@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 가상환경
+venv/
+env/
+.env
+
+# 데이터베이스 및 로컬 데이터
+*.db
+*.sqlite3
+data/trading.db
+data/*.db
+
+# 커서 및 에디터 설정
+.vscode/
+.cursor/
+
+# 기타 잡동사니
+scratch/
+graphify-out/
+.DS_Store
