@@ -20,5 +20,5 @@ data/*.db
 
 # 기타 잡동사니
 scratch/
-graphify-out/
+#graphify-out/
 .DS_Store
