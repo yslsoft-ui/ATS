@@ -1,61 +1,382 @@
 {
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\run_backtest_sample.py": 1777540105.1099997,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\app.js": 1777998144.9479425,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\eslint.config.js": 1777341894.2219312,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\postcss.config.js": 1777344050.543008,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\tailwind.config.js": 1777341971.928208,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\vite.config.js": 1777341894.2662168,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\src\\App.jsx": 1777364975.4392822,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\src\\main.jsx": 1777341894.3865094,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\scratch\\check_db.py": 1777958294.704761,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\__init__.py": 1777355259.7426448,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\api\\main.py": 1777365349.944625,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\api\\test_api.py": 1777340482.4380648,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\collector\\upbit_ws.py": 1777355096.6683307,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\collector\\__init__.py": 1777355267.632455,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\database\\check_db.py": 1777335629.072818,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\database\\db_writer.py": 1777355109.1185782,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\database\\schema.py": 1777334408.537845,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\database\\__init__.py": 1777355275.2805498,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\backtest.py": 1777539605.9214945,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\candles.py": 1777991933.371623,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\indicators.py": 1777556681.4540095,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\loader.py": 1777992655.587948,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\matching.py": 1777337773.4397235,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\strategy.py": 1777989391.864611,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\test_candles.py": 1777537534.1926036,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\test_indicators.py": 1777337970.4094968,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\test_loader_tdd.py": 1777989872.47789,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\test_matching.py": 1777337798.4479535,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\test_strategy_params.py": 1777987640.0583315,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\__init__.py": 1777364494.7220428,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\strategies\\macd_strategy.py": 1777989382.6149337,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\strategies\\rsi_strategy.py": 1777989375.3072052,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\strategies\\sequential_strategy.py": 1777997449.5380466,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\engine\\strategies\\volume_power_strategy.py": 1777991973.8823316,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\server\\main.py": 1777996097.2578213,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\src\\utils\\visualizer.py": 1777539619.3628929,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\antigravity.md": 1777985002.4283462,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\ARCHITECTURE.md": 1777892189.9263322,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\BACKTEST_ENGINE_DESIGN.md": 1777892247.1388373,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\COLLECTOR_DESIGN.md": 1777892297.1215563,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\CONTEXT.md": 1777986449.4218228,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\DESIGN.md": 1777549586.4714546,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\UI_DESIGN.md": 1777892355.3222382,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\docs\\agents\\domain.md": 1777985024.1228197,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\docs\\agents\\issue-tracker.md": 1777985009.802405,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\docs\\agents\\triage-labels.md": 1777985016.224094,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\index.html": 1777994717.6461103,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\README.md": 1777341894.3971553,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\scratch\\strategy-management\\PRD.md": 1777986711.8603697,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\scratch\\strategy-management\\issues\\01-strategy-registry-metadata.md": 1777987090.8341453,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\scratch\\strategy-management\\issues\\02-parameter-update-validation.md": 1777987675.3285582,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\scratch\\strategy-management\\issues\\03-management-ui.md": 1777987737.5720203,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\backtest_macd_golden_cross.png": 1777540128.5964026,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\backtest_rsi_30_70.png": 1777540127.9678872,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\public\\favicon.svg": 1777341894.505891,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\public\\icons.svg": 1777341894.550259,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\src\\assets\\hero.png": 1777341894.4413433,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\src\\assets\\react.svg": 1777341894.5834894,
-  "C:\\Users\\yslso\\OneDrive\\\ubb38\uc11c\\Cursor\\TEST\\frontend\\src\\assets\\vite.svg": 1777341894.6155167
+  "/home/simon/ATS/run_backtest_sample.py": {
+    "mtime": 1778418725.1138074,
+    "ast_hash": "4541705465d71c53eec5501f3b32b18c",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/skills-lock.json": {
+    "mtime": 1778241512.0247161,
+    "ast_hash": "57b308c2d9e5c7d7765fb3f6dd97634b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/package.json": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "a38d3e410bccdac7fedbc7a0204a7c90",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/eslint.config.js": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "3aa4b57d7f08181d86bde52a4dcb7f22",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/utils.js": {
+    "mtime": 1778815392.130901,
+    "ast_hash": "8b2c398ddf0fe438a960b538aa247d76",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/vite.config.js": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "88439104b3c207f17d33ef3160e3b080",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/postcss.config.js": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "c1ee9ce6a4fe04105dbf8e619390df5e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/tailwind.config.js": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "3346df3fd0a1ea3f84440703bf8fd2cb",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/app.js": {
+    "mtime": 1778925233.8809884,
+    "ast_hash": "0a8d8f62af70281b04aca519237c528a",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/src/main.jsx": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "e13723e2574429d9a6d849727e3ff695",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/src/App.jsx": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "86de74fe08783381ecace26037649da4",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/strategies_debug.json": {
+    "mtime": 1778926032.7253885,
+    "ast_hash": "c321b4e02c2e605abfc32eee166e04f3",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/test_fee_system.py": {
+    "mtime": 1778897478.166951,
+    "ast_hash": "91fc6d09cf80738fd3ff98d2395a61f8",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/__init__.py": {
+    "mtime": 1778241512.0247161,
+    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/connection.py": {
+    "mtime": 1778819823.6951494,
+    "ast_hash": "8df2b8db31fe969e80597d32fe5eb503",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/db_writer.py": {
+    "mtime": 1778819868.7819347,
+    "ast_hash": "c7a0b4d61f18916d0a585c3f4814c1f7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/check_db.py": {
+    "mtime": 1778807832.5969048,
+    "ast_hash": "66a5f477a062814628811bee8a9b9055",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/__init__.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/schema.py": {
+    "mtime": 1778924664.9937072,
+    "ast_hash": "a4052e1c033c753a64a33edc36904f44",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/collector/upbit_ws.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "afaf78ce686ec6d7e6c43f0c3a618489",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/collector/__init__.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/api/test_api.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "db2e084157b10461cc9d89f2aad09206",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/api/main.py": {
+    "mtime": 1778819939.155872,
+    "ast_hash": "5c33b189cabccc9c0c88d97bc8ddab3a",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/collector.py": {
+    "mtime": 1778924860.7053592,
+    "ast_hash": "7c25f3a6da2c68c31915605fc3027cce",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_candles.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "e6c14fba97480cbd755dc4792eaf642f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategy_host.py": {
+    "mtime": 1778924878.5626655,
+    "ast_hash": "18783b76da6c27587597fddc2d66425e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategy.py": {
+    "mtime": 1778924684.067918,
+    "ast_hash": "d034125847da9fb1f3b1d94ef691b113",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/pipeline.py": {
+    "mtime": 1778924753.9695072,
+    "ast_hash": "78e0877ed18d942265d45fa964abc8cc",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_loader_tdd.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "41efc176a38af10ec07df944a6a667ac",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/portfolio.py": {
+    "mtime": 1778924734.4240763,
+    "ast_hash": "c571b0ea46fa689413351b8e89c4bb02",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/trade_engine.py": {
+    "mtime": 1778924931.1398847,
+    "ast_hash": "89cb88edab592bd46483513b49b6e675",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/indicators.py": {
+    "mtime": 1778913077.646799,
+    "ast_hash": "13778afd43535f0a34eb5797495fdc9e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/system.py": {
+    "mtime": 1778924868.3396952,
+    "ast_hash": "34cfa637b298c3311547181734e5e99b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/backtest.py": {
+    "mtime": 1778819918.4396076,
+    "ast_hash": "16313107a50a992fa077c9e8b0ffc9b6",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_indicators.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "38b134b6cea8bad520c1cd5c75189dce",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/loader.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "8c3ad595c14733756ac357114718cae0",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_portfolio.py": {
+    "mtime": 1778807891.4467533,
+    "ast_hash": "048c34218b1cd36ad507b8aebf8d5627",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/matching.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "3ad9f791bf396b1434e3c98d2141521f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/__init__.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "fb54fab14bfdc6d335473d93c8f2d948",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_matching.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "96d609c96fcff6996a2bf0b1485108a7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/candles.py": {
+    "mtime": 1778804019.6193907,
+    "ast_hash": "1cb10f456cafc667cc4acbeddedc3860",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_strategy_params.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "62a4aebe7f1a97f55ddcba17340b3203",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/volume_power_strategy.py": {
+    "mtime": 1778473689.8732927,
+    "ast_hash": "88014571fcfac7cb07fde315fcbaab43",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/sequential_strategy.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "9016d7d0a558fdb5f47502884acb6822",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/macd_strategy.py": {
+    "mtime": 1778473679.840276,
+    "ast_hash": "7b9528b5a108c02aa95e57e5dcecb69f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/momentum_spike_strategy.py": {
+    "mtime": 1778473661.293905,
+    "ast_hash": "1eb7001eebb9464bce54c5797074d993",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/rsi_strategy.py": {
+    "mtime": 1778926049.7365448,
+    "ast_hash": "faacae0e286ef06652657a40ad3262d0",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/panic.py": {
+    "mtime": 1778833178.6186495,
+    "ast_hash": "d1dc48d86d574b2409fefbe27b8a6d69",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/strategies/trend_bend.py": {
+    "mtime": 1778833185.0884948,
+    "ast_hash": "0c8da7cdf46a256ab93087c2e8f232b7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/server/main.py": {
+    "mtime": 1778923768.1995184,
+    "ast_hash": "f3b71bd68efc411711e58dbacdc31ae4",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/utils/visualizer.py": {
+    "mtime": 1778241512.0285957,
+    "ast_hash": "024b498dc5def531db6a048fb6e0d861",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/config/manager.py": {
+    "mtime": 1778923685.397866,
+    "ast_hash": "1c35c9797c44de18c285b1c34e4bc4f7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/BACKTEST_ENGINE_DESIGN.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "b84d41e5126e17c4e056f687a5fd9b6b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/COLLECTOR_DESIGN.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "47fe7b07aa5f78ffb2e2e396346fc850",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/requirements.txt": {
+    "mtime": 1778319732.1457856,
+    "ast_hash": "a2b9bbe06bcd45eb1e452f6553b04a3c",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/UI_DESIGN.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "21dfacf2ea3e66493698840944846604",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/ARCHITECTURE.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "b55bd18b6cbfd55a84044590324dcab7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/CONTEXT.md": {
+    "mtime": 1778808061.4658852,
+    "ast_hash": "7ef5c0b685032f5a6c0de969bcf4f3d8",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/index.html": {
+    "mtime": 1778925183.852482,
+    "ast_hash": "af2e53381c8c5c610d8ec371cd099f28",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/README.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "a28dc4cb878325f3e9e5649f3e1469ac",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/multi-portfolio-ui/issue.md": {
+    "mtime": 1778812423.3187108,
+    "ast_hash": "0ff58ae40eea5a8ba98d5c2792e34fe4",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/portfolio-ui/issue.md": {
+    "mtime": 1778810976.9628105,
+    "ast_hash": "eaa2b090598aab1522d62536ee33af2e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/code-stabilization/issue.md": {
+    "mtime": 1778815382.159185,
+    "ast_hash": "0265ed25f5700f774a0b9a1e752ae08f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/config/settings.yaml": {
+    "mtime": 1778924156.1350694,
+    "ast_hash": "2de09370efba54e20b40b6ce19bfc4b8",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/agents/domain.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "1a3e1a81467c94f4b333a0fdfcf989f4",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/agents/issue-tracker.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "60c8445820f3c0ae6be7d21a48f2658e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/agents/triage-labels.md": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "ff190078f702ab95bb34b65498878cc6",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/adr/0001-trade-engine-centralization.md": {
+    "mtime": 1778807203.2823358,
+    "ast_hash": "e8ab29e50c3f2b7ffd7913dc9373d3c7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
+    "mtime": 1778807211.6594594,
+    "ast_hash": "050c1abc728a5b4044680b461c0b8b1b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/adr/0003-portfolio-manager-decoupling.md": {
+    "mtime": 1778808041.9711604,
+    "ast_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/backtest_macd_golden_cross.png": {
+    "mtime": 1778418794.3681433,
+    "ast_hash": "cb4c75a5ac5351a6745142784760529e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/public/favicon.svg": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "7e840862161341271697daa99a40d76b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/public/icons.svg": {
+    "mtime": 1778241512.0169573,
+    "ast_hash": "3b4fcfcf393eca4d264dca4a4663bc37",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/src/assets/vite.svg": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "9960a24288958394ac50e57ff638b036",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/src/assets/react.svg": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "f0402b67b6ce880f65666bb49e841696",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/src/assets/hero.png": {
+    "mtime": 1778241512.0208366,
+    "ast_hash": "aead493361b27e7510691c5d7072dfc1",
+    "semantic_hash": ""
+  }
 }

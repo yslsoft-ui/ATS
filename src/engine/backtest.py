@@ -1,13 +1,13 @@
 import asyncio
-import aiosqlite
-import pandas as pd
 from typing import Dict, List, Any
+from src.database.connection import get_db_conn
 from .matching import OrderbookMatchingEngine
 from .candles import CandleGenerator
-from .strategy import RSIStrategy
+from .strategy import BaseStrategy
+from .trade_engine import TradeEngine
 
 class BacktestEngine:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str = None):
         self.db_path = db_path
         self.matching_engine = OrderbookMatchingEngine()
         
@@ -15,8 +15,7 @@ class BacktestEngine:
         """
         틱 데이터를 기반으로 멀티 타임프레임 백테스트를 수행합니다.
         """
-        async with aiosqlite.connect(self.db_path) as db:
-            db.row_factory = aiosqlite.Row
+        async with get_db_conn() as db:
             cursor = await db.execute(
                 "SELECT trade_timestamp, trade_price, trade_volume, ask_bid FROM trades WHERE symbol = ? ORDER BY trade_timestamp ASC",
                 (symbol,)
@@ -27,7 +26,7 @@ class BacktestEngine:
                 return {"status": "error", "message": "No data found for backtest"}
 
             # 엔진 초기화
-            candle_gen = CandleGenerator(intervals=[interval])
+            engine = TradeEngine(symbol, [strategy])
             
             cash = initial_cash
             position = 0.0
@@ -36,38 +35,41 @@ class BacktestEngine:
             
             for row in rows:
                 price = row["trade_price"]
-                volume = row["trade_volume"]
                 timestamp = row["trade_timestamp"]
                 
-                # 1. 틱 데이터를 캔들 생성기에 주입
-                closed_candles = candle_gen.process_tick(symbol, price, volume, timestamp)
+                # 1. 틱 데이터를 TradeEngine에 주입
+                signals = engine.process_tick({
+                    "trade_price": price,
+                    "trade_volume": row["trade_volume"],
+                    "ask_bid": row["ask_bid"],
+                    "trade_timestamp": timestamp
+                })
                 
-                # 2. 완성된 캔들이 있으면 전략 실행
-                for candle in closed_candles:
-                    candle_history.append(candle)
-                    result = strategy.on_candle(candle)
-                    
-                    if result.action == "BUY" and cash > 0:
-                        # 전량 매수 시뮬레이션
+                # 2. 발생한 신호 처리
+                for sig in signals:
+                    if sig.action == "BUY" and cash > 0:
                         position = cash / price
                         cash = 0
                         trades_executed.append({
                             "type": "BUY",
                             "price": price,
                             "timestamp": timestamp,
-                            "reason": result.reason
+                            "reason": sig.reason
                         })
                     
-                    elif result.action == "SELL" and position > 0:
-                        # 전량 매도 시뮬레이션
+                    elif sig.action == "SELL" and position > 0:
                         cash = position * price
                         position = 0
                         trades_executed.append({
                             "type": "SELL",
                             "price": price,
                             "timestamp": timestamp,
-                            "reason": result.reason
+                            "reason": sig.reason
                         })
+                
+                # 차트 표시용 캔들 히스토리 수집 (TradeEngine 내부 캔들 참조)
+                # 여기서는 캔들 생성을 직접 하지 않고 엔진의 것을 가져오거나 별도 처리 필요
+                # 일단 백테스트용 캔들 수집은 기존대로 유지하거나 엔진에서 노출하도록 수정 가능
                 
             final_price = rows[-1]["trade_price"]
             final_value = cash + (position * final_price)

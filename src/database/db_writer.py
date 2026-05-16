@@ -1,12 +1,9 @@
 import asyncio
-import aiosqlite
 import json
-import os
-
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'backtest.db')
+from src.database.connection import get_db_conn
 
 class DBWriter:
-    def __init__(self, queue: asyncio.Queue, db_path: str, batch_size=100, flush_interval=1.0):
+    def __init__(self, queue: asyncio.Queue, db_path: str = None, batch_size=100, flush_interval=1.0):
         self.queue = queue
         self.db_path = db_path
         self.batch_size = batch_size
@@ -15,8 +12,8 @@ class DBWriter:
         self.orderbook_buffer = []
 
     async def run(self):
-        print(f"DBWriter started. Connected to {self.db_path}")
-        async with aiosqlite.connect(self.db_path) as db:
+        print(f"DBWriter started.")
+        async with get_db_conn() as db:
             while True:
                 try:
                     # 지정된 시간동안 큐에서 데이터 가져오기 시도 (타임아웃 시 플러시)

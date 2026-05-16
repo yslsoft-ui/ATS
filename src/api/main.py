@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import aiosqlite
 import os
 import asyncio
+from src.database.connection import get_db_conn
 from src.collector.upbit_ws import UpbitCollector, DBWriter
 from src.engine.backtest import BacktestEngine
 
@@ -81,8 +81,7 @@ async def stop_collector():
 async def get_recent_trades(symbol: str, limit: int = 50):
     """지정된 종목의 최근 체결 데이터를 반환합니다."""
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
+        async with get_db_conn() as db:
             cursor = await db.execute('''
                 SELECT trade_timestamp, trade_price, trade_volume, ask_bid
                 FROM trades
@@ -111,8 +110,7 @@ async def get_candles(symbol: str, interval: int = 60):
     틱 데이터를 기반으로 캔들(OHLC) 데이터를 생성하고 기술 지표를 추가하여 반환합니다.
     """
     try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            db.row_factory = aiosqlite.Row
+        async with get_db_conn() as db:
             query = f'''
                 SELECT 
                     (trade_timestamp / (1000 * {interval})) * {interval} as candle_time,

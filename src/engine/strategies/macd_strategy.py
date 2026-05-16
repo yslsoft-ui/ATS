@@ -8,7 +8,8 @@ class MACDStrategy(BaseStrategy):
     """
     MACD 골든크로스(매수) 및 데드크로스(매도) 신호를 생성합니다.
     """
-    def __init__(self, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9):
+    def __init__(self, fast_period: int = 12, slow_period: int = 26, signal_period: int = 9, **kwargs):
+        super().__init__(**kwargs)
         self.calculator = IndicatorCalculator(window_size=slow_period)
         self.in_position = False
         self.prev_hist = 0

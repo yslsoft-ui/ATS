@@ -1,21 +1,29 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 from typing import Set, Optional, Dict, List
+from pydantic import BaseModel
 import shutil
 import os
 import asyncio
 import json
 import time
 import aiohttp
-import aiosqlite
+from src.database.connection import get_db_conn
 from collections import deque
 from src.engine.candles import CandleGenerator
 from src.engine.indicators import IndicatorCalculator
-from src.engine.strategy import StrategyRegistry
+from src.engine.strategy import StrategyRegistry, BaseStrategy
+from src.engine.trade_engine import TradeEngine, TradeSignal
 from src.engine.loader import load_dynamic_strategies, unload_strategy
+from src.engine.portfolio import PortfolioManager, Portfolio
+
+from src.engine.system import TradingSystem
 
 app = FastAPI()
-# Trigger reload for new strategies
+
+# 전역 시스템 인스턴스 초기화
+CONFIG_PATH = os.path.join(os.getcwd(), 'config', 'settings.yaml')
+system = TradingSystem(CONFIG_PATH)
 
 # 전역 상태 관리
 class ConnectionManager:
@@ -57,353 +65,18 @@ class ConnectionManager:
             )
 
 manager = ConnectionManager()
-DB_PATH = os.path.join(os.getcwd(), 'data', 'backtest.db')
-
-# 전략별 현재 파라미터 설정 저장 (ID -> Params)
-strategy_configs: Dict[str, Dict] = {
-    "rsistrategy": {"rsi_window": 14, "buy_threshold": 30.0, "sell_threshold": 70.0, "enabled": True},
-    "macdstrategy": {"fast_period": 12, "slow_period": 26, "signal_period": 9, "enabled": True},
-    "volumepowerstrategy": {"buy_threshold": 120.0, "sell_threshold": 80.0, "enabled": True}
-}
-
-# DB 쓰기 큐 (수집 루프와 DB 저장 분리)
-db_queue: asyncio.Queue = asyncio.Queue()
-
-# 수집 가능한 전체 종목 코드
-available_symbols: list = []
-
-class SpikeDetector:
-    def __init__(self, window_sec=60, price_threshold=1.5, vol_multiplier=3.0, buy_ratio_threshold=0.7):
-        self.windows: Dict[str, deque] = {} # symbol -> deque of ticks
-        self.window_sec = window_sec
-        self.price_threshold = price_threshold
-        self.vol_multiplier = vol_multiplier
-        self.buy_ratio_threshold = buy_ratio_threshold
-        self.last_alert_time: Dict[str, Dict[str, float]] = {} # symbol -> type -> last alert timestamp
-        self.alert_cooldown = 300 # 5분 (300초)
-        
-        # 추가 설정
-        self.rsi_buy_threshold = 30.0
-        self.rsi_sell_threshold = 70.0
-        self.enabled_alerts = {
-            "spike": True,
-            "volume": True,
-            "rsi": True,
-            "cross": True
-        }
-
-    def process_tick(self, tick: dict, indicators: Optional[dict] = None):
-        symbol = tick['code']
-        now = tick['trade_timestamp'] / 1000 # ms to sec
-        
-        if symbol not in self.windows:
-            self.windows[symbol] = deque()
-            self.last_alert_time[symbol] = {}
-            
-        window = self.windows[symbol]
-        window.append(tick)
-        
-        # 윈도우 시간 지난 데이터 제거
-        while window and (now - (window[0]['trade_timestamp'] / 1000)) > self.window_sec:
-            window.popleft()
-            
-        if len(window) < 15: return None 
-        
-        alerts = []
-
-        # 1. 가격 급등 (Spike)
-        if self.enabled_alerts.get("spike"):
-            start_price = window[0]['trade_price']
-            curr_price = tick['trade_price']
-            price_change = (curr_price - start_price) / start_price * 100
-            
-            total_vol = sum(t['trade_volume'] for t in window)
-            buy_vol = sum(t['trade_volume'] for t in window if t['ask_bid'] == 'BID')
-            buy_ratio = buy_vol / total_vol if total_vol > 0 else 0
-
-            if price_change >= self.price_threshold and buy_ratio >= self.buy_ratio_threshold:
-                if now - self.last_alert_time[symbol].get("spike", 0) > self.alert_cooldown:
-                    self.last_alert_time[symbol]["spike"] = now
-                    alerts.append({
-                        "type": "alert",
-                        "alert_type": "spike",
-                        "code": symbol,
-                        "price": curr_price,
-                        "change": round(price_change, 2),
-                        "buy_ratio": round(buy_ratio * 100, 1),
-                        "msg": f"🚀 급등 포착: {symbol} ({price_change:+.2f}%)"
-                    })
-
-        # 2. 거래량 폭증 (Volume)
-        if self.enabled_alerts.get("volume"):
-            total_vol = sum(t['trade_volume'] for t in window)
-            avg_vol_per_sec = total_vol / self.window_sec
-            recent_10s_ticks = [t for t in window if (now - (t['trade_timestamp']/1000)) <= 10]
-            if recent_10s_ticks:
-                recent_avg_vol_per_sec = sum(t['trade_volume'] for t in recent_10s_ticks) / 10
-                if avg_vol_per_sec > 0 and recent_avg_vol_per_sec > (avg_vol_per_sec * self.vol_multiplier):
-                    if now - self.last_alert_time[symbol].get("volume", 0) > self.alert_cooldown:
-                        self.last_alert_time[symbol]["volume"] = now
-                        alerts.append({
-                            "type": "alert",
-                            "alert_type": "volume",
-                            "code": symbol,
-                            "price": tick['trade_price'],
-                            "msg": f"📊 거래량 폭증: {symbol} ({recent_avg_vol_per_sec/avg_vol_per_sec:.1f}배)"
-                        })
-
-        # 3. 지표 기반 알림 (RSI)
-        if indicators and self.enabled_alerts.get("rsi"):
-            rsi = indicators.get('rsi')
-            if rsi:
-                if rsi <= self.rsi_buy_threshold:
-                    if now - self.last_alert_time[symbol].get("rsi_buy", 0) > self.alert_cooldown:
-                        self.last_alert_time[symbol]["rsi_buy"] = now
-                        alerts.append({ "type": "alert", "alert_type": "rsi", "code": symbol, "price": tick['trade_price'], "msg": f"📉 RSI 과매도: {symbol} ({rsi:.1f})" })
-                elif rsi >= self.rsi_sell_threshold:
-                    if now - self.last_alert_time[symbol].get("rsi_sell", 0) > self.alert_cooldown:
-                        self.last_alert_time[symbol]["rsi_sell"] = now
-                        alerts.append({ "type": "alert", "alert_type": "rsi", "code": symbol, "price": tick['trade_price'], "msg": f"📈 RSI 과매수: {symbol} ({rsi:.1f})" })
-
-        return alerts[0] if alerts else None
-
-async def save_alert(alert: dict):
-    """알림을 DB에 영구 저장합니다."""
-    try:
-        async with aiosqlite.connect(DB_PATH) as db:
-            await db.execute(
-                "INSERT INTO alerts (symbol, price, change, buy_ratio, msg, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-                (alert['code'], alert['price'], alert.get('change', 0), alert.get('buy_ratio', 0), alert['msg'], int(time.time() * 1000))
-            )
-            await db.commit()
-    except Exception as e:
-        print(f"[ERROR] Alert Save Error: {e}")
-
-spike_detector = SpikeDetector()
-
-# 수집기 태스크 관리
-class CollectorManager:
-    def __init__(self):
-        self.task: Optional[asyncio.Task] = None
-        self.is_running = False
-        self.candle_generators: Dict[str, CandleGenerator] = {}
-        self.active_strategies: Dict[str, Dict[str, BaseStrategy]] = {}
-
-    async def start(self):
-        if self.is_running:
-            return
-        self.is_running = True
-        self.task = asyncio.create_task(self.run())
-
-    async def stop(self):
-        if self.task:
-            self.is_running = False
-            self.task.cancel()
-            try:
-                await self.task
-            except asyncio.CancelledError:
-                pass
-            self.task = None
-
-    async def run(self):
-        global available_symbols
-
-        # Upbit REST API에서 전체 KRW 마켓 종목 조회
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.upbit.com/v1/market/all") as resp:
-                    markets = await resp.json()
-                    available_symbols = sorted([
-                        m['market'] for m in markets
-                        if m['market'].startswith('KRW-')
-                    ])
-                    print(f"[INFO] {len(available_symbols)}개 KRW 종목 로드 완료")
-                    self.candle_generators = {symbol: CandleGenerator(intervals=[60]) for symbol in available_symbols}
-                    self.active_strategies = {symbol: {} for symbol in available_symbols}
-        except Exception as e:
-            print(f"[ERROR] 종목 목록 조회 실패: {e}")
-            if not available_symbols:
-                available_symbols = ["KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-DOGE"]
-                self.candle_generators = {symbol: CandleGenerator(intervals=[60]) for symbol in available_symbols}
-                self.active_strategies = {symbol: {} for symbol in available_symbols}
-
-        # 실시간 지표 계산기 딕셔너리
-        self.indicator_calculators: Dict[str, IndicatorCalculator] = {
-            symbol: IndicatorCalculator(window_size=20) for symbol in available_symbols
-        }
-
-        print("[INFO] 전략 인스턴스 워밍업 시작 (최근 1000개 틱)...")
-        enabled_configs = {sid: cfg for sid, cfg in strategy_configs.items() if cfg.get('enabled', True)}
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                db.row_factory = aiosqlite.Row
-                for symbol in available_symbols:
-                    # 전략 인스턴스화
-                    for sid, cfg in enabled_configs.items():
-                        strategy = StrategyRegistry.create_strategy(sid, cfg.get('params', {}))
-                        if strategy:
-                            self.active_strategies[symbol][sid] = strategy
-
-                    # DB에서 과거 틱 데이터 로드하여 캔들 채우기
-                    async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE symbol = ? ORDER BY trade_timestamp DESC LIMIT 1000", (symbol,)) as cursor:
-                        rows = await cursor.fetchall()
-                        for row in reversed(rows):
-                            closed_candles = self.candle_generators[symbol].process_tick(
-                                symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp']
-                            )
-                            for candle in closed_candles:
-                                for strategy in self.active_strategies[symbol].values():
-                                    strategy.on_candle(candle)
-            print("[INFO] 전략 워밍업 완료")
-        except Exception as e:
-            print(f"[WARNING] 워밍업 중 오류 발생 (데이터가 없을 수 있습니다): {e}")
-
-        url = "wss://api.upbit.com/websocket/v1"
-        subscribe_data = [
-            {"ticket": "collector"},
-            {"type": "trade", "codes": available_symbols}
-        ]
-
-        while self.is_running:
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.ws_connect(url) as ws:
-                        await ws.send_json(subscribe_data)
-                        print(f"[INFO] Collector Started - {len(available_symbols)}개 종목 구독 중")
-
-                        async for msg in ws:
-                            if not self.is_running: break
-                            if msg.type == aiohttp.WSMsgType.BINARY:
-                                data = json.loads(msg.data.decode('utf-8'))
-
-                                # 1. 구독 중인 클라이언트에게 브로드캐스트
-                                await manager.broadcast(data)
-
-                                # 2. 실시간 지표 계산
-                                symbol = data['code']
-                                indicators = None
-                                if symbol in self.indicator_calculators:
-                                    indicators = self.indicator_calculators[symbol].update(data['trade_price'])
-
-                                # 3. 급등/지표 탐지 및 글로벌 알림
-                                alert = spike_detector.process_tick(data, indicators)
-                                if alert:
-                                    await manager.broadcast_global(alert)
-                                    asyncio.create_task(save_alert(alert))
-
-                                # 4. DB 큐에 삽입
-                                await db_queue.put(data)
-                                
-                                # 5. 전략 엔진 (실시간 캔들 생성 및 매매 평가)
-                                closed_candles = self.candle_generators[symbol].process_tick(
-                                    symbol, data['trade_price'], data['trade_volume'], data['ask_bid'], data['trade_timestamp']
-                                )
-                                for candle in closed_candles:
-                                    # 설정(동적 토글) 반영하여 전략 객체 관리
-                                    for sid, cfg in strategy_configs.items():
-                                        if cfg.get('enabled', True):
-                                            if sid not in self.active_strategies[symbol]:
-                                                strategy = StrategyRegistry.create_strategy(sid, cfg.get('params', {}))
-                                                if strategy: self.active_strategies[symbol][sid] = strategy
-                                            else:
-                                                self.active_strategies[symbol][sid].update_params(cfg.get('params', {}))
-                                            
-                                            if sid in self.active_strategies[symbol]:
-                                                result = self.active_strategies[symbol][sid].on_candle(candle)
-                                                if result and result.action in ["BUY", "SELL"]:
-                                                    asyncio.create_task(simulate_trade_from_engine(symbol, result.action, result.price or candle.close, result.reason))
-                                        else:
-                                            # 비활성화 시 즉시 메모리에서 제거
-                                            if sid in self.active_strategies[symbol]:
-                                                del self.active_strategies[symbol][sid]
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                if self.is_running:
-                    print(f"[ERROR] Collector Error: {e}. Reconnecting...")
-                    await asyncio.sleep(5)
-
-collector = CollectorManager()
-
-# DB Writer 백그라운드 태스크
-async def db_writer_loop():
-    """Queue에서 데이터를 꺼내 배치 단위로 DB에 저장합니다."""
-    while True:
-        try:
-            async with aiosqlite.connect(DB_PATH) as db:
-                while True:
-                    buffer = []
-                    try:
-                        # 최대 500건 또는 1초 타임아웃까지 수집
-                        while len(buffer) < 500:
-                            item = await asyncio.wait_for(db_queue.get(), timeout=1.0)
-                            buffer.append((
-                                item['code'],
-                                item['trade_price'],
-                                item['trade_volume'],
-                                item['ask_bid'],
-                                item['trade_timestamp']
-                            ))
-                            db_queue.task_done()
-                    except asyncio.TimeoutError:
-                        pass
-
-                    if buffer:
-                        await db.executemany(
-                            "INSERT INTO trades (symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?)",
-                            buffer
-                        )
-                        await db.commit()
-                        # 다른 비동기 태스크(API 등)에 제어권을 양보합니다.
-                        await asyncio.sleep(0.01)
-        except asyncio.CancelledError:
-            # 종료 시 잔여 데이터 플러시
-            try:
-                async with aiosqlite.connect(DB_PATH) as db:
-                    buffer = []
-                    while not db_queue.empty():
-                        item = db_queue.get_nowait()
-                        buffer.append((
-                            item['code'], item['trade_price'],
-                            item['trade_volume'], item['ask_bid'],
-                            item['trade_timestamp']
-                        ))
-                    if buffer:
-                        await db.executemany(
-                            "INSERT INTO trades (symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?)",
-                            buffer
-                        )
-                        await db.commit()
-                        print(f"[INFO] DB Writer: 잔여 {len(buffer)}건 플러시 완료")
-            except Exception:
-                pass
-            break
-        except Exception as e:
-            print(f"[ERROR] DB Writer Error: {e}")
-            await asyncio.sleep(1)
+# 시스템 콜백 설정
+system.broadcast_callback = manager.broadcast_global
 
 @app.on_event("startup")
 async def startup_event():
-    # DB 초기화
-    if not os.path.exists(os.path.dirname(DB_PATH)):
-        os.makedirs(os.path.dirname(DB_PATH))
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("PRAGMA journal_mode=WAL") # 동시 읽기/쓰기 성능 향상
-        await db.execute("CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, trade_price REAL, trade_volume REAL, ask_bid TEXT, trade_timestamp INTEGER)")
-        await db.execute("CREATE TABLE IF NOT EXISTS alerts (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, price REAL, change REAL, buy_ratio REAL, msg TEXT, timestamp INTEGER)")
-        await db.commit()
-    # DB Writer 백그라운드 태스크 시작
-    app.state.db_writer = asyncio.create_task(db_writer_loop())
+    # TradingSystem 기동 (내부에서 DB 초기화, 포트폴리오 로드, 전략 로드, 수집기 시작을 모두 수행)
+    await system.boot()
+    print("[INFO] 시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다.")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    print("[INFO] Shutting down...")
-    await collector.stop()
-    app.state.db_writer.cancel()
-    try:
-        await app.state.db_writer
-    except asyncio.CancelledError:
-        pass
+    await system.shutdown()
     print("[INFO] Shutdown complete.")
 
 @app.get("/market")
@@ -449,85 +122,188 @@ async def get_market():
 @app.get("/symbols")
 async def get_symbols():
     """수집 가능한 전체 KRW 종목 목록을 반환합니다."""
-    if available_symbols:
-        return available_symbols
-    # 아직 수집기가 시작되지 않았으면 직접 조회
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://api.upbit.com/v1/market/all") as resp:
-                markets = await resp.json()
-                return sorted([m['market'] for m in markets if m['market'].startswith('KRW-')])
-    except Exception:
-        return ["KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-DOGE"]
+    if system.collector and system.collector.available_symbols:
+        return system.collector.available_symbols
+    return ["KRW-BTC", "KRW-ETH", "KRW-XRP", "KRW-SOL", "KRW-DOGE"]
 
 @app.get("/collector/status")
 async def get_status():
-    return {"is_running": collector.is_running}
+    is_running = system.collector.is_running if system.collector else False
+    return {"is_running": is_running}
 
 @app.post("/collector/start")
 async def start_collector():
-    await collector.start()
+    if system.collector:
+        await system.collector.start()
     return {"message": "Collector started"}
 
 @app.post("/collector/stop")
 async def stop_collector():
-    await collector.stop()
+    if system.collector:
+        await system.collector.stop()
     return {"message": "Collector stopped"}
+
+@app.get("/api/system/queues")
+async def get_queue_status():
+    """각 작업 큐의 현재 적체량 및 누적 처리량을 반환합니다."""
+    return {
+        "processing": system.processing_queue.qsize(),
+        "database": system.db_queue.qsize(),
+        "candle": system.candle_queue.qsize(),
+        "total": system.collector.total_processed_count if system.collector else 0
+    }
 
 @app.get("/api/strategies")
 async def list_strategies():
     """사용 가능한 모든 전략 목록과 메타데이터를 반환합니다."""
-    metadata = StrategyRegistry.get_all_metadata()
-    # 현재 설정값(configs)을 메타데이터에 병합
-    for m in metadata:
-        s_id = m['id']
-        if s_id in strategy_configs:
-            for p_name, p_val in strategy_configs[s_id].items():
-                if p_name == 'enabled':
-                    m['enabled'] = p_val
-                elif p_name in m['params']:
-                    m['params'][p_name]['current'] = p_val
-        else:
-            # 기본값 설정
-            m['enabled'] = True
-    return metadata
+    # 1. 레지스트리에서 코드 기반 메타데이터(설명, 파라미터 타입 등) 가져오기
+    all_meta = StrategyRegistry.get_all_metadata()
+    
+    # 2. Config에서 현재 상태(enabled, current_params) 가져오기
+    configs = system.strategy_configs
+    
+    results = []
+    for meta in all_meta:
+        s_id = meta['id']
+        config = configs.get(s_id, {"enabled": False, "params": {}})
+        
+        # 메타데이터 구조에 현재 값 병합
+        params_with_values = {}
+        for p_name, p_info in meta['params'].items():
+            current_val = config.get('params', {}).get(p_name, p_info.get('default'))
+            params_with_values[p_name] = {
+                **p_info,
+                "current": current_val
+            }
+            
+        results.append({
+            "id": s_id,
+            "name": meta['name'],
+            "type": meta['type'],
+            "description": meta['description'],
+            "enabled": config.get('enabled', False),
+            "params": params_with_values
+        })
+        
+    return results
 
-@app.post("/api/strategies/{strategy_id}/params")
+@app.put("/api/strategies/{strategy_id}")
 async def update_strategy_params(strategy_id: str, params: Dict):
-    """특정 전략의 파라미터를 업데이트합니다."""
+    """특정 전략의 파라미터를 업데이트하고 파일에 저장합니다."""
     s_id = strategy_id.lower()
-    if s_id not in strategy_configs:
-        strategy_configs[s_id] = {}
     
-    # 전달받은 파라미터 업데이트
-    strategy_configs[s_id].update(params)
+    # 1. ConfigManager를 통해 파일 및 메모리 업데이트
+    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
+    current_config['params'].update(params)
     
-    return {"message": f"Strategy {strategy_id} parameters updated", "current_params": strategy_configs[s_id]}
+    system.config_manager.update(f"strategies.{s_id}", current_config)
+    
+    # 2. 실시간 엔진 반영 강제 트리거 (Hot-reload를 기다려도 되지만 즉시 반영이 좋음)
+    await system._on_config_changed(system.config_manager.config)
+    
+    return {"message": f"Strategy {strategy_id} updated and saved", "params": current_config['params']}
 
 @app.delete("/api/strategies/{strategy_id}")
 async def disable_strategy(strategy_id: str):
-    """특정 전략을 비활성화(사용 안함) 처리합니다."""
+    """특정 전략을 비활성화하고 파일에 저장합니다."""
     s_id = strategy_id.lower()
-    if s_id not in strategy_configs:
-        strategy_configs[s_id] = {}
-    strategy_configs[s_id]['enabled'] = False
-    return {"message": f"Strategy {strategy_id} disabled", "status": "disabled"}
+    
+    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
+    current_config['enabled'] = False
+    
+    system.config_manager.update(f"strategies.{s_id}", current_config)
+    await system._on_config_changed(system.config_manager.config)
+    
+    return {"message": f"Strategy {strategy_id} disabled and saved"}
 
 @app.post("/api/strategies/{strategy_id}/enable")
 async def enable_strategy(strategy_id: str):
-    """특정 전략을 활성화합니다."""
+    """특정 전략을 활성화하고 파일에 저장합니다."""
     s_id = strategy_id.lower()
-    if s_id not in strategy_configs:
-        strategy_configs[s_id] = {}
-    strategy_configs[s_id]['enabled'] = True
-    return {"message": f"Strategy {strategy_id} enabled", "status": "enabled"}
+    
+    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
+    current_config['enabled'] = True
+    
+    system.config_manager.update(f"strategies.{s_id}", current_config)
+    await system._on_config_changed(system.config_manager.config)
+    
+    return {"message": f"Strategy {strategy_id} enabled and saved"}
 
-@app.on_event("startup")
-async def startup_event():
-    """서버 시작 시 동적 전략을 로드합니다."""
-    strategies_dir = os.path.join(os.getcwd(), 'src', 'engine', 'strategies')
-    count = load_dynamic_strategies(strategies_dir)
-    print(f"[INFO] {count} strategies loaded on startup.")
+
+@app.get("/candles")
+async def get_candles(symbol: str = "KRW-BTC", interval: int = 60, limit: int = 500, start_ts: int = None, end_ts: int = None):
+    """최적화된 고성능 캔들 데이터 반환"""
+    async with get_db_conn() as db:
+        all_candles = []
+        
+        # 1. 고분봉(60초 이상) 처리 최적화: 1분봉 기반 집계
+        if interval >= 60 and interval % 60 == 0:
+            query = "SELECT * FROM candles WHERE symbol = ? AND (interval = ? OR interval = 60)"
+            params = [symbol, interval]
+            if start_ts and end_ts:
+                query += " AND timestamp BETWEEN ? AND ?"
+                params.extend([start_ts, end_ts])
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit * (interval // 60) + 100)
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                if rows:
+                    raw_data = sorted([dict(r) for r in rows], key=lambda x: x['timestamp'])
+                    generator = CandleGenerator(intervals=[interval])
+                    for r in raw_data:
+                        # 1분봉을 입력으로 상위 분봉 조립
+                        closed = generator.process_tick(symbol, r['close'], r['volume'], 'BID', r['timestamp'] * 1000)
+                        for c in closed:
+                            all_candles.append({'timestamp': c.timestamp, 'open': c.open, 'high': c.high, 'low': c.low, 'close': c.close, 'volume': c.volume})
+                    
+                    current = generator.get_current_candle(symbol, interval)
+                    if current and (not all_candles or all_candles[-1]['timestamp'] < current.timestamp):
+                        all_candles.append({'timestamp': current.timestamp, 'open': current.open, 'high': current.high, 'low': current.low, 'close': current.close, 'volume': current.volume})
+        
+        # 2. 저분봉(60초 미만) 또는 데이터 부족 시 틱 데이터 활용
+        if not all_candles:
+            needed_ticks = limit * 2 if interval < 10 else limit * 10
+            query = "SELECT * FROM trades WHERE symbol = ? "
+            params = [symbol]
+            if start_ts and end_ts:
+                query += " AND trade_timestamp BETWEEN ? AND ?"
+                params.extend([start_ts * 1000, end_ts * 1000])
+            else:
+                query += " AND trade_timestamp > ?"
+                params.append(int((time.time() - (limit * interval * 1.5)) * 1000))
+            
+            query += " ORDER BY trade_timestamp DESC LIMIT ?"
+            params.append(min(needed_ticks, 30000))
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                if rows:
+                    ticks = sorted([dict(r) for r in rows], key=lambda x: x['trade_timestamp'])
+                    generator = CandleGenerator(intervals=[interval])
+                    for row in ticks:
+                        closed = generator.process_tick(symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
+                        for c in closed:
+                            all_candles.append({'timestamp': c.timestamp, 'open': c.open, 'high': c.high, 'low': c.low, 'close': c.close, 'volume': c.volume})
+                    
+                    current = generator.get_current_candle(symbol, interval)
+                    if current and (not all_candles or all_candles[-1]['timestamp'] < current.timestamp):
+                        all_candles.append({'timestamp': current.timestamp, 'open': current.open, 'high': current.high, 'low': current.low, 'close': current.close, 'volume': current.volume})
+
+        # 3. 결과 정제 및 지표 계산
+        if all_candles:
+            seen = set()
+            unique_candles = []
+            for c in sorted(all_candles, key=lambda x: x['timestamp']):
+                if c['timestamp'] not in seen:
+                    unique_candles.append(c)
+                    seen.add(c['timestamp'])
+            
+            unique_candles = unique_candles[-limit:]
+            df = IndicatorCalculator.calculate_all_indicators(unique_candles)
+            return df.replace({float('nan'): None}).to_dict(orient='records')
+        
+        return []
 
 @app.get("/test-alert")
 async def test_alert(symbol: str = "KRW-BTC"):
@@ -541,14 +317,13 @@ async def test_alert(symbol: str = "KRW-BTC"):
         "msg": f"🚀 [TEST] 급등 포착: {symbol} (+5.23%)"
     }
     await manager.broadcast_global(mock_alert)
-    await save_alert(mock_alert)
+    await system.save_alert(mock_alert)
     return {"message": f"Test alert for {symbol} sent to all clients and saved"}
 
 @app.get("/alerts")
 async def get_alerts(limit: int = 50):
     """최근 알림 기록을 반환합니다."""
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with get_db_conn() as db:
         async with db.execute("SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,)) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
@@ -556,57 +331,56 @@ async def get_alerts(limit: int = 50):
 @app.delete("/api/alerts")
 async def clear_alerts():
     """모든 알림 기록을 삭제합니다."""
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with get_db_conn() as db:
         await db.execute("DELETE FROM alerts")
         await db.commit()
     return {"message": "모든 알림 기록이 삭제되었습니다."}
 
-@app.get("/candles")
-async def get_candles(symbol: str = "KRW-BTC", interval: int = 60, limit: int = 5000, start_ts: int = None, end_ts: int = None):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        query = "SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE symbol = ?"
-        params = [symbol]
-        
-        if start_ts and end_ts:
-            query += " AND trade_timestamp BETWEEN ? AND ?"
-            params.extend([start_ts, end_ts])
-            query += " ORDER BY trade_timestamp ASC"
-        else:
-            query += " ORDER BY trade_timestamp DESC LIMIT ?"
-            params.append(limit if limit > 5000 else 10000) # 기본 1만개로 상향
-            
-        async with db.execute(query, params) as cursor:
-            rows = await cursor.fetchall()
-            # LIMIT 쿼리의 경우 결과를 다시 시간순으로 정렬
-            if not (start_ts and end_ts):
-                ticks = sorted(rows, key=lambda x: x['trade_timestamp'])
-            else:
-                ticks = rows
-                
-            generator = CandleGenerator(intervals=[interval])
-            all_candles = []
-            for row in ticks:
-                # ask_bid 정보를 함께 전달
-                closed = generator.process_tick(symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
-                all_candles.extend(closed)
-            
-            # 실시간 진행 중인 캔들 추가 (범위 조회가 아닐 때만)
-            if not (start_ts and end_ts):
-                current = generator.get_current_candle(symbol, interval)
-                if current: all_candles.append(current)
-            
-            # 기술 지표 계산
-            if len(all_candles) > 0:
-                df = IndicatorCalculator.calculate_all_indicators(all_candles)
-                df = df.replace({float('nan'): None})
-                return df.to_dict(orient='records')
-            return []
+@app.get("/api/portfolios")
+async def list_portfolios():
+    """관리 중인 모든 포트폴리오 목록을 반환합니다."""
+    return [
+        {"id": p.id, "name": p.name, "cash": p.cash}
+        for p in system.portfolio_manager.portfolios.values()
+    ]
+
+@app.get("/api/portfolio")
+async def get_portfolio(portfolio_id: str = "default"):
+    """포트폴리오의 현재 상태(잔고, 포지션, 수익률)를 반환합니다."""
+    portfolio = system.portfolio_manager.portfolios.get(portfolio_id)
+    if not portfolio:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    
+    # 현재가 기준 평가액 계산을 위해 최신가 정보 수집
+    # (실제로는 collector의 최신가 캐시를 사용하는 것이 좋음)
+    current_prices = {}
+    for symbol in portfolio.positions:
+        # 간단히 각 포지션의 avg_price를 기본값으로 사용 (추후 최적화 가능)
+        current_prices[symbol] = portfolio.positions[symbol].avg_price
+    
+    total_value = portfolio.get_total_value(current_prices)
+    
+    return {
+        "id": portfolio.id,
+        "name": portfolio.name,
+        "initial_cash": portfolio.initial_cash, # 원금 정보 추가 [NEW]
+        "cash": portfolio.cash,
+        "total_value": total_value,
+        "positions": [
+            {
+                "symbol": pos.symbol,
+                "quantity": pos.quantity,
+                "avg_price": pos.avg_price,
+                "updated_at": pos.updated_at
+            }
+            for pos in portfolio.positions.values() if pos.quantity > 0
+        ],
+        "history": portfolio.history[-50:] # 최근 50건만 반환
+    }
 
 @app.get("/trades")
 async def get_trades(symbol: str = "KRW-BTC", limit: int = 10):
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    async with get_db_conn() as db:
         async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (symbol, limit)) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
@@ -620,7 +394,7 @@ async def cleanup_data(date: str):
         dt = datetime.datetime.fromisoformat(date)
         ts = int(dt.timestamp() * 1000)
         
-        async with aiosqlite.connect(DB_PATH) as db:
+        async with get_db_conn() as db:
             cursor = await db.execute("DELETE FROM trades WHERE trade_timestamp < ?", (ts,))
             deleted_count = cursor.rowcount
             await db.commit()
@@ -628,15 +402,75 @@ async def cleanup_data(date: str):
     except Exception as e:
         return {"message": f"삭제 실패: {str(e)}", "count": 0}
 
-@app.post("/trade/simulate")
-async def simulate_trade(order: dict):
-    """프론트엔드에서 강제 트리거하는 시뮬레이션용 (레거시 지원)"""
-    symbol = order.get('symbol')
-    side = order.get('side')
-    price = order.get('price')
-    amount = order.get('amount')
-    print(f"[TRADE SIM] {side} {symbol} at {price} (Qty: {amount/price:.4f})")
-    return {"status": "success", "message": f"{side} 주문 완료", "data": order}
+@app.post("/api/portfolio/{portfolio_id}/panic")
+async def panic_sell(portfolio_id: str):
+    """모든 포지션을 즉시 시장가 청산하고 비상 정지합니다."""
+    try:
+        portfolio = system.portfolio_manager.portfolios.get(portfolio_id)
+        if not portfolio:
+            raise HTTPException(status_code=404, detail="Portfolio not found")
+
+        # 1. 청산할 종목들 추출
+        symbols = [s for s, pos in portfolio.positions.items() if pos.quantity > 0]
+        if not symbols:
+            return {"status": "success", "message": "청산할 포지션이 없습니다.", "data": []}
+
+        # 2. 실시간 가격 조회 (Upbit API)
+        prices = {}
+        async with aiohttp.ClientSession() as session:
+            for i in range(0, len(symbols), 100):
+                batch = ','.join(symbols[i:i+100])
+                async with session.get(f"https://api.upbit.com/v1/ticker?markets={batch}") as resp:
+                    tickers = await resp.json()
+                    for t in tickers:
+                        prices[t['market']] = t['trade_price']
+
+        # 3. 각 종목별 청산 실행
+        results = []
+        executor = system.portfolio_manager.executors.get('simulation')
+        for symbol in symbols:
+            price = prices.get(symbol, 0)
+            if price == 0: continue
+            
+            qty = portfolio.positions[symbol].quantity
+            res = await executor.execute_order(
+                portfolio=portfolio,
+                symbol=symbol,
+                side='SELL',
+                quantity=qty,
+                trade_price=price,
+                reason="긴급 손절 (Panic Sell)"
+            )
+            if res:
+                results.append(res)
+                # 1. DB 거래 내역 저장 [NEW]
+                async with get_db_conn() as db:
+                    await db.execute('''
+                        INSERT INTO orders_history (portfolio_id, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (portfolio_id, "panic_sell", res['symbol'], res['side'], res['price'], res['quantity'], res['fee'], int(time.time()), "긴급 손절 (Panic Sell)", "{}"))
+                    await db.commit()
+
+                # 2. 긴급 알림 브로드캐스트
+                alert = {
+                    "type": "alert",
+                    "alert_type": "panic",
+                    "code": symbol,
+                    "price": price,
+                    "msg": f"🚨 [긴급손절] {symbol} 전량 매도 완료"
+                }
+                await manager.broadcast_global(alert)
+                asyncio.create_task(system.save_alert(alert))
+
+        # 4. 변경된 포트폴리오 상태 DB 영구 저장 [중요]
+        await system.portfolio_manager.save_to_db(portfolio_id)
+
+        return {"status": "success", "message": f"{len(results)}개 종목 청산 완료", "data": results}
+
+    except Exception as e:
+        print(f"[ERROR] Panic Sell Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 async def simulate_trade_from_engine(symbol: str, side: str, price: float, reason: str):
     """엔진에서 실시간 전략으로 발생한 모의 체결을 브로드캐스트합니다."""
@@ -651,10 +485,6 @@ async def simulate_trade_from_engine(symbol: str, side: str, price: float, reaso
     await manager.broadcast_global(trade_alert)
     await save_alert(trade_alert)
 
-@app.post("/settings/alerts")
-async def update_alert_settings(settings: dict):
-    spike_detector.update_settings(settings)
-    return {"message": "알림 설정이 업데이트되었습니다."}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

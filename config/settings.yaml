@@ -1,0 +1,56 @@
+system:
+  db_path: data/backtest.db
+  strategies_dir: src/engine/strategies
+  log_level: INFO
+collector:
+  warmup_enabled: true
+  worker_count: 2
+  websocket_url: wss://api.upbit.com/websocket/v1
+  db_path: data/backtest.db
+strategies:
+  rsistrategy:
+    enabled: true
+    params:
+      rsi_window: 14
+      buy_threshold: 30
+      sell_threshold: 70
+  macdstrategy:
+    enabled: false
+    params:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+  volumepowerstrategy:
+    enabled: false
+    params:
+      buy_threshold: 120.0
+      sell_threshold: 80.0
+  sequentialstrategy:
+    enabled: false
+    params:
+      first_strategy_id: rsi_strategy
+      second_strategy_id: macd_strategy
+      wait_candles: 3
+  momentumspikestrategy:
+    enabled: false
+    params:
+      lookback_periods: 20
+      vol_multiplier: 3.0
+      freq_multiplier: 2.0
+      buy_ratio_threshold: 0.7
+      price_change_threshold: 0.3
+      trailing_stop_pct: 1.5
+  panicstrategy:
+    enabled: false
+    params:
+      vol_multiplier: 3.0
+      drop_threshold: 0.02
+  trendbendstrategy:
+    enabled: false
+    params:
+      lookback: 5
+  momentumstrategy:
+    enabled: false
+    params:
+      period: 15
+      threshold: 2.5

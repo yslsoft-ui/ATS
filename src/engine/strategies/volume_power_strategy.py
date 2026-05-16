@@ -8,7 +8,8 @@ class VolumePowerStrategy(BaseStrategy):
     체결강도(Volume Power)를 기반으로 매수/매도 신호를 생성합니다.
     체결강도 = (매수 체결량 / 매도 체결량) * 100
     """
-    def __init__(self, buy_threshold: float = 120.0, sell_threshold: float = 80.0):
+    def __init__(self, buy_threshold: float = 120.0, sell_threshold: float = 80.0, **kwargs):
+        super().__init__(**kwargs)
         self.buy_threshold = buy_threshold
         self.sell_threshold = sell_threshold
         self.in_position = False
