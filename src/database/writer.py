@@ -1,7 +1,9 @@
 import asyncio
 from typing import List, Dict, Any, Optional
 from src.database.connection import get_db_conn
+from src.database.retry import with_db_retry
 from src.engine.utils.telemetry import get_logger
+
 
 logger = get_logger(__name__)
 
@@ -88,11 +90,7 @@ class DatabaseWriter:
                             pass
 
                         if buffer:
-                            await db.executemany(
-                                "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?, ?)", 
-                                buffer
-                            )
-                            await db.commit()
+                            await self._write_ticks_to_db(db, buffer)
                             await asyncio.sleep(0.01)
             except asyncio.CancelledError:
                 break
@@ -138,10 +136,16 @@ class DatabaseWriter:
             except asyncio.CancelledError:
                 logger.info("[DatabaseWriter] _candle_writer_loop CancelledError 수신")
                 break
-            except Exception as e:
-                logger.error(f"[DatabaseWriter] DB 캔들 라이터 루프 예외 발생: {e}", exc_info=True)
-                await asyncio.sleep(1)
+    @with_db_retry()
+    async def _write_ticks_to_db(self, db, buffer):
+        """틱 리스트를 실제 DB에 벌크 삽입하고 커밋합니다 (재시도 지원)."""
+        await db.executemany(
+            "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?, ?)", 
+            buffer
+        )
+        await db.commit()
 
+    @with_db_retry()
     async def _flush_candles_to_db(self, db_conn, candles_to_write):
         """실제 데이터베이스 접속 세션을 통해 캔들 리스트를 벌크 삽입합니다."""
         if not candles_to_write:
@@ -159,6 +163,7 @@ class DatabaseWriter:
         await db_conn.commit()
         logger.debug(f"[DatabaseWriter] 캔들 {len(candles_to_write)}개 벌크 플러시 완료")
 
+    @with_db_retry()
     async def _force_flush_remaining(self):
         """종료 시점에 큐에 적체된 잔여 틱 및 캔들을 강제로 털어서 커밋합니다."""
         try:
@@ -198,3 +203,4 @@ class DatabaseWriter:
                 await db.commit()
         except Exception as e:
             logger.error(f"[DatabaseWriter] 종료 가드 최종 영속화 실패: {e}")
+

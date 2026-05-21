@@ -14,6 +14,7 @@ router = APIRouter()
 async def list_portfolios(request: Request):
     """관리 중인 모든 포트폴리오 목록을 반환합니다."""
     system = request.app.state.system
+    await system.portfolio_manager.load_from_db()
     return [
         {"id": p.id, "name": p.name, "cash": p.cash}
         for p in system.portfolio_manager.portfolios.values()
@@ -23,6 +24,7 @@ async def list_portfolios(request: Request):
 async def get_portfolio(request: Request, portfolio_id: str = "default"):
     """포트폴리오의 현재 상태(잔고, 포지션, 수익률)를 반환합니다."""
     system = request.app.state.system
+    await system.portfolio_manager.load_from_db()
     portfolio = system.portfolio_manager.portfolios.get(portfolio_id)
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")

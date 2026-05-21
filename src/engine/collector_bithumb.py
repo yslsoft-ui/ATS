@@ -19,8 +19,7 @@ class BithumbCollector(BaseCollector):
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         try:
-            if not self.session or self.session.closed:
-                      bithumb_config = config.get('exchanges', {}).get('bithumb', {}) if config else {}
+            bithumb_config = config.get('exchanges', {}).get('bithumb', {}) if config else {}
             api_url = bithumb_config.get('api_url', 'https://api.bithumb.com/v1')
             configured_symbols = bithumb_config.get('symbols', [])
             

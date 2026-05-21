@@ -26,7 +26,8 @@ class TradingSystem:
     """
     트레이딩 시스템의 모든 컴포넌트와 백그라운드 서비스를 총괄하는 슈퍼바이저입니다.
     """
-    def __init__(self, config_path: str, db_path: Optional[str] = None):
+    def __init__(self, config_path: str, db_path: Optional[str] = None, is_web_only: bool = False):
+        self.is_web_only = is_web_only
         # 1. 설정 매니저 초기화 및 로드
         self.config_manager = ConfigManager(config_path)
         
@@ -70,7 +71,8 @@ class TradingSystem:
         self.is_running = True
         
         logger.info("TradingSystem booting with DatabaseWriter...")
-        await self.db_writer.start()
+        if not self.is_web_only:
+            await self.db_writer.start()
         
         # 설정 감시 시작
         await self.config_manager.start_watching()
@@ -114,22 +116,23 @@ class TradingSystem:
             'on_status_callback': self._handle_strategy_status
         }
         
-        exchanges_config = self.config_manager.get('exchanges', {})
-        for exchange_id, exch_config in exchanges_config.items():
-            if not exch_config.get('enabled', True):
-                continue
-            collector = CollectorRegistry.create(exchange_id, **common_kwargs)
-            if collector:
-                self.collectors.append(collector)
-                logger.info(f"Collector registered: {exchange_id}")
-        
-        # 🌟 백그라운드 DB 벌크 라이터는 이제 레포지토리가 담당하므로 레거시 루프 미사용!
-        
-        # 5. 수집기 시작
-        full_config = self.config_manager.config.copy()
-        full_config['db_path'] = self.db_path  # 시스템 DB 경로 주입
-        for collector in self.collectors:
-            await collector.start(full_config)
+        if not self.is_web_only:
+            exchanges_config = self.config_manager.get('exchanges', {})
+            for exchange_id, exch_config in exchanges_config.items():
+                if not exch_config.get('enabled', True):
+                    continue
+                collector = CollectorRegistry.create(exchange_id, **common_kwargs)
+                if collector:
+                    self.collectors.append(collector)
+                    logger.info(f"Collector registered: {exchange_id}")
+            
+            # 🌟 백그라운드 DB 벌크 라이터는 이제 레포지토리가 담당하므로 레거시 루프 미사용!
+            
+            # 5. 수집기 시작
+            full_config = self.config_manager.config.copy()
+            full_config['db_path'] = self.db_path  # 시스템 DB 경로 주입
+            for collector in self.collectors:
+                await collector.start(full_config)
         
         logger.info("TradingSystem all components started.")
 
@@ -164,14 +167,16 @@ class TradingSystem:
         self.is_running = False
         
         # 데이터베이스 영속화 라이터 중단 및 안전 플러시
-        await self.db_writer.stop()
+        if not self.is_web_only:
+            await self.db_writer.stop()
         
         # 설정 감시 중지
         await self.config_manager.stop_watching()
         
         # 1. 수집기들 중지
-        for collector in self.collectors:
-            await collector.stop()
+        if not self.is_web_only:
+            for collector in self.collectors:
+                await collector.stop()
         
         # 1.1 인증 세션 종료
         await self.cred_provider.close()

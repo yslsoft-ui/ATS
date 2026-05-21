@@ -10,3 +10,7 @@ numpy>=1.24.0
 
 # Visualization (백테스트 결과 차트)
 matplotlib>=3.7.0
+
+# IPC & Multiprocessing
+pyzmq>=25.0.0
+

@@ -22,6 +22,19 @@ async function loadHistory() {
         // 차트 엔진에 렌더링 지시
         ChartEngine.render(state.candles, state.currentCandle);
 
+        // 헤더 현재가/변동률 초기 표시 (첫 틱 도달 전까지 공백이 되는 현상 방지)
+        const lastCandle = state.currentCandle || (state.candles.length ? state.candles[state.candles.length - 1] : null);
+        if (lastCandle) {
+            const priceEl = document.getElementById('price-metric');
+            const changeEl = document.getElementById('change-metric');
+            if (priceEl) priceEl.innerText = formatPrice(lastCandle.close);
+            if (changeEl && lastCandle.open) {
+                const changePercent = ((lastCandle.close - lastCandle.open) / lastCandle.open * 100).toFixed(2);
+                changeEl.innerText = `${changePercent >= 0 ? '+' : ''}${changePercent}%`;
+                changeEl.style.color = changePercent >= 0 ? '#FF4B4B' : '#0072FF';
+            }
+        }
+
         if (state.autoScroll) {
             ChartEngine.exitExplorerMode();
         } else if (state.alertMarkerTs) {

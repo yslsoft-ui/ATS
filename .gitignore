@@ -12,6 +12,8 @@ env/
 *.db
 *.sqlite3
 data/
+data/ipc/
+
 
 # 커서 및 에디터 설정
 .agents/

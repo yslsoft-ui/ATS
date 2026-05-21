@@ -25,6 +25,18 @@ function formatVolume(vol) {
     return (vol / 1e4).toFixed(0) + '만';
 }
 
+/**
+ * 거래량을 소수점 4째자리에서 반올림(최대 소수점 3자리)하여 천 단위 콤마를 찍고 불필요한 소수점 이하 0 제거
+ * @param {number} vol - 거래량
+ * @returns {string} 포맷팅된 거래량 문자열
+ */
+function formatTooltipVolume(vol) {
+    if (vol === undefined || vol === null) return '0';
+    const num = parseFloat(parseFloat(vol).toFixed(3));
+    return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}
+
+
 
 
 /**

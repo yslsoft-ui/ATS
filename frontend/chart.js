@@ -196,7 +196,7 @@
                 html += `<div class="tooltip-row"><span>C</span><b class="${data.close >= data.open ? 'bull' : 'bear'}">${price}</b></div>`;
 
                 if (rawCandle) {
-                    html += `<div class="tooltip-row"><span>Vol</span><b>${formatPrice(rawCandle.volume)}</b></div>`;
+                    html += `<div class="tooltip-row"><span>Vol</span><b>${formatTooltipVolume(rawCandle.volume)}</b></div>`;
                     if (rawCandle.count) {
                         html += `<div class="tooltip-row"><span>Count</span><b>${rawCandle.count}</b></div>`;
                     }

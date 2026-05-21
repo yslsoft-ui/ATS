@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 import time
 import asyncio
 from src.database.connection import get_db_conn
+from src.database.retry import with_db_retry
 from src.engine.matching import OrderbookMatchingEngine
 
 @dataclass
@@ -209,6 +210,7 @@ class PortfolioManager:
                 
         return results
 
+    @with_db_retry()
     async def execute_pipeline_order(self, portfolio_id: str, signal, quantity: float, execution_price: float, orderbook_data: Optional[Dict] = None):
         """
         ExecutionPipeline에 의해 계산되고 검증 완료된 주문을 실제로 실행하고 영구 저장합니다.
@@ -295,6 +297,7 @@ class PortfolioManager:
 
         return await self.execute_pipeline_order(portfolio.id, signal, quantity, trade_price, orderbook_data)
 
+    @with_db_retry()
     async def save_to_db(self, portfolio_id: str):
         """포트폴리오 상태를 DB에 영구 저장합니다."""
         portfolio = self.portfolios.get(portfolio_id)

@@ -75,7 +75,7 @@ exchanges:
     is_vts: true # 모의투자 서버 사용 여부
     fee_rate: 0.00015 # 국내 주식 표준 수수료 예시
     websocket_url: "ws://ops.koreainvestment.com:31000" # 실전: ws://ops.koreainvestment.com:21000, 모의: ws://ops.koreainvestment.com:31000
-    symbols: ["005930", "000660", "035420"] # 삼성전자, SK하이닉스, NAVER
+    symbols: [] #"005930", "000660", "035420"] # 삼성전자, SK하이닉스, NAVER
   bithumb:
     enabled: true
     api_key: "${BITHUMB_API_KEY}"
