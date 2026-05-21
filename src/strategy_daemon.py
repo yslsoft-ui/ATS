@@ -18,14 +18,14 @@ from src.engine.strategy import StrategyRegistry
 from src.engine.loader import load_dynamic_strategies
 from src.engine.collector_base import CollectorRegistry
 from src.ipc.bus import EventBusPublisher, EventBusSubscriber
-from src.engine.utils.telemetry import get_logger
+from src.engine.utils.telemetry import get_logger, setup_logging
 
 # 각 거래소 수집기가 Registry에 등록되도록 import 수행 (종목 조회용)
 import src.engine.collector
 import src.engine.collector_kis
 import src.engine.collector_bithumb
 
-logger = get_logger("strategy_daemon")
+logger = get_logger("src.strategy_daemon")
 
 async def fetch_exchange_symbols(exchange_id: str, config: Dict[str, Any]) -> List[str]:
     """설정에 정의된 symbols를 가져오거나, 없으면 거래소 API를 통해 전종목 리스트를 받아옵니다."""
@@ -50,6 +50,7 @@ async def fetch_exchange_symbols(exchange_id: str, config: Dict[str, Any]) -> Li
             return []
 
 async def main():
+    setup_logging(log_file="ats.log")
     logger.info("=========================================")
     logger.info("실시간 전략 엔진 데몬(Strategy Engine Daemon) 기동 시작")
     logger.info("=========================================")
@@ -71,20 +72,21 @@ async def main():
     await portfolio_manager.load_from_db()
 
     # 5. ZeroMQ Publisher 기동 (주문 신호 및 상태 알림 발행용)
-    signal_publisher = EventBusPublisher("signal_data")
+    signal_publisher = EventBusPublisher("strategy_signal")
 
     # 6. 주문 실행 파이프라인(ExecutionPipeline) 구축 및 ZMQ 연동
     execution_pipeline = ExecutionPipeline(portfolio_manager)
     
     async def zmq_broadcast_callback(alert_data: dict):
         """매매 체결/보류 상태 알림 발생 시 ZeroMQ로 즉시 퍼블리시합니다."""
-        await signal_publisher.publish("signal_data", alert_data)
+        await signal_publisher.publish("strategy_signal", alert_data)
         
     execution_pipeline.set_broadcast_callback(zmq_broadcast_callback)
 
     # 7. 거래소별 종목 목록 로드 및 TradeEngine 인스턴스 생성
     trade_engines: Dict[str, TradeEngine] = {}
     
+    logger.info("[Strategy Daemon DEBUG] Starting exchange config loop...")
     exchanges_config = config_manager.get('exchanges', {})
     for exchange_id, exch_config in exchanges_config.items():
         if not exch_config.get('enabled', True):
@@ -92,6 +94,7 @@ async def main():
             
         # 종목 로드 (config 고정값 또는 API 동적 조회)
         symbols = await fetch_exchange_symbols(exchange_id, config_manager.config)
+        logger.info(f"[Strategy Daemon DEBUG] Symbols fetched for {exchange_id}: count={len(symbols)}")
         
         # 활성화된 전략 목록 및 파라미터 파싱
         strategy_configs = config_manager.get('strategies', {})
@@ -107,7 +110,7 @@ async def main():
         
         async def on_strategy_status(status_data: dict):
             """전략 상태 Audit 로그 발생 시 ZeroMQ로 즉시 퍼블리시합니다."""
-            await signal_publisher.publish("signal_data", status_data)
+            await signal_publisher.publish("strategy_signal", status_data)
 
         # 각 종목별로 독립된 TradeEngine 세팅
         for symbol in symbols:
@@ -125,7 +128,9 @@ async def main():
                 on_status_callback=on_strategy_status
             )
             trade_engines[key] = engine
+            logger.info(f"[Strategy Daemon DEBUG] TradeEngine created for {key}")
 
+    logger.info(f"[Strategy Daemon DEBUG] Exchange loop finished. Total trade engines: {len(trade_engines)}")
     # 8. 백그라운드 워밍업 실행
     async def run_warmup():
         logger.info(f"[Strategy Daemon] {len(trade_engines)}개 종목에 대한 전략 엔진 백그라운드 워밍업 개시...")
@@ -138,14 +143,50 @@ async def main():
             await asyncio.sleep(0.01)
         logger.info("[Strategy Daemon] 모든 종목 전략 엔진 워밍업 완료")
 
+    logger.info("[Strategy Daemon DEBUG] Scheduling run_warmup...")
     asyncio.create_task(run_warmup())
+
+    # 종료 처리용 시그널 핸들링
+    stop_event = asyncio.Event()
+
+    # 전략 엔진 동작 상태 퍼블리시 루프 (3초 주기 및 기동 즉시 전송)
+    async def status_broadcast_loop():
+        logger.info("[Strategy Daemon DEBUG] status_broadcast_loop started")
+        
+        # 기동 즉시 첫 하트비트 상태를 전송하여 ZMQ 구독 연결 지연으로 인한 유실 방지
+        try:
+            logger.info("[Strategy Daemon DEBUG] Publishing initial strategy_status to ZMQ...")
+            await signal_publisher.publish("strategy_signal", {
+                "type": "strategy_status",
+                "is_running": True,
+                "active_engines": len(trade_engines),
+                "error": None
+            })
+            logger.info("[Strategy Daemon DEBUG] Publishing initial strategy_status completed.")
+        except Exception as e:
+            logger.error(f"[Strategy Daemon] 초기 상태 퍼블리시 중 에러: {e}")
+
+        while not stop_event.is_set():
+            try:
+                logger.info("[Strategy Daemon DEBUG] Publishing strategy_status to ZMQ...")
+                await signal_publisher.publish("strategy_signal", {
+                    "type": "strategy_status",
+                    "is_running": True,
+                    "active_engines": len(trade_engines),
+                    "error": None
+                })
+                logger.info("[Strategy Daemon DEBUG] Publishing strategy_status completed.")
+            except Exception as e:
+                logger.error(f"[Strategy Daemon] 상태 퍼블리시 중 에러: {e}")
+            await asyncio.sleep(3.0)
+
+    logger.info("[Strategy Daemon DEBUG] Scheduling status_broadcast_loop...")
+    broadcast_task = asyncio.create_task(status_broadcast_loop())
 
     # 9. ZeroMQ Subscriber 기동 (market_data 토픽 구독)
     market_subscriber = EventBusSubscriber("market_data")
 
     # 10. 종료 처리용 시그널 핸들링
-    stop_event = asyncio.Event()
-
     def handle_shutdown():
         logger.info("[Strategy Daemon] 종료 시그널 감지. 자원 정리 및 안전 종료 절차를 진행합니다...")
         stop_event.set()
@@ -206,6 +247,24 @@ async def main():
 
     # 종료 이벤트 대기
     await stop_event.wait()
+
+    # 상태 퍼블리시 루프 취소 및 종료 상태(False) ZMQ 퍼블리시
+    logger.info("[Strategy Daemon] 상태 퍼블리시 루프 취소 및 종료 상태 전송 중...")
+    broadcast_task.cancel()
+    try:
+        await broadcast_task
+    except asyncio.CancelledError:
+        pass
+
+    try:
+        await signal_publisher.publish("strategy_signal", {
+            "type": "strategy_status",
+            "is_running": False,
+            "active_engines": 0,
+            "error": None
+        })
+    except Exception as e:
+        logger.error(f"[Strategy Daemon] 종료 상태 퍼블리시 에러: {e}")
 
     # 12. 정리 절차 (Graceful Shutdown)
     logger.info("[Strategy Daemon] 실시간 구독 루프 취소 중...")

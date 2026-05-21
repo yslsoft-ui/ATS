@@ -25,8 +25,10 @@
         activeAssetDetail: null,
         alertFilter: 'high',
         alertHistory: [],
-        symbolNames: {}
+        symbolNames: {},
+        collectorStatuses: {}
     };
+
 
     // 상태 변경 이벤트 감지를 위한 리스너 목록
     const _listeners = [];

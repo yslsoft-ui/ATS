@@ -26,47 +26,42 @@
                 <div class="menu-item" data-view="settings-view">⚙️ 설정</div>
                 <div class="menu-item" data-view="restored-view">🛠️ 복원 캔들</div>
             </nav>
-            <!-- 수집기 신호등 위젯 [NEW] -->
-            <div class="system-status" style="margin-bottom: 15px;">
-                <div class="status-header">COLLECTORS STATUS</div>
-                <div class="status-item">
-                    <span>Upbit</span>
-                    <span id="sidebar-upbit-status" class="status-indicator status-off">● OFF</span>
-                </div>
-                <div class="status-item">
-                    <span>Bithumb</span>
-                    <span id="sidebar-bithumb-status" class="status-indicator status-off">● OFF</span>
-                </div>
-                <div class="status-item">
-                    <span>Domestic (KIS)</span>
-                    <span id="sidebar-kis-status" class="status-indicator status-off">● OFF</span>
-                </div>
-            </div>
-            <!-- 시스템 상태 위젯 [NEW] -->
-            <div class="system-status" style="margin-bottom: 15px;">
+            <!-- 시스템 및 수집기 통합 상태 위젯 (컴팩트 버전) -->
+            <div class="system-status-container">
                 <div class="status-header">SYSTEM STATUS</div>
-                <div class="status-item">
-                    <span>WebSocket Link</span>
-                    <span id="status-badge" class="badge">CONNECTED</span>
+                <div class="compact-status-grid">
+                    <!-- WebSocket Link -->
+                    <div class="compact-status-card" id="status-badge-container" title="WebSocket Link">
+                        <span class="status-label">WS</span>
+                        <span id="status-badge" class="status-indicator">●</span>
+                    </div>
+                    <!-- Upbit -->
+                    <div class="compact-status-card" title="Upbit Collector">
+                        <span class="status-label">UP</span>
+                        <span id="sidebar-upbit-status" class="status-indicator">●</span>
+                    </div>
+                    <!-- Bithumb -->
+                    <div class="compact-status-card" title="Bithumb Collector">
+                        <span class="status-label">BT</span>
+                        <span id="sidebar-bithumb-status" class="status-indicator">●</span>
+                    </div>
+                    <!-- KIS -->
+                    <div class="compact-status-card" title="KIS Collector">
+                        <span class="status-label">KS</span>
+                        <span id="sidebar-kis-status" class="status-indicator">●</span>
+                    </div>
+                    <!-- Strategy Engine -->
+                    <div class="compact-status-card" title="Strategy Engine">
+                        <span class="status-label">ST</span>
+                        <span id="sidebar-strategy-status" class="status-indicator">●</span>
+                    </div>
                 </div>
-            </div>
-            <div class="system-status">
-                <div class="status-header">SYSTEM QUEUES</div>
-                <div class="status-item">
-                    <span>Receiver</span>
-                    <span id="queue-processing" class="status-value">0</span>
-                </div>
-                <div class="status-item">
-                    <span>Database</span>
-                    <span id="queue-database" class="status-value">0</span>
-                </div>
-                <div class="status-item">
-                    <span>Candle</span>
-                    <span id="queue-candle" class="status-value">0</span>
-                </div>
-                <div class="status-item total">
-                    <span>Total Processed</span>
-                    <span id="queue-total" class="status-value">0</span>
+                <!-- 큐 상태 한 줄로 통합 -->
+                <div class="compact-queues">
+                    <span title="Receiver Queue">RCV:<span id="queue-processing" class="queue-val">0</span></span>
+                    <span title="Database Queue">DB:<span id="queue-database" class="queue-val">0</span></span>
+                    <span title="Candle Queue">CND:<span id="queue-candle" class="queue-val">0</span></span>
+                    <span title="Total Processed" style="color: #F59E0B;">TOT:<span id="queue-total" class="queue-val total-val">0</span></span>
                 </div>
             </div>
         </aside>

@@ -90,8 +90,13 @@ class KisCollector(BaseCollector):
         return None
 
     async def _pre_connect_check(self) -> float:
-        if not MarketHours.is_krx_open():
-            wait_sec = MarketHours.time_until_open('kis')
+        kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}
+        hours_config = kis_config.get('market_hours', {})
+        start_time_str = hours_config.get('start_time', '08:30')
+        end_time_str = hours_config.get('end_time', '18:10')
+
+        if not MarketHours.is_krx_open(start_time_str=start_time_str, end_time_str=end_time_str):
+            wait_sec = MarketHours.time_until_open('kis', start_time_str=start_time_str)
             logger.info(f"Market is closed. KisCollector waiting for {wait_sec/3600:.1f} hours...")
             return min(wait_sec, 3600.0)
         return 0.0
@@ -151,6 +156,10 @@ class KisCollector(BaseCollector):
             return
 
         app_key = self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('app_key')
+        app_secret = self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('app_secret')
+        
+        app_key_str = str(app_key) if app_key is not None else ""
+        app_secret_str = str(app_secret) if app_secret is not None else ""
         
         url = "https://openapivts.koreainvestment.com:29443/uapi/domestic-stock/v1/quotations/volume-rank"
         if not self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('is_vts', True):
@@ -159,8 +168,8 @@ class KisCollector(BaseCollector):
         headers = {
             "Content-Type": "application/json",
             "authorization": f"Bearer {token}",
-            "appkey": app_key,
-            "appsecret": self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('app_secret'),
+            "appkey": app_key_str,
+            "appsecret": app_secret_str,
             "tr_id": "FHKST01010900",
             "custtype": "P"
         }
@@ -187,6 +196,8 @@ class KisCollector(BaseCollector):
                 self.last_error = None
                 data = await resp.json()
                 output = data.get('output', [])
+                if output is None:
+                    output = []
                 
                 if not output:
                     logger.warning("No ranking data (Market closed?). Using default major symbols as fallback.")
@@ -203,6 +214,8 @@ class KisCollector(BaseCollector):
                 
                 for item in output:
                     symbol = item.get('mksc_shrn_iscd')
+                    if not symbol:
+                        continue
                     name = item.get('hts_kor_isnm')
                     price = float(item.get('stck_prpr', 0))
                     change_rate = float(item.get('prdy_ctrt', 0)) / 100.0

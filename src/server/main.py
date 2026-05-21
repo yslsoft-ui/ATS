@@ -45,6 +45,7 @@ async def zmq_listener_loop():
     logger.info("[Web ZMQ Listener] Starting ZMQ listener loops...")
     market_sub = EventBusSubscriber("market_data")
     signal_sub = EventBusSubscriber("signal_data")
+    strategy_sub = EventBusSubscriber("strategy_signal")
     
     async def listen_market():
         while True:
@@ -66,8 +67,29 @@ async def zmq_listener_loop():
                 topic, data = await signal_sub.receive()
                 if not topic:
                     continue
-                # 실시간 전략 신호/체결 알림 발생 시 브로드캐스트 콜백 호출
-                if system.broadcast_callback:
+                
+                # 실시간 수집기 상태 패킷 수신 시 캐시 업데이트
+                if data.get('type') == 'collector_status':
+                    exch = data.get('exchange')
+                    if exch:
+                        logger.info(f"[Web ZMQ Signal Listener] 수집기 상태 수신: exch={exch}, is_running={data.get('is_running')}")
+                        system.collector_statuses[exch] = {
+                            "is_running": data.get('is_running', False),
+                            "error": data.get('error', None)
+                        }
+                elif data.get('type') == 'queue_status':
+                    system.queue_status = {
+                        "processing": data.get('processing', 0),
+                        "database": data.get('database', 0),
+                        "candle": data.get('candle', 0),
+                        "total": data.get('total', 0)
+                    }
+
+                # 실시간 상태 패킷 브로드캐스트 호출
+                if data.get('type') in ['collector_status', 'queue_status']:
+                    from src.server.websocket import manager
+                    await manager.broadcast_alert(data)
+                elif system.broadcast_callback:
                     await system.broadcast_callback(data)
             except asyncio.CancelledError:
                 break
@@ -75,18 +97,51 @@ async def zmq_listener_loop():
                 logger.error(f"[Web ZMQ Signal Listener] Error: {e}")
                 await asyncio.sleep(0.1)
 
+    async def listen_strategy_signal():
+        while True:
+            try:
+                topic, data = await strategy_sub.receive()
+                if not topic:
+                    continue
+                
+                # 실시간 전략 엔진 상태 패킷 수신 시 캐시 업데이트
+                if data.get('type') == 'strategy_status' and 'strategy_id' not in data:
+                    import time
+                    logger.info(f"[Web ZMQ Strategy Listener] 전략 엔진 상태 수신: is_running={data.get('is_running')}, active_engines={data.get('active_engines')}")
+                    system.strategy_status = {
+                        "is_running": data.get('is_running', False),
+                        "active_engines": data.get('active_engines', 0),
+                        "last_heartbeat": time.time(),
+                        "error": data.get('error', None)
+                    }
+
+                # 실시간 전략 상태 및 주문 신호 발생 시 브로드캐스트 호출
+                if data.get('type') == 'strategy_status':
+                    from src.server.websocket import manager
+                    await manager.broadcast_alert(data)
+                elif system.broadcast_callback:
+                    await system.broadcast_callback(data)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[Web ZMQ Strategy Listener] Error: {e}")
+                await asyncio.sleep(0.1)
+
     t1 = asyncio.create_task(listen_market())
     t2 = asyncio.create_task(listen_signal())
+    t3 = asyncio.create_task(listen_strategy_signal())
     
     try:
-        await asyncio.gather(t1, t2)
+        await asyncio.gather(t1, t2, t3)
     except asyncio.CancelledError:
         pass
     finally:
         t1.cancel()
         t2.cancel()
+        t3.cancel()
         market_sub.close()
         signal_sub.close()
+        strategy_sub.close()
         logger.info("[Web ZMQ Listener] ZMQ listener loops stopped and sockets closed.")
 
 @app.on_event("startup")

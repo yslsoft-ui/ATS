@@ -23,6 +23,9 @@ class BithumbCollector(BaseCollector):
             api_url = bithumb_config.get('api_url', 'https://api.bithumb.com/v1')
             configured_symbols = bithumb_config.get('symbols', [])
             
+            if not self.session or self.session.closed:
+                self.session = aiohttp.ClientSession()
+            
             # --- 1. [NEW] 빗썸 공식 V1 API를 통해 한글명 동적 캐싱 로드 ---
             try:
                 async with self.session.get(f"{api_url}/market/all") as resp:

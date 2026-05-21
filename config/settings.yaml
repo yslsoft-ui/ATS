@@ -16,8 +16,8 @@ strategies:
     overrides:
       kis:
         params:
-          rsi_window: 20  # 주식은 노이즈가 적어 더 긴 윈도우 권장
-          buy_threshold: 35 # 주식은 코인보다 덜 과매도되는 경향이 있음
+          rsi_window: 20
+          buy_threshold: 35
           sell_threshold: 65
   macdstrategy:
     enabled: false
@@ -61,27 +61,29 @@ strategies:
 exchanges:
   upbit:
     enabled: true
-    api_key: "${UPBIT_ACCESS_KEY}"
-    api_secret: "${UPBIT_SECRET_KEY}"
+    api_key: 4xex9xdcG4Ce6gCKs0Y8KSzXgI0Lmu5cGrZMwzNS
+    api_secret: g0mEQPLKYhxtxXkxhcvxovKTt0IuYI3VHecUeHqF
     fee_rate: 0.0005
-    websocket_url: "wss://api.upbit.com/websocket/v1"
-    api_url: "https://api.upbit.com/v1" # 업비트 REST API 공통 주소 (/v1 포함)
-    symbols: [] # 빈 리스트일 경우 KRW 전체 종목 자동 로드
+    websocket_url: wss://api.upbit.com/websocket/v1
+    api_url: https://api.upbit.com/v1
+    symbols: []
   kis:
     enabled: true
-    app_key: "${KIS_APP_KEY}"
-    app_secret: "${KIS_APP_SECRET}"
-    account_no: "${KIS_ACCOUNT_NO}"
-    is_vts: true # 모의투자 서버 사용 여부
-    fee_rate: 0.00015 # 국내 주식 표준 수수료 예시
-    websocket_url: "ws://ops.koreainvestment.com:31000" # 실전: ws://ops.koreainvestment.com:21000, 모의: ws://ops.koreainvestment.com:31000
-    symbols: [] #"005930", "000660", "035420"] # 삼성전자, SK하이닉스, NAVER
+    app_key: PSpNCUs5O8snmpX0pcY1QZDiPz58JINHTu3X
+    app_secret: WdaB3Uy+xrEhM2Pgt5o7rtPcNEmdKp4ZdYjH9po+yLjeFnqWgPnMkLK7vNjcl99K1Rb5Ktzlys9uuWXyGgyQFGYklt/ZHzV9JDj4ZOtr4bBBFwzQFSKfud1SGJulJ4yXVv8vRDSb0BzgahtRk18nGB5vYoaFLLM+dg/v90qV8vdMMczMurA=
+    account_no: 73804972
+    is_vts: true
+    fee_rate: 0.00015
+    websocket_url: ws://ops.koreainvestment.com:31000
+    symbols: []
+    market_hours:
+      start_time: "08:30"
+      end_time: "18:10"
   bithumb:
     enabled: true
-    api_key: "${BITHUMB_API_KEY}"
-    api_secret: "${BITHUMB_SECRET_KEY}"
-    fee_rate: 0.0025 # 빗썸 기본 수수료
-    websocket_url: "wss://ws-api.bithumb.com/websocket/v1"
-    api_url: "https://api.bithumb.com/v1" # 빗썸 REST API 공통 주소 (/v1 포함)
+    api_key: your_bithumb_api_key
+    api_secret: your_bithumb_secret_key
+    fee_rate: 0.0025
+    websocket_url: wss://ws-api.bithumb.com/websocket/v1
+    api_url: https://api.bithumb.com/v1
     symbols: []
-    # symbols: ["BTC", "ETH", "XRP", "SOL", "DOGE"]

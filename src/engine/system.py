@@ -64,6 +64,26 @@ class TradingSystem:
         # 외부 브로드캐스트 콜백 (웹소켓 등)
         self.broadcast_callback: Optional[Callable] = None
 
+        # 수집기 및 전략 엔진 상태 전역 캐시 (Web-only 기동 시 ZMQ 통신으로 채워짐)
+        self.collector_statuses: Dict[str, Dict[str, Any]] = {
+            "upbit": {"is_running": False, "error": None},
+            "bithumb": {"is_running": False, "error": None},
+            "kis": {"is_running": False, "error": None}
+        }
+        self.strategy_status: Dict[str, Any] = {
+            "is_running": False,
+            "active_engines": 0,
+            "last_heartbeat": 0.0,
+            "error": None
+        }
+        self.queue_status: Dict[str, Any] = {
+            "processing": 0,
+            "database": 0,
+            "candle": 0,
+            "total": 0
+        }
+
+
     async def boot(self):
         """시스템의 모든 구성 요소를 올바른 순서로 기동합니다."""
         if self.is_running:
@@ -329,9 +349,15 @@ class TradingSystem:
                 for collector in self.collectors:
                     if getattr(collector, 'exchange', '') == 'bithumb':
                         bithumb_symbols.update(getattr(collector, 'available_symbols', []))
+                bithumb_config_symbols = self.config_manager.get('exchanges.bithumb.symbols', [])
+                if bithumb_config_symbols:
+                    bithumb_symbols.update(bithumb_config_symbols)
                 for key in self.latest_prices.keys():
                     if key.startswith('bithumb:'):
                         bithumb_symbols.add(key.split(':')[1])
+                bithumb_mapper_symbols = stock_mapper._mapping.get('bithumb', {})
+                if bithumb_mapper_symbols:
+                    bithumb_symbols.update(bithumb_mapper_symbols.keys())
 
                 if bithumb_symbols:
                     bithumb_config = self.config_manager.get('exchanges.bithumb', {})
@@ -383,9 +409,15 @@ class TradingSystem:
                 for collector in self.collectors:
                     if getattr(collector, 'exchange', '') == 'kis':
                         kis_symbols.update(getattr(collector, 'available_symbols', []))
+                kis_config_symbols = self.config_manager.get('exchanges.kis.symbols', [])
+                if kis_config_symbols:
+                    kis_symbols.update(kis_config_symbols)
                 for key in self.latest_prices.keys():
                     if key.startswith('kis:'):
                         kis_symbols.add(key.split(':')[1])
+                kis_mapper_symbols = stock_mapper._mapping.get('kis', {})
+                if kis_mapper_symbols:
+                    kis_symbols.update(kis_mapper_symbols.keys())
 
                 for s_code in kis_symbols:
                     key = f"kis:{s_code}"

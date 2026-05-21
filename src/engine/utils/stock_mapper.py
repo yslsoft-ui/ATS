@@ -84,9 +84,11 @@ class StockMapper:
 
     def add_mapping(self, exchange: str, symbol: str, name: str):
         """새로운 매핑을 추가합니다."""
+        if not exchange or not symbol:
+            return
         if exchange not in self._mapping:
             self._mapping[exchange] = {}
-        self._mapping[exchange][symbol] = name
+        self._mapping[exchange][symbol] = str(name) if name is not None else ""
 
 # 전역 인스턴스
 stock_mapper = StockMapper()

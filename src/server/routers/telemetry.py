@@ -28,6 +28,10 @@ async def clear_alerts():
 async def get_queue_status(request: Request):
     """각 작업 큐의 현재 적체량 및 누적 처리량을 반환합니다."""
     system = request.app.state.system
+    
+    if system.is_web_only:
+        return system.queue_status
+        
     total_count = sum(getattr(c, 'total_processed_count', 0) for c in system.collectors)
     # 각 거래소 수집기가 격리 큐를 가짐에 따라, 큐 크기의 총합을 산출하여 UI에 누적 적체량을 리포트합니다.
     processing_size = sum(c.processing_queue.qsize() for c in system.collectors)

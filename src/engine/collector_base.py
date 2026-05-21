@@ -282,6 +282,7 @@ class BaseCollector(ABC):
         """메인 실행 루프 (템플릿 메서드)"""
         if config is None:
             config = {}
+        self.config = config
             
         # 1. 종목 로드
         self.available_symbols = await self._fetch_symbols(config)

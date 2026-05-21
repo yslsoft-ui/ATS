@@ -44,38 +44,86 @@ body {
     padding: 20px;
 }
 
-/* 시스템 상태 위젯 스타일 [NEW] */
-.system-status {
+/* 시스템 상태 위젯 스타일 (컴팩트 통합 버전) */
+.system-status-container {
     margin-top: auto;
-    padding-top: 20px;
+    padding-top: 12px;
     border-top: 1px solid var(--border-color);
     font-size: 0.75rem;
 }
 
-.status-header {
+.system-status-container .status-header {
     color: var(--text-secondary);
     font-weight: bold;
-    margin-bottom: 12px;
-    letter-spacing: 1px;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
     font-size: 0.7rem;
+    text-transform: uppercase;
 }
 
-.status-item {
+.compact-status-grid {
     display: flex;
+    gap: 4px;
     justify-content: space-between;
     margin-bottom: 8px;
+}
+
+.compact-status-card {
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 4px;
+    padding: 3px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+}
+
+.compact-status-card:hover {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+.compact-status-card .status-label {
+    font-size: 8px;
+    font-weight: bold;
+    color: #94A3B8;
+    margin-bottom: 1px;
+}
+
+.compact-status-card .status-indicator {
+    font-size: 9px;
+    color: #64748B;
+    transition: color 0.3s ease;
+}
+
+.compact-queues {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
     color: var(--text-secondary);
     font-family: 'Roboto Mono', monospace;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 6px;
 }
 
-.status-value {
+.compact-queues > span {
+    display: flex;
+    align-items: center;
+}
+
+.compact-queues .queue-val {
     color: var(--accent-color);
     font-weight: bold;
+    margin-left: 2px;
 }
 
-.status-value.warning {
-    color: var(--bull-color);
-    animation: pulse 1s infinite;
+.compact-queues .queue-val.total-val {
+    color: #F59E0B;
 }
 
 @keyframes pulse {
@@ -107,23 +155,7 @@ body {
 }
 
 
-/* 시스템 상태 위젯 스타일 */
-.system-status .status-item.total {
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.system-status .status-item.total .status-value {
-    color: #F59E0B; /* Amber color */
-    font-weight: bold;
-    font-size: 1.1rem;
-}
-
-.system-status .status-value.warning {
-    color: #FF4B4B;
-    animation: pulse 1s infinite;
-}
+/* 레거시 시스템 상태 위젯 스타일 제거됨 */
 
 /* 메인 콘텐츠 스타일 */
 .content {

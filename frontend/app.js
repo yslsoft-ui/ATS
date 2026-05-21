@@ -53,8 +53,28 @@ async function loadHistory() {
 
 // --- 실시간 캔들 생성 및 업데이트 로직 (PUSH) ---
 function processTick(tick) {
+    if (tick.type === 'collector_status') {
+        const current = { ...Store.get('collectorStatuses') };
+        current[tick.exchange] = {
+            is_running: tick.is_running,
+            error: tick.error
+        };
+        Store.set('collectorStatuses', current);
+        return;
+    }
+
     if (tick.type === 'strategy_status') {
-        updateStrategyStatusUI(tick);
+        if (tick.strategy_id !== undefined) {
+            updateStrategyStatusUI(tick);
+        } else {
+            const current = { ...Store.get('collectorStatuses') };
+            current.strategy = {
+                is_running: tick.is_running,
+                active_engines: tick.active_engines,
+                error: tick.error
+            };
+            Store.set('collectorStatuses', current);
+        }
         return;
     }
 
@@ -324,80 +344,117 @@ const exchangeState = {
 async function updateCollectorStatus() {
     try {
         const data = await APIClient.fetchCollectorStatus();
-
-        let hasEmergency = false;
-
-        for (const [exch, status] of Object.entries(data)) {
-            const statusEl = document.getElementById(`${exch}-status`);
-            const btnEl = document.getElementById(`btn-toggle-${exch}`);
-            const errorEl = document.getElementById(`${exch}-error-msg`);
-            const sidebarStatusEl = document.getElementById(`sidebar-${exch}-status`);
-
-            if (!statusEl || !btnEl) continue;
-
-            exchangeState[exch].isRunning = status.is_running;
-            
-            if (sidebarStatusEl) {
-                if (status.is_running && !status.error) {
-                    sidebarStatusEl.innerText = '● RUNNING';
-                    sidebarStatusEl.className = 'status-indicator status-on';
-                } else if (status.error) {
-                    sidebarStatusEl.innerText = '● ERROR';
-                    sidebarStatusEl.className = 'status-indicator status-warn';
-                } else {
-                    sidebarStatusEl.innerText = '● STOPPED';
-                    sidebarStatusEl.className = 'status-indicator status-off';
-                }
-            }
-
-            if (status.is_running && !status.error) {
-                statusEl.innerText = 'RUNNING';
-                statusEl.className = 'status-badge status-on';
-                btnEl.innerText = '⏹️ 중단';
-                btnEl.className = 'btn sm danger';
-            } else {
-                statusEl.innerText = status.error ? 'ERROR' : 'STOPPED';
-                statusEl.className = status.error ? 'status-badge status-warn' : 'status-badge status-off';
-                btnEl.innerText = '▶️ 시작';
-                btnEl.className = 'btn sm primary';
-            }
-
-            if (status.error) {
-                errorEl.innerText = status.error;
-                errorEl.style.display = 'block';
-                
-                if (lastSeenErrors[exch] !== status.error) {
-                    showAlert({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${status.error}`, alert_type: 'error' });
-                    lastSeenErrors[exch] = status.error;
-                }
-            } else {
-                errorEl.style.display = 'none';
-                lastSeenErrors[exch] = null;
-            }
-            
-            btnEl.disabled = false;
-
-            if (!status.is_running || status.error) {
-                hasEmergency = true;
-            }
-        }
-
-        const emergencyBanner = document.getElementById('global-emergency-banner');
-        if (emergencyBanner) {
-            if (hasEmergency) {
-                emergencyBanner.style.display = 'flex';
-                emergencyBanner.querySelector('.warning-text').innerText = '[비상 경고] 일부 데이터 수집기가 중단되었거나 에러 상태입니다! 상시 시세 모니터링 수급이 어렵습니다.';
-            } else {
-                emergencyBanner.style.display = 'none';
-            }
-        }
-
+        Store.set('collectorStatuses', data);
     } catch (e) {
         console.error("Status check failed", e);
         const emergencyBanner = document.getElementById('global-emergency-banner');
         if (emergencyBanner) {
             emergencyBanner.style.display = 'flex';
             emergencyBanner.querySelector('.warning-text').innerText = '[비상 경고] 백엔드 거래 서버와의 실시간 API 통신이 차단되었습니다! 네트워크 연결을 확인하십시오.';
+        }
+    }
+}
+
+function renderCollectorStatuses(statuses) {
+    if (!statuses) return;
+
+    let hasEmergency = false;
+
+    // 1. 거래소 수집기 상태 렌더링
+    const exchanges = ['upbit', 'bithumb', 'kis'];
+    exchanges.forEach(exch => {
+        const status = statuses[exch] || { is_running: false, error: null };
+        const isRunning = status.is_running;
+        const error = status.error;
+
+        // 사이드바 콤팩트 표시등 및 툴팁 업데이트
+        const sidebarStatusEl = document.getElementById(`sidebar-${exch}-status`);
+        const cardEl = sidebarStatusEl ? sidebarStatusEl.closest('.compact-status-card') : null;
+        if (sidebarStatusEl) {
+            if (isRunning && !error) {
+                sidebarStatusEl.style.color = '#4caf50'; // RUNNING: 초록
+            } else if (error) {
+                sidebarStatusEl.style.color = '#FF4B4B'; // ERROR: 빨강
+            } else {
+                sidebarStatusEl.style.color = '#64748B'; // STOPPED: Slate 회색
+            }
+        }
+        if (cardEl) {
+            const statusStr = isRunning ? (error ? 'ERROR' : 'RUNNING') : 'STOPPED';
+            cardEl.title = `${exch.toUpperCase()} Collector: ${statusStr}${error ? ` (${error})` : ''}`;
+        }
+
+        // 설정 화면의 거래소 수집기 위젯 상태 업데이트
+        const statusEl = document.getElementById(`${exch}-status`);
+        const btnEl = document.getElementById(`btn-toggle-${exch}`);
+        const errorEl = document.getElementById(`${exch}-error-msg`);
+
+        if (statusEl && btnEl) {
+            exchangeState[exch].isRunning = isRunning;
+            btnEl.disabled = false;
+
+            if (isRunning && !error) {
+                statusEl.innerText = 'RUNNING';
+                statusEl.className = 'status-badge status-on';
+                btnEl.innerText = '⏹️ 중단';
+                btnEl.className = 'btn sm danger';
+            } else {
+                statusEl.innerText = error ? 'ERROR' : 'STOPPED';
+                statusEl.className = error ? 'status-badge status-warn' : 'status-badge status-off';
+                btnEl.innerText = '▶️ 시작';
+                btnEl.className = 'btn sm primary';
+            }
+        }
+
+        if (errorEl) {
+            if (error) {
+                errorEl.innerText = error;
+                errorEl.style.display = 'block';
+                if (lastSeenErrors[exch] !== error) {
+                    showAlert({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${error}`, alert_type: 'error' });
+                    lastSeenErrors[exch] = error;
+                }
+            } else {
+                errorEl.style.display = 'none';
+                lastSeenErrors[exch] = null;
+            }
+        }
+
+        if (!isRunning || error) {
+            hasEmergency = true;
+        }
+    });
+
+    // 2. 전략 엔진 상태 렌더링
+    const strategy = statuses.strategy || { is_running: false, active_engines: 0, error: null };
+    const stratRunning = strategy.is_running;
+    const activeEngines = strategy.active_engines || 0;
+    const stratError = strategy.error;
+
+    const sidebarStratEl = document.getElementById('sidebar-strategy-status');
+    const stratCardEl = sidebarStratEl ? sidebarStratEl.closest('.compact-status-card') : null;
+    if (sidebarStratEl) {
+        if (stratRunning && !stratError) {
+            sidebarStratEl.style.color = '#4caf50'; // RUNNING: 초록
+        } else if (stratError) {
+            sidebarStratEl.style.color = '#FF4B4B'; // ERROR: 빨강
+        } else {
+            sidebarStratEl.style.color = '#64748B'; // STOPPED: Slate 회색
+        }
+    }
+    if (stratCardEl) {
+        const stratStatusStr = stratRunning ? (stratError ? 'ERROR' : `RUNNING (${activeEngines} 종목)`) : 'STOPPED';
+        stratCardEl.title = `Strategy Engine: ${stratStatusStr}${stratError ? ` (${stratError})` : ''}`;
+    }
+
+    // 3. 글로벌 비상 경고 배너 업데이트
+    const emergencyBanner = document.getElementById('global-emergency-banner');
+    if (emergencyBanner) {
+        if (hasEmergency) {
+            emergencyBanner.style.display = 'flex';
+            emergencyBanner.querySelector('.warning-text').innerText = '[비상 경고] 일부 데이터 수집기가 중단되었거나 에러 상태입니다! 상시 시세 모니터링 수급이 어렵습니다.';
+        } else {
+            emergencyBanner.style.display = 'none';
         }
     }
 }
@@ -715,10 +772,17 @@ function initTradingControls() {
         
         if (key === 'wsConnected') {
             const badge = document.getElementById('status-badge');
+            const container = document.getElementById('status-badge-container');
             if (badge) {
-                badge.innerText = val ? 'CONNECTED' : 'DISCONNECTED';
-                badge.className = val ? 'badge' : 'badge disconnected';
+                badge.style.color = val ? '#4caf50' : '#FF4B4B';
             }
+            if (container) {
+                container.title = `WebSocket Link: ${val ? 'CONNECTED' : 'DISCONNECTED'}`;
+            }
+        }
+
+        if (key === 'collectorStatuses') {
+            renderCollectorStatuses(val);
         }
         
         if (key === 'currentPortfolioId') {
