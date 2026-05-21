@@ -1,4 +1,4 @@
-import logging
+from src.engine.utils.telemetry import get_logger
 import asyncio
 import time
 from typing import List, Dict, Any, Optional, Callable
@@ -6,13 +6,11 @@ from src.engine.candles import Candle
 from src.engine.strategy import BaseStrategy, TradeSignal
 from src.engine.indicators import IndicatorCalculator
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class StrategyContext:
-    """
-    전략이 판단을 내리는 데 필요한 모든 데이터를 제공하는 컨텍스트 객체입니다.
-    """
-    def __init__(self, symbol: str, interval: int, candles: List[Candle], indicators: Dict[str, Any], params: Dict[str, Any], portfolio: Dict[str, Any]):
+    def __init__(self, exchange: str, symbol: str, interval: int, candles: List[Candle], indicators: Dict[str, Any], params: Dict[str, Any], portfolio: Dict[str, Any]):
+        self.exchange = exchange
         self.symbol = symbol
         self.interval = interval
         self.candles = candles
@@ -29,11 +27,9 @@ class StrategyContext:
         return self.last_candle.close if self.last_candle else 0.0
 
 class StrategyHost:
-    """
-    전략을 감싸서(Wrapping) 데이터 공급 및 지표 계산을 관리하는 호스트입니다.
-    """
-    def __init__(self, strategy: BaseStrategy, symbol: str, interval: int, on_status_callback: Optional[Callable] = None):
+    def __init__(self, strategy: BaseStrategy, exchange: str, symbol: str, interval: int, on_status_callback: Optional[Callable] = None):
         self.strategy = strategy
+        self.exchange = exchange
         self.symbol = symbol
         self.interval = interval
         self.candles: List[Candle] = []
@@ -64,6 +60,7 @@ class StrategyHost:
 
         # 4. 컨텍스트 생성
         context = StrategyContext(
+            exchange=self.exchange,
             symbol=self.symbol,
             interval=self.interval,
             candles=self.candles,
@@ -86,6 +83,7 @@ class StrategyHost:
                 status_info = {
                     "type": "strategy_status",
                     "strategy_id": self.strategy.id,
+                    "exchange": self.exchange,
                     "symbol": self.symbol,
                     "indicators": self.indicators,
                     "last_action": action_result.action if hasattr(action_result, 'action') else str(action_result),
@@ -102,6 +100,7 @@ class StrategyHost:
             if isinstance(action_result, StrategyResult):
                 if action_result.action in ['BUY', 'SELL']:
                     return TradeSignal(
+                        exchange=self.exchange,
                         symbol=self.symbol,
                         action=action_result.action,
                         price=action_result.price or candle.close,
@@ -113,6 +112,7 @@ class StrategyHost:
             # 문자열인 경우 처리 (하위 호환)
             elif action_result in ['BUY', 'SELL']:
                 return TradeSignal(
+                    exchange=self.exchange,
                     symbol=self.symbol,
                     action=action_result,
                     price=candle.close,

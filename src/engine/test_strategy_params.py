@@ -1,5 +1,5 @@
 import unittest
-from src.engine.strategy import RSIStrategy
+from src.engine.strategies.rsi_strategy import RSIStrategy
 from src.engine.candles import Candle
 
 class TestStrategyParams(unittest.TestCase):

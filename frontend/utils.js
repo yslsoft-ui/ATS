@@ -9,7 +9,6 @@
  */
 function formatPrice(price) {
     if (price === undefined || price === null) return '0';
-    if (price >= 1000000) return (price / 1000000).toFixed(2) + 'M';
     if (price >= 1000) return price.toLocaleString();
     return price.toFixed(price < 1 ? 4 : 2);
 }
@@ -26,24 +25,7 @@ function formatVolume(vol) {
     return (vol / 1e4).toFixed(0) + '만';
 }
 
-/**
- * API 호출을 위한 공통 헬퍼 함수
- * @param {string} url - API 엔드포인트
- * @param {object} options - Fetch 옵션
- * @returns {Promise<any>} API 응답 데이터
- */
-async function fetchAPI(url, options = {}) {
-    try {
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            throw new Error(`API 오류: ${response.status} ${response.statusText}`);
-        }
-        return await response.json();
-    } catch (error) {
-        console.error(`[API Error] ${url}:`, error);
-        throw error;
-    }
-}
+
 
 /**
  * 퍼센트 값을 포맷팅하고 상승/하락 클래스를 반환
@@ -57,3 +39,6 @@ function formatRate(rate) {
         className: value >= 0 ? 'bull' : 'bear'
     };
 }
+
+
+

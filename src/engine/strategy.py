@@ -9,7 +9,8 @@ class StrategyType(Enum):
     BOTH = "BOTH"    # 매수/매도 공용
 
 class TradeSignal:
-    def __init__(self, symbol: str, action: str, price: float, reason: str, interval: int, strategy_id: str = "", context: Dict = None):
+    def __init__(self, exchange: str, symbol: str, action: str, price: float, reason: str, interval: int, strategy_id: str = "", context: Dict = None):
+        self.exchange = exchange
         self.symbol = symbol
         self.action = action
         self.price = price
@@ -83,5 +84,5 @@ class StrategyRegistry:
         strategy_id = strategy_id.lower()
         strategy_cls = cls._strategies.get(strategy_id)
         if strategy_cls:
-            return strategy_cls(**(params or {}))
+            return strategy_cls(strategy_id=strategy_id, params=params)
         return None

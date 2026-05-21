@@ -1,5 +1,8 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
+from src.engine.utils.telemetry import get_logger
+
+logger = get_logger(__name__)
 from abc import ABC, abstractmethod
 import time
 import asyncio
@@ -8,6 +11,7 @@ from src.engine.matching import OrderbookMatchingEngine
 
 @dataclass
 class Position:
+    exchange: str
     symbol: str
     quantity: float = 0.0
     avg_price: float = 0.0
@@ -26,10 +30,10 @@ class Portfolio:
         self.positions: Dict[str, Position] = {}
         self.history: List[Dict] = []
 
-    def update_position(self, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None):
+    def update_position(self, exchange: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None):
         """체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다."""
         if symbol not in self.positions:
-            self.positions[symbol] = Position(symbol=symbol)
+            self.positions[symbol] = Position(exchange=exchange, symbol=symbol)
         
         pos = self.positions[symbol]
         
@@ -52,6 +56,7 @@ class Portfolio:
         
         # 히스토리 기록
         self.history.append({
+            'exchange': exchange,
             'symbol': symbol,
             'side': side,
             'price': price,
@@ -75,7 +80,7 @@ class OrderExecutor(ABC):
     주문 실행 인터페이스입니다. (가상/실제 공통)
     """
     @abstractmethod
-    async def execute_order(self, portfolio: Portfolio, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+    async def execute_order(self, portfolio: Portfolio, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         pass
 
 class VirtualExecutor(OrderExecutor):
@@ -90,7 +95,7 @@ class VirtualExecutor(OrderExecutor):
         """실행 시점에 수수료율을 동적으로 변경합니다."""
         self.matching_engine.fee_rate = fee_rate
 
-    async def execute_order(self, portfolio: Portfolio, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+    async def execute_order(self, portfolio: Portfolio, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         orderbook = kwargs.get('orderbook')
         trade_price = kwargs.get('trade_price')
         strategy_id = kwargs.get('strategy_id', "")
@@ -108,49 +113,42 @@ class VirtualExecutor(OrderExecutor):
                 orderbook_asks=asks,
                 orderbook_bids=bids
             )
-        elif trade_price:
-            # Orderbook이 없으면 현재 trade_price로 즉시 체결 (슬리피지 없음)
-            vwap = trade_price
-            remaining = 0
-            executed_value = vwap * quantity
-            fee = executed_value * self.matching_engine.fee_rate
-            cash_flow = -(executed_value + fee) if side == 'BUY' else (executed_value - fee)
-        else:
-            print(f"[ERROR] VirtualExecutor: Both orderbook and trade_price missing for {symbol}")
-            return None
-        
-        if vwap == 0:
-            print(f"[WARNING] VirtualExecutor: Order failed for {symbol}")
-            return None
-            
-        executed_qty = quantity - remaining
-        if executed_qty <= 0:
-            return None
-
-        # 수수료 계산 (현금 흐름 차이로 역산 - orderbook 사용 시)
-        if orderbook:
+            executed_qty = quantity - remaining
+            # 수수료 산출: 실제 현금흐름과 순수 체결가치의 차이
             executed_value = vwap * executed_qty
             fee = abs(abs(cash_flow) - executed_value)
+        elif trade_price:
+            # Orderbook이 없으면 현재 trade_price로 즉시 전량 체결 (슬리피지 없음)
+            vwap = trade_price
+            executed_qty = quantity
+            executed_value = vwap * executed_qty
+            fee = executed_value * self.matching_engine.fee_rate
+        else:
+            logger.error(f"VirtualExecutor: Both orderbook and trade_price missing for {symbol}")
+            return None
         
-        portfolio.update_position(symbol, side, vwap, executed_qty, fee, strategy_id=strategy_id, reason=reason, context=context)
+        if vwap == 0 or executed_qty <= 0:
+            return None
+        
+        portfolio.update_position(exchange, symbol, side, vwap, executed_qty, fee, strategy_id=strategy_id, reason=reason, context=context)
         
         return {
+            'exchange': exchange,
             'symbol': symbol,
             'side': side,
             'price': vwap,
             'quantity': executed_qty,
             'fee': fee,
-            'remaining': remaining,
-            'strategy_id': strategy_id,
-            'reason': reason,
-            'context': context
+            'executed_value': executed_value,
+            'timestamp': int(time.time() * 1000)
         }
 
 class PortfolioManager:
     """
     여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다.
     """
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path
         self.portfolios: Dict[str, Portfolio] = {}
         self.exchange_configs: Dict[str, Dict] = {} # [NEW] 거래소별 수수료 등 설정 캐시
         self.executors: Dict[str, OrderExecutor] = {
@@ -159,6 +157,22 @@ class PortfolioManager:
 
     def add_portfolio(self, portfolio: Portfolio):
         self.portfolios[portfolio.id] = portfolio
+
+    def get_portfolio_summary(self, symbol: str, portfolio_id: str = "default") -> Dict[str, Any]:
+        """
+        특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.
+        (전략 컨텍스트 공급용)
+        """
+        portfolio = self.portfolios.get(portfolio_id)
+        if not portfolio:
+            return {"cash": 0.0, "quantity": 0.0, "avg_price": 0.0}
+            
+        pos = portfolio.positions.get(symbol)
+        return {
+            "cash": portfolio.cash,
+            "quantity": pos.quantity if pos else 0.0,
+            "avg_price": pos.avg_price if pos else 0.0
+        }
 
     async def liquidate_all(self, portfolio_id: str) -> List[Dict]:
         """포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다."""
@@ -184,25 +198,26 @@ class PortfolioManager:
             # handle_signal 처럼 외부에서 주입받는 구조 유지
             result = await executor.execute_order(
                 portfolio=portfolio,
+                exchange=portfolio.exchange_id,
                 symbol=symbol,
                 side='SELL',
                 quantity=qty,
-                trade_price=0 # 0으로 주입하면 executor가 ticker 조회하도록 수정 가능
+                trade_price=0 
             )
             if result:
                 results.append(result)
                 
         return results
 
-    async def handle_signal(self, portfolio_id: str, signal, trade_price: float, orderbook_data: Optional[Dict] = None):
+    async def execute_pipeline_order(self, portfolio_id: str, signal, quantity: float, execution_price: float, orderbook_data: Optional[Dict] = None):
         """
-        TradeSignal을 수신하여 주문을 실행합니다.
+        ExecutionPipeline에 의해 계산되고 검증 완료된 주문을 실제로 실행하고 영구 저장합니다.
         """
-        import json
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
-            return
-            
+            logger.error(f"Portfolio {portfolio_id} not found for executing pipeline order.")
+            return None
+
         # 거래소 수수료율 적용
         exchange_config = self.exchange_configs.get(portfolio.exchange_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
@@ -210,41 +225,31 @@ class PortfolioManager:
         executor = self.executors.get('simulation')
         if isinstance(executor, VirtualExecutor):
             executor.set_fee_rate(fee_rate)
-        
-        # 수량 결정 로직
-        if signal.action == 'BUY':
-            target_value = portfolio.cash * 0.1
-            quantity = target_value / trade_price
-        elif signal.action == 'SELL':
-            pos = portfolio.positions.get(signal.symbol)
-            if not pos or pos.quantity <= 0:
-                return
-            quantity = pos.quantity
-        else:
-            return
 
         result = await executor.execute_order(
             portfolio=portfolio,
+            exchange=signal.exchange,
             symbol=signal.symbol,
             side=signal.action,
             quantity=quantity,
             orderbook=orderbook_data,
-            trade_price=trade_price,
+            trade_price=execution_price,
             strategy_id=getattr(signal, 'strategy_id', ""),
             reason=getattr(signal, 'reason', ""),
             context=getattr(signal, 'context', {})
         )
         
         if result:
-            print(f"[TRADE] {portfolio.name}: {result['side']} {result['symbol']} @ {result['price']:.2f} (Qty: {result['quantity']:.4f})")
+            logger.info(f"TRADE EXECUTION: {portfolio.name}: {result['side']} {result['symbol']} @ {result['price']:.2f} (Qty: {result['quantity']:.4f})")
             
-            # 체결 성공 시 DB 저장 (포트폴리오 상태 + 거래 내역) [UPDATED]
-            async with get_db_conn() as db:
+            async with get_db_conn(self.db_path) as db:
+                import json
                 await db.execute('''
-                    INSERT INTO orders_history (portfolio_id, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     portfolio_id, 
+                    result['exchange'],
                     result.get('strategy_id', ""),
                     result['symbol'], 
                     result['side'], 
@@ -261,13 +266,42 @@ class PortfolioManager:
             return result
         return None
 
+    async def handle_signal(self, portfolio_id: str, signal, trade_price: float, orderbook_data: Optional[Dict] = None):
+        """
+        [DEPRECATED] 하위 호환성을 유지하기 위한 래퍼입니다. 
+        실제 주문 처리는 ExecutionPipeline.process_signal()을 통하시기 바랍니다.
+        """
+        if signal.exchange == 'kis':
+            portfolio_id = 'stock_default'
+        elif signal.exchange == 'upbit':
+            portfolio_id = 'default'
+        elif signal.exchange == 'bithumb':
+            portfolio_id = 'bithumb_default'
+
+        portfolio = self.portfolios.get(portfolio_id)
+        if not portfolio:
+            portfolio = self.portfolios.get('default')
+            if not portfolio: return None
+
+        # 고정 수량 계산
+        if signal.action == 'BUY':
+            quantity = (portfolio.cash * 0.1) / trade_price
+        elif signal.action == 'SELL':
+            pos = portfolio.positions.get(signal.symbol)
+            if not pos or pos.quantity <= 0: return None
+            quantity = pos.quantity
+        else:
+            return None
+
+        return await self.execute_pipeline_order(portfolio.id, signal, quantity, trade_price, orderbook_data)
+
     async def save_to_db(self, portfolio_id: str):
         """포트폴리오 상태를 DB에 영구 저장합니다."""
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return
 
-        async with get_db_conn() as db:
+        async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 기본 정보 저장
             await db.execute('''
                 INSERT OR REPLACE INTO portfolios (id, name, type, exchange_id, initial_cash, cash, updated_at)
@@ -279,9 +313,9 @@ class PortfolioManager:
             for symbol, pos in portfolio.positions.items():
                 if pos.quantity > 0:
                     await db.execute('''
-                        INSERT INTO positions (portfolio_id, symbol, quantity, avg_price, updated_at)
-                        VALUES (?, ?, ?, ?, datetime('now'))
-                    ''', (portfolio_id, symbol, pos.quantity, pos.avg_price))
+                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, updated_at)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                    ''', (portfolio_id, pos.exchange, symbol, pos.quantity, pos.avg_price))
 
             # 3. 거래 히스토리 저장 (최근 내역만 중복되지 않게)
             # (간단하게 하기 위해 모든 history를 저장하거나, execute_order 시점에 한 건씩 저장하는 것이 좋음)
@@ -291,17 +325,17 @@ class PortfolioManager:
 
     async def load_exchange_configs(self):
         """DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다."""
-        async with get_db_conn() as db:
+        async with get_db_conn(self.db_path) as db:
             async with db.execute("SELECT * FROM exchanges") as cursor:
                 async for row in cursor:
                     self.exchange_configs[row['id']] = dict(row)
-        print(f"[INFO] {len(self.exchange_configs)}개의 거래소 설정을 로드했습니다.")
+        logger.info(f"{len(self.exchange_configs)}개의 거래소 설정을 로드했습니다.")
 
     async def load_from_db(self):
         """DB에서 저장된 모든 포트폴리오 정보를 불러옵니다."""
         await self.load_exchange_configs() # 거래소 설정 먼저 로드
 
-        async with get_db_conn() as db:
+        async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 로드
             async with db.execute("SELECT * FROM portfolios") as cursor:
                 async for row in cursor:
@@ -314,10 +348,11 @@ class PortfolioManager:
                 async with db.execute("SELECT * FROM positions WHERE portfolio_id = ?", (pid,)) as cursor:
                     async for row in cursor:
                         p.positions[row['symbol']] = Position(
+                            exchange=row['exchange'],
                             symbol=row['symbol'],
                             quantity=row['quantity'],
                             avg_price=row['avg_price'],
-                            updated_at=time.time() # 로드 시점 시간으로 대략 설정
+                            updated_at=time.time() 
                         )
                 
                 # 3. 최근 거래 내역 로드 (최근 100건)
@@ -325,4 +360,4 @@ class PortfolioManager:
                     rows = await cursor.fetchall()
                     p.history = [dict(r) for r in reversed(rows)]
         
-        print(f"[INFO] {len(self.portfolios)}개의 포트폴리오를 DB에서 로드했습니다.")
+        logger.info(f"{len(self.portfolios)}개의 포트폴리오를 DB에서 로드했습니다.")

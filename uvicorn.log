@@ -1,0 +1,1156 @@
+nohup: ignoring input
+INFO:     Will watch for changes in these directories: ['/home/simon/ATS']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [143320] using WatchFiles
+[90m2026-05-18 01:05:18,637[0m [[36mINFO    [0m] [1msrc[0m: Telemetry system initialized for 'src' package. Log file: logs/ats.log
+[90m2026-05-18 01:05:18,638[0m [[36mINFO    [0m] [1msrc.server.main[0m: ATS Server is starting up...
+[90m2026-05-18 01:05:18,650[0m [[36mINFO    [0m] [1msrc.config.manager[0m: Configuration loaded from /home/simon/ATS/config/settings.yaml
+[90m2026-05-18 01:05:18,651[0m [[36mINFO    [0m] [1msrc.engine.credentials[0m: Loaded valid token from /home/simon/ATS/config/.kis_token.json
+INFO:     Started server process [143323]
+INFO:     Waiting for application startup.
+[90m2026-05-18 01:05:18,666[0m [[36mINFO    [0m] [1msrc.engine.system[0m: TradingSystem booting...
+[90m2026-05-18 01:05:18,667[0m [[36mINFO    [0m] [1msrc.config.manager[0m: Config hot-reloading watcher started.
+[90m2026-05-18 01:05:18,667[0m [[36mINFO    [0m] [1msrc.database.schema[0m: Initializing database at /home/simon/ATS/data/backtest.db
+[90m2026-05-18 01:05:20,760[0m [[36mINFO    [0m] [1msrc.database.schema[0m: Database initialization and migration complete.
+[90m2026-05-18 01:05:20,769[0m [[36mINFO    [0m] [1msrc.engine.portfolio[0m: 3개의 거래소 설정을 로드했습니다.
+[90m2026-05-18 01:05:20,780[0m [[36mINFO    [0m] [1msrc.engine.portfolio[0m: 7개의 포트폴리오를 DB에서 로드했습니다.
+[90m2026-05-18 01:05:20,781[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from volume_power_strategy.py
+[90m2026-05-18 01:05:20,781[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from sequential_strategy.py
+[90m2026-05-18 01:05:20,782[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from macd_strategy.py
+[90m2026-05-18 01:05:20,782[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from momentum_spike_strategy.py
+[90m2026-05-18 01:05:20,783[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from rsi_strategy.py
+[90m2026-05-18 01:05:20,783[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from panic.py
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.loader[0m: Strategy loaded successfully from trend_bend.py
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.system[0m: Syncing strategies between disk and config...
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.system[0m: Collector registered: upbit
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.system[0m: Collector registered: kis
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.system[0m: Collector registered: bithumb
+[90m2026-05-18 01:05:20,784[0m [[36mINFO    [0m] [1msrc.engine.system[0m: TradingSystem all components started.
+[90m2026-05-18 01:05:20,785[0m [[36mINFO    [0m] [1msrc.server.main[0m: 시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다.
+[90m2026-05-18 01:05:20,788[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: Market is closed. KisCollector waiting for 7.4 hours...
+INFO:     Application startup complete.
+[90m2026-05-18 01:05:20,789[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [KIS] 3개 종목 백그라운드 워밍업 시작 (순차 진행)
+[90m2026-05-18 01:05:20,806[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 005930 warmed up (Source: Ticks).
+[90m2026-05-18 01:05:20,858[0m [[36mINFO    [0m] [1msrc.engine.collector[0m: [UPBIT] 260개 종목 로드 완료
+[90m2026-05-18 01:05:20,864[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 260개 종목 백그라운드 워밍업 시작 (순차 진행)
+[90m2026-05-18 01:05:20,867[0m [[36mINFO    [0m] [1msrc.engine.collector_bithumb[0m: [BITHUMB] 공식 V1 API로부터 한글 코인명 매핑 로드 완료
+[90m2026-05-18 01:05:20,878[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] Collector Connected - 260 symbols
+[90m2026-05-18 01:05:20,891[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 000660 warmed up (Source: Ticks).
+[90m2026-05-18 01:05:20,893[0m [[36mINFO    [0m] [1msrc.engine.collector_bithumb[0m: [BITHUMB] 458개 종목 로드 완료
+[90m2026-05-18 01:05:20,901[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 458개 종목 백그라운드 워밍업 시작 (순차 진행)
+[90m2026-05-18 01:05:20,911[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 0G warmed up (Source: Candles).
+[90m2026-05-18 01:05:20,944[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 0G warmed up (Source: Candles).
+[90m2026-05-18 01:05:20,954[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 035420 warmed up (Source: Ticks).
+[90m2026-05-18 01:05:20,995[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 1INCH warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,003[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,005[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [KIS] 전체 3개 종목 백그라운드 워밍업 완료
+[90m2026-05-18 01:05:21,013[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 1INCH warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,073[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,089[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 2Z warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,103[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: 2Z warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,136[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,174[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: A warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,197[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: A warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,207[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,264[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AAVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,268[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,283[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: A8 warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,342[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,360[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ADA warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,377[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AAVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,407[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,446[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AERGO warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,455[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ACE warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,491[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,533[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AERO warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,542[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ACH warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,573[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,628[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AGLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,643[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:21,651[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ACS warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,714[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:21,714[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AHT warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,721[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ACX warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,796[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AKT warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,814[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ADA warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,896[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALGO warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,901[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ADP warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,983[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALT warmed up (Source: Candles).
+[90m2026-05-18 01:05:21,994[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AERGO warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,105[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ANIME warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,116[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AERO warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,191[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ANKR warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,207[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AGI warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,294[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: API3 warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,314[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AGLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,384[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: APT warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,392[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AHT warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,465[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AQT warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,467[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AIOZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,562[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARB warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,563[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AKT warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,666[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARDR warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,666[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AL warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,716[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (20/260)
+[90m2026-05-18 01:05:22,717[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (20/458)
+[90m2026-05-18 01:05:22,768[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARK warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,769[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALGO warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,850[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALICE warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,861[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARKM warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,933[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALLO warmed up (Source: Candles).
+[90m2026-05-18 01:05:22,944[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ASTR warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,010[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ALT warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,026[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ATH warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,088[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AMO warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,112[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ATOM warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,162[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,197[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AUCTION warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,244[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ANIME warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,280[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVAX warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,327[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ANKR warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,364[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,396[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: APE warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,477[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AWE warmed up (Source: Candles).
+INFO:     127.0.0.1:46346 - "WebSocket /ws" [accepted]
+INFO:     connection open
+[90m2026-05-18 01:05:23,496[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: API3 warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,584[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AXL warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,594[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: APT warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,692[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AXS warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,704[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AQT warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,780[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AZTEC warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,791[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AR warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,877[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: B3 warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,893[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARB warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,973[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BARD warmed up (Source: Candles).
+[90m2026-05-18 01:05:23,985[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARDR warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,068[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,079[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARK warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,166[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BCH warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,178[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARKM warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,261[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BEAM warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,271[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ARPA warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,348[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BERA warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,354[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ASTER warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,441[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIGTIME warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,455[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ASTR warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,506[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (40/458)
+[90m2026-05-18 01:05:24,539[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIO warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,551[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ATH warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,589[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (40/260)
+[90m2026-05-18 01:05:24,639[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIRB warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,650[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ATOM warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,729[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLAST warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,739[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AUCTION warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,818[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLEND warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,830[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AUDIO warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,933[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLUR warmed up (Source: Candles).
+[90m2026-05-18 01:05:24,942[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVAIL warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,036[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BONK warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,048[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVAX warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,134[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BORA warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,144[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVL warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,230[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BOUNTY warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,241[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AVNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,324[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BREV warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,336[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AWE warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,431[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BSV warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,442[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AXS warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,526[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,536[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AZIT warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,620[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BTT warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,637[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: AZTEC warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,715[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CARV warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,726[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: B3 warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,790[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: 랭킹 수집 시도 중...
+[90m2026-05-18 01:05:25,791[0m [[36mINFO    [0m] [1msrc.engine.credentials[0m: Using valid memory-cached token.
+[90m2026-05-18 01:05:25,807[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CBK warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,825[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BABY warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,882[0m [[33mWARNING [0m] [1msrc.engine.collector_kis[0m: No ranking data (Market closed?). Using default major symbols as fallback.
+[90m2026-05-18 01:05:25,893[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: Updated 10 ranking symbols via REST API
+[90m2026-05-18 01:05:25,925[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CC warmed up (Source: Candles).
+[90m2026-05-18 01:05:25,937[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BARD warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,026[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CELO warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,038[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BASED warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,111[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CFG warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,120[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,233[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CHIP warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,244[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BB warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,328[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CHZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,340[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BCH warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,427[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CKB warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,443[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BEAM warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,494[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (60/458)
+[90m2026-05-18 01:05:26,514[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,520[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BEL warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,565[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (60/260)
+[90m2026-05-18 01:05:26,623[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COW warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,635[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BERA warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,711[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CPOOL warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,714[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BFC warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,755[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:26,804[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BICO warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,814[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CRO warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,835[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:26,902[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIGTIME warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,904[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:26,914[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:26,973[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,026[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIO warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,064[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CVC warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,079[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,096[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIOT warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,147[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,166[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CYBER warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,180[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BIRB warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,219[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,283[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DEEP warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,295[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLAST warmed up (Source: Candles).
+INFO:     127.0.0.1:46354 - "GET /api/system/queues HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:27,308[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+INFO:     127.0.0.1:46354 - "GET /api/system/queues HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:27,376[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,408[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DKA warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,430[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLEND warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,469[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,547[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOGE warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,562[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLUE warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,587[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,661[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,669[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOOD warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,682[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BLUR warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,733[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:27,764[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOT warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,774[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BMT warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,809[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:27,861[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DRIFT warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,871[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BNB warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,954[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EDGE warmed up (Source: Candles).
+[90m2026-05-18 01:05:27,959[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,054[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EGLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,066[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BOB warmed up (Source: Candles).
+INFO:     127.0.0.1:46354 - "GET /api/system/queues HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:28,149[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ELF warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,164[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BOBA warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,315[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ELSA warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,329[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BONK warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,449[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENA warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,461[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BORA warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,555[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENS warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,565[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BOUNTY warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,616[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (80/458)
+[90m2026-05-18 01:05:28,664[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENSO warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,676[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BRETT warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,773[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ERA warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,785[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BREV warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,824[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (80/260)
+[90m2026-05-18 01:05:28,869[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ESP warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,881[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BSV warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,966[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETC warmed up (Source: Candles).
+[90m2026-05-18 01:05:28,978[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,065[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETH warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,075[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BTR warmed up (Source: Candles).
+INFO:     127.0.0.1:46354 - "GET /api/system/queues HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:29,163[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETHFI warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,174[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: BTT warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,277[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: F warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,288[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: C warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,368[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FCT2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,377[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: C98 warmed up (Source: Candles).
+INFO:     127.0.0.1:46354 - "GET / HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:29,477[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FF warmed up (Source: Candles).
+INFO:     connection closed
+[90m2026-05-18 01:05:29,487[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CAKE warmed up (Source: Candles).
+INFO:     127.0.0.1:46354 - "GET /style.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:46360 - "GET /view-manager.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:46366 - "GET /chart-controller.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46354 - "GET /app.js HTTP/1.1" 200 OK
+[90m2026-05-18 01:05:29,584[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FIL warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,610[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CAMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,681[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLOCK warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,695[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CARV warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,765[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLUID warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,778[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CBK warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,852[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: G warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,866[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CELO warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,936[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GAME2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:29,941[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CELR warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,022[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GAS warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,036[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CFG warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,113[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GLM warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,128[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CFX warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,197[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GMT warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,216[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CHIP warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,284[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GRT warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,291[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CHR warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,396[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HBAR warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,419[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CHZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,491[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HIVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,510[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CKB warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,561[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (100/458)
+[90m2026-05-18 01:05:30,578[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HOLO warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,597[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,664[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HP warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,669[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COOKIE warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,714[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (100/260)
+[90m2026-05-18 01:05:30,762[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HUNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,772[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CORE warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,853[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HYPER warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,868[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COS warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,940[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ICP warmed up (Source: Candles).
+[90m2026-05-18 01:05:30,946[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COTI warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,024[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ICX warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,029[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: COW warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,109[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ID warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,129[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CPOOL warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,196[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IMX warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,214[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CRO warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,288[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IN warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,299[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CRTS warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,375[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: INJ warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,381[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CRV warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,464[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IOST warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,479[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CSPR warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,556[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IOTA warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,571[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,642[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IP warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,655[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CTK warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,726[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IQ warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,729[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CTSI warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,837[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CUDIS warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,838[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IRYS warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,931[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CVC warmed up (Source: Candles).
+[90m2026-05-18 01:05:31,935[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JST warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,006[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CYBER warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,023[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JTO warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,097[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: CYS warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,112[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JUP warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,186[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: D warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,200[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAITO warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,276[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DAO warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,290[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,327[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (120/458)
+[90m2026-05-18 01:05:32,342[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DBR warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,373[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAVA warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,436[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DEEP warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,459[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KERNEL warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,509[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (120/260)
+[90m2026-05-18 01:05:32,511[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DEXE warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,544[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KITE warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,592[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DKA warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,628[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KNC warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,676[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOGE warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,712[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LA warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,762[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOOD warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,798[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LAYER warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,848[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DOT warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,852[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:32,884[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LINEA warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,933[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DRIFT warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,967[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LINK warmed up (Source: Candles).
+[90m2026-05-18 01:05:32,972[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:32,999[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: DYDX warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,039[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,054[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LPT warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,088[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EDEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,108[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,141[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LSK warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,172[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EDGE warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,179[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,234[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MANA warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,244[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EDGEX warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,264[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,326[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MANTRA warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,337[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EDU warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,343[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,405[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,408[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MASK warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,416[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EGG warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,472[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,496[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MBL warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,507[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EGLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,580[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ME warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,592[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EIGEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,669[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MED warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,679[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EL warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,754[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,758[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MEGA warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,773[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ELF warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,824[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:33,847[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MET2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,862[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ELSA warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,908[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:33,949[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: META warmed up (Source: Candles).
+[90m2026-05-18 01:05:33,974[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENA warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,024[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (140/458)
+[90m2026-05-18 01:05:34,037[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MEW warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,056[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENJ warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,129[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MINA warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,149[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENS warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,215[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MIRA warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,233[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ENSO warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,266[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (140/260)
+[90m2026-05-18 01:05:34,308[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MLK warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,323[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EPT warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,396[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MMT warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,402[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ERA warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,495[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,498[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ES warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,592[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOC warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,592[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ESP warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,683[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETC warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,688[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOCA warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,774[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETH warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,784[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MON warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,881[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ETHFI warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,901[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOODENG warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,971[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: EUL warmed up (Source: Candles).
+[90m2026-05-18 01:05:34,987[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,055[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: F warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,075[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MTL warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,137[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FANC warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,155[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MVL warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,228[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FCT2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,247[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEAR warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,307[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FET warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,330[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEO warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,395[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FF warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,424[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEWT warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,494[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FIL warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,505[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NXPC warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,588[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FITFI warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,599[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONDO warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,682[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLOCK warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,693[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONG warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,757[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLOKI warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,776[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONT warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,807[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (160/458)
+[90m2026-05-18 01:05:35,841[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLR warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,859[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OP warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,934[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLUID warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,951[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OPEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:35,999[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FLUX warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,035[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORBS warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,077[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FORT warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,085[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (160/260)
+[90m2026-05-18 01:05:36,147[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORCA warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,150[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: FRAX warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,247[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORDER warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,258[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: G warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,337[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PENDLE warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,347[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GALA warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,420[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PENGU warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,430[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GAME2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,514[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PEPE warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,525[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GAS warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,597[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PIEVERSE warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,608[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GHX warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,685[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PLUME warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,699[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GLM warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,780[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POKT warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,790[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GMT warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,866[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GMX warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,867[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POL warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,955[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GNO warmed up (Source: Candles).
+[90m2026-05-18 01:05:36,960[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POLYX warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,039[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GPS warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,057[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POWR warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,124[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GRACY warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,139[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PRL warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,190[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GRASS warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,225[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PROS warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,273[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GRND warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,309[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PROVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,359[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GRT warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,392[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,450[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,474[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUNDIX warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,501[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (180/458)
+[90m2026-05-18 01:05:37,538[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: GWEI warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,561[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PYTH warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,632[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: H warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,649[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: QKC warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,701[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HAEDAL warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,737[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: QTUM warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,790[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HBAR warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,824[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RAY warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,874[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (180/260)
+[90m2026-05-18 01:05:37,875[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HEMI warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,910[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RED warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,948[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HFT warmed up (Source: Candles).
+[90m2026-05-18 01:05:37,996[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RENDER warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,036[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HIGH warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,080[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RVN warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,118[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HIVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,165[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAFE warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,202[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HOLO warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,250[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAHARA warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,282[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HOME warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,337[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAND warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,367[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HOOK warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,424[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SC warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,455[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HP warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,523[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SEI warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,543[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HUMA warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,620[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SENT warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,634[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HUNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,714[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SHIB warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,725[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: HYPER warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,813[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SIGN warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,824[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ICP warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,898[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SKR warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,910[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ICX warmed up (Source: Candles).
+[90m2026-05-18 01:05:38,946[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:38,996[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SKY warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,012[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ID warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,022[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,084[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,095[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ILV warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,098[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,169[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,177[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOL warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,188[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IMX warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,241[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,241[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (200/458)
+[90m2026-05-18 01:05:39,279[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOMI warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,289[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IN warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,327[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,364[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SONIC warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,375[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: INIT warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,402[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,464[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOON warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,474[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: INJ warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,486[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,562[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,564[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOPH warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,568[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IO warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,633[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,655[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IOST warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,656[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SPK warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,695[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:39,707[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (200/260)
+[90m2026-05-18 01:05:39,758[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STEEM warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,759[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IOTA warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,777[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:39,849[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IOTX warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,860[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STORJ warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,942[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IP warmed up (Source: Candles).
+[90m2026-05-18 01:05:39,957[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STRAX warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,016[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IQ warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,041[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STX warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,104[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: IRYS warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,128[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUI warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,170[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JASMY warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,208[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUN warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,239[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JOE warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,293[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUPER warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,319[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JST warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,382[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SYRUP warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,401[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JTO warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,470[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: T warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,490[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: JUP warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,561[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TAIKO warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,575[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAIA warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,644[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TAO warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,667[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAITO warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,738[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TFUEL warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,756[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,826[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: THETA warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,846[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KAVA warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,920[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TIA warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,932[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KERNEL warmed up (Source: Candles).
+[90m2026-05-18 01:05:40,982[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (220/458)
+[90m2026-05-18 01:05:41,006[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TOKAMAK warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,025[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KITE warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,093[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TOSHI warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,103[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KMNO warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,225[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TREE warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,255[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KNC warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,317[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRUMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,327[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: KSM warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,430[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRUST warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,456[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LA warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,524[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRX warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,548[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LAYER warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,575[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (220/260)
+[90m2026-05-18 01:05:41,615[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TT warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,626[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LDO warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,712[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UNI warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,723[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LINEA warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,806[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UP2 warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,817[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LINK warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,893[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USD1 warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,895[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LISTA warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,979[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LIT warmed up (Source: Candles).
+[90m2026-05-18 01:05:41,987[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDC warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,055[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LM warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,066[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDE warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,140[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LPT warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,151[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDS warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,224[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LSK warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,235[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDT warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,315[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: LWA warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,338[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VANA warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,384[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MAGIC warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,426[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VET warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,465[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MANA warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,508[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VIRTUAL warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,534[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MANTA warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,600[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VTHO warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,614[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MANTRA warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,683[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VVV warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,693[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MAPO warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,744[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (240/458)
+[90m2026-05-18 01:05:42,769[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: W warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,780[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MASK warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,885[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAL warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,895[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MAV warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,974[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAVES warmed up (Source: Candles).
+[90m2026-05-18 01:05:42,996[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MAY warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,068[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAXP warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,084[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MBL warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,172[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WCT warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,183[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MBX warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,271[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WET warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,286[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ME warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,362[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WIF warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,381[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MED warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,412[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (240/260)
+[90m2026-05-18 01:05:43,456[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,476[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MEGA warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,546[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WLFI warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,564[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MERL warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,667[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XAUT warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,669[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MET warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,785[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: META warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,785[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XCN warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,865[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: METIS warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,875[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XEC warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,944[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MEV warmed up (Source: Candles).
+[90m2026-05-18 01:05:43,969[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XLM warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,038[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MEW warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,054[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XPL warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,126[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MINA warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,137[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XRP warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,236[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MIRA warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,261[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XTZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,333[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MLK warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,352[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: YGG warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,424[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MMT warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,439[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZAMA warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,503[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,527[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZBT warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,597[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOC warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,611[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZETA warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,648[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (260/458)
+[90m2026-05-18 01:05:44,691[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOCA warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,702[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZIL warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,781[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MON warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,796[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZK warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,815[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:44,871[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOODENG warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,886[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZKC warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,927[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:44,953[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MORPHO warmed up (Source: Candles).
+[90m2026-05-18 01:05:44,967[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZKP warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,000[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,046[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MOVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,062[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZORA warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,080[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,128[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MTL warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,146[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,149[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZRO warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,195[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MVC warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,214[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,231[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZRX warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,264[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: MVL warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,276[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,282[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 워밍업 진행 중... (260/260)
+[90m2026-05-18 01:05:45,283[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [UPBIT] 전체 260개 종목 백그라운드 워밍업 완료
+[90m2026-05-18 01:05:45,336[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,342[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NCT warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,403[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,432[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEAR warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,477[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,517[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEO warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,553[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,606[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NEWT warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,627[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:45,670[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NFT warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,692[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:45,756[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NIL warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,842[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NMR warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,927[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: NXPC warmed up (Source: Candles).
+[90m2026-05-18 01:05:45,997[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OBSR warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,085[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OBT warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,153[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OGN warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,243[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONDO warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,293[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (280/458)
+[90m2026-05-18 01:05:46,326[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONG warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,410[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ONT warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,486[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OP warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,572[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OPEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,652[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORBS warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,737[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORCA warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,819[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ORDER warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,903[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OSMO warmed up (Source: Candles).
+[90m2026-05-18 01:05:46,993[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: OXT warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,080[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PARTI warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,148[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PAXG warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,232[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PCI warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,316[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PEAQ warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,400[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PENDLE warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,490[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PENGU warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,572[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PEPE warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,650[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PHA warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,745[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PIEVERSE warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,854[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PLUME warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,939[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POKT warmed up (Source: Candles).
+[90m2026-05-18 01:05:47,989[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (300/458)
+[90m2026-05-18 01:05:48,024[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POL warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,107[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POLA warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,191[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POLYX warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,277[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PONKE warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,365[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POPCAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,441[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: POWR warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,526[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PRL warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,604[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PROMPT warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,692[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PROS warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,765[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PROVE warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,847[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUFFER warmed up (Source: Candles).
+[90m2026-05-18 01:05:48,928[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,013[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUMPBTC warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,100[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PUNDIX warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,176[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PYR warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,262[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: PYTH warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,347[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: QKC warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,433[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: QTUM warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,518[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RAD warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,601[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RAY warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,652[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (320/458)
+[90m2026-05-18 01:05:49,687[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RECALL warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,763[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RED warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,839[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: REI warmed up (Source: Candles).
+[90m2026-05-18 01:05:49,925[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RENDER warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,014[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: REQ warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,110[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RESOLV warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,185[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: REZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,257[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RLC warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,328[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ROA warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,412[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ROBO warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,477[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RON warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,547[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RPL warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,617[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RSR warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,701[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RSS3 warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,728[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:50,780[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: RVN warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,787[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:50,852[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:50,854[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: S warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,919[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:50,927[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAFE warmed up (Source: Candles).
+[90m2026-05-18 01:05:50,981[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,013[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAHARA warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,053[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,109[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAND warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,123[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,188[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,189[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SAPIEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,239[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (340/458)
+[90m2026-05-18 01:05:51,250[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,262[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SC warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,323[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,338[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SCR warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,392[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,425[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SD warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,467[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,516[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SEI warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,541[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,600[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SENT warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,609[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:51,665[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SFP warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,672[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:51,740[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SHELL warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,826[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SHIB warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,914[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SIGN warmed up (Source: Candles).
+[90m2026-05-18 01:05:51,980[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SIX warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,052[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SKL warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,144[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SKR warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,212[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SKY warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,300[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SNT warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,365[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SNX warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,452[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOL warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,537[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOLV warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,639[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOMI warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,726[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SONIC warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,811[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOON warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,861[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (360/458)
+[90m2026-05-18 01:05:52,894[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SOPH warmed up (Source: Candles).
+[90m2026-05-18 01:05:52,979[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SPK warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,086[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SPURS warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,171[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STABLE warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,242[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STAT warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,326[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STEEM warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,410[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STORJ warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,489[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STRAX warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,574[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STRK warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,659[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: STX warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,742[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUI warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,810[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUN warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,895[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUNDOG warmed up (Source: Candles).
+[90m2026-05-18 01:05:53,969[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUPER warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,038[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SUSHI warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,117[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SWAP warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,205[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SWELL warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,285[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SXT warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,359[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: SYRUP warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,444[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: T warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,494[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (380/458)
+[90m2026-05-18 01:05:54,524[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TAIKO warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,626[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TAO warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,694[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TAVA warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,764[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TDROP warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,833[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TEMCO warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,909[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TFUEL warmed up (Source: Candles).
+[90m2026-05-18 01:05:54,978[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: THE warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,058[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: THETA warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,131[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: THQ warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,213[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TIA warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,296[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TOKAMAK warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,378[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TON warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,458[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TOSHI warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,543[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TOWNS warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,612[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRAC warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,695[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TREE warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,810[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRUMP warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,898[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRUST warmed up (Source: Candles).
+[90m2026-05-18 01:05:55,982[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TRX warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,057[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TT warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,107[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (400/458)
+[90m2026-05-18 01:05:56,145[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: TURBO warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,231[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UMA warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,353[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UNI warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,455[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UOS warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,540[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: UP warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,624[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USD1 warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,716[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:56,736[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDC warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,808[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDE warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,855[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:56,875[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDS warmed up (Source: Candles).
+[90m2026-05-18 01:05:56,931[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:56,957[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: USDT warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,001[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,048[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VANA warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,077[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,140[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VET warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,149[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,230[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VIRTUAL warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,232[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,309[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VTHO warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,311[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,382[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,394[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: VVV warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,448[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,482[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: W warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,521[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,559[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAL warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,601[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:05:57,646[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAVES warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,717[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:05:57,732[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAXL warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,808[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WAXP warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,859[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (420/458)
+[90m2026-05-18 01:05:57,894[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WCT warmed up (Source: Candles).
+[90m2026-05-18 01:05:57,977[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WET warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,060[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WIF warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,140[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WIKEN warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,232[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WLD warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,316[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WLFI warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,463[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WNCG warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,536[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: WOO warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,618[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XAI warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,708[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XAN warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,796[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XAUT warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,879[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XCN warmed up (Source: Candles).
+[90m2026-05-18 01:05:58,963[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XEC warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,050[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XION warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,133[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XLM warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,224[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XPL warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,299[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XPLA warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,395[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XPR warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,532[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XRP warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,673[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XTER warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,723[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 워밍업 진행 중... (440/458)
+[90m2026-05-18 01:05:59,767[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XTZ warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,851[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XVS warmed up (Source: Candles).
+[90m2026-05-18 01:05:59,922[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: XYO warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,011[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: YB warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,083[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: YFI warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,155[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: YGG warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,229[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZAMA warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,315[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZBT warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,399[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZETA warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,487[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZIL warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,572[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZK warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,651[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZKC warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,731[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZKP warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,815[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZORA warmed up (Source: Candles).
+[90m2026-05-18 01:06:00,899[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZRC warmed up (Source: Candles).
+[90m2026-05-18 01:06:01,010[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZRO warmed up (Source: Candles).
+[90m2026-05-18 01:06:01,084[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZRX warmed up (Source: Candles).
+[90m2026-05-18 01:06:01,168[0m [[36mINFO    [0m] [1msrc.engine.trade_engine[0m: ZTX warmed up (Source: Candles).
+[90m2026-05-18 01:06:01,218[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] 전체 458개 종목 백그라운드 워밍업 완료
+[90m2026-05-18 01:06:02,761[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:02,828[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:02,898[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:02,963[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,028[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,086[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,149[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,222[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,296[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,365[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,433[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,514[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,579[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:03,648[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:08,690[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:08,799[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:08,863[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:08,934[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,022[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,092[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,157[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,225[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,289[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,369[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,436[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,581[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,643[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,707[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:09,765[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+INFO:     127.0.0.1:59380 - "GET / HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59380 - "GET /chart-controller.js HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:59386 - "GET /app.js HTTP/1.1" 304 Not Modified
+[90m2026-05-18 01:06:14,803[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:14,876[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:14,946[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,012[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,074[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,139[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,208[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,283[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,347[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,416[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,492[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,564[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,631[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:15,701[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+INFO:     127.0.0.1:49060 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49060 - "GET /style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49076 - "GET /utils.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49060 - "GET /view-manager.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49076 - "GET /chart-controller.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49060 - "GET /app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49060 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+[90m2026-05-18 01:06:20,735[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:20,835[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:20,905[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:20,984[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,053[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,120[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,186[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,255[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,331[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,404[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,472[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,565[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,628[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:21,686[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:25,894[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: 랭킹 수집 시도 중...
+[90m2026-05-18 01:06:25,894[0m [[36mINFO    [0m] [1msrc.engine.credentials[0m: Using valid memory-cached token.
+[90m2026-05-18 01:06:25,988[0m [[33mWARNING [0m] [1msrc.engine.collector_kis[0m: No ranking data (Market closed?). Using default major symbols as fallback.
+[90m2026-05-18 01:06:25,992[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: Updated 10 ranking symbols via REST API
+[90m2026-05-18 01:06:26,717[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:26,781[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:26,893[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:26,956[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,020[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,080[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,139[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,223[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,289[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,360[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,449[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,523[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,586[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:27,654[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:32,686[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:32,800[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:32,857[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:32,934[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,010[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,077[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,136[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,198[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,261[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,323[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,389[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,468[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,539[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,612[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:33,680[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:38,713[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:38,782[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:38,857[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:38,919[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:38,982[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,045[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,101[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,163[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,235[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,297[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,354[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,422[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,489[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,564[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:39,626[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:44,666[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:44,825[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:44,911[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:44,979[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,052[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,127[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,188[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,259[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,335[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,417[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,480[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,551[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,618[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:45,676[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:50,711[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:50,792[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:50,858[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:50,927[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:50,997[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,064[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,130[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,198[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,273[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,563[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,624[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,684[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,750[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,888[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:51,949[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:06:56,993[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,107[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,187[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,259[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,331[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,406[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,489[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,586[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,659[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,729[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:06:57,797[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:02,841[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:02,916[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:02,977[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,031[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,113[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,186[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,260[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,325[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,401[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,465[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,536[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,608[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:03,681[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:08,727[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:08,846[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:08,923[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:08,991[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,063[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,131[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,196[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,275[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,354[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,423[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,503[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,576[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,643[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:09,697[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:14,737[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:14,939[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:14,999[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,067[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,134[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,207[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,280[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,344[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,414[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,478[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,546[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,613[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:15,682[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:20,728[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:20,846[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:20,915[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:20,984[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,047[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,118[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,182[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,246[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,309[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,379[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,468[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,742[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,812[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:21,882[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:25,993[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: 랭킹 수집 시도 중...
+[90m2026-05-18 01:07:25,994[0m [[36mINFO    [0m] [1msrc.engine.credentials[0m: Using valid memory-cached token.
+[90m2026-05-18 01:07:26,088[0m [[33mWARNING [0m] [1msrc.engine.collector_kis[0m: No ranking data (Market closed?). Using default major symbols as fallback.
+[90m2026-05-18 01:07:26,089[0m [[36mINFO    [0m] [1msrc.engine.collector_kis[0m: Updated 10 ranking symbols via REST API
+[90m2026-05-18 01:07:26,938[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:27,004[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,085[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,175[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,236[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,303[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,375[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,446[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,513[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,578[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,661[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,727[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:28,795[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:33,843[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:33,974[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,046[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,115[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,183[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,255[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,328[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,403[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,470[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,539[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,600[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:34,675[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...
+[90m2026-05-18 01:07:39,716[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:39,781[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:39,843[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:39,907[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:39,973[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,025[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,095[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,158[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,236[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,306[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,379[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,443[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,535[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,602[0m [[36mINFO    [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connected - 458 symbols
+[90m2026-05-18 01:07:40,661[0m [[31mERROR   [0m] [1msrc.engine.collector_base[0m: [BITHUMB] Collector Connection Error: 429, message='Invalid response status', url='wss://ws-api.bithumb.com/websocket/v1'. Reconnecting in 5s...

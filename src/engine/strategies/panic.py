@@ -10,10 +10,8 @@ class PanicStrategy(BaseStrategy):
     """
     type = StrategyType.EXIT
 
-    def __init__(self, vol_multiplier: float = 3.0, drop_threshold: float = 0.02, **kwargs):
-        super().__init__(**kwargs)
-        self.vol_multiplier = vol_multiplier  # 평균 거래량 대비 배수
-        self.drop_threshold = drop_threshold    # 하락 폭 임계치 (2%)
+    def __init__(self, strategy_id: str, params: Dict = None):
+        super().__init__(strategy_id, params)
         self.volumes = []
 
     def on_candle(self, candle: Candle) -> StrategyResult:

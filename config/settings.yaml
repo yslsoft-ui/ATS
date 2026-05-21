@@ -5,7 +5,6 @@ system:
 collector:
   warmup_enabled: true
   worker_count: 2
-  websocket_url: wss://api.upbit.com/websocket/v1
   db_path: data/backtest.db
 strategies:
   rsistrategy:
@@ -14,6 +13,12 @@ strategies:
       rsi_window: 14
       buy_threshold: 30
       sell_threshold: 70
+    overrides:
+      kis:
+        params:
+          rsi_window: 20  # 주식은 노이즈가 적어 더 긴 윈도우 권장
+          buy_threshold: 35 # 주식은 코인보다 덜 과매도되는 경향이 있음
+          sell_threshold: 65
   macdstrategy:
     enabled: false
     params:
@@ -53,4 +58,30 @@ strategies:
     enabled: false
     params:
       period: 15
-      threshold: 2.5
+exchanges:
+  upbit:
+    enabled: true
+    api_key: "${UPBIT_ACCESS_KEY}"
+    api_secret: "${UPBIT_SECRET_KEY}"
+    fee_rate: 0.0005
+    websocket_url: "wss://api.upbit.com/websocket/v1"
+    api_url: "https://api.upbit.com/v1" # 업비트 REST API 공통 주소 (/v1 포함)
+    symbols: [] # 빈 리스트일 경우 KRW 전체 종목 자동 로드
+  kis:
+    enabled: true
+    app_key: "${KIS_APP_KEY}"
+    app_secret: "${KIS_APP_SECRET}"
+    account_no: "${KIS_ACCOUNT_NO}"
+    is_vts: true # 모의투자 서버 사용 여부
+    fee_rate: 0.00015 # 국내 주식 표준 수수료 예시
+    websocket_url: "ws://ops.koreainvestment.com:31000" # 실전: ws://ops.koreainvestment.com:21000, 모의: ws://ops.koreainvestment.com:31000
+    symbols: ["005930", "000660", "035420"] # 삼성전자, SK하이닉스, NAVER
+  bithumb:
+    enabled: true
+    api_key: "${BITHUMB_API_KEY}"
+    api_secret: "${BITHUMB_SECRET_KEY}"
+    fee_rate: 0.0025 # 빗썸 기본 수수료
+    websocket_url: "wss://ws-api.bithumb.com/websocket/v1"
+    api_url: "https://api.bithumb.com/v1" # 빗썸 REST API 공통 주소 (/v1 포함)
+    symbols: []
+    # symbols: ["BTC", "ETH", "XRP", "SOL", "DOGE"]

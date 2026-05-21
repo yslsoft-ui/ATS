@@ -1,6 +1,9 @@
 import asyncio
 import json
 from src.database.connection import get_db_conn
+from src.engine.utils.telemetry import get_logger
+
+logger = get_logger(__name__)
 
 class DBWriter:
     def __init__(self, queue: asyncio.Queue, db_path: str = None, batch_size=100, flush_interval=1.0):
@@ -12,7 +15,7 @@ class DBWriter:
         self.orderbook_buffer = []
 
     async def run(self):
-        print(f"DBWriter started.")
+        logger.info("DBWriter started.")
         async with get_db_conn() as db:
             while True:
                 try:
@@ -57,10 +60,10 @@ class DBWriter:
                 except asyncio.CancelledError:
                     # 프로세스 종료 요청 시 남은 데이터 저장 후 종료
                     await self.flush(db)
-                    print("DBWriter task cancelled. Flushed remaining data.")
+                    logger.info("DBWriter task cancelled. Flushed remaining data.")
                     break
                 except Exception as e:
-                    print(f"DBWriter Error: {e}")
+                    logger.error(f"DBWriter Error: {e}")
 
     async def flush(self, db):
         try:
@@ -80,4 +83,4 @@ class DBWriter:
             
             await db.commit()
         except Exception as e:
-            print(f"Flush Error: {e}")
+            logger.error(f"Flush Error: {e}")

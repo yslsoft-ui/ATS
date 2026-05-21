@@ -1,0 +1,30 @@
+# 한국투자증권_오픈API_전체문서 마크다운 가이드 문서
+
+> 6 nodes · cohesion 0.50
+
+## Key Concepts
+
+- **개요** (4 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+- **실시간 (웹소켓) 접속키 발급** (3 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+- **기본정보** (1 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+- **Fields** (1 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+- **Response Header** (1 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+- **Example** (1 connections) — `docs/ manual/한국투자증권_오픈API_전체문서.md`
+
+## Relationships
+
+- [[기능 모듈 그룹 25]] (1 shared connections)
+
+## Source Files
+
+- `docs/ manual/한국투자증권_오픈API_전체문서.md`
+
+## Audit Trail
+
+- EXTRACTED: 11 (100%)
+- INFERRED: 0 (0%)
+- AMBIGUOUS: 0 (0%)
+
+---
+
+*Part of the graphify knowledge wiki. See [[index]] to navigate.*

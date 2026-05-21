@@ -10,24 +10,23 @@ class TrendBendStrategy(BaseStrategy):
     """
     type = StrategyType.EXIT
 
-    def __init__(self, lookback: int = 5, **kwargs):
-        super().__init__(**kwargs)
-        self.lookback = lookback
-        self.candles = []
+    def __init__(self, strategy_id: str, params: Dict = None):
+        super().__init__(strategy_id, params)
+        self.history_candles = []
 
     def on_candle(self, candle: Candle) -> StrategyResult:
-        self.candles.append(candle)
-        if len(self.candles) > self.lookback + 1:
-            self.candles.pop(0)
+        self.history_candles.append(candle)
+        if len(self.history_candles) > self.lookback + 1:
+            self.history_candles.pop(0)
 
-        if len(self.candles) < self.lookback + 1:
+        if len(self.history_candles) < self.lookback + 1:
             return StrategyResult("HOLD")
 
         # 거래량 감소 추세 확인 (Volume Divergence)
-        vol_decreasing = all(self.candles[i].volume > self.candles[i+1].volume for i in range(len(self.candles)-2))
+        vol_decreasing = all(self.history_candles[i].volume > self.history_candles[i+1].volume for i in range(len(self.history_candles)-2))
         
         # 가격 상승 혹은 횡보 확인
-        price_rising = self.candles[-2].close >= self.candles[0].open
+        price_rising = self.history_candles[-2].close >= self.history_candles[0].open
         
         # 현재 캔들이 음봉인지 확인 (Trend Bend)
         is_bearish = candle.close < candle.open

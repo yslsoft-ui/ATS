@@ -1,16 +1,20 @@
 import os
 import yaml
-import logging
+from src.engine.utils.telemetry import get_logger
 import asyncio
 from typing import Any, Dict, Optional, Callable, List
+from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class ConfigManager:
     """
-    YAML 설정을 관리하고, 실시간 변경 감지 및 환경 변수 병합을 수행합니다.
+    YAML 설정을 관리하고, 실시간 변경 감지 및 환경 변수 치환을 수행합니다.
     """
     def __init__(self, config_path: str):
+        # .env 파일 로드
+        load_dotenv()
+        
         self.config_path = config_path
         self.config: Dict[str, Any] = {}
         self.last_mtime: float = 0
@@ -23,7 +27,7 @@ class ConfigManager:
         self._watch_task: Optional[asyncio.Task] = None
 
     def reload(self):
-        """설정 파일을 다시 읽고 환경 변수와 병합합니다."""
+        """설정 파일을 다시 읽고 환경 변수 치환 및 병합을 수행합니다."""
         if not os.path.exists(self.config_path):
             logger.error(f"Config file not found: {self.config_path}")
             return False
@@ -32,7 +36,10 @@ class ConfigManager:
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 new_config = yaml.safe_load(f) or {}
                 
-            # 환경 변수 병합 (예: SYSTEM__DB_PATH -> system: {db_path: ...})
+            # 1. YAML 내부의 ${VAR_NAME} 패턴 치환
+            self._substitute_env_vars(new_config)
+            
+            # 2. 외부 환경 변수 강제 병합 (기존 SECTION__KEY 방식 유지)
             self._merge_env_vars(new_config)
             
             self.config = new_config
@@ -42,6 +49,66 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             return False
+
+    def _substitute_env_vars(self, config: Any):
+        """설정 내의 ${VAR_NAME} 형식을 실제 환경 변수 값으로 치환합니다."""
+        if isinstance(config, dict):
+            for k, v in config.items():
+                if isinstance(v, (dict, list)):
+                    self._substitute_env_vars(v)
+                elif isinstance(v, str) and v.startswith("${") and v.endswith("}"):
+                    env_key = v[2:-1]
+                    env_val = os.getenv(env_key)
+                    if env_val is not None:
+                        # 숫자나 불리언 형변환 시도
+                        try:
+                            if env_val.lower() in ('true', 'false'):
+                                config[k] = env_val.lower() == 'true'
+                            elif env_val.isdigit():
+                                config[k] = int(env_val)
+                            elif env_val.replace('.', '', 1).isdigit():
+                                config[k] = float(env_val)
+                            else:
+                                config[k] = env_val
+                        except:
+                            config[k] = env_val
+        elif isinstance(config, list):
+            for i, v in enumerate(config):
+                if isinstance(v, (dict, list)):
+                    self._substitute_env_vars(v)
+                elif isinstance(v, str) and v.startswith("${") and v.endswith("}"):
+                    env_key = v[2:-1]
+                    env_val = os.getenv(env_key)
+                    if env_val is not None:
+                        config[i] = env_val
+
+    def _merge_env_vars(self, config: Dict[str, Any]):
+        """환경 변수를 설정에 병합합니다 (형식: SECTION__KEY)."""
+        for env_key, env_val in os.environ.items():
+            if '__' in env_key:
+                parts = env_key.lower().split('__')
+                d = config
+                for part in parts[:-1]:
+                    if part not in d or not isinstance(d[part], dict):
+                        d[part] = {}
+                    d = d[part]
+                
+                last_key = parts[-1]
+                # 기존 값의 타입에 맞춰 형변환 시도
+                if last_key in d:
+                    try:
+                        if isinstance(d[last_key], bool):
+                            d[last_key] = env_val.lower() in ('true', '1', 'yes')
+                        elif isinstance(d[last_key], int):
+                            d[last_key] = int(env_val)
+                        elif isinstance(d[last_key], float):
+                            d[last_key] = float(env_val)
+                        else:
+                            d[last_key] = env_val
+                    except:
+                        d[last_key] = env_val
+                else:
+                    d[last_key] = env_val
 
     def get(self, key: str, default: Any = None) -> Any:
         """점(.)으로 구분된 키를 사용하여 설정값을 가져옵니다 (예: 'system.db_path')."""
@@ -103,9 +170,6 @@ class ConfigManager:
             d = d[part]
         
         d[parts[-1]] = value
-        
-        # 파일 저장 (Hot-reloading 루프가 자신의 변경을 무시하도록 last_mtime 갱신 방지)
-        # 하지만 정합성을 위해 저장 후 즉시 reload()를 호출하는 것이 안전함
         return self.save()
 
     def save(self):
@@ -113,29 +177,8 @@ class ConfigManager:
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
                 yaml.dump(self.config, f, allow_unicode=True, sort_keys=False)
-            # 저장 후 mtime을 즉시 갱신하여 감시 루프에서 중복 로드 방지
             self.last_mtime = os.path.getmtime(self.config_path)
             return True
         except Exception as e:
             logger.error(f"Error saving config to {self.config_path}: {e}")
             return False
-
-    def _merge_env_vars(self, config: Dict[str, Any]):
-        """환경 변수를 설정에 병합합니다 (형식: SECTION__KEY)."""
-        for env_key, env_val in os.environ.items():
-            if '__' in env_key:
-                section, key = env_key.lower().split('__', 1)
-                if section in config and isinstance(config[section], dict):
-                    # 값 타입 유지 시도
-                    original_val = config[section].get(key)
-                    if original_val is not None:
-                        try:
-                            if isinstance(original_val, bool):
-                                env_val = env_val.lower() in ('true', '1', 'yes')
-                            elif isinstance(original_val, int):
-                                env_val = int(env_val)
-                            elif isinstance(original_val, float):
-                                env_val = float(env_val)
-                        except ValueError:
-                            pass
-                    config[section][key] = env_val

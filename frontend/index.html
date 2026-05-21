@@ -8,6 +8,10 @@
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
+    <div id="global-emergency-banner" class="emergency-banner" style="display: none;">
+        <span class="warning-icon">⚠️</span> 
+        <span class="warning-text">[비상 경고] 데이터 수집기 작동이 중단되었습니다! 즉시 시스템 설정 및 백엔드 상태를 점검하십시오.</span>
+    </div>
     <div class="app-container">
         <!-- 사이드바 -->
         <aside class="sidebar">
@@ -18,9 +22,34 @@
                 <div class="menu-item" data-view="alert-view">🔔 알림</div>
                 <div class="menu-item" data-view="strategy-view">🎯 전략</div>
                 <div class="menu-item" data-view="portfolio-view">💼 포트폴리오</div>
+                <div class="menu-item" data-view="real-asset-view">💳 실자산 현황</div>
                 <div class="menu-item" data-view="settings-view">⚙️ 설정</div>
+                <div class="menu-item" data-view="restored-view">🛠️ 복원 캔들</div>
             </nav>
+            <!-- 수집기 신호등 위젯 [NEW] -->
+            <div class="system-status" style="margin-bottom: 15px;">
+                <div class="status-header">COLLECTORS STATUS</div>
+                <div class="status-item">
+                    <span>Upbit</span>
+                    <span id="sidebar-upbit-status" class="status-indicator status-off">● OFF</span>
+                </div>
+                <div class="status-item">
+                    <span>Bithumb</span>
+                    <span id="sidebar-bithumb-status" class="status-indicator status-off">● OFF</span>
+                </div>
+                <div class="status-item">
+                    <span>Domestic (KIS)</span>
+                    <span id="sidebar-kis-status" class="status-indicator status-off">● OFF</span>
+                </div>
+            </div>
             <!-- 시스템 상태 위젯 [NEW] -->
+            <div class="system-status" style="margin-bottom: 15px;">
+                <div class="status-header">SYSTEM STATUS</div>
+                <div class="status-item">
+                    <span>WebSocket Link</span>
+                    <span id="status-badge" class="badge">CONNECTED</span>
+                </div>
+            </div>
             <div class="system-status">
                 <div class="status-header">SYSTEM QUEUES</div>
                 <div class="status-item">
@@ -54,7 +83,6 @@
                                 <h1 id="current-symbol-kr">-</h1>
                                 <span id="current-symbol-code">KRW-BTC</span>
                             </div>
-                            <div id="status-badge" class="badge">CONNECTED</div>
                         </div>
                     </div>
                     <div class="header-metrics">
@@ -134,15 +162,22 @@
             <!-- 마켓 뷰 (초기엔 숨김) -->
             <section id="market-view" style="display: none;">
                 <header class="main-header">
-                    <h1>🌐 마켓 현황 <span id="market-count" class="market-count-badge"></span></h1>
-                    <input type="text" id="market-search" class="dark-input market-search" placeholder="코인명 또는 코드 검색...">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h1>🌐 마켓 현황 <span id="market-count" class="market-count-badge"></span></h1>
+                        <div class="market-tabs">
+                            <button class="market-tab active" data-tab="upbit">업비트</button>
+                            <button class="market-tab" data-tab="bithumb">빗썸</button>
+                            <button class="market-tab" data-tab="kis">국내주식</button>
+                        </div>
+                    </div>
+                    <input type="text" id="market-search" class="dark-input market-search" placeholder="종목명 또는 코드 검색...">
                 </header>
                 <div class="market-table-wrapper">
                     <table id="market-table">
                         <thead>
                             <tr>
                                 <th>#</th>
-                                <th>코인</th>
+                                <th>종목</th>
                                 <th style="text-align:right">현재가</th>
                                 <th style="text-align:right">변동률(24h)</th>
                                 <th style="text-align:right">고가</th>
@@ -157,11 +192,18 @@
 
             <!-- 알림 뷰 (초기엔 숨김) -->
             <section id="alert-view" style="display: none;">
-                <header class="main-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <h1>🔔 급등 알림 기록 <span id="alert-count" class="market-count-badge"></span></h1>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btn-toggle-alerts" class="btn sm" onclick="toggleAlerts()">🔕 알림 팝업: OFF</button>
-                        <button class="btn sm danger" onclick="clearAlertHistory()">🗑️ 전체 내역 삭제</button>
+                <header class="main-header" style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h1>🔔 매매 및 수신 알림 기록 <span id="alert-count" class="market-count-badge"></span></h1>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="btn-toggle-alerts" class="btn sm" onclick="toggleAlerts()">🔕 알림 팝업: OFF</button>
+                            <button class="btn sm danger" onclick="clearAlertHistory()">🗑️ 전체 내역 삭제</button>
+                        </div>
+                    </div>
+                    <!-- 고신호 필터 선택 탭 [NEW] -->
+                    <div class="alert-filter-container">
+                        <button class="filter-tab active" id="alert-filter-high" onclick="setAlertFilter('high')">⚡ 체결/보류 전용 (고신호 추천)</button>
+                        <button class="filter-tab" id="alert-filter-all" onclick="setAlertFilter('all')">🌐 전체 수신 알림 (감지 포함)</button>
                     </div>
                 </header>
                 <div class="market-table-wrapper">
@@ -274,6 +316,52 @@
                 </div>
             </section>
 
+            <!-- 실자산 뷰 (초기엔 숨김) [NEW] -->
+            <section id="real-asset-view" style="display: none;">
+                <header class="main-header">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <h1>💳 Upbit 실자산 현황</h1>
+                            <span class="badge" style="background: #4caf50; color: #FFF; font-weight: bold;">LIVE WALLET</span>
+                        </div>
+                        <button class="btn sm" onclick="loadRealAssets()">🔄 즉시 갱신</button>
+                    </div>
+                    <div id="real-asset-summary" class="header-metrics">
+                        <div class="metric">
+                            <span class="label">💼 실시간 총 평가액 (KRW 기준)</span>
+                            <span id="real-total-value" class="value" style="font-family: 'Roboto Mono', monospace;">-</span>
+                        </div>
+                        <div class="metric">
+                            <span class="label">📊 보유 가상자산 수</span>
+                            <span id="real-asset-count" class="value" style="font-family: 'Roboto Mono', monospace;">-</span>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="portfolio-grid">
+                    <div class="portfolio-card allocation-card" style="grid-column: span 3; width: 100%;">
+                        <h3>실시간 보유 자산 분포 (평가액 많은 순 정렬)</h3>
+                        <div class="table-wrapper" style="max-height: 750px;">
+                            <table id="real-assets-table">
+                                <thead>
+                                    <tr>
+                                        <th>종목명 (코드)</th>
+                                        <th style="text-align:right">보유 잔고 (수량)</th>
+                                        <th style="text-align:right">평균 매수가</th>
+                                        <th style="text-align:right">현재가</th>
+                                        <th style="text-align:right">평가금액</th>
+                                        <th style="text-align:right">자산 비중 (게이지)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="real-assets-tbody">
+                                    <tr><td colspan="6" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">자산을 로딩 중입니다...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 설정 뷰 (초기엔 숨김) -->
             <section id="settings-view" class="settings-view" style="display: none;">
                 <header class="main-header">
@@ -281,11 +369,44 @@
                 </header>
                 
                 <div class="settings-grid">
-                    <div class="settings-card">
+                    <div class="settings-card full-width">
                         <h3>데이터 수집기 관리</h3>
-                        <p class="status-text">상태: <span id="collector-status">조회 중...</span></p>
-                        <div class="button-group">
-                            <button id="btn-toggle" class="btn" style="width: 100%;">조회 중...</button>
+                        <div class="collector-controls-grid">
+                            <!-- 업비트 수집기 -->
+                            <div class="collector-item">
+                                <div class="collector-info">
+                                    <span class="collector-name">🚀 Upbit Collector</span>
+                                    <span id="upbit-status" class="status-badge status-off">조회 중...</span>
+                                </div>
+                                <div class="collector-actions">
+                                    <button id="btn-toggle-upbit" class="btn sm" disabled>조회 중...</button>
+                                </div>
+                                <div id="upbit-error-msg" class="collector-error" style="display: none;"></div>
+                            </div>
+                            
+                            <!-- KIS 수집기 -->
+                            <div class="collector-item">
+                                <div class="collector-info">
+                                    <span class="collector-name">📈 KIS Collector</span>
+                                    <span id="kis-status" class="status-badge status-off">조회 중...</span>
+                                </div>
+                                <div class="collector-actions">
+                                    <button id="btn-toggle-kis" class="btn sm" disabled>조회 중...</button>
+                                </div>
+                                <div id="kis-error-msg" class="collector-error" style="display: none;"></div>
+                            </div>
+                            
+                            <!-- Bithumb 수집기 -->
+                            <div class="collector-item">
+                                <div class="collector-info">
+                                    <span class="collector-name">🚀 Bithumb Collector</span>
+                                    <span id="bithumb-status" class="status-badge status-off">조회 중...</span>
+                                </div>
+                                <div class="collector-actions">
+                                    <button id="btn-toggle-bithumb" class="btn sm" disabled>조회 중...</button>
+                                </div>
+                                <div id="bithumb-error-msg" class="collector-error" style="display: none;"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -296,14 +417,81 @@
                             <label>기준 날짜 선택</label>
                             <input type="date" id="cleanup-date" class="dark-input">
                         </div>
+                        <!-- 삭제 미리보기 현황 패널 [NEW] -->
+                        <div id="cleanup-preview-panel" style="display: none; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.15); margin-top: 15px; padding: 12px; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: #94A3B8; font-size: 0.9rem;">🧹 삭제 예정 데이터 요약</h4>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                                <span>체결 정보 (Trades)</span>
+                                <span id="cleanup-preview-trades" style="color: #FF4B4B; font-weight: bold; font-family: 'Roboto Mono', monospace;">0건</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                                <span>캔들 정보 (Candles)</span>
+                                <span id="cleanup-preview-candles" style="color: #FF4B4B; font-weight: bold; font-family: 'Roboto Mono', monospace;">0건</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; border-top: 1px solid rgba(148, 163, 184, 0.1); padding-top: 6px; font-weight: bold;">
+                                <span>총 정리 대상 수</span>
+                                <span id="cleanup-preview-total" style="color: #FF4B4B; font-family: 'Roboto Mono', monospace;">0건</span>
+                            </div>
+                        </div>
                         <button id="btn-cleanup" class="btn danger" style="width: 100%; margin-top: 15px;">선택 날짜 이전 삭제</button>
                     </div>
+                </div>
+            </section>
+
+            <!-- 복원 캔들 뷰 (초기엔 숨김) -->
+            <section id="restored-view" style="display: none;">
+                <header class="main-header" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h1>🛠️ 1분봉 DB 누락 및 복원 현황 (전체 종목)</h1>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="control-group" style="margin: 0;">
+                                <select id="restored-range-select" class="dark-input" style="margin: 0; padding: 6px 12px; width: 150px; font-weight: bold;">
+                                    <option value="60">최근 1시간</option>
+                                    <option value="360">최근 6시간</option>
+                                    <option value="720">최근 12시간</option>
+                                    <option value="1440" selected>최근 24시간</option>
+                                    <option value="2880">최근 48시간</option>
+                                </select>
+                            </div>
+                            <button class="btn sm primary" onclick="loadRestoredCandles()" style="padding: 6px 15px; font-weight: bold;">🔄 조회</button>
+                        </div>
+                    </div>
+                </header>
+
+
+                <div class="restored-summary-banner" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0; margin-bottom: 8px; color: #F8FAFC; font-size: 1.05rem;">💡 모니터링 안내</h3>
+                    <p style="margin: 0; color: #94A3B8; font-size: 0.85rem; line-height: 1.5;">
+                        백엔드 수집 중 데이터베이스(`candles` 테이블)에 기록되지 않았으나, 체결 내역(`trades` 테이블)을 기반으로 임시 복원(재조립) 가능한 1분봉 목록입니다.<br>
+                        이 목록에 나타나는 캔들들은 DB 적재 유실이 실제로 발생했던 구간을 나타냅니다.
+                    </p>
+                </div>
+
+                <div class="market-table-wrapper" style="max-height: calc(100vh - 280px); overflow-y: auto;">
+                    <table id="restored-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; text-align: center;">순번</th>
+                                <th style="text-align: center; width: 100px;">거래소</th>
+                                <th style="text-align: left; width: 120px;">종목 (Symbol)</th>
+                                <th style="text-align: left;">복원 시간 (Timestamp)</th>
+                                <th style="text-align: right;">시가 (Open)</th>
+                                <th style="text-align: right;">고가 (High)</th>
+                                <th style="text-align: right;">저가 (Low)</th>
+                                <th style="text-align: right;">종가 (Close)</th>
+                                <th style="text-align: right;">거래량 (Volume)</th>
+                                <th style="text-align: center; width: 100px;">조립 틱 개수</th>
+                            </tr>
+                        </thead>
+                        <tbody id="restored-tbody">
+                            <tr><td colspan="10" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">조회 버튼을 클릭하여 데이터를 확인해보세요.</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </section>
         </main>
     </div>
     <div id="alert-container" class="alert-container"></div>
-    <script src="utils.js"></script>
     <!-- 종목 상세 내역 모달 [NEW] -->
     <div id="asset-modal" class="modal-overlay" style="display: none;">
         <div class="asset-modal-content">
@@ -357,6 +545,16 @@
         </div>
     </div>
 
+    <script src="store.js"></script>
+    <script src="router.js"></script>
+    <script src="client.js"></script>
+    <script src="stream.js"></script>
+    <script src="indicators.js"></script>
+    <script src="chart.js"></script>
+    <script src="utils.js"></script>
+    <script src="alerts.js"></script>
+    <script src="market.js"></script>
+    <script src="portfolio.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

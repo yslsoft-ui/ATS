@@ -4,6 +4,9 @@ import json
 import uuid
 import sys
 import os
+from src.engine.utils.telemetry import get_logger
+
+logger = get_logger(__name__)
 
 # src 경로 인식용 설정
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -16,7 +19,7 @@ class UpbitCollector:
         
     async def connect_and_listen(self, symbols):
         async with websockets.connect(self.uri) as websocket:
-            print(f"Connected to Upbit WebSocket for {symbols}")
+            logger.info(f"Connected to Upbit WebSocket for {symbols}")
             
             # 구독 요청 (체결 및 호가창)
             subscribe_data = [
@@ -34,7 +37,7 @@ class UpbitCollector:
                     await self.queue.put(data)
 
             except websockets.ConnectionClosed:
-                print("Connection closed. Attempting to reconnect...")
+                logger.warning("Connection closed. Attempting to reconnect...")
                 await asyncio.sleep(2)
                 await self.connect_and_listen(symbols) # 재연결
 
@@ -46,7 +49,7 @@ if __name__ == "__main__":
     db_writer = DBWriter(shared_queue, db_path)
     
     async def main_run():
-        print("Starting continuous data collection...")
+        logger.info("Starting continuous data collection...")
         # 1. 수집기 실행 (Producer)
         ws_task = asyncio.create_task(collector.connect_and_listen(["KRW-BTC"]))
         # 2. DB 저장기 실행 (Consumer)
@@ -56,6 +59,6 @@ if __name__ == "__main__":
         try:
             await asyncio.gather(ws_task, db_task)
         except asyncio.CancelledError:
-            print("Shutting down...")
+            logger.info("Shutting down...")
         
     asyncio.run(main_run())

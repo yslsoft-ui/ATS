@@ -10,7 +10,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)
 db_semaphore = asyncio.Semaphore(10)
 
 @asynccontextmanager
-async def get_db_conn(db_path: str = DB_PATH):
+async def get_db_conn(db_path: str = None):
     """
     최적화된 설정을 적용한 SQLite 연결을 제공하는 컨텍스트 매니저입니다.
     - WAL 모드: 읽기/쓰기 동시성 향상
@@ -18,8 +18,9 @@ async def get_db_conn(db_path: str = DB_PATH):
     - Semaphore: 동시 접속 제어
     - Busy Timeout: 30초 대기
     """
+    target_path = db_path if db_path is not None else DB_PATH
     async with db_semaphore:
-        async with aiosqlite.connect(db_path, timeout=30) as db:
+        async with aiosqlite.connect(target_path, timeout=30) as db:
             # 성능 최적화 PRAGMA 설정
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA synchronous=NORMAL")

@@ -1,8 +1,21 @@
-# Upbit Real-time Dashboard
+# Multi-Market Real-time Trading System
 
-Upbit 거래소의 실시간 체결 데이터를 수집하여 시각화하고, 급등 탐지 및 자동 매매 시뮬레이션을 수행하는 시스템입니다.
+다양한 시장(가상자산, 국내 주식 등)의 실시간 체결 데이터를 수집하여 시각화하고, 지표 분석 및 자동 매매 시뮬레이션을 수행하는 통합 시스템입니다.
 
 ## Language
+
+**Market**:
+자산이 거래되는 장소 (예: Upbit, KIS).
+_Avoid_: 거래소, 섹터
+
+**Exchange (ID)**:
+시스템 내부에서 시장을 식별하는 고유 ID (예: `upbit`, `kis`).
+
+**AssetSymbol**:
+거래소 내의 순수 종목 코드 (예: `BTC`, `ETH`, `005930`). 더 이상 접두어를 포함하지 않음.
+
+**Composite Key**:
+`(Exchange, AssetSymbol)` 쌍으로 시스템 내 모든 자산을 고유하게 식별.
 
 **Candle**:
 특정 시간 범위(Interval) 동안의 가격 변동(시가, 고가, 저가, 종가)과 거래량을 요약한 데이터 단위.
@@ -64,6 +77,10 @@ _Avoid_: 자산 관리자, 매매 관리기
 주문을 실제로 집행하는 추상 레이어. 가상 체결(**VirtualExecutor**)과 실제 API 체결을 동일한 인터페이스로 제공함.
 _Avoid_: 주문기, 체결 처리기
 
+**Collector**:
+특정 거래소(Market)의 실시간 **Tick** 데이터를 WebSocket으로 수집하고, 내부 **TradeEngine**으로 배분하는 모듈.
+_Avoid_: 수집기 (혼재 방지를 위해 영문 용어 통일)
+
 ## Relationships
 
 - 하나의 **Interval** 설정에 따라 여러 개의 **Candle**이 연속적으로 생성됨
@@ -75,8 +92,21 @@ _Avoid_: 주문기, 체결 처리기
 - **Spike Detector**는 **Tick** 스트림을 분석하여 **Spike**를 포착함
 - **Spike**가 발생하면 시스템은 **Alert**를 생성하고 저장함
 - **Trade Simulation**은 하나 이상의 **Strategy**를 실행하여 매매 신호를 발생시킴
-- **Backtest**는 과거의 **Candle** 데이터를 입력값으로 사용하는 **Trade Simulation**의 한 형태임
-- **Order Matching** 엔진은 **Trade Simulation** 과정에서 발생한 주문의 실제 체결가를 결정함
+- **Backtest**는 과거의 **Candle** 데이터를 입력값으로 사용하는 **Trade Simulation**의 형태임
+
+### 3. Logging & Telemetry
+- **Standard**: Always use `src.engine.utils.telemetry.get_logger`.
+- **Avoid**: Never use standard `logging.getLogger` or `print()` for system logs.
+- **Leverage**: `logger.warning` and `logger.error` automatically broadcast alerts to the UI.
+
+### 4. KIS (한국투자증권) API 연동 규격 원칙
+- **KIS (한국투자증권) 연동 및 다중 자산군 개발 시**: 에이전트는 사용자의 추가적인 요청 유무에 관계없이 아래의 **5대 분할 정제 마스터 매뉴얼**을 상시 우선 참조하여 설계의 무결성을 완벽하게 보증해야 합니다.
+  - **전체 API 인덱스 목차 (최우선 색인원)**: [kis_api_list.md](file:///home/simon/ATS/docs/%20manual/kis/kis_api_list.md) 문서를 참조하여 전체 KIS API의 ID, 호출 URL, TR_ID, 설명 등의 일람 목차를 초고속 탐색 및 대조합니다.
+  - **국내주식 (주문/잔고/실시간 체결·호가)**: [kis_domestic_stock.md](file:///home/simon/ATS/docs/%20manual/kis/kis_domestic_stock.md) 문서를 참조하여 국내주식 현금주문, 정정취소, 잔고조회, 실시간 WebSocket 체결/호가 프레임 레이아웃과 TR_ID를 확인합니다.
+  - **해외주식 (주문/잔고/실시간 시세)**: [kis_overseas_stock.md](file:///home/simon/ATS/docs/%20manual/kis/kis_overseas_stock.md) 문서를 참조하여 미국/아시아 해외주식 주문, 예약주문, 실시간 체결 통보 사양을 확인합니다.
+  - **선물옵션 및 파생상품**: [kis_derivative.md](file:///home/simon/ATS/docs/%20manual/kis/kis_derivative.md) 문서를 참조하여 선물옵션 주문, 잔고정산, 야간 체결/호가 웹소켓 수신 규격을 분석합니다.
+  - **채권/ELW/기타자산**: [kis_bond_etc.md](file:///home/simon/ATS/docs/%20manual/kis/kis_bond_etc.md) 문서를 참조하여 장내/일반채권 주문, 잔고조회 및 ELW 실시간 체결 명세를 확인합니다.
+
 - **Portfolio** 상태는 **Order Matching** 결과에 따라 업데이트됨
 - **PortfolioManager**는 **TradeEngine**이 생성한 신호를 받아 적절한 **Portfolio**에 배분함
 

@@ -1,5 +1,8 @@
 import asyncio
 from typing import List, Dict, Optional, Any
+from src.engine.utils.telemetry import get_logger
+
+logger = get_logger(__name__)
 from src.database.connection import get_db_conn
 from src.engine.candles import CandleGenerator, Candle
 from src.engine.strategy import BaseStrategy, StrategyType, TradeSignal
@@ -9,15 +12,13 @@ from src.engine.strategy_host import StrategyHost
 from src.engine import strategies
 
 class TradeEngine:
-    """
-    종목별로 캔들 생성과 전략 실행을 통합 관리하는 엔진입니다.
-    """
-    def __init__(self, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None):
+    def __init__(self, exchange: str, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None):
+        self.exchange = exchange
         self.symbol = symbol
         self.strategies = strategies
         
         # 전략들을 호스트로 래핑
-        self.hosts = [StrategyHost(s, symbol, s.params.get('interval', 60), on_status_callback=on_status_callback) for s in strategies]
+        self.hosts = [StrategyHost(s, exchange, symbol, s.params.get('interval', 60), on_status_callback=on_status_callback) for s in strategies]
         
         # 전략 분류 (호스트 기준)
         self.entry_hosts = [h for h in self.hosts if h.strategy.type in [StrategyType.ENTRY, StrategyType.BOTH]]
@@ -36,14 +37,15 @@ class TradeEngine:
                 # 1. 먼저 캔들 테이블에서 데이터 시도
                 has_candle_data = False
                 for interval in self.intervals:
-                    query = "SELECT * FROM candles WHERE symbol = ? AND interval = ? ORDER BY timestamp DESC LIMIT ?"
-                    async with db.execute(query, (self.symbol, interval, lookback_candles)) as cursor:
+                    query = "SELECT * FROM candles WHERE exchange = ? AND symbol = ? AND interval = ? ORDER BY timestamp DESC LIMIT ?"
+                    async with db.execute(query, (self.exchange, self.symbol, interval, lookback_candles)) as cursor:
                         rows = await cursor.fetchall()
                         if rows:
                             has_candle_data = True
                             # 시간순 처리를 위해 역순으로 전략에 주입
                             for j, row in enumerate(reversed(rows)):
                                 candle = Candle(
+                                    exchange=row['exchange'],
                                     symbol=row['symbol'],
                                     interval=row['interval'],
                                     timestamp=row['timestamp'],
@@ -66,8 +68,8 @@ class TradeEngine:
                 
                 # 2. 캔들 데이터가 없는 경우에만 틱 데이터로 워밍업 (Fallback)
                 if not has_candle_data:
-                    query = "SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE symbol = ? ORDER BY trade_timestamp DESC LIMIT ?"
-                    async with db.execute(query, (self.symbol, lookback_ticks)) as cursor:
+                    query = "SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?"
+                    async with db.execute(query, (self.exchange, self.symbol, lookback_ticks)) as cursor:
                         rows = await cursor.fetchall()
                         for i, row in enumerate(reversed(rows)):
                             await self.process_tick({
@@ -81,13 +83,14 @@ class TradeEngine:
                             if i % 20 == 0:
                                 await asyncio.sleep(0.001)
             
-            print(f"[INFO] TradeEngine: {self.symbol} warmed up (Source: {'Candles' if has_candle_data else 'Ticks'}).")
+            logger.debug(f"{self.symbol} warmed up (Source: {'Candles' if has_candle_data else 'Ticks'}).")
         except Exception as e:
-            print(f"[WARNING] TradeEngine: {self.symbol} warmup failed: {e}")
+            logger.warning(f"{self.symbol} warmup failed: {e}")
 
     async def process_tick(self, tick: Dict, portfolio_manager: Any, is_warmup: bool = False) -> tuple[List[TradeSignal], List[Candle]]:
         """실시간 틱을 처리하고, 완성된 캔들이 있을 경우 전략을 실행하여 신호와 캔들을 반환합니다."""
         closed_candles = self.candle_gen.process_tick(
+            self.exchange,
             self.symbol, 
             tick['trade_price'], 
             tick['trade_volume'], 

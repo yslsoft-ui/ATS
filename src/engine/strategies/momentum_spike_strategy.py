@@ -9,25 +9,9 @@ class MomentumSpikeStrategy(BaseStrategy):
     짧은 순간(1-10초)의 거래량 폭증과 가격 상승 모멘텀을 포착합니다.
     트레일링 스탑을 통해 수익을 보존하고 급락 시 탈출합니다.
     """
-    def __init__(
-        self, 
-        lookback_periods: int = 20, 
-        vol_multiplier: float = 3.0, 
-        freq_multiplier: float = 2.0,
-        buy_ratio_threshold: float = 0.7,
-        price_change_threshold: float = 0.3,
-        trailing_stop_pct: float = 1.5,
-        **kwargs
-    ):
-        super().__init__(interval=kwargs.get('interval', 10))
-        self.lookback_periods = lookback_periods
-        self.vol_multiplier = vol_multiplier
-        self.freq_multiplier = freq_multiplier
-        self.buy_ratio_threshold = buy_ratio_threshold
-        self.price_change_threshold = price_change_threshold
-        self.trailing_stop_pct = trailing_stop_pct
-        
-        self.history = deque(maxlen=lookback_periods)
+    def __init__(self, strategy_id: str, params: Dict = None):
+        super().__init__(strategy_id, params)
+        self.history_queue = deque(maxlen=getattr(self, 'lookback_periods', 20))
         self.in_position = False
         self.peak_price = 0.0
         self.buy_price = 0.0
@@ -67,13 +51,13 @@ class MomentumSpikeStrategy(BaseStrategy):
             return StrategyResult("HOLD")
 
         # 2. 매수 로직 (포지션이 없는 경우)
-        if len(self.history) < self.lookback_periods:
-            self.history.append(candle)
+        if len(self.history_queue) < self.lookback_periods:
+            self.history_queue.append(candle)
             return StrategyResult("HOLD", reason="Warming up history")
 
         # 과거 평균 계산
-        avg_vol = sum(c.volume for c in self.history) / len(self.history)
-        avg_freq = sum(c.count for c in self.history) / len(self.history)
+        avg_vol = sum(c.volume for c in self.history_queue) / len(self.history_queue)
+        avg_freq = sum(c.count for c in self.history_queue) / len(self.history_queue)
         
         # 현재 상태 계산
         buy_ratio = candle.buy_volume / candle.volume if candle.volume > 0 else 0
@@ -93,5 +77,5 @@ class MomentumSpikeStrategy(BaseStrategy):
             return StrategyResult("BUY", price=candle.close, reason=reason)
 
         # 히스토리 업데이트
-        self.history.append(candle)
+        self.history_queue.append(candle)
         return StrategyResult("HOLD")

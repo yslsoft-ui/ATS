@@ -8,10 +8,11 @@ class SequentialStrategy(BaseStrategy):
     두 개의 다른 전략을 순차적으로 조합하는 마스터 전략입니다.
     1차 전략의 신호가 발생한 후, 지정된 캔들 갯수 이내에 2차 전략의 동일한 방향(BUY/SELL) 신호가 발생하면 최종 신호를 냅니다.
     """
-    def __init__(self, first_strategy_id: str = "rsi_strategy", second_strategy_id: str = "macd_strategy", wait_candles: int = 3):
-        self.first_strategy_id = first_strategy_id.lower()
-        self.second_strategy_id = second_strategy_id.lower()
-        self.wait_candles = wait_candles
+    def __init__(self, strategy_id: str, params: Dict = None):
+        super().__init__(strategy_id, params)
+        # ID 파라미터 확보 (BaseStrategy가 params에서 이미 매핑함)
+        self.first_strategy_id = getattr(self, 'first_strategy_id', 'rsistrategy').lower()
+        self.second_strategy_id = getattr(self, 'second_strategy_id', 'macdstrategy').lower()
         
         # 내부 하위 전략 인스턴스 (기본값으로 초기화)
         self.first_strategy: Optional[BaseStrategy] = StrategyRegistry.create_strategy(self.first_strategy_id)
