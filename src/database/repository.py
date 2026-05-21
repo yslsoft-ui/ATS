@@ -297,6 +297,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
     ) -> List[Dict[str, Any]]:
         end_time = int(time.time())
         start_time = end_time - limit_minutes * 60
+        current_minute_bucket = (end_time // 60) * 60
         
         async with get_db_conn() as db:
             # 1. DB에 존재하는 1분봉 타임스탬프 조회
@@ -339,6 +340,10 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             for r in rows_trades:
                 ex, sym, price, volume, side, ts_ms = r[0], r[1], r[2], r[3], r[4], r[5]
                 bucket = (ts_ms // 1000 // 60) * 60
+                
+                # 아직 완성되지 않은 현재 진행 중인 분봉은 누락 캔들로 판단하지 않음
+                if bucket >= current_minute_bucket:
+                    continue
                 
                 # DB에 이미 존재하는 캔들이면 복원 대상에서 제외
                 if (ex, sym, bucket) in db_timestamps:

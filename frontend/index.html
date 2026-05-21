@@ -462,8 +462,14 @@
                 <div class="restored-summary-banner" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
                     <h3 style="margin-top: 0; margin-bottom: 8px; color: #F8FAFC; font-size: 1.05rem;">💡 모니터링 안내</h3>
                     <p style="margin: 0; color: #94A3B8; font-size: 0.85rem; line-height: 1.5;">
-                        백엔드 수집 중 데이터베이스(`candles` 테이블)에 기록되지 않았으나, 체결 내역(`trades` 테이블)을 기반으로 임시 복원(재조립) 가능한 1분봉 목록입니다.<br>
+                        데이터베이스(<code>candles</code> 테이블)에 기록되지 않았으나, 체결 내역(<code>trades</code> 테이블)을 기반으로 임시 복원(재조립) 가능한 1분봉 목록입니다.<br>
                         이 목록에 나타나는 캔들들은 DB 적재 유실이 실제로 발생했던 구간을 나타냅니다.
+                    </p>
+                    <p style="margin: 10px 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.6; border-top: 1px solid rgba(148,163,184,0.1); padding-top: 10px;">
+                        ⚠️ <strong style="color: #94A3B8;">일시적 깜박임 현상 (정상 동작)</strong><br>
+                        매 분이 끝나는 순간, 체결 틱은 즉시 DB에 저장되지만 분봉 캔들은 최대 약 0.5초 후 배치로 기록됩니다.
+                        이 미세한 쓰기 지연(Write Lag) 구간 동안 페이지를 조회하면 방금 완성된 분봉이 잠시 누락으로 표시됐다가 사라질 수 있습니다.
+                        이는 데이터 손실이 아닌 정상적인 파이프라인 동작입니다.
                     </p>
                 </div>
 
