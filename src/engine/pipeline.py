@@ -18,25 +18,32 @@ class ExecutionPipeline:
     def set_broadcast_callback(self, callback: Callable):
         self.broadcast_callback = callback
 
-    def calculate_position_size(self, portfolio, signal, price: float) -> Tuple[float, float]:
+    def calculate_position_size(self, portfolio, signal, price: float, size_ratio: Optional[float] = None) -> Tuple[float, float]:
         """포지션의 수량과 예정 진입 가치를 정밀 계산합니다."""
         action = signal.action
         
         if action == 'BUY':
-            # context 내에 비중 설정(weight, ratio)이 있는지 점검, 없을 경우 디폴트 10%
-            context = getattr(signal, 'context', {}) or {}
-            ratio = context.get('weight', context.get('ratio', 0.1))
+            # size_ratio가 직접 지정되었으면 이를 우선 사용
+            if size_ratio is not None:
+                ratio = size_ratio
+            else:
+                context = getattr(signal, 'context', {}) or {}
+                ratio = context.get('weight', context.get('ratio', 0.1))
             
             # 비율 범위 제한 (0.0 < ratio <= 1.0)
             if not (0.0 < ratio <= 1.0):
                 ratio = 0.1
                 
-            target_value = portfolio.cash * ratio
+            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
+            available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
+            
+            target_value = available_cash * ratio
             quantity = target_value / price
             return quantity, target_value
             
         elif action == 'SELL':
-            pos = portfolio.positions.get(signal.symbol)
+            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
+            pos = portfolio.positions.get((ex_key, signal.symbol))
             if not pos or pos.quantity <= 0:
                 return 0.0, 0.0
             
@@ -47,8 +54,11 @@ class ExecutionPipeline:
             
         return 0.0, 0.0
 
-    def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float) -> Tuple[bool, str]:
+    def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float, risk_limits_enabled: bool = True) -> Tuple[bool, str]:
         """포지션 진입 전에 리스크 한도 필터를 실행합니다."""
+        if not risk_limits_enabled:
+            return True, ""
+
         action = signal.action
         if action != 'BUY':
             return True, ""
@@ -56,24 +66,29 @@ class ExecutionPipeline:
         if qty <= 0 or target_value <= 0:
             return False, "유효하지 않은 주문 수량"
 
+        ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
+        available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
+
         # 1. 사용 가능 현금 검사
         exchange_config = self.portfolio_manager.exchange_configs.get(portfolio.exchange_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         total_cost = target_value * (1 + fee_rate)
 
-        if total_cost > portfolio.cash:
-            return False, f"잔고 부족 (소요 현금: {total_cost:,.0f} > 보유 현금: {portfolio.cash:,.0f})"
+        if total_cost > available_cash:
+            return False, f"잔고 부족 (소요 현금: {total_cost:,.0f} > 보유 현금: {available_cash:,.0f})"
 
         # 2. 단일 종목 투자 한도 검사 (최대 30%)
         # 자산 평가를 위한 종목별 현재가 사전 구성 (기존 포지션 평균 단가 기반)
-        current_prices = {s: pos.avg_price for s, pos in portfolio.positions.items()}
+        current_prices = {pos.symbol: pos.avg_price for pos in portfolio.positions.values()}
         current_prices[signal.symbol] = price  # 진입할 종목 현재가 주입
         
         total_portfolio_value = portfolio.get_total_value(current_prices)
         if total_portfolio_value <= 0:
             total_portfolio_value = portfolio.initial_cash
 
-        existing_qty = portfolio.positions[signal.symbol].quantity if signal.symbol in portfolio.positions else 0
+        ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
+        pos_key = (ex_key, signal.symbol)
+        existing_qty = portfolio.positions[pos_key].quantity if pos_key in portfolio.positions else 0
         predicted_asset_value = (existing_qty * price) + target_value
         
         weight = predicted_asset_value / total_portfolio_value
@@ -84,21 +99,22 @@ class ExecutionPipeline:
 
         return True, ""
 
-    def apply_slippage(self, signal, price: float) -> float:
-        """가상 체결 시 시뮬레이션 현실성을 위한 0.1%의 현실적 슬리피지를 적용합니다."""
+    def apply_slippage(self, signal, price: float, slippage_rate: float = 0.001) -> float:
+        """가상 체결 시 시뮬레이션 현실성을 위한 슬리피지를 적용합니다."""
         action = signal.action
-        slippage_rate = 0.001  # 0.1% 슬리피지
-        
+        if slippage_rate <= 0:
+            return price
+            
         if action == 'BUY':
-            # 매수 시에는 시세보다 0.1% 비싸게 체결
+            # 매수 시에는 시세보다 비싸게 체결
             return price * (1 + slippage_rate)
         elif action == 'SELL':
-            # 매도 시에는 시세보다 0.1% 저렴하게 체결
+            # 매도 시에는 시세보다 저렴하게 체결
             return price * (1 - slippage_rate)
             
         return price
 
-    async def process_signal(self, signal: Any, price: float, orderbook: Optional[Dict] = None):
+    async def process_signal(self, signal: Any, price: float, orderbook: Optional[Dict] = None, portfolio_id: Optional[str] = None, risk_limits_enabled: bool = True, slippage_rate: float = 0.001, size_ratio: Optional[float] = None) -> Optional[Dict]:
         """
         신호를 수신하여 실행 파이프라인의 오케스트레이션 과정을 가동합니다.
         """
@@ -111,41 +127,38 @@ class ExecutionPipeline:
         # 1. 신호 액션 검증
         if action not in ['BUY', 'SELL']:
             logger.warning(f"Invalid action {action} for {symbol}")
-            return
+            return None
 
         # 2. 거래소 포트폴리오 안전 라우팅
-        if exchange == 'kis':
-            portfolio_id = 'stock_default'
-        elif exchange == 'bithumb':
-            portfolio_id = 'bithumb_default'
-        else:
-            portfolio_id = 'default'
-
-        portfolio = self.portfolio_manager.portfolios.get(portfolio_id)
-        if not portfolio:
-            logger.warning(f"Portfolio {portfolio_id} not found. Falling back to default.")
-            portfolio = self.portfolio_manager.portfolios.get('default')
+        if portfolio_id is None or portfolio_id in ['default', 'stock_default', 'bithumb_default']:
+            portfolio = self.portfolio_manager.get_active_simulation_portfolio()
             if not portfolio:
-                logger.error("No default portfolio exists in PortfolioManager.")
-                return
+                logger.warning("활성화된 실시간 모의투자 세션이 없어 주문 신호가 무시(Skip)되었습니다.")
+                await self._broadcast_skip(signal, "활성 모의투자 세션 없음")
+                return None
+        else:
+            portfolio = self.portfolio_manager.portfolios.get(portfolio_id)
+            if not portfolio:
+                logger.error(f"Portfolio {portfolio_id} not found.")
+                return None
 
         # 3. 정밀 포지션 사이징 계산
-        qty, target_value = self.calculate_position_size(portfolio, signal, price)
+        qty, target_value = self.calculate_position_size(portfolio, signal, price, size_ratio=size_ratio)
         if qty <= 0.0:
             # 매도할 포지션이 없거나 수량이 0인 경우 통과
             if action == 'SELL':
                 logger.debug(f"SELL signal ignored: No existing position for {symbol}")
-            return
+            return None
 
         # 4. 리스크 한도(Risk Limits) 필터 실행
-        passed, skip_reason = self.check_risk_limits(portfolio, signal, price, qty, target_value)
+        passed, skip_reason = self.check_risk_limits(portfolio, signal, price, qty, target_value, risk_limits_enabled=risk_limits_enabled)
         if not passed:
             logger.warning(f"Trade signal SKIPPED for {symbol}: {skip_reason}")
             await self._broadcast_skip(signal, skip_reason)
-            return
+            return None
 
         # 5. 현실적인 슬리피지 보정 적용
-        execution_price = self.apply_slippage(signal, price)
+        execution_price = self.apply_slippage(signal, price, slippage_rate=slippage_rate)
 
         # 6. 정제된 가격과 수량으로 최종 매매 주문 지시
         try:
@@ -159,13 +172,15 @@ class ExecutionPipeline:
             
             if not result:
                 logger.warning(f"Execution failed or skipped inside PortfolioManager for {symbol}")
-                return
+                return None
 
             # 7. 성공 시 알림 생성 및 처리
             await self._handle_notifications(result, signal)
+            return result
             
         except Exception as e:
             logger.error(f"Execution Error for {symbol}: {str(e)}")
+            return None
 
     async def _broadcast_skip(self, signal: Any, reason: str):
         """리스크 및 규칙 위반으로 거래가 취소(Skip)되었음을 UI에 공유합니다."""

@@ -21,7 +21,8 @@ async def get_db_conn(db_path: str = None):
     target_path = db_path if db_path is not None else DB_PATH
     async with db_semaphore:
         async with aiosqlite.connect(target_path, timeout=30) as db:
-            # 성능 최적화 PRAGMA 설정
+            # 성능 최적화 및 외래 키 활성화 PRAGMA 설정
+            await db.execute("PRAGMA foreign_keys=ON")
             await db.execute("PRAGMA journal_mode=WAL")
             await db.execute("PRAGMA synchronous=NORMAL")
             await db.execute("PRAGMA cache_size=-64000") # 약 64MB 캐시 사용

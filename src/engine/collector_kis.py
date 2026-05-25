@@ -8,6 +8,7 @@ from src.engine.collector_base import BaseCollector, CollectorRegistry
 from src.engine.credentials import CredentialProvider
 from src.engine.utils.stock_mapper import stock_mapper
 from src.engine.utils.market_hours import MarketHours
+from src.engine.candles import Candle
 
 logger = get_logger(__name__)
 
@@ -27,13 +28,13 @@ class KisCollector(BaseCollector):
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         kis_symbols = config.get('exchanges', {}).get('kis', {}).get('symbols', [])
+        if not kis_symbols:
+            kis_symbols = list(stock_mapper._mapping.get('kis', {}).keys())
         return kis_symbols
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
         kis_config = config.get('exchanges', {}).get('kis', {})
-        is_vts = kis_config.get('is_vts', True)
-        default_url = "ws://ops.koreainvestment.com:31000" if is_vts else "ws://ops.koreainvestment.com:21000"
-        return kis_config.get('websocket_url', default_url)
+        return kis_config.get('websocket_url', "ws://ops.koreainvestment.com:21000")
 
     async def _subscribe(self, ws, config: Dict[str, Any]):
         approval_key = await self.cred_provider.get_kis_approval_key()
@@ -114,14 +115,7 @@ class KisCollector(BaseCollector):
         return True
 
     async def _start_additional_tasks(self, config: Dict[str, Any]):
-        # settings.yaml에 KIS 고정 수집 종목(symbols)이 기재되어 있다면 동적 랭킹 수집 루프를 기동하지 않습니다.
-        # 이를 통해 사용자 고정 설정이 덮어쓰기 오염되는 것을 방지합니다.
-        kis_symbols = config.get('exchanges', {}).get('kis', {}).get('symbols', [])
-        if not kis_symbols:
-            self.rank_task = asyncio.create_task(self._ranking_loop())
-            logger.info("[KIS] 동적 랭킹 수집 루프가 기동되었습니다.")
-        else:
-            logger.info(f"[KIS] 고정 수집 종목 설정 감지 ({kis_symbols}). 동적 랭킹 수집 루프를 기동하지 않고 설정을 유지합니다.")
+        logger.info("[KIS] 추가적인 백그라운드 태스크가 없습니다. (동적 랭킹 수집 루프 제거됨)")
 
     async def _handle_connection_error(self, error: Exception):
         if getattr(self.cred_provider, 'last_status', 0) not in [401, 403]:
@@ -135,118 +129,199 @@ class KisCollector(BaseCollector):
         if self.rank_task and not self.rank_task.done():
             self.rank_task.cancel()
 
-    async def _ranking_loop(self):
-        await asyncio.sleep(5)
-        while self.is_running:
-            try:
-                await self.fetch_market_rank()
-                self.last_error = None
-            except Exception as e:
-                self.last_error = f"Ranking Fetch Error: {str(e)}"
-                logger.error(f"Error in ranking loop: {e}")
-            await asyncio.sleep(60)
+    async def update_subscription(self, code: str, is_collected: bool):
+        """ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다."""
+        if is_collected:
+            if code not in self.available_symbols:
+                self.available_symbols.append(code)
+                logger.info(f"[KIS] 동적 수집 종목 추가: {code}")
+            
+            # 전략 엔진 재구성
+            if hasattr(self, 'config') and self.config:
+                self._init_trade_engines(self.config)
+            
+            # 웹소켓 구독 등록
+            if hasattr(self, 'ws') and self.ws and not self.ws.closed:
+                try:
+                    approval_key = await self.cred_provider.get_kis_approval_key()
+                    subscribe_msg = {
+                        "header": {
+                            "approval_key": approval_key,
+                            "custtype": "P",
+                            "tr_type": "1",
+                            "content-type": "utf-8"
+                        },
+                        "body": {
+                            "input": {
+                                "tr_id": "H0STCNT0",
+                                "tr_key": code
+                            }
+                        }
+                    }
+                    await self.ws.send_json(subscribe_msg)
+                    logger.info(f"[KIS] 웹소켓 실시간 구독 등록 송신 완료: {code}")
+                except Exception as e:
+                    logger.error(f"[KIS] 웹소켓 구독 등록 실패 ({code}): {e}")
+        else:
+            if code in self.available_symbols:
+                self.available_symbols.remove(code)
+                logger.info(f"[KIS] 동적 수집 종목 제거: {code}")
+            
+            # 전략 엔진 재구성 (제거된 종목 정리)
+            if hasattr(self, 'config') and self.config:
+                self._init_trade_engines(self.config)
 
-    async def fetch_market_rank(self):
-        logger.info("랭킹 수집 시도 중...")
-        token = await self.cred_provider.get_kis_access_token()
-        if not token:
-            if self.cred_provider.last_status in [401, 403, 500]:
-                self.last_error = f"인증 실패 ({self.cred_provider.last_status}): 토큰을 발급받을 수 없어 수집기를 중단합니다."
-                await self.stop()
-            return
+            # 웹소켓 구독 해제
+            if hasattr(self, 'ws') and self.ws and not self.ws.closed:
+                try:
+                    approval_key = await self.cred_provider.get_kis_approval_key()
+                    unsubscribe_msg = {
+                        "header": {
+                            "approval_key": approval_key,
+                            "custtype": "P",
+                            "tr_type": "2",
+                            "content-type": "utf-8"
+                        },
+                        "body": {
+                            "input": {
+                                "tr_id": "H0STCNT0",
+                                "tr_key": code
+                            }
+                        }
+                    }
+                    await self.ws.send_json(unsubscribe_msg)
+                    logger.info(f"[KIS] 웹소켓 실시간 구독 해제 송신 완료: {code}")
+                except Exception as e:
+                    logger.error(f"[KIS] 웹소켓 구독 해제 실패 ({code}): {e}")
 
-        app_key = self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('app_key')
-        app_secret = self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('app_secret')
+    async def _fetch_historical_candles(self, symbol: str, start_time: int, end_time: int) -> List[Candle]:
+        """한국투자증권(KIS) REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다."""
+        kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}
         
-        app_key_str = str(app_key) if app_key is not None else ""
-        app_secret_str = str(app_secret) if app_secret is not None else ""
+        bf_config = self.config.get('collector', {}).get('backfill', {}) if hasattr(self, 'config') and self.config else {}
+        delays = bf_config.get('delays', {})
+        delay = delays.get('kis', 0.1)
         
-        url = "https://openapivts.koreainvestment.com:29443/uapi/domestic-stock/v1/quotations/volume-rank"
-        if not self.cred_provider.config.get('exchanges', {}).get('kis', {}).get('is_vts', True):
-            url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/volume-rank"
+        api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')
+        url = f"{api_url}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice"
 
-        headers = {
-            "Content-Type": "application/json",
-            "authorization": f"Bearer {token}",
-            "appkey": app_key_str,
-            "appsecret": app_secret_str,
-            "tr_id": "FHKST01010900",
-            "custtype": "P"
-        }
-        
-        params = {
-            "FID_COND_MRKT_DIV_CODE": "J",
-            "FID_COND_SCR_DIV_CODE": "20173",
-            "FID_INPUT_ISCD": "0000",
-            "FID_DIV_CLS_CODE": "0",
-            "FID_BLNG_CLS_CODE": "0",
-            "FID_TRGT_CLS_CODE": "0",
-            "FID_TRGT_EXLS_CLS_CODE": "0",
-            "FID_INPUT_PRICE_1": "0",
-            "FID_INPUT_PRICE_2": "0",
-            "FID_VOL_CNT": "0",
-            "FID_INPUT_DATE_1": ""
-        }
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        kst = ZoneInfo('Asia/Seoul')
+
+        candles: List[Candle] = []
+        to_time = end_time
 
         if not self.session or self.session.closed:
             self.session = aiohttp.ClientSession()
 
-        async with self.session.get(url, headers=headers, params=params) as resp:
-            if resp.status == 200:
-                self.last_error = None
-                data = await resp.json()
-                output = data.get('output', [])
-                if output is None:
-                    output = []
-                
-                if not output:
-                    logger.warning("No ranking data (Market closed?). Using default major symbols as fallback.")
-                    default_codes = ["005930", "000660", "035420", "005380", "035720", "000270", "005490", "105560", "055550", "068270"]
-                    for code in default_codes:
-                        name = stock_mapper.get_name('kis', code)
-                        output.append({
-                            'mksc_shrn_iscd': code,
-                            'hts_kor_isnm': name,
-                            'stck_prpr': '0',
-                            'prdy_ctrt': '0',
-                            'acml_tr_pbmn': '0'
-                        })
-                
-                for item in output:
-                    symbol = item.get('mksc_shrn_iscd')
-                    if not symbol:
-                        continue
-                    name = item.get('hts_kor_isnm')
-                    price = float(item.get('stck_prpr', 0))
-                    change_rate = float(item.get('prdy_ctrt', 0)) / 100.0
-                    volume_amt = float(item.get('acml_tr_pbmn', 0))
+        # 누락 시간 범위가 유효할 때까지 루프 (최신부터 과거로 역방향 페이지네이션)
+        while to_time >= start_time:
+            # KST 기준 시간 변환하여 FID_INPUT_HOUR_1 설정
+            to_dt = datetime.fromtimestamp(to_time, tz=kst)
+            hour_str = to_dt.strftime('%H%M%S')
 
-                    stock_mapper.add_mapping('kis', symbol, name)
+            token = await self.cred_provider.get_kis_access_token()
+            if not token:
+                logger.error(f"[{self.exchange.upper()}] 백필을 위한 KIS 접근 토큰 발급 실패")
+                break
+
+            app_key = kis_config.get('app_key')
+            app_secret = kis_config.get('app_secret')
+            
+            headers = {
+                "Content-Type": "application/json",
+                "authorization": f"Bearer {token}",
+                "appkey": str(app_key) if app_key else "",
+                "appsecret": str(app_secret) if app_secret else "",
+                "tr_id": "FHKST03010200",
+                "custtype": "P"
+            }
+
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": symbol,
+                "FID_INPUT_HOUR_1": hour_str,
+                "FID_PW_DATA_INCU_YN": "Y"
+            }
+
+            try:
+                async with self.session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
+                        break
                     
-                    mock_tick = {
-                        'type': 'tick',
-                        'exchange': 'kis',
-                        'code': symbol,
-                        'trade_price': price,
-                        'signed_change_rate': change_rate,
-                        'acc_trade_price_24h': volume_amt,
-                        'high_price': float(item.get('stck_hgpr', 0)),
-                        'low_price': float(item.get('stck_lwpr', 0)),
-                        'trade_timestamp': int(time.time() * 1000)
-                    }
-                    if self.on_data_callback:
-                        await self.on_data_callback(mock_tick)
-                
-                self.available_symbols = [item.get('mksc_shrn_iscd') for item in output]
-                stock_mapper.save_cache()
-                
-                logger.info(f"Updated {len(output)} ranking symbols via REST API")
-            else:
-                body = await resp.text()
-                self.last_error = f"Ranking API Error: {resp.status} - {body}"
-                logger.error(self.last_error)
-                
-                is_auth_error = resp.status in [401, 403] or (resp.status == 500 and ("유효하지" in body or "식별키" in body))
-                if is_auth_error:
-                    self.last_error = f"치명적 인증 오류 ({resp.status}): API 키를 확인하세요. 수집기를 중단합니다."
-                    await self.stop()
+                    data = await resp.json()
+                    output2 = data.get('output2', [])
+                    if not output2:
+                        break
+                    
+                    batch_candles = []
+                    min_ts = to_time
+
+                    for item in output2:
+                        # 일자와 시간 필드 추출
+                        date_str = item.get('stck_bsop_date')
+                        time_str = item.get('stck_cntg_hour', '').zfill(6)
+                        
+                        if not date_str or not time_str:
+                            continue
+
+                        # KST 기준 파싱하여 타임스탬프 변환
+                        dt_str = f"{date_str}{time_str}"
+                        try:
+                            dt = datetime.strptime(dt_str, '%Y%m%d%H%M%S').replace(tzinfo=kst)
+                            ts = int(dt.timestamp())
+                        except Exception as parse_err:
+                            logger.error(f"[{self.exchange.upper()}] {symbol} 캔들 시간 파싱 에러 ({dt_str}): {parse_err}")
+                            continue
+
+                        min_ts = min(min_ts, ts)
+
+                        # 요청한 시작 시간보다 이전 캔들이 유입된 경우 수집 중단 대상
+                        if ts < start_time:
+                            continue
+
+                        # API가 보낸 시, 고, 저, 종, 거래량 정보 파싱
+                        try:
+                            open_p = float(item.get('stck_oprc', 0))
+                            high_p = float(item.get('stck_hgpr', 0))
+                            low_p = float(item.get('stck_lwpr', 0))
+                            close_p = float(item.get('stck_prpr', 0))
+                            vol = float(item.get('cntg_vol', 0))
+                        except ValueError as val_err:
+                            logger.error(f"[{self.exchange.upper()}] {symbol} 캔들 수치 변환 실패: {val_err}")
+                            continue
+
+                        candle = Candle(
+                            exchange=self.exchange,
+                            symbol=symbol,
+                            interval=60,
+                            timestamp=ts,
+                            open=open_p,
+                            high=high_p,
+                            low=low_p,
+                            close=close_p,
+                            volume=vol,
+                            is_closed=True
+                        )
+                        batch_candles.append(candle)
+                    
+                    candles.extend(batch_candles)
+                    
+                    # 더 이상 오래된 데이터가 유입되지 않거나 output2 크기가 너무 작으면 루프 종료
+                    if len(output2) < 30 or min_ts >= to_time:
+                        break
+                        
+                    # 다음 페이지네이션을 위해 to_time을 수집된 가장 오래된 캔들 시각의 1초 전으로 설정
+                    to_time = min_ts - 60
+                    
+            except Exception as e:
+                logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
+                break
+
+            # Rate Limit 준수를 위한 딜레이 적용
+            await asyncio.sleep(delay)
+            
+        return candles

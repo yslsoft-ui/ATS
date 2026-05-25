@@ -24,20 +24,20 @@ def setup_test_db():
 
 @pytest.mark.asyncio
 async def test_portfolio_basic_operations():
-    portfolio = Portfolio(portfolio_id="test_id", name="Test Portfolio", initial_cash=1000000, exchange_id="upbit")
+    portfolio = Portfolio(portfolio_id="test_id", name="Test Portfolio", initial_cash=10000000, exchange_id="upbit")
     
     # Buy operation (exchange 인자 주입)
     portfolio.update_position(exchange="upbit", symbol="KRW-BTC", side="BUY", price=50000000, quantity=0.01, fee=250)
     
-    assert portfolio.positions["KRW-BTC"].quantity == 0.01
-    assert portfolio.positions["KRW-BTC"].avg_price == 50000000
-    assert portfolio.cash == 1000000 - (500000 + 250)
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0.01
+    assert portfolio.positions[("upbit", "KRW-BTC")].avg_price == 50000000
+    assert portfolio.cash == 10000000 - (500000 + 250)
     
     # Sell operation (exchange 인자 주입)
     portfolio.update_position(exchange="upbit", symbol="KRW-BTC", side="SELL", price=60000000, quantity=0.01, fee=300)
     
-    assert portfolio.positions["KRW-BTC"].quantity == 0.00
-    assert portfolio.cash == 499750 + (600000 - 300)
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0.00
+    assert portfolio.cash == (10000000 - 500250) + (600000 - 300)
 
 @pytest.mark.asyncio
 async def test_virtual_executor():
@@ -50,9 +50,8 @@ async def test_virtual_executor():
         'bids': [[49900000, 1.0], [49800000, 1.0]]
     }
     
-    # Market BUY (exchange="upbit" 누락 매개변수 주입)
+    # Market BUY (exchange="upbit" 누락 매개변수 주입, portfolio 인자 제거)
     result = await executor.execute_order(
-        portfolio=portfolio,
         exchange="upbit",
         symbol="KRW-BTC",
         side="BUY",
@@ -63,11 +62,20 @@ async def test_virtual_executor():
     assert result is not None
     assert result['price'] == 50000000
     assert result['quantity'] == 0.1
-    assert portfolio.positions["KRW-BTC"].quantity == 0.1
     
-    # Market SELL (exchange="upbit" 누락 매개변수 주입)
+    # 분리된 설계에 따라 포트폴리오가 반환받은 체결 정보로 자산을 업데이트하는지 수동 검증
+    portfolio.update_position(
+        exchange=result['exchange'],
+        symbol=result['symbol'],
+        side=result['side'],
+        price=result['price'],
+        quantity=result['quantity'],
+        fee=result['fee']
+    )
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0.1
+    
+    # Market SELL (portfolio 인자 제거)
     result = await executor.execute_order(
-        portfolio=portfolio,
         exchange="upbit",
         symbol="KRW-BTC",
         side="SELL",
@@ -77,7 +85,17 @@ async def test_virtual_executor():
     
     assert result is not None
     assert result['price'] == 49900000
-    assert portfolio.positions["KRW-BTC"].quantity == 0.05
+    
+    # 분리된 설계에 따라 포트폴리오가 반환받은 체결 정보로 자산을 업데이트하는지 수동 검증
+    portfolio.update_position(
+        exchange=result['exchange'],
+        symbol=result['symbol'],
+        side=result['side'],
+        price=result['price'],
+        quantity=result['quantity'],
+        fee=result['fee']
+    )
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0.05
 
 @pytest.mark.asyncio
 async def test_portfolio_manager_handle_signal():
@@ -86,6 +104,7 @@ async def test_portfolio_manager_handle_signal():
     # upbit 신호는 내부적으로 'default' ID 포트폴리오로 우회되므로 'default'로 개설!
     portfolio = Portfolio(portfolio_id="default", name="Main Portfolio", initial_cash=1000000, exchange_id="upbit")
     pm.add_portfolio(portfolio)
+    await pm.save_to_db("default")
     
     # TradeSignal 생성자에 exchange="upbit" 누락 인자 주입
     signal = TradeSignal(exchange="upbit", symbol="KRW-BTC", action="BUY", price=50000000, reason="Test", interval=60)
@@ -99,7 +118,7 @@ async def test_portfolio_manager_handle_signal():
     
     assert result is not None
     assert result['side'] == 'BUY'
-    assert portfolio.positions["KRW-BTC"].quantity > 0
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity > 0
     
     # SELL signal handles all holdings (exchange="upbit" 누락 인자 주입)
     sell_signal = TradeSignal(exchange="upbit", symbol="KRW-BTC", action="SELL", price=50000000, reason="Test", interval=60)
@@ -107,4 +126,4 @@ async def test_portfolio_manager_handle_signal():
     
     assert result is not None
     assert result['side'] == 'SELL'
-    assert portfolio.positions["KRW-BTC"].quantity == 0
+    assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0

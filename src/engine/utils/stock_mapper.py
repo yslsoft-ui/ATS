@@ -50,11 +50,10 @@ class StockMapper:
             try:
                 with open(cache_path, 'r', encoding='utf-8') as f:
                     cached_data = json.load(f)
-                    # 기존 하드코딩 데이터와 병합
-                    for exch, symbols in cached_data.items():
-                        if exch not in self._mapping:
-                            self._mapping[exch] = {}
-                        self._mapping[exch].update(symbols)
+                    # 캐시 파일이 있으면 덮어씁니다 (삭제된 내역 반영을 위해 update가 아닌 대체를 수행)
+                    for exch in ["upbit", "kis", "bithumb"]:
+                        if exch in cached_data:
+                            self._mapping[exch] = cached_data[exch]
                 logger.info(f"Loaded {sum(len(v) for v in self._mapping.values())} symbols from cache.")
             except Exception as e:
                 logger.error(f"Failed to load stock master cache: {e}")

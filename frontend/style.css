@@ -42,14 +42,21 @@ body {
     display: flex;
     flex-direction: column;
     padding: 20px;
+    position: relative;
+    height: 100vh;
+    box-sizing: border-box;
 }
 
 /* 시스템 상태 위젯 스타일 (컴팩트 통합 버전) */
 .system-status-container {
-    margin-top: auto;
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    right: 20px;
     padding-top: 12px;
     border-top: 1px solid var(--border-color);
     font-size: 0.75rem;
+    background-color: var(--sidebar-color);
 }
 
 .system-status-container .status-header {
@@ -135,13 +142,32 @@ body {
 .logo {
     font-size: 1.2rem;
     font-weight: bold;
-    margin-bottom: 40px;
+    margin-bottom: 25px;
     color: var(--accent-color);
 }
 
+.menu {
+    overflow-y: auto;
+    margin-bottom: 140px;
+    flex: 1;
+}
+
+.menu::-webkit-scrollbar {
+    width: 4px;
+}
+
+.menu::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+}
+
+.menu::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .menu-item {
-    padding: 12px 15px;
-    margin-bottom: 10px;
+    padding: 8px 12px;
+    margin-bottom: 6px;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s;
@@ -712,6 +738,13 @@ td {
     margin-top: 15px; /* Push table down so headers are not covered by sticky main-header */
 }
 
+/* 순위분석 테이블 전용 스크롤 및 레이아웃 제어 */
+.ranking-table-wrapper {
+    max-height: none !important;
+    overflow-y: hidden !important;
+    overflow-x: auto !important;
+}
+
 #market-table {
     width: 100%;
     border-collapse: collapse;
@@ -1095,6 +1128,21 @@ table thead th {
     position: sticky;
     top: 0;
     z-index: 10;
+    /* GPU 하드웨어 가속을 통해 스크롤 시 흔들림(Jittering) 방지 */
+    transform: translate3d(0, 0, 0);
+    -webkit-transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+table tfoot tr td {
+    background: #161B22; /* Solid dark background to prevent scrolled rows from shining through sticky footer */
+    padding: 16px 15px;
+    font-weight: bold;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    border-top: 2px solid rgba(148, 163, 184, 0.2);
     /* GPU 하드웨어 가속을 통해 스크롤 시 흔들림(Jittering) 방지 */
     transform: translate3d(0, 0, 0);
     -webkit-transform: translate3d(0, 0, 0);
@@ -1701,6 +1749,167 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     border-radius: 4px;
     font-weight: bold;
 }
+
+/* ===== 순위분석 탭 전용 스타일 ===== */
+.ranking-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.ranking-card {
+    background: var(--card-bg, #1E293B);
+    border: 1px solid var(--glass-border, rgba(148, 163, 184, 0.15));
+    border-radius: 12px;
+    padding: 15px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    min-height: 120px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.ranking-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.ranking-card:hover {
+    transform: translateY(-3px) scale(1.02);
+    border-color: rgba(148, 163, 184, 0.3);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.ranking-card.active {
+    border: 2px solid #FF4B4B; /* Bull Red 로 선택 강조 */
+    background: rgba(255, 75, 75, 0.03);
+    box-shadow: 0 8px 24px rgba(255, 75, 75, 0.1);
+}
+
+.ranking-card-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #F8FAFC;
+    margin-bottom: 6px;
+    z-index: 2;
+}
+
+.ranking-card-desc {
+    font-size: 0.78rem;
+    color: #94A3B8;
+    line-height: 1.35;
+    z-index: 2;
+}
+
+.ranking-card-badge {
+    font-size: 0.7rem;
+    background: rgba(148, 163, 184, 0.15);
+    color: #94A3B8;
+    padding: 2px 6px;
+    border-radius: 4px;
+    align-self: flex-start;
+    margin-top: 10px;
+    font-family: 'Roboto Mono', monospace;
+    z-index: 2;
+}
+
+.ranking-card.active .ranking-card-badge {
+    background: rgba(255, 75, 75, 0.15);
+    color: #FF4B4B;
+}
+
+/* 결과 테이블 스타일 정렬 */
+#ranking-table td {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.88rem;
+}
+#ranking-table td:nth-child(1),
+#ranking-table td:nth-child(2),
+#ranking-table td:nth-child(3) {
+    text-align: center;
+}
+#ranking-table td:nth-child(4) {
+    text-align: left;
+    font-family: inherit;
+    font-weight: 500;
+}
+#ranking-table td:nth-child(5),
+#ranking-table td:nth-child(6),
+#ranking-table td:nth-child(7) {
+    text-align: right;
+}
+#ranking-table td:nth-child(8) {
+    text-align: left;
+    font-family: inherit;
+    color: #94A3B8;
+    font-size: 0.8rem;
+}
+
+/* 스위치 체크박스 스타일 (수집 여부 토글용) */
+.collect-checkbox-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.collect-checkbox {
+    width: 17px;
+    height: 17px;
+    cursor: pointer;
+    accent-color: #FF4B4B; /* Bull Red 로 수집 체크 활성 */
+}
+
+/* 백테스트 분할 레이아웃 및 하이라이트 스타일 */
+.backtest-split-container {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* 선택된 거래소 및 종목 행 강조 */
+.backtest-split-container tbody tr.selected {
+    background-color: rgba(88, 166, 255, 0.15) !important;
+    border-left: 3px solid var(--accent-color) !important;
+}
+
+.backtest-split-container tbody tr {
+    border-left: 3px solid transparent;
+    transition: background-color 0.2s, border-left-color 0.2s;
+}
+
+.backtest-split-container tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* 백테스트 서브 탭 스타일 */
+.backtest-tab-group .market-tab:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: rgba(148, 163, 184, 0.05) !important;
+    border-color: rgba(148, 163, 184, 0.1) !important;
+    color: #64748B !important;
+}
+
+.backtest-tab-group .market-tab:disabled:hover {
+    border-color: rgba(148, 163, 184, 0.1) !important;
+    color: #64748B !important;
+    background: rgba(148, 163, 184, 0.05) !important;
+}
+
+
 
 
 

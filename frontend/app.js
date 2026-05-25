@@ -669,8 +669,9 @@ function initViewNavigation() {
             'market-view': () => { exitExplorerMode(); loadMarket(); },
             'alert-view': () => loadAlertHistory(),
             'strategy-view': () => loadStrategies(),
-            'portfolio-view': () => { loadPortfolioList(); loadPortfolio(); },
+            'portfolio-view': () => { loadPortfolioHistoryList(); loadPortfolio(); },
             'real-asset-view': () => loadRealAssets(),
+            'ranking-view': () => { exitExplorerMode(); loadRankingView(); },
             'settings-view': () => updateCollectorStatus(),
             'restored-view': () => { exitExplorerMode(); loadRestoredCandles(); }
         }
@@ -938,7 +939,9 @@ async function loadRestoredCandles() {
 }
 
 async function init() {
-
+    state.currentExchange = Store.get('currentExchange') || 'upbit';
+    state.currentSymbol = Store.get('currentSymbol') || 'BTC';
+    
     ChartEngine.initialize('main-chart', drillDown);
     updateHeaderInfo(state.currentExchange, state.currentSymbol);
     await loadSymbols();
@@ -947,6 +950,7 @@ async function init() {
     loadMarket();
     loadPortfolioList();
     loadPortfolio();
+
     DataStream.initialize(processTick);
     updateCollectorStatus();
     initMarketTabs();
@@ -956,6 +960,7 @@ async function init() {
     initTradingControls();
     initCollectorControls();
     initDatabaseControls();
+    initRankingControls();
 }
 
 // --- 앱 전체 초기화 진입점 ---
@@ -1003,5 +1008,354 @@ window.drillDown = drillDown;
 window.exitExplorerMode = exitExplorerMode;
 window.loadRecentTrades = loadRecentTrades;
 window.loadRestoredCandles = loadRestoredCandles;
+window.loadRankingView = loadRankingView;
+window.loadRankingResult = loadRankingResult;
 window.init = init;
+
+
+// --- KIS 순위분석 및 토글 관련 기능 구현 ---
+let isRankingLoading = false;
+let activeRankingTrId = ''; // 현재 선택된 순위 TR_ID
+let rankingTypesCache = [];  // 순위 유형 목록 캐시
+
+/**
+ * 세련된 토스트 알림 메시지를 화면 우측 상단에 표시합니다.
+ */
+function showToast(message, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-message ${type}`;
+    
+    // type에 따른 하이라이트 색상 설정
+    const borderLeftColor = type === 'success' ? '#FF4B4B' : (type === 'error' ? '#EF4444' : '#0072FF');
+    
+    toast.style.cssText = `
+        background: #1E293B;
+        border-left: 4px solid ${borderLeftColor};
+        color: #F8FAFC;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        font-size: 0.88rem;
+        font-weight: 600;
+        pointer-events: auto;
+        min-width: 280px;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+    
+    toast.innerText = message;
+    container.appendChild(toast);
+    
+    // 리플로우 트리거
+    toast.offsetHeight;
+    
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+async function loadRankingView() {
+    const cardsContainer = document.getElementById('ranking-cards-container');
+    if (!cardsContainer) return;
+    
+    cardsContainer.innerHTML = '<div style="color: #94A3B8; padding: 20px; text-align: center; grid-column: 1/-1;">순위 유형을 불러오는 중...</div>';
+    
+    try {
+        const types = await APIClient.fetchRankingTypes();
+        rankingTypesCache = types || [];
+        cardsContainer.innerHTML = '';
+        
+        if (rankingTypesCache.length === 0) {
+            cardsContainer.innerHTML = '<div style="color: #94A3B8; padding: 20px; text-align: center; grid-column: 1/-1;">불러온 순위 유형이 없습니다.</div>';
+            return;
+        }
+        
+        // 카드 목록 생성
+        rankingTypesCache.forEach((item, index) => {
+            const card = document.createElement('div');
+            card.className = 'ranking-card';
+            card.dataset.trId = item.tr_id;
+            
+            // HSL 색상을 생성해서 각 카드에 개성 있는 다크 색조 부여
+            const hue = (index * (360 / rankingTypesCache.length)) % 360;
+            card.style.background = `linear-gradient(135deg, hsl(${hue}, 20%, 15%) 0%, #1e293b 100%)`;
+            
+            card.innerHTML = `
+                <div class="ranking-card-title">${item.title}</div>
+                <div class="ranking-card-desc">${item.description}</div>
+                <div class="ranking-card-badge">${item.tr_id}</div>
+            `;
+            
+            card.addEventListener('click', () => {
+                selectRankingCard(item.tr_id, item.title);
+            });
+            
+            cardsContainer.appendChild(card);
+        });
+        
+        // 첫 번째 카드를 자동으로 선택하여 데이터 로드
+        if (rankingTypesCache.length > 0) {
+            selectRankingCard(rankingTypesCache[0].tr_id, rankingTypesCache[0].title);
+        }
+    } catch (e) {
+        cardsContainer.innerHTML = `<div style="color: #FF4B4B; padding: 20px; text-align: center; grid-column: 1/-1;">순위 유형 로드 실패: ${e.message}</div>`;
+    }
+}
+
+function selectRankingCard(trId, title) {
+    activeRankingTrId = trId;
+    
+    // UI 액티브 상태 표시 변경
+    const cards = document.querySelectorAll('.ranking-card');
+    cards.forEach(c => {
+        if (c.dataset.trId === trId) {
+            c.classList.add('active');
+        } else {
+            c.classList.remove('active');
+        }
+    });
+    
+    const titleEl = document.getElementById('ranking-active-title');
+    if (titleEl) {
+        titleEl.innerText = ` - ${title}`;
+    }
+    
+    // 순위 결과 조회
+    loadRankingResult(trId);
+}
+
+function formatValueByType(val, colSpec, item) {
+    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+        return '-';
+    }
+    
+    switch (colSpec.type) {
+        case 'price':
+            const price = Math.round(parseFloat(val));
+            if (isNaN(price)) return '-';
+            
+            let formattedPrice = price.toLocaleString();
+            if (colSpec.signKey) {
+                const signVal = String(item[colSpec.signKey] || '');
+                let signText = '';
+                let colorClass = '';
+                if (signVal === '1' || signVal === '2') {
+                    signText = '▲';
+                    colorClass = 'bull';
+                } else if (signVal === '4' || signVal === '5') {
+                    signText = '▼';
+                    colorClass = 'bear';
+                } else if (signVal === '3') {
+                    signText = '';
+                    colorClass = '';
+                }
+                
+                if (colSpec.key.includes('vrss') || colSpec.key.includes('diff')) {
+                    return `<span class="${colorClass}" style="font-weight: bold;">${signText}${formattedPrice}</span>`;
+                }
+            }
+            return formattedPrice;
+            
+        case 'integer':
+            const intVal = Math.round(parseFloat(val));
+            return isNaN(intVal) ? '-' : intVal.toLocaleString();
+            
+        case 'percent':
+            const pct = parseFloat(val);
+            return isNaN(pct) ? '-' : pct.toFixed(2) + '%';
+            
+        case 'date':
+            const s = String(val).trim();
+            if (s.length === 8) {
+                return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
+            }
+            return s;
+            
+        case 'marketDiv':
+            const div = String(val).trim();
+            if (div === 'J') return '코스피';
+            if (div === 'Q') return '코스닥';
+            return div;
+            
+        case 'rate':
+            const rate = parseFloat(val);
+            if (isNaN(rate)) return '-';
+            
+            let sign = '';
+            const signVal = colSpec.signKey ? String(item[colSpec.signKey]) : '';
+            if (signVal === '1' || signVal === '2') {
+                sign = '+';
+            } else if (signVal === '4' || signVal === '5') {
+                if (rate > 0) {
+                    sign = '-';
+                }
+            } else {
+                if (rate > 0) sign = '+';
+            }
+            
+            let colorClass = '';
+            if (rate > 0 || sign === '+') {
+                colorClass = 'bull';
+            } else if (rate < 0 || sign === '-') {
+                colorClass = 'bear';
+            }
+            
+            const formattedVal = Math.abs(rate).toFixed(2) + '%';
+            return `<span class="${colorClass}" style="font-weight: bold;">${sign}${formattedVal}</span>`;
+            
+        case 'text':
+        default:
+            return String(val);
+    }
+}
+
+async function loadRankingResult(trId) {
+    if (isRankingLoading) return;
+    
+    const thead = document.getElementById('ranking-thead');
+    const tbody = document.querySelector('#ranking-table tbody');
+    if (!tbody) return;
+    
+    isRankingLoading = true;
+    
+    tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #94A3B8; padding: 40px;">📊 순위 분석 데이터 로드 중...</td></tr>`;
+    
+    try {
+        const responseData = await APIClient.fetchRankingResult(trId);
+        const columns = responseData.columns || [];
+        const results = responseData.data || [];
+        tbody.innerHTML = '';
+        
+        // <thead> 동적 구성
+        if (thead) {
+            let theadHtml = `
+                <tr>
+                    <th style="width: 65px; text-align: center;">수집</th>
+                    <th style="width: 60px; text-align: center;">순위</th>
+                    <th style="width: 80px; text-align: center;">코드</th>
+                    <th style="text-align: left; width: 180px;">종목명</th>
+            `;
+            
+            columns.forEach(col => {
+                let align = 'center';
+                if (col.type === 'price' || col.type === 'integer' || col.type === 'percent' || col.type === 'rate') {
+                    align = 'right';
+                }
+                theadHtml += `<th style="text-align: ${align}; white-space: nowrap;">${col.name}</th>`;
+            });
+            
+            theadHtml += `</tr>`;
+            thead.innerHTML = theadHtml;
+        }
+        
+        const totalColSpan = 4 + columns.length;
+        if (!results || results.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${totalColSpan}" style="text-align: center; color: #64748B; padding: 40px;">분석 데이터가 존재하지 않거나 KIS 통신에 실패했습니다.</td></tr>`;
+            return;
+        }
+        
+        const table = document.getElementById('ranking-table');
+        if (table) {
+            if (columns.length > 5) {
+                table.style.minWidth = '1400px';
+            } else {
+                table.style.minWidth = '1200px';
+            }
+        }
+        
+        results.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.classList.add('market-row');
+            
+            const checked = item.is_collected ? 'checked' : '';
+            
+            let cellsHtml = `
+                <td style="text-align: center; width: 65px;">
+                    <div class="collect-checkbox-wrapper">
+                        <input type="checkbox" class="collect-checkbox" data-code="${item.code}" data-name="${item.name}" ${checked}>
+                    </div>
+                </td>
+                <td style="color: #F8FAFC; font-weight: bold; text-align: center; width: 60px;">${index + 1}</td>
+                <td style="color: #94A3B8; text-align: center; width: 80px; font-family: 'Roboto Mono', monospace;">${item.code}</td>
+                <td class="coin-cell" style="color: #F8FAFC; font-weight: bold; cursor: pointer; text-align: left; width: 180px;">${item.name}</td>
+            `;
+            
+            columns.forEach(col => {
+                const rawVal = item.raw ? item.raw[col.key] : null;
+                const formatted = formatValueByType(rawVal, col, item.raw || {});
+                
+                let align = 'center';
+                if (col.type === 'price' || col.type === 'integer' || col.type === 'percent' || col.type === 'rate') {
+                    align = 'right';
+                }
+                
+                cellsHtml += `<td style="text-align: ${align}; white-space: nowrap;">${formatted}</td>`;
+            });
+            
+            tr.innerHTML = cellsHtml;
+            
+            const nameTd = tr.querySelector('.coin-cell');
+            if (nameTd) {
+                nameTd.addEventListener('click', () => {
+                    Store.update({
+                        currentExchange: 'kis',
+                        currentSymbol: item.code
+                    });
+                    ViewRouter.navigateTo('monitoring-view');
+                });
+            }
+            
+            const checkbox = tr.querySelector('.collect-checkbox');
+            if (checkbox) {
+                checkbox.addEventListener('change', async (e) => {
+                    const code = e.target.dataset.code;
+                    const name = e.target.dataset.name;
+                    const isChecked = e.target.checked;
+                    
+                    try {
+                        const result = await APIClient.toggleKisSymbol(code, name);
+                        const statusMsg = result.is_collected ? '수집 등록 완료' : '수집 해제 완료';
+                        
+                        showToast(`${name} (${code}) ${statusMsg}`, result.is_collected ? 'success' : 'info');
+                        
+                        if (window.updateCollectorStatus) {
+                            window.updateCollectorStatus();
+                        }
+                    } catch (err) {
+                        e.target.checked = !isChecked;
+                        showToast(`수집 변경 실패: ${err.message}`, 'error');
+                    }
+                });
+            }
+            
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align: center; color: #FF4B4B; padding: 40px;">조회 실패: ${e.message}</td></tr>`;
+    } finally {
+        isRankingLoading = false;
+    }
+}
+
+function initRankingControls() {
+    document.getElementById('ranking-refresh-btn')?.addEventListener('click', () => {
+        if (activeRankingTrId) {
+            loadRankingResult(activeRankingTrId);
+        }
+    });
+}
 

@@ -59,17 +59,17 @@ async def main():
     config_path = "config/settings.yaml"
     config_manager = ConfigManager(config_path)
     db_path = config_manager.get('system.db_path', 'data/backtest.db')
-    strategies_dir = config_manager.get('system.strategies_dir', 'src/engine/strategies')
-
+    
     # 2. SQLite 스키마 초기화 확인
     await init_db(db_path)
 
     # 3. 동적 전략 클래스 로드 및 바인딩
+    strategies_dir = config_manager.get('system.strategies_dir', 'src/engine/strategies')
     load_dynamic_strategies(strategies_dir)
 
     # 4. 포트폴리오 관리자 기동 및 로드
     portfolio_manager = PortfolioManager(db_path=db_path)
-    await portfolio_manager.load_from_db()
+    await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
 
     # 5. ZeroMQ Publisher 기동 (주문 신호 및 상태 알림 발행용)
     signal_publisher = EventBusPublisher("strategy_signal")
@@ -83,104 +83,143 @@ async def main():
         
     execution_pipeline.set_broadcast_callback(zmq_broadcast_callback)
 
-    # 7. 거래소별 종목 목록 로드 및 TradeEngine 인스턴스 생성
+    # 7. 전략 엔진 핫리로드 핵심 구조 설계
     trade_engines: Dict[str, TradeEngine] = {}
-    
-    logger.info("[Strategy Daemon DEBUG] Starting exchange config loop...")
-    exchanges_config = config_manager.get('exchanges', {})
-    for exchange_id, exch_config in exchanges_config.items():
-        if not exch_config.get('enabled', True):
-            continue
-            
-        # 종목 로드 (config 고정값 또는 API 동적 조회)
-        symbols = await fetch_exchange_symbols(exchange_id, config_manager.config)
-        logger.info(f"[Strategy Daemon DEBUG] Symbols fetched for {exchange_id}: count={len(symbols)}")
+    current_portfolio_id = None
+    stop_event = asyncio.Event()
+
+    async def reload_trade_engines(portfolio):
+        import json
+        new_engines = {}
+        if not portfolio:
+            logger.info("[Strategy Daemon] 활성화된 실시간 모의투자 세션이 없습니다. 대기 상태로 유지합니다.")
+            return new_engines
+
+        logger.info(f"[Strategy Daemon] 모의투자 세션 감지 및 엔진 로드 시작: {portfolio.id} ({portfolio.name})")
         
-        # 활성화된 전략 목록 및 파라미터 파싱
-        strategy_configs = config_manager.get('strategies', {})
         enabled_strategies = []
-        for s_id, s_conf in strategy_configs.items():
-            if s_conf.get('enabled', False):
-                params = s_conf.get('params', {}).copy()
-                overrides = s_conf.get('overrides', {}).get(exchange_id, {}).get('params', {})
-                params.update(overrides)
-                enabled_strategies.append((s_id, params))
+        if portfolio.strategy_info:
+            try:
+                meta = json.loads(portfolio.strategy_info)
+                strategies_config = meta.get("applied_strategies", {})
+                for s_id, s_conf in strategies_config.items():
+                    if s_conf.get("enabled", False):
+                        params = s_conf.get("params", {}).copy()
+                        enabled_strategies.append((s_id, params))
+                logger.info(f"[Strategy Daemon] 세션 활성 전략 목록: {[s[0] for s in enabled_strategies]}")
+            except Exception as e:
+                logger.error(f"[Strategy Daemon] 포트폴리오 전략 정보 파싱 에러: {e}")
+                
+        if not enabled_strategies:
+            logger.warning(f"[Strategy Daemon] 세션 {portfolio.id}에 설정된 전략이 없습니다.")
+            return new_engines
 
-        logger.info(f"[Strategy Daemon] {exchange_id} 전략 기동 대상 종목 수: {len(symbols)}")
-        
-        async def on_strategy_status(status_data: dict):
-            """전략 상태 Audit 로그 발생 시 ZeroMQ로 즉시 퍼블리시합니다."""
-            await signal_publisher.publish("strategy_signal", status_data)
-
-        # 각 종목별로 독립된 TradeEngine 세팅
-        for symbol in symbols:
-            instances = []
-            for s_id, s_params in enabled_strategies:
-                strat = StrategyRegistry.create_strategy(s_id, s_params)
-                if strat:
-                    instances.append(strat)
+        exchanges_config = config_manager.get('exchanges', {})
+        for exchange_id, exch_config in exchanges_config.items():
+            if not exch_config.get('enabled', True):
+                continue
+                
+            symbols = await fetch_exchange_symbols(exchange_id, config_manager.config)
             
-            key = f"{exchange_id}:{symbol}"
-            engine = TradeEngine(
-                exchange=exchange_id,
-                symbol=symbol,
-                strategies=instances,
-                on_status_callback=on_strategy_status
-            )
-            trade_engines[key] = engine
-            logger.info(f"[Strategy Daemon DEBUG] TradeEngine created for {key}")
+            async def on_strategy_status(status_data: dict):
+                await signal_publisher.publish("strategy_signal", status_data)
 
-    logger.info(f"[Strategy Daemon DEBUG] Exchange loop finished. Total trade engines: {len(trade_engines)}")
-    # 8. 백그라운드 워밍업 실행
-    async def run_warmup():
-        logger.info(f"[Strategy Daemon] {len(trade_engines)}개 종목에 대한 전략 엔진 백그라운드 워밍업 개시...")
-        for key, engine in trade_engines.items():
+            for symbol in symbols:
+                instances = []
+                for s_id, s_params in enabled_strategies:
+                    strat = StrategyRegistry.create_strategy(s_id, s_params)
+                    if strat:
+                        instances.append(strat)
+                
+                if not instances:
+                    continue
+                    
+                key = f"{exchange_id}:{symbol}"
+                engine = TradeEngine(
+                    exchange=exchange_id,
+                    symbol=symbol,
+                    strategies=instances,
+                    on_status_callback=on_strategy_status
+                )
+                new_engines[key] = engine
+
+        logger.info(f"[Strategy Daemon] {len(new_engines)}개 종목에 대한 전략 엔진 동적 워밍업 개시...")
+        for key, engine in new_engines.items():
             try:
                 await engine.warm_up(db_path)
             except Exception as e:
                 logger.error(f"[Strategy Daemon] {key} 워밍업 실패: {e}")
-            # 루프 제어권 잠시 넘김
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.002)
         logger.info("[Strategy Daemon] 모든 종목 전략 엔진 워밍업 완료")
+        
+        return new_engines
 
-    logger.info("[Strategy Daemon DEBUG] Scheduling run_warmup...")
-    asyncio.create_task(run_warmup())
+    # 3초마다 활성 포트폴리오 변경 여부를 감시하는 백그라운드 태스크
+    async def portfolio_monitor_loop():
+        nonlocal current_portfolio_id
+        logger.info("[Strategy Daemon] 활성 모의투자 세션 감시 루프 기동")
+        
+        # 첫 기동 시 바로 한번 체크
+        try:
+            await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+            active_p = portfolio_manager.get_active_simulation_portfolio()
+            active_id = active_p.id if active_p else None
+            current_portfolio_id = active_id
+            if active_p:
+                new_engs = await reload_trade_engines(active_p)
+                trade_engines.clear()
+                trade_engines.update(new_engs)
+        except Exception as e:
+            logger.error(f"[Strategy Daemon] 초기 세션 로드 중 예외: {e}")
 
-    # 종료 처리용 시그널 핸들링
-    stop_event = asyncio.Event()
+        while not stop_event.is_set():
+            try:
+                await asyncio.sleep(3.0)
+                await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                active_p = portfolio_manager.get_active_simulation_portfolio()
+                active_id = active_p.id if active_p else None
+                
+                if active_id != current_portfolio_id:
+                    logger.info(f"[Strategy Daemon] 세션 변경 감지: {current_portfolio_id} -> {active_id}")
+                    current_portfolio_id = active_id
+                    
+                    # 기존 엔진들을 스레드 안전하게 클리어하고 새 엔진 구축
+                    trade_engines.clear()
+                    if active_p:
+                        new_engs = await reload_trade_engines(active_p)
+                        trade_engines.update(new_engs)
+                    else:
+                        logger.info("[Strategy Daemon] 활성 포트폴리오가 존재하지 않아 엔진 대기 모드로 전환합니다.")
+            except Exception as e:
+                logger.error(f"[Strategy Daemon] 모니터 루프 내 에러: {e}")
+
+    asyncio.create_task(portfolio_monitor_loop())
 
     # 전략 엔진 동작 상태 퍼블리시 루프 (3초 주기 및 기동 즉시 전송)
     async def status_broadcast_loop():
-        logger.info("[Strategy Daemon DEBUG] status_broadcast_loop started")
-        
         # 기동 즉시 첫 하트비트 상태를 전송하여 ZMQ 구독 연결 지연으로 인한 유실 방지
         try:
-            logger.info("[Strategy Daemon DEBUG] Publishing initial strategy_status to ZMQ...")
             await signal_publisher.publish("strategy_signal", {
                 "type": "strategy_status",
                 "is_running": True,
                 "active_engines": len(trade_engines),
                 "error": None
             })
-            logger.info("[Strategy Daemon DEBUG] Publishing initial strategy_status completed.")
         except Exception as e:
             logger.error(f"[Strategy Daemon] 초기 상태 퍼블리시 중 에러: {e}")
 
         while not stop_event.is_set():
             try:
-                logger.info("[Strategy Daemon DEBUG] Publishing strategy_status to ZMQ...")
                 await signal_publisher.publish("strategy_signal", {
                     "type": "strategy_status",
                     "is_running": True,
                     "active_engines": len(trade_engines),
                     "error": None
                 })
-                logger.info("[Strategy Daemon DEBUG] Publishing strategy_status completed.")
             except Exception as e:
                 logger.error(f"[Strategy Daemon] 상태 퍼블리시 중 에러: {e}")
             await asyncio.sleep(3.0)
 
-    logger.info("[Strategy Daemon DEBUG] Scheduling status_broadcast_loop...")
     broadcast_task = asyncio.create_task(status_broadcast_loop())
 
     # 9. ZeroMQ Subscriber 기동 (market_data 토픽 구독)
@@ -203,13 +242,10 @@ async def main():
         logger.info("[Strategy Daemon] 실시간 market_data 구독 수신 시작")
         while not stop_event.is_set():
             try:
-                # 0.1초 타임아웃을 주어 루프가 종료 플래그를 정기적으로 체크할 수 있게 함
                 topic, data = await market_subscriber.receive()
                 if not topic:
-                    # 빈 메시지 무시
                     continue
                 
-                # 오직 tick 데이터만 수신하여 처리 (캔들은 수집 데몬 발행용이므로 전략에서는 자체 candle_gen 활용)
                 if data.get('type') == 'tick':
                     exchange = data.get('exchange')
                     symbol = data.get('code')
@@ -217,7 +253,6 @@ async def main():
                     
                     if key in trade_engines:
                         engine = trade_engines[key]
-                        # 틱 데이터 포맷을 TradeEngine의 process_tick 명세와 맞춤
                         tick_payload = {
                             'trade_price': data['trade_price'],
                             'trade_volume': data['trade_volume'],
@@ -225,15 +260,12 @@ async def main():
                             'trade_timestamp': data['trade_timestamp']
                         }
                         
-                        # 전략 평가 실행
                         signals, _ = await engine.process_tick(tick_payload, portfolio_manager)
                         
-                        # 신호 발생 시 주문 실행 파이프라인 가동
                         for sig in signals:
                             logger.info(f"[Strategy Daemon] 전략 신호 감지: {sig.symbol} -> {sig.action}")
                             # 주문 체결 직전에 포트폴리오 최신 잔고를 DB로부터 로드 (수동 개입 반영)
-                            await portfolio_manager.load_from_db()
-                            # execution_pipeline 내부에서 DB 쓰기 및 ZMQ 알림 발행까지 원스톱 처리됨
+                            await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
                             await execution_pipeline.process_signal(sig, data['trade_price'])
                             
             except asyncio.CancelledError:
@@ -242,7 +274,6 @@ async def main():
                 logger.error(f"[Strategy Daemon] 구독 루프 내 에러 발생: {e}")
                 await asyncio.sleep(0.1)
 
-    # 구독 루프를 태스크로 기동
     subscribe_task = asyncio.create_task(subscribe_loop())
 
     # 종료 이벤트 대기
@@ -273,13 +304,6 @@ async def main():
         await subscribe_task
     except asyncio.CancelledError:
         pass
-
-    logger.info("[Strategy Daemon] 포트폴리오 최신 상태 DB 영속화 중...")
-    for pid in portfolio_manager.portfolios:
-        try:
-            await portfolio_manager.save_to_db(pid)
-        except Exception as e:
-            logger.error(f"[Strategy Daemon] 포트폴리오 {pid} 저장 실패: {e}")
 
     logger.info("[Strategy Daemon] ZeroMQ IPC 소켓 정리 중...")
     market_subscriber.close()

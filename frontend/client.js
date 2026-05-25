@@ -137,7 +137,78 @@ const APIClient = (() => {
             if (exchange && exchange !== 'all') url += `&exchange=${exchange}`;
             if (symbol && symbol !== 'all') url += `&symbol=${symbol}`;
             return _fetchAPI(url);
-        }
+        },
+
+        /**
+         * KIS 순위분석 항목 목록 조회
+         */
+        fetchRankingTypes: () => _fetchAPI('/market/ranking/types'),
+
+        /**
+         * 지정한 TR_ID의 순위 분석 결과 조회
+         */
+        fetchRankingResult: (trId) => _fetchAPI(`/market/ranking/fetch?tr_id=${trId}`),
+
+        /**
+         * KIS 수집 종목을 토글 (추가/제거)
+         */
+        toggleKisSymbol: (code, name) => 
+            _fetchAPI('/market/symbols/kis/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, name })
+            }),
+
+        /**
+         * 백테스트용 기본 전략 및 파라미터 구성 로드
+         */
+        fetchBacktestDefaultConfigs: () => _fetchAPI('/api/backtest/default-configs'),
+
+        /**
+         * 리플레이 백테스트 실행
+         */
+        runBacktest: (data) => 
+            _fetchAPI('/api/backtest/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }),
+
+        /**
+         * 백테스트 이력(세트) 목록 조회
+         */
+        fetchBacktestHistory: () => _fetchAPI(`/api/backtest/history?t=${Date.now()}`),
+
+        /**
+         * 특정 백테스트 이력 상세 복원
+         */
+        fetchBacktestHistoryDetail: (portfolioId) => _fetchAPI(`/api/backtest/history/${portfolioId}`),
+
+        /**
+         * 특정 백테스트 이력 영구 삭제
+         */
+        deleteBacktestHistory: (portfolioId) => _fetchAPI(`/api/backtest/history/${portfolioId}`, { method: 'DELETE' }),
+
+        /**
+         * 전체 백테스트 이력 영구 삭제
+         */
+        clearAllBacktestHistory: () => _fetchAPI('/api/backtest/history', { method: 'DELETE' }),
+
+        /**
+         * 실시간 모의투자 세션 시작
+         */
+        startPortfolioSession: (initialCash, strategies) => 
+            _fetchAPI('/api/portfolio/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ initial_cash: initialCash, strategies })
+            }),
+
+        /**
+         * 실시간 모의투자 세션 종료 (미실현 자산 평가가 박제 마감)
+         */
+        endPortfolioSession: (portfolioId) => 
+            _fetchAPI(`/api/portfolio/${portfolioId}/end`, { method: 'POST' })
     };
 })();
 

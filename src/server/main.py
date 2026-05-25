@@ -6,7 +6,7 @@ import asyncio
 from src.engine.system import TradingSystem
 from src.server.websocket import manager
 from src.engine.utils.telemetry import setup_logging, get_logger, update_broadcast_callback
-from src.ipc.bus import EventBusSubscriber
+from src.ipc.bus import EventBusSubscriber, EventBusPublisher
 
 # 라우터 임포트
 from src.server.routers.market import router as market_router
@@ -14,6 +14,7 @@ from src.server.routers.collector import router as collector_router
 from src.server.routers.strategy import router as strategy_router
 from src.server.routers.portfolio import router as portfolio_router
 from src.server.routers.telemetry import router as telemetry_router
+from src.server.routers.backtest import router as backtest_router
 
 # 로깅 시스템 초기화 (초기 단계)
 setup_logging()
@@ -24,7 +25,7 @@ logger.info("ATS Server is starting up...")
 
 # 전역 시스템 인스턴스 초기화 (Web-only 모드로 설정)
 CONFIG_PATH = os.path.join(os.getcwd(), 'config', 'settings.yaml')
-system = TradingSystem(CONFIG_PATH, is_web_only=True)
+system = TradingSystem(CONFIG_PATH)
 
 # FastAPI state에 싱글톤 보관 (APIRouter 연동용)
 app.state.system = system
@@ -39,6 +40,8 @@ app.include_router(collector_router)
 app.include_router(strategy_router)
 app.include_router(portfolio_router)
 app.include_router(telemetry_router)
+app.include_router(backtest_router)
+
 
 # ZeroMQ IPC 구독 태스크 정의
 async def zmq_listener_loop():
@@ -148,6 +151,8 @@ async def zmq_listener_loop():
 async def startup_event():
     # TradingSystem 기동 (db_writer 및 수집기는 제외)
     await system.boot()
+    # ZMQ 제어 Publisher 생성
+    app.state.control_publisher = EventBusPublisher("collector_control")
     # ZMQ 구독 비동기 루프 기동
     app.state.zmq_loop_task = asyncio.create_task(zmq_listener_loop())
     logger.info("시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다. (Web-only + ZMQ Listener)")
@@ -161,6 +166,10 @@ async def shutdown_event():
             await app.state.zmq_loop_task
         except asyncio.CancelledError:
             pass
+    # ZMQ 제어 Publisher 종료
+    if hasattr(app.state, 'control_publisher'):
+        app.state.control_publisher.close()
+        logger.info("[Web Server] ZMQ control publisher closed.")
     await system.shutdown()
     logger.info("Shutdown complete.")
 

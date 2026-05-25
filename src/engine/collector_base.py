@@ -5,7 +5,7 @@ from typing import List, Dict, Optional, Any, Callable
 from abc import ABC, abstractmethod
 
 from src.engine.utils.telemetry import get_logger
-from src.engine.candles import CandleGenerator
+from src.engine.candles import CandleGenerator, Candle
 from src.engine.trade_engine import TradeEngine
 from src.engine.strategy import StrategyRegistry
 
@@ -67,6 +67,7 @@ class BaseCollector(ABC):
         self.candle_lock = asyncio.Lock()  # 동시성 제어용 락 추가
         self.total_processed_count = 0
         self.last_error: Optional[str] = None
+        self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
         
     @property
     @abstractmethod
@@ -206,6 +207,104 @@ class BaseCollector(ABC):
         pass
 
     @abstractmethod
+    async def _fetch_historical_candles(self, symbol: str, start_time: int, end_time: int) -> List[Candle]:
+        """각 거래소별 REST API를 호출하여 누락된 1분봉 데이터를 조회하여 반환합니다."""
+        pass
+
+    async def backfill_candles(self, config: Dict[str, Any]):
+        """로컬 DB의 마지막 저장 타임스탬프와 비교하여 누락된 분봉을 수집하고 백필합니다."""
+        bf_config = config.get('collector', {}).get('backfill', {})
+        if not bf_config.get('enabled', True):
+            logger.info(f"[{self.exchange.upper()}] 백필 기능이 비활성화되어 있습니다.")
+            return
+
+        db_path = config.get('db_path', 'data/backtest.db')
+        max_hours = bf_config.get('max_hours', 24)
+        
+        # 거래소별 Throttling 딜레이 추출
+        delays = bf_config.get('delays', {})
+        delay = delays.get(self.exchange, 0.2)
+
+        logger.info(f"[{self.exchange.upper()}] 백필 작업 기동. 대상 종목: {self.available_symbols}, 최대 복구: {max_hours}시간, API 딜레이: {delay}초")
+
+        from src.database.connection import get_db_conn
+        
+        current_time = int(time.time() // 60) * 60
+        max_lookback = current_time - (max_hours * 3600)
+
+        for symbol in self.available_symbols:
+            if not self.is_running:
+                break
+            
+            last_timestamp = None
+            try:
+                async with get_db_conn(db_path) as db:
+                    cursor = await db.execute(
+                        "SELECT max(timestamp) FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60",
+                        (self.exchange, symbol)
+                    )
+                    row = await cursor.fetchone()
+                    if row and row[0] is not None:
+                        last_timestamp = row[0]
+            except Exception as e:
+                logger.error(f"[{self.exchange.upper()}] {symbol} DB 조회 실패: {e}")
+                continue
+
+            # DB에 저장된 캔들이 없다면 최대 룩백 시간부터 시작
+            if last_timestamp is None:
+                start_time = max_lookback
+            else:
+                start_time = max(last_timestamp + 60, max_lookback)
+
+            # 마감된 분봉까지만 조회 (현재 분의 1분 전)
+            end_time = current_time - 60
+
+            if start_time > end_time:
+                logger.debug(f"[{self.exchange.upper()}] {symbol} 백필 불필요 (마지막 저장: {last_timestamp}, 수집 대상: {end_time})")
+                continue
+
+            logger.info(f"[{self.exchange.upper()}] {symbol} 백필 수행 구간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))} ~ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
+
+            try:
+                # 거래소별 REST API 호출
+                candles = await self._fetch_historical_candles(symbol, start_time, end_time)
+                if not candles:
+                    logger.debug(f"[{self.exchange.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다.")
+                    continue
+
+                # 시간 순서로 정렬
+                candles.sort(key=lambda x: x.timestamp)
+
+                # 중복 저장 방지를 위해 구간 내 이미 존재하는 타임스탬프 로드
+                existing_timestamps = set()
+                try:
+                    async with get_db_conn(db_path) as db:
+                        cursor = await db.execute(
+                            "SELECT timestamp FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
+                            (self.exchange, symbol, start_time, end_time)
+                        )
+                        rows = await cursor.fetchall()
+                        existing_timestamps = {r[0] for r in rows}
+                except Exception as e:
+                    logger.error(f"[{self.exchange.upper()}] {symbol} 중복 검사용 DB 조회 실패: {e}")
+
+                # 캔들 발행 큐에 적재
+                count = 0
+                for candle in candles:
+                    if candle.interval == 60 and candle.timestamp not in existing_timestamps:
+                        if self.candle_queue:
+                            await self.candle_queue.put(candle)
+                            count += 1
+                
+                logger.info(f"[{self.exchange.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
+
+            except Exception as e:
+                logger.error(f"[{self.exchange.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
+
+            # Throttling 적용
+            await asyncio.sleep(delay)
+
+    @abstractmethod
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
         """WebSocket URL 반환"""
         pass
@@ -314,9 +413,15 @@ class BaseCollector(ABC):
         # 7. 분 경계 캔들 강제 flush 태스크 기동
         self._flush_task = asyncio.create_task(self._candle_flush_loop())
 
+        # 8. 기동 시 누락 캔들 백필 수행 (동기식으로 진행되어 기동 시 과거 데이터를 먼저 다 복구하고 실시간 연결로 진입)
+        try:
+            await self.backfill_candles(config)
+        except Exception as e:
+            logger.error(f"[{self.exchange.upper()}] 백필 중 치명적 오류 발생: {e}")
 
-        # 6. WebSocket 연결 루프
+        # 9. WebSocket 연결 루프
         url = self._get_websocket_url(config)
+        self.ws = None
 
         while self.is_running:
             try:
@@ -336,6 +441,7 @@ class BaseCollector(ABC):
                     self.session = aiohttp.ClientSession()
                 
                 async with self.session.ws_connect(url, heartbeat=30.0) as ws:
+                    self.ws = ws
                     await self._subscribe(ws, config)
                     logger.info(f"[{self.exchange.upper()}] Collector Connected - {len(self.available_symbols)} symbols")
 
@@ -346,11 +452,13 @@ class BaseCollector(ABC):
                         if tick_data:
                             self.processing_queue.put_nowait(tick_data)
 
+                self.ws = None
                 # 정상적으로 소켓 루프가 종료(끊김)되었을 때도 즉각 재연결 폭주를 방지하기 위해 5초 대기 적용
                 if self.is_running:
                     logger.warning(f"[{self.exchange.upper()}] WebSocket connection closed. Reconnecting in 5s...")
                     await asyncio.sleep(5)
 
             except Exception as e:
+                self.ws = None
                 if self.is_running:
                     await self._handle_connection_error(e)

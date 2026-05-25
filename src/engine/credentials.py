@@ -102,14 +102,14 @@ class CredentialProvider:
         
         app_key = str(kis_config.get('app_key', '')).strip()
         app_secret = str(kis_config.get('app_secret', '')).strip()
-        is_vts = kis_config.get('is_vts', True)
+        api_url = str(kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')).strip()
 
         if not app_key or not app_secret:
             self.last_error = f"KIS 인증 정보 누락 (Key length: {len(app_key)}, Secret length: {len(app_secret)})"
             logger.error(self.last_error)
             return None
 
-        url = "https://openapivts.koreainvestment.com:29443" if is_vts else "https://openapi.koreainvestment.com:9443"
+        url = api_url
         path = "/oauth2/tokenP"
         
         payload = {
@@ -151,9 +151,9 @@ class CredentialProvider:
         
         app_key = str(kis_config.get('app_key', '')).strip()
         app_secret = str(kis_config.get('app_secret', '')).strip()
-        is_vts = kis_config.get('is_vts', True)
+        api_url = str(kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')).strip()
 
-        url = "https://openapivts.koreainvestment.com:29443" if is_vts else "https://openapi.koreainvestment.com:9443"
+        url = api_url
         path = "/oauth2/Approval"
         
         payload = {

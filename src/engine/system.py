@@ -6,11 +6,6 @@ import time
 from typing import Optional, List, Dict, Callable, Any
 from src.database.connection import get_db_conn
 from src.database.repository import SqliteTradingRepository
-from src.database.writer import DatabaseWriter
-from src.engine.collector_base import CollectorRegistry
-import src.engine.collector
-import src.engine.collector_kis
-import src.engine.collector_bithumb
 from src.engine.portfolio import PortfolioManager, Portfolio
 from src.engine.strategy import StrategyRegistry
 from src.engine.loader import load_dynamic_strategies
@@ -26,8 +21,7 @@ class TradingSystem:
     """
     트레이딩 시스템의 모든 컴포넌트와 백그라운드 서비스를 총괄하는 슈퍼바이저입니다.
     """
-    def __init__(self, config_path: str, db_path: Optional[str] = None, is_web_only: bool = False):
-        self.is_web_only = is_web_only
+    def __init__(self, config_path: str, db_path: Optional[str] = None):
         # 1. 설정 매니저 초기화 및 로드
         self.config_manager = ConfigManager(config_path)
         
@@ -38,16 +32,12 @@ class TradingSystem:
         # 전역 리소스를 통합 래핑하는 레포지토리 초기화
         self.repository = SqliteTradingRepository(system=self)
         
-        # 비동기 데이터베이스 영속화 라이터 (Candidate 1)
-        self.db_writer = DatabaseWriter(db_path=self.db_path)
-        
         # 전역 큐 관리 (레거시 호환 및 내부 버퍼용)
         self.processing_queue = asyncio.Queue()
         
         # 컴포넌트 초기화 - 주입된 DB 경로 관통 주입
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
         self.execution_pipeline = ExecutionPipeline(self.portfolio_manager) # [NEW]
-        self.collectors: List[Any] = []
         self.cred_provider = CredentialProvider(self.config_manager.config)
         
         # 실시간 가격 캐시 [NEW]
@@ -90,9 +80,7 @@ class TradingSystem:
             return
         self.is_running = True
         
-        logger.info("TradingSystem booting with DatabaseWriter...")
-        if not self.is_web_only:
-            await self.db_writer.start()
+        logger.info("TradingSystem booting in Web-only mode...")
         
         # 설정 감시 시작
         await self.config_manager.start_watching()
@@ -100,59 +88,38 @@ class TradingSystem:
         # 1. DB 초기화 및 포트폴리오 로드
         from src.database.schema import init_db
         await init_db(self.db_path)
-        await self.portfolio_manager.load_from_db()
+        await self.portfolio_manager.load_from_db(exclude_types=['simulationR'])
         
-        # 기본 포트폴리오 보장 (코인)
+        # 기본 포트폴리오 보장 및 각 거래소별 초기 세팅 확보
         if 'default' not in self.portfolio_manager.portfolios:
-            p = Portfolio("default", "기본 모의투자(코인)", 10000000.0, "upbit")
+            p = Portfolio("default", "기본 모의투자", 30000000.0, "all")
+            p.exchange_cash = {
+                'upbit': 10000000.0,
+                'kis': 10000000.0,
+                'bithumb': 10000000.0
+            }
             self.portfolio_manager.add_portfolio(p)
             await self.portfolio_manager.save_to_db("default")
-
-        # 주식용 기본 포트폴리오 보장
-        if 'stock_default' not in self.portfolio_manager.portfolios:
-            p = Portfolio("stock_default", "기본 모의투자(주식)", 50000000.0, "kis")
-            self.portfolio_manager.add_portfolio(p)
-            await self.portfolio_manager.save_to_db("stock_default")
-
-        # 빗썸용 기본 포트폴리오 보장
-        if 'bithumb_default' not in self.portfolio_manager.portfolios:
-            p = Portfolio("bithumb_default", "기본 모의투자(빗썸)", 10000000.0, "bithumb")
-            self.portfolio_manager.add_portfolio(p)
-            await self.portfolio_manager.save_to_db("bithumb_default")
+        else:
+            p = self.portfolio_manager.portfolios['default']
+            p.name = "기본 모의투자"
+            p.exchange_id = "all"
+            p.initial_cash = 30000000.0
+            
+            # 거래소별 격리 자금 보장
+            changed = False
+            for ex in ['upbit', 'kis', 'bithumb']:
+                if ex not in p.exchange_cash:
+                    p.exchange_cash[ex] = 10000000.0
+                    changed = True
+            
+            p.cash = sum(p.exchange_cash.values())
+            if changed:
+                await self.portfolio_manager.save_to_db("default")
 
         # 2. 전략 동적 로드 및 동기화 [NEW]
         load_dynamic_strategies(self.strategies_dir)
         self.sync_strategies()
-        
-        # 3. 수집기들 초기화 및 레포지토리 의존성 주입 [MODIFIED]
-        common_kwargs = {
-            'processing_queue': self.processing_queue,
-            'db_queue': self.db_writer.db_queue,
-            'candle_queue': self.db_writer.candle_queue,
-            'repository': self.repository,
-            'portfolio_manager': self.portfolio_manager,
-            'on_data_callback': self._handle_market_data,
-            'on_signal_callback': self._handle_strategy_signal,
-            'on_status_callback': self._handle_strategy_status
-        }
-        
-        if not self.is_web_only:
-            exchanges_config = self.config_manager.get('exchanges', {})
-            for exchange_id, exch_config in exchanges_config.items():
-                if not exch_config.get('enabled', True):
-                    continue
-                collector = CollectorRegistry.create(exchange_id, **common_kwargs)
-                if collector:
-                    self.collectors.append(collector)
-                    logger.info(f"Collector registered: {exchange_id}")
-            
-            # 🌟 백그라운드 DB 벌크 라이터는 이제 레포지토리가 담당하므로 레거시 루프 미사용!
-            
-            # 5. 수집기 시작
-            full_config = self.config_manager.config.copy()
-            full_config['db_path'] = self.db_path  # 시스템 DB 경로 주입
-            for collector in self.collectors:
-                await collector.start(full_config)
         
         logger.info("TradingSystem all components started.")
 
@@ -186,25 +153,12 @@ class TradingSystem:
         logger.info("TradingSystem shutting down...")
         self.is_running = False
         
-        # 데이터베이스 영속화 라이터 중단 및 안전 플러시
-        if not self.is_web_only:
-            await self.db_writer.stop()
-        
         # 설정 감시 중지
         await self.config_manager.stop_watching()
-        
-        # 1. 수집기들 중지
-        if not self.is_web_only:
-            for collector in self.collectors:
-                await collector.stop()
         
         # 1.1 인증 세션 종료
         await self.cred_provider.close()
         
-        # 2. 모든 포트폴리오 상태 저장
-        for pid in self.portfolio_manager.portfolios:
-            await self.portfolio_manager.save_to_db(pid)
-            
         # 3. 백그라운드 태스크 종료 및 잔여 데이터 처리
         for task in self.tasks:
             task.cancel()
@@ -283,30 +237,6 @@ class TradingSystem:
         
         # 인증 정보 동기화
         self.cred_provider.config = new_config
-        
-        if not self.collectors:
-            return
-            
-        # 모든 수집기 엔진의 전략 파라미터 업데이트
-        for collector in self.collectors:
-            exch = getattr(collector, 'exchange', 'upbit')
-            for symbol, engine in collector.trade_engines.items():
-                for strategy_id, config in self.strategy_configs.items():
-                    if config.get('enabled', False):
-                        # 기본 파라미터
-                        params = config.get('params', {}).copy()
-                        
-                        # 거래소별 오버라이드 적용 [NEW]
-                        overrides = config.get('overrides', {}).get(exch, {})
-                        if 'params' in overrides:
-                            params.update(overrides['params'])
-                            
-                        engine.update_strategy_params(strategy_id, params)
-        
-        logger.info(f"Strategy parameters hot-reloaded for {len(self.collectors)} collectors.")
-
-        # (비동기 DB/Candle 영속화 기능은 이제 self.db_writer가 전담하여 격리 수행합니다)
-        pass
 
     async def get_all_market_data(self) -> List[Dict[str, Any]]:
         """전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다."""
@@ -346,9 +276,6 @@ class TradingSystem:
 
                 # 2. Bithumb 가상자산 종목 추가 (신형 V1 REST Ticker API 실시간 연동 최적화)
                 bithumb_symbols = set()
-                for collector in self.collectors:
-                    if getattr(collector, 'exchange', '') == 'bithumb':
-                        bithumb_symbols.update(getattr(collector, 'available_symbols', []))
                 bithumb_config_symbols = self.config_manager.get('exchanges.bithumb.symbols', [])
                 if bithumb_config_symbols:
                     bithumb_symbols.update(bithumb_config_symbols)
@@ -406,9 +333,6 @@ class TradingSystem:
 
                 # 3. 국내 주식 종목 추가 (KIS)
                 kis_symbols = set()
-                for collector in self.collectors:
-                    if getattr(collector, 'exchange', '') == 'kis':
-                        kis_symbols.update(getattr(collector, 'available_symbols', []))
                 kis_config_symbols = self.config_manager.get('exchanges.kis.symbols', [])
                 if kis_config_symbols:
                     kis_symbols.update(kis_config_symbols)

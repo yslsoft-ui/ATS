@@ -56,7 +56,7 @@ class StrategyHost:
         portfolio_status = {}
         if portfolio_manager:
             # 포트폴리오 매니저에서 현재 종목의 포지션 및 잔고 정보를 가져옴
-            portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol)
+            portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol, exchange=self.exchange)
 
         # 4. 컨텍스트 생성
         context = StrategyContext(

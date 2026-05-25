@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config.manager import ConfigManager
 from src.database.writer import DatabaseWriter
-from src.ipc.bus import EventBusPublisher
+from src.ipc.bus import EventBusPublisher, EventBusSubscriber
 from src.engine.collector_base import CollectorRegistry
 from src.engine.credentials import CredentialProvider
 # 각 거래소 수집기가 Registry에 자동 등록되도록 import 수행
@@ -147,6 +147,39 @@ async def main():
         }
         await signal_publisher.publish("signal_data", status_payload)
 
+    # ZMQ 제어 소켓 리스너 루프
+    async def control_listener_loop():
+        control_sub = EventBusSubscriber("collector_control")
+        logger.info("[Collector Daemon] ZMQ control subscriber connected.")
+        while not stop_event.is_set():
+            try:
+                topic, data = await control_sub.receive()
+                if not topic or not data:
+                    continue
+
+                logger.info(f"[Collector Daemon] IPC 제어 신호 수신: topic={topic}, data={data}")
+                
+                if data.get('type') == 'update_symbols':
+                    exchange = data.get('exchange')
+                    code = data.get('code')
+                    is_collected = data.get('is_collected')
+                    
+                    # 1. stock_mapper 캐시 리로드 동기화
+                    from src.engine.utils.stock_mapper import stock_mapper
+                    stock_mapper._load_cache()
+                    
+                    # 2. 수집기에 통지
+                    collector = collectors.get(exchange)
+                    if collector and hasattr(collector, 'update_subscription'):
+                        await collector.update_subscription(code, is_collected)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[Collector Daemon] control_listener_loop error: {e}")
+                await asyncio.sleep(0.5)
+        control_sub.close()
+        logger.info("[Collector Daemon] ZMQ control subscriber closed.")
+
     # 5초 간격 실시간 상태 주기적 퍼블리시 루프
     async def status_broadcast_loop():
         while not stop_event.is_set():
@@ -212,9 +245,10 @@ async def main():
     config_manager.subscribe(on_config_changed)
     await config_manager.start_watching()
 
-    # 상태 전송 루프 기동
+    # 루프 및 리스너 태스크 기동
     broadcast_task = asyncio.create_task(status_broadcast_loop())
     queue_task = asyncio.create_task(queue_broadcast_loop())
+    control_task = asyncio.create_task(control_listener_loop())
 
     def handle_shutdown():
         logger.info("[Collector Daemon] 종료 시그널 감지. 자원 정리 및 안전 종료 절차를 진행합니다...")
@@ -233,11 +267,12 @@ async def main():
     # 10. 종료 절차 (Graceful Shutdown)
     await config_manager.stop_watching()
     
-    logger.info("[Collector Daemon] 상태 퍼블리시 루프 취소 중...")
+    logger.info("[Collector Daemon] 상태 퍼블리시 루프 및 제어 리스너 취소 중...")
     broadcast_task.cancel()
     queue_task.cancel()
+    control_task.cancel()
     try:
-        await asyncio.gather(broadcast_task, queue_task, return_exceptions=True)
+        await asyncio.gather(broadcast_task, queue_task, control_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
 

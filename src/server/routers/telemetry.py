@@ -29,7 +29,7 @@ async def get_queue_status(request: Request):
     """각 작업 큐의 현재 적체량 및 누적 처리량을 반환합니다."""
     system = request.app.state.system
     
-    if system.is_web_only:
+    if not hasattr(system, "collectors"):
         return system.queue_status
         
     total_count = sum(getattr(c, 'total_processed_count', 0) for c in system.collectors)
