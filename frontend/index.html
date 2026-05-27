@@ -17,8 +17,8 @@
         <aside class="sidebar">
             <div class="logo">🚀 UPBIT TERMINAL</div>
             <nav class="menu">
-                <div class="menu-item active" data-view="monitoring-view">📊 모니터링</div>
-                <div class="menu-item" data-view="market-view">🌐 마켓</div>
+                <div class="menu-item active" data-view="market-view">🌐 마켓</div>
+                <div class="menu-item" data-view="monitoring-view">📊 모니터링</div>
                 <div class="menu-item" data-view="alert-view">🔔 알림</div>
                 <div class="menu-item" data-view="strategy-view">🎯 전략</div>
                 <div class="menu-item" data-view="portfolio-view">💼 포트폴리오</div>
@@ -69,8 +69,8 @@
 
         <!-- 메인 콘텐츠 -->
         <main class="content">
-            <!-- 모니터링 뷰 -->
-            <section id="monitoring-view">
+            <!-- 모니터링 뷰 (초기엔 숨김) -->
+            <section id="monitoring-view" style="display: none;">
                 <header class="main-header">
                     <div class="symbol-info">
                         <img id="header-coin-icon" src="" alt="" class="coin-icon" style="display: none;" onerror="this.style.display='none'">
@@ -101,13 +101,6 @@
                     </div>
 
                     <aside class="chart-controls">
-                        <div class="control-group">
-                            <label>모니터링 종목</label>
-                            <select id="symbol-select" class="dark-input">
-                                <option value="KRW-BTC" selected>BTC</option>
-                            </select>
-                        </div>
-
                         <div class="control-group">
                             <label>캔들 간격</label>
                             <div id="interval-btn-group" class="interval-btn-group">
@@ -155,8 +148,8 @@
                 </section>
             </section>
 
-            <!-- 마켓 뷰 (초기엔 숨김) -->
-            <section id="market-view" style="display: none;">
+            <!-- 마켓 뷰 -->
+            <section id="market-view">
                 <header class="main-header">
                     <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                         <h1>🌐 마켓 현황 <span id="market-count" class="market-count-badge"></span></h1>
@@ -167,7 +160,28 @@
                         </div>
                     </div>
                     <input type="text" id="market-search" class="dark-input market-search" placeholder="종목명 또는 코드 검색...">
+                    <!-- 마켓 메타 정보 및 수동 새로고침 위젯 (flex layout 개행 분리) -->
+                    <div class="market-meta-bar" style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding: 10px 15px; background: #1E293B; border: 1px solid #334155; border-radius: 6px; width: 100%; box-sizing: border-box; flex-shrink: 0; clear: both;">
+                        <div class="market-latency-info" style="font-family: 'Roboto Mono', 'Source Code Pro', monospace; font-size: 12px; color: #94A3B8;">
+                            ⏱️ 수집 레이턴시: 
+                            <span style="color: #FF4B4B;">Upbit</span> <span id="latency-upbit" style="color: #F8FAFC; font-weight: bold;">0</span>ms | 
+                            <span style="color: #F59E0B;">Bithumb</span> <span id="latency-bithumb" style="color: #F8FAFC; font-weight: bold;">0</span>ms | 
+                            <span style="color: #0072FF;">KIS</span> <span id="latency-kis" style="color: #F8FAFC; font-weight: bold;">0</span>ms
+                            <span style="margin: 0 15px; color: #475569;">|</span>
+                            <span>최종 수집:</span> <span id="market-last-updated" style="color: #F8FAFC; font-weight: bold;">-</span>
+                            <span id="market-elapsed" style="color: #64748B; font-size: 11px; margin-left: 4px;"></span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button id="btn-market-refresh" class="btn btn-secondary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; border-radius: 4px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; transition: background 0.2s;">
+                                🔄 새로고침
+                            </button>
+                        </div>
+
+                    </div>
                 </header>
+
+
+
                 <div class="market-table-wrapper">
                     <table id="market-table">
                         <thead>
@@ -800,16 +814,23 @@
         </div>
     </div>
 
-    <script src="store.js?v=1.0.1"></script>
-    <script src="router.js?v=1.0.1"></script>
-    <script src="client.js?v=1.0.1"></script>
-    <script src="stream.js?v=1.0.1"></script>
-    <script src="indicators.js?v=1.0.1"></script>
-    <script src="chart.js?v=1.0.1"></script>
-    <script src="utils.js?v=1.0.1"></script>
-    <script src="alerts.js?v=1.0.1"></script>
-    <script src="market.js?v=1.0.1"></script>
-    <script src="portfolio.js?v=1.0.1"></script>
-    <script src="app.js?v=1.0.1"></script>
+    <script src="store.js"></script>
+    <script src="router.js"></script>
+    <script src="client.js"></script>
+    <script src="stream.js"></script>
+    <script src="indicators.js"></script>
+    <script src="chart.js"></script>
+    <script src="utils.js"></script>
+    <script src="alerts.js"></script>
+    <script src="market.js"></script>
+    <script src="portfolio-adapter.js"></script>
+    <script src="portfolio-chart.js"></script>
+    <script src="portfolio-view.js"></script>
+    <script src="portfolio.js"></script>
+    <script src="settings.js"></script>
+    <script src="ranking.js"></script>
+    <script src="strategy.js"></script>
+    <script src="restored-view.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

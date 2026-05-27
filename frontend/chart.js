@@ -428,6 +428,13 @@
             if (_chart) {
                 _chart.timeScale().applyOptions({ barSpacing: spacing });
             }
+        },
+
+        // 화면 탭 전환 등으로 인한 크기 변화를 차트 엔진에 강제 반영
+        resize() {
+            if (_chart && _chartDiv) {
+                _chart.resize(_chartDiv.clientWidth, 500);
+            }
         }
     };
 

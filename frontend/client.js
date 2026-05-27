@@ -101,7 +101,7 @@ const APIClient = (() => {
         /**
          * 전체 실시간 마켓 현황 및 가격 통계 조회
          */
-        fetchMarketData: () => _fetchAPI('/market'),
+        fetchMarketData: () => _fetchAPI(`/market`),
 
         /**
          * 데이터 수집기 가동 상태 정보 조회
@@ -179,10 +179,7 @@ const APIClient = (() => {
          */
         fetchBacktestHistory: () => _fetchAPI(`/api/backtest/history?t=${Date.now()}`),
 
-        /**
-         * 특정 백테스트 이력 상세 복원
-         */
-        fetchBacktestHistoryDetail: (portfolioId) => _fetchAPI(`/api/backtest/history/${portfolioId}`),
+
 
         /**
          * 특정 백테스트 이력 영구 삭제

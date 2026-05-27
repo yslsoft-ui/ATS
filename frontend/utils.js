@@ -52,5 +52,151 @@ function formatRate(rate) {
     };
 }
 
+/**
+ * 세련된 토스트 알림 메시지를 화면 우측 상단에 표시합니다.
+ * @param {string} message - 메시지 내용
+ * @param {string} type - 알림 타입 ('success', 'error', 'info')
+ */
+function showToast(message, type = 'success') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;';
+        document.body.appendChild(container);
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-message ${type}`;
+    
+    const borderLeftColor = type === 'success' ? '#FF4B4B' : (type === 'error' ? '#EF4444' : '#0072FF');
+    
+    toast.style.cssText = `
+        background: #1E293B;
+        border-left: 4px solid ${borderLeftColor};
+        color: #F8FAFC;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+        font-size: 0.88rem;
+        font-weight: 600;
+        pointer-events: auto;
+        min-width: 280px;
+        opacity: 0;
+        transform: translateY(-20px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+    
+    toast.innerText = message;
+    container.appendChild(toast);
+    
+    toast.offsetHeight; // 리플로우 트리거
+    
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+/**
+ * KIS 순위분석 데이터를 타입에 맞게 포맷팅합니다.
+ */
+function formatValueByType(val, colSpec, item) {
+    if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+        return '-';
+    }
+    
+    switch (colSpec.type) {
+        case 'price':
+            const price = Math.round(parseFloat(val));
+            if (isNaN(price)) return '-';
+            
+            let formattedPrice = price.toLocaleString();
+            if (colSpec.signKey) {
+                const signVal = String(item[colSpec.signKey] || '');
+                let signText = '';
+                let colorClass = '';
+                if (signVal === '1' || signVal === '2') {
+                    signText = '▲';
+                    colorClass = 'bull';
+                } else if (signVal === '4' || signVal === '5') {
+                    signText = '▼';
+                    colorClass = 'bear';
+                } else if (signVal === '3') {
+                    signText = '';
+                    colorClass = '';
+                }
+                
+                if (colSpec.key.includes('vrss') || colSpec.key.includes('diff')) {
+                    return `<span class="${colorClass}" style="font-weight: bold;">${signText}${formattedPrice}</span>`;
+                }
+            }
+            return formattedPrice;
+            
+        case 'integer':
+            const intVal = Math.round(parseFloat(val));
+            return isNaN(intVal) ? '-' : intVal.toLocaleString();
+            
+        case 'percent':
+            const pct = parseFloat(val);
+            return isNaN(pct) ? '-' : pct.toFixed(2) + '%';
+            
+        case 'date':
+            const s = String(val).trim();
+            if (s.length === 8) {
+                return `${s.substring(0, 4)}-${s.substring(4, 6)}-${s.substring(6, 8)}`;
+            }
+            return s;
+            
+        case 'marketDiv':
+            const div = String(val).trim();
+            if (div === 'J') return '코스피';
+            if (div === 'Q') return '코스닥';
+            return div;
+            
+        case 'rate':
+            const rate = parseFloat(val);
+            if (isNaN(rate)) return '-';
+            
+            let sign = '';
+            const signVal = colSpec.signKey ? String(item[colSpec.signKey]) : '';
+            if (signVal === '1' || signVal === '2') {
+                sign = '+';
+            } else if (signVal === '4' || signVal === '5') {
+                if (rate > 0) {
+                    sign = '-';
+                }
+            } else {
+                if (rate > 0) sign = '+';
+            }
+            
+            let colorClass = '';
+            if (rate > 0 || sign === '+') {
+                colorClass = 'bull';
+            } else if (rate < 0 || sign === '-') {
+                colorClass = 'bear';
+            }
+            
+            const formattedVal = Math.abs(rate).toFixed(2) + '%';
+            return `<span class="${colorClass}" style="font-weight: bold;">${sign}${formattedVal}</span>`;
+            
+        case 'text':
+        default:
+            return String(val);
+    }
+}
+
+// 전역 바인딩
+window.showToast = showToast;
+window.formatValueByType = formatValueByType;
+window.formatPrice = formatPrice;
+window.formatVolume = formatVolume;
+window.formatTooltipVolume = formatTooltipVolume;
+window.formatRate = formatRate;
+
 
 

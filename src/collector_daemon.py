@@ -82,6 +82,10 @@ async def main():
     # 2. SQLite 스키마 초기화 확인
     from src.database.schema import init_db
     await init_db(db_path)
+
+    # 2.5 StockMapper 메모리 캐시 적재
+    from src.engine.utils.stock_mapper import stock_mapper
+    await stock_mapper.load_from_db(db_path)
     
     # 3. DB Writer 기동
     db_writer = DatabaseWriter(db_path=db_path)
@@ -164,9 +168,9 @@ async def main():
                     code = data.get('code')
                     is_collected = data.get('is_collected')
                     
-                    # 1. stock_mapper 캐시 리로드 동기화
+                    # 1. DB의 변경 사항을 반영하여 StockMapper 캐시를 실시간 리로드
                     from src.engine.utils.stock_mapper import stock_mapper
-                    stock_mapper._load_cache()
+                    await stock_mapper.load_from_db(db_path)
                     
                     # 2. 수집기에 통지
                     collector = collectors.get(exchange)

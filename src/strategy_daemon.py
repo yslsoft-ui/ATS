@@ -154,46 +154,51 @@ async def main():
         
         return new_engines
 
-    # 3초마다 활성 포트폴리오 변경 여부를 감시하는 백그라운드 태스크
-    async def portfolio_monitor_loop():
-        nonlocal current_portfolio_id
-        logger.info("[Strategy Daemon] 활성 모의투자 세션 감시 루프 기동")
-        
-        # 첫 기동 시 바로 한번 체크
-        try:
-            await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
-            active_p = portfolio_manager.get_active_simulation_portfolio()
-            active_id = active_p.id if active_p else None
-            current_portfolio_id = active_id
-            if active_p:
-                new_engs = await reload_trade_engines(active_p)
-                trade_engines.clear()
-                trade_engines.update(new_engs)
-        except Exception as e:
-            logger.error(f"[Strategy Daemon] 초기 세션 로드 중 예외: {e}")
+    # 첫 기동 시 초기 1회 로드 및 세션 구축
+    try:
+        active_p = portfolio_manager.get_active_simulation_portfolio()
+        active_id = active_p.id if active_p else None
+        current_portfolio_id = active_id
+        if active_p:
+            new_engs = await reload_trade_engines(active_p)
+            trade_engines.clear()
+            trade_engines.update(new_engs)
+    except Exception as e:
+        logger.error(f"[Strategy Daemon] 초기 세션 로드 중 예외: {e}")
 
+    # ZMQ 제어 명령 수신 비동기 루프 (3초 Polling 대체)
+    async def control_loop():
+        nonlocal current_portfolio_id
+        logger.info("[Strategy Daemon] ZMQ strategy_control 구독 수신 시작")
         while not stop_event.is_set():
             try:
-                await asyncio.sleep(3.0)
-                await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
-                active_p = portfolio_manager.get_active_simulation_portfolio()
-                active_id = active_p.id if active_p else None
+                topic, data = await strategy_control_subscriber.receive()
+                if not topic:
+                    continue
                 
-                if active_id != current_portfolio_id:
-                    logger.info(f"[Strategy Daemon] 세션 변경 감지: {current_portfolio_id} -> {active_id}")
-                    current_portfolio_id = active_id
+                if data.get('type') == 'update_portfolio':
+                    logger.info(f"[Strategy Daemon] ZMQ 제어 수신: 포트폴리오 업데이트 신호")
+                    await portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                    active_p = portfolio_manager.get_active_simulation_portfolio()
+                    active_id = active_p.id if active_p else None
                     
-                    # 기존 엔진들을 스레드 안전하게 클리어하고 새 엔진 구축
-                    trade_engines.clear()
-                    if active_p:
-                        new_engs = await reload_trade_engines(active_p)
-                        trade_engines.update(new_engs)
-                    else:
-                        logger.info("[Strategy Daemon] 활성 포트폴리오가 존재하지 않아 엔진 대기 모드로 전환합니다.")
+                    if active_id != current_portfolio_id:
+                        logger.info(f"[Strategy Daemon] 세션 변경 감지: {current_portfolio_id} -> {active_id}")
+                        current_portfolio_id = active_id
+                        
+                        trade_engines.clear()
+                        if active_p:
+                            new_engs = await reload_trade_engines(active_p)
+                            trade_engines.update(new_engs)
+                        else:
+                            logger.info("[Strategy Daemon] 활성 포트폴리오가 존재하지 않아 엔진 대기 모드로 전환합니다.")
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                logger.error(f"[Strategy Daemon] 모니터 루프 내 에러: {e}")
+                logger.error(f"[Strategy Daemon] 제어 루프 에러: {e}")
+                await asyncio.sleep(0.1)
 
-    asyncio.create_task(portfolio_monitor_loop())
+    control_task = asyncio.create_task(control_loop())
 
     # 전략 엔진 동작 상태 퍼블리시 루프 (3초 주기 및 기동 즉시 전송)
     async def status_broadcast_loop():
@@ -222,8 +227,9 @@ async def main():
 
     broadcast_task = asyncio.create_task(status_broadcast_loop())
 
-    # 9. ZeroMQ Subscriber 기동 (market_data 토픽 구독)
+    # 9. ZeroMQ Subscriber 기동
     market_subscriber = EventBusSubscriber("market_data")
+    strategy_control_subscriber = EventBusSubscriber("strategy_control")
 
     # 10. 종료 처리용 시그널 핸들링
     def handle_shutdown():
@@ -298,6 +304,13 @@ async def main():
         logger.error(f"[Strategy Daemon] 종료 상태 퍼블리시 에러: {e}")
 
     # 12. 정리 절차 (Graceful Shutdown)
+    logger.info("[Strategy Daemon] ZMQ strategy_control 구독 루프 취소 중...")
+    control_task.cancel()
+    try:
+        await control_task
+    except asyncio.CancelledError:
+        pass
+
     logger.info("[Strategy Daemon] 실시간 구독 루프 취소 중...")
     subscribe_task.cancel()
     try:
@@ -307,6 +320,7 @@ async def main():
 
     logger.info("[Strategy Daemon] ZeroMQ IPC 소켓 정리 중...")
     market_subscriber.close()
+    strategy_control_subscriber.close()
     signal_publisher.close()
 
     logger.info("=========================================")

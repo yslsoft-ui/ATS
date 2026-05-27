@@ -1,562 +1,862 @@
 {
+  "/home/simon/ATS/run.sh": {
+    "mtime": 1779373718.3959553,
+    "ast_hash": "bc3a060c0f637ab11cf3620093652c94",
+    "semantic_hash": "bc3a060c0f637ab11cf3620093652c94"
+  },
   "/home/simon/ATS/run_backtest_sample.py": {
-    "mtime": 1778418725.1138074,
+    "mtime": 1778418725.0,
     "ast_hash": "4541705465d71c53eec5501f3b32b18c",
     "semantic_hash": "4541705465d71c53eec5501f3b32b18c"
   },
+  "/home/simon/ATS/recover.py": {
+    "mtime": 1779697386.3514874,
+    "ast_hash": "4a4c2ab22e15dde627efc209defa1234",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/skills-lock.json": {
-    "mtime": 1778241512.0247161,
+    "mtime": 1778241512.0,
     "ast_hash": "57b308c2d9e5c7d7765fb3f6dd97634b",
     "semantic_hash": "57b308c2d9e5c7d7765fb3f6dd97634b"
   },
-  "/home/simon/ATS/data/stock_master.json": {
-    "mtime": 1779071023.2989247,
-    "ast_hash": "f9be03e4a724f3c22ee50b63116e6b79",
-    "semantic_hash": "f9be03e4a724f3c22ee50b63116e6b79"
-  },
-  "/home/simon/ATS/frontend/market.js": {
-    "mtime": 1779192789.7842155,
-    "ast_hash": "6c17c70057afead74f3bc06350dbeea7",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/router.js": {
-    "mtime": 1779183996.6855316,
-    "ast_hash": "3a8160f8e09bf858e0e7837419f9bcdf",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/chart.js": {
-    "mtime": 1779182414.7442794,
-    "ast_hash": "0dcfcb970b1fa4cbd16a42b5d021e3e2",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/client.js": {
-    "mtime": 1779192748.4514432,
-    "ast_hash": "70363be32f84c9809ef6c5d8c91a4f1d",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/stream.js": {
-    "mtime": 1779196710.0891516,
-    "ast_hash": "fed07d07bae065ec680bcf9811100954",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/indicators.js": {
-    "mtime": 1779207777.4597847,
-    "ast_hash": "829486a891927a0de4bb398e21b9e921",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/utils.js": {
-    "mtime": 1779202389.0755117,
-    "ast_hash": "5f26ab173706fc8583335dd93b84ed92",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1779192808.5605578,
-    "ast_hash": "d6acdbb8b40a4efd2ed99089445a552b",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1779211767.784286,
-    "ast_hash": "3a2f35e6f739572c15ae9843cf96ab6d",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/store.js": {
-    "mtime": 1779196703.49691,
-    "ast_hash": "f390d7c2c67adb6b23aeed3f886471f4",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/frontend/alerts.js": {
-    "mtime": 1779192798.4603608,
-    "ast_hash": "f831e01c67a83053f057ded95ad8aef2",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/scratch/kis_formatter.py": {
-    "mtime": 1779157354.5722198,
-    "ast_hash": "543cf314de12b51c8c6de1db34413528",
-    "semantic_hash": "543cf314de12b51c8c6de1db34413528"
+  "/home/simon/ATS/scratch/show_kis_value_rank.py": {
+    "mtime": 1779420612.4287667,
+    "ast_hash": "83e5a2d69227c8fbb850631336637b33",
+    "semantic_hash": "83e5a2d69227c8fbb850631336637b33"
   },
   "/home/simon/ATS/scratch/test_bithumb.py": {
-    "mtime": 1778949810.9318976,
+    "mtime": 1778949810.0,
     "ast_hash": "ad364ab98c40f403db93569f201e6d4c",
     "semantic_hash": "ad364ab98c40f403db93569f201e6d4c"
   },
-  "/home/simon/ATS/scratch/kis_excel_parser.py": {
-    "mtime": 1779155344.7914472,
-    "ast_hash": "7579219d6113c715628362d1eea75742",
-    "semantic_hash": "7579219d6113c715628362d1eea75742"
-  },
   "/home/simon/ATS/scratch/ws_test.py": {
-    "mtime": 1779205301.1417015,
+    "mtime": 1779205301.0,
     "ast_hash": "985b6ac3e9fbfd1f14d5605c26f0a4cc",
+    "semantic_hash": "985b6ac3e9fbfd1f14d5605c26f0a4cc"
+  },
+  "/home/simon/ATS/scratch/test_restore_detail.py": {
+    "mtime": 1779615963.4783702,
+    "ast_hash": "73e9b45ba5c9ee6e76a951dca51e16ff",
     "semantic_hash": ""
   },
-  "/home/simon/ATS/scratch/strategies_debug.json": {
-    "mtime": 1778926032.7253885,
-    "ast_hash": "c321b4e02c2e605abfc32eee166e04f3",
-    "semantic_hash": "c321b4e02c2e605abfc32eee166e04f3"
+  "/home/simon/ATS/scratch/diagnose_candles.py": {
+    "mtime": 1779215367.0,
+    "ast_hash": "ed82e3627ad9c97841284854e4378e49",
+    "semantic_hash": "ed82e3627ad9c97841284854e4378e49"
   },
-  "/home/simon/ATS/scratch/test_fee_system.py": {
-    "mtime": 1778897478.166951,
-    "ast_hash": "91fc6d09cf80738fd3ff98d2395a61f8",
-    "semantic_hash": "91fc6d09cf80738fd3ff98d2395a61f8"
+  "/home/simon/ATS/scratch/test_backtest_api.py": {
+    "mtime": 1779715803.0746953,
+    "ast_hash": "6003a283aba28d655d62242018637d90",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/parse_tr_ids.py": {
+    "mtime": 1779439414.5202754,
+    "ast_hash": "6dec97679939aee23fd994e3b8171758",
+    "semantic_hash": "6dec97679939aee23fd994e3b8171758"
+  },
+  "/home/simon/ATS/scratch/debug_backtest_ui.py": {
+    "mtime": 1779633617.544536,
+    "ast_hash": "a662d6af027c1ee56bc27cf59563e156",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/test_kis_auth.py": {
-    "mtime": 1778935850.9947817,
+    "mtime": 1778935850.0,
     "ast_hash": "b6de14a430de641d5bf120e3e539f62a",
     "semantic_hash": "b6de14a430de641d5bf120e3e539f62a"
   },
-  "/home/simon/ATS/scratch/test_strategy_creation.py": {
-    "mtime": 1778928891.2256696,
-    "ast_hash": "88f633c4d1745a1567b84d1865351e18",
-    "semantic_hash": "88f633c4d1745a1567b84d1865351e18"
+  "/home/simon/ATS/scratch/analyze_missing_reason.py": {
+    "mtime": 1779217796.0,
+    "ast_hash": "c21e09c5e5a6d3825311bf266ae261b8",
+    "semantic_hash": "c21e09c5e5a6d3825311bf266ae261b8"
   },
-  "/home/simon/ATS/scratch/kis_text_splitter.py": {
-    "mtime": 1779156502.4966834,
-    "ast_hash": "1d10d6385eb8d1e476d9339937ea27fc",
-    "semantic_hash": "1d10d6385eb8d1e476d9339937ea27fc"
+  "/home/simon/ATS/scratch/restore_missing_candles.py": {
+    "mtime": 1779217913.0,
+    "ast_hash": "4ae09b7d40637ebd22f47f0589e16893",
+    "semantic_hash": "4ae09b7d40637ebd22f47f0589e16893"
+  },
+  "/home/simon/ATS/scratch/test_backtest_run.py": {
+    "mtime": 1779678804.6389637,
+    "ast_hash": "96bcddbf6d5f2251b409749805f6b9a2",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/test_kis_rank.py": {
+    "mtime": 1779420567.0526397,
+    "ast_hash": "46303c61b904247ec0f3cecb002cd169",
+    "semantic_hash": "46303c61b904247ec0f3cecb002cd169"
+  },
+  "/home/simon/ATS/scratch/test_bulk_delete.py": {
+    "mtime": 1779612188.5103664,
+    "ast_hash": "32b12b8361c447dd36721428b68f5476",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/db_check.py": {
+    "mtime": 1779260659.0,
+    "ast_hash": "53b652b5d7fbb69a47b9aaf9766d36c1",
+    "semantic_hash": "53b652b5d7fbb69a47b9aaf9766d36c1"
+  },
+  "/home/simon/ATS/scratch/show_kis_rank.py": {
+    "mtime": 1779420440.4027202,
+    "ast_hash": "59f12da567cfe9fea8f652db26b95b69",
+    "semantic_hash": "59f12da567cfe9fea8f652db26b95b69"
+  },
+  "/home/simon/ATS/scratch/kis_excel_parser.py": {
+    "mtime": 1779155344.0,
+    "ast_hash": "7579219d6113c715628362d1eea75742",
+    "semantic_hash": "7579219d6113c715628362d1eea75742"
+  },
+  "/home/simon/ATS/scratch/test_kis_psearch.py": {
+    "mtime": 1779432978.5933933,
+    "ast_hash": "1ec11a409dd2c2853ca2d02486895aa2",
+    "semantic_hash": "1ec11a409dd2c2853ca2d02486895aa2"
+  },
+  "/home/simon/ATS/scratch/check_gap.py": {
+    "mtime": 1779217639.0,
+    "ast_hash": "0dab2f8293f19b3f17217b1535ef6ab5",
+    "semantic_hash": "0dab2f8293f19b3f17217b1535ef6ab5"
+  },
+  "/home/simon/ATS/scratch/test_fee_system.py": {
+    "mtime": 1778897478.0,
+    "ast_hash": "91fc6d09cf80738fd3ff98d2395a61f8",
+    "semantic_hash": "91fc6d09cf80738fd3ff98d2395a61f8"
   },
   "/home/simon/ATS/scratch/test_risk_skip.py": {
-    "mtime": 1779018812.2213078,
+    "mtime": 1779018812.0,
     "ast_hash": "139c2d4f8f10f9365767d6ac4c98e58e",
     "semantic_hash": "139c2d4f8f10f9365767d6ac4c98e58e"
   },
+  "/home/simon/ATS/scratch/show_kis_power_rank.py": {
+    "mtime": 1779421742.134316,
+    "ast_hash": "1a51d7fe4ca4b7e5ea2fcd6474df1e86",
+    "semantic_hash": "1a51d7fe4ca4b7e5ea2fcd6474df1e86"
+  },
+  "/home/simon/ATS/scratch/test_zmq.py": {
+    "mtime": 1779367447.8474214,
+    "ast_hash": "6eaad64bbeb553874c10ee0f7911ce6e",
+    "semantic_hash": "6eaad64bbeb553874c10ee0f7911ce6e"
+  },
+  "/home/simon/ATS/scratch/test_kis_dynamic_sub.py": {
+    "mtime": 1779420232.551893,
+    "ast_hash": "eacd66ff932d5e2b33458216ae265ed2",
+    "semantic_hash": "eacd66ff932d5e2b33458216ae265ed2"
+  },
+  "/home/simon/ATS/scratch/strategies_debug.json": {
+    "mtime": 1778926032.0,
+    "ast_hash": "c321b4e02c2e605abfc32eee166e04f3",
+    "semantic_hash": "c321b4e02c2e605abfc32eee166e04f3"
+  },
+  "/home/simon/ATS/scratch/test_ranking_api_fix.py": {
+    "mtime": 1779446921.2417266,
+    "ast_hash": "122f9226fe4cf45df93be13bab652a77",
+    "semantic_hash": "122f9226fe4cf45df93be13bab652a77"
+  },
+  "/home/simon/ATS/scratch/test_cascade_delete.py": {
+    "mtime": 1779611838.9881673,
+    "ast_hash": "9433d5078e729f9c9918a331d6409f0b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/reproduce_collector_status.py": {
+    "mtime": 1779415984.2134774,
+    "ast_hash": "87ca327c0ece6c49d63d97e45155ccd8",
+    "semantic_hash": "87ca327c0ece6c49d63d97e45155ccd8"
+  },
+  "/home/simon/ATS/scratch/check_db_details.py": {
+    "mtime": 1779712626.3337297,
+    "ast_hash": "01ca4f5c64aa597316143d1f6c0fdfcc",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/clear_backtest_data.py": {
+    "mtime": 1779611083.0907774,
+    "ast_hash": "ed38fb7db80f9abcddf08054627393d0",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/test_psearch_ui.py": {
+    "mtime": 1779423624.198126,
+    "ast_hash": "0c3eca7aed4e8173bb8deff972b1cf1f",
+    "semantic_hash": "0c3eca7aed4e8173bb8deff972b1cf1f"
+  },
+  "/home/simon/ATS/scratch/test_symbols_api.py": {
+    "mtime": 1779412060.4973419,
+    "ast_hash": "3cf08037a046e7f0220f17a6bd15c494",
+    "semantic_hash": "3cf08037a046e7f0220f17a6bd15c494"
+  },
+  "/home/simon/ATS/scratch/test_gen.py": {
+    "mtime": 1779259802.0,
+    "ast_hash": "68557719c4cd94d52c693f060dd2cd79",
+    "semantic_hash": "68557719c4cd94d52c693f060dd2cd79"
+  },
+  "/home/simon/ATS/scratch/diagnose_candle_gap.py": {
+    "mtime": 1779262451.0,
+    "ast_hash": "dd0ad360ee1f1ee5bfd4d995cf5618e9",
+    "semantic_hash": "dd0ad360ee1f1ee5bfd4d995cf5618e9"
+  },
+  "/home/simon/ATS/scratch/verify_api.py": {
+    "mtime": 1779713949.503834,
+    "ast_hash": "b9237f75e5b06cb6ad75ae5871ee23e0",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/kis_text_splitter.py": {
+    "mtime": 1779156502.0,
+    "ast_hash": "1d10d6385eb8d1e476d9339937ea27fc",
+    "semantic_hash": "1d10d6385eb8d1e476d9339937ea27fc"
+  },
+  "/home/simon/ATS/scratch/test_market_api.py": {
+    "mtime": 1779374845.8386269,
+    "ast_hash": "c442aa2c1d988bffd23eb2962aecbc72",
+    "semantic_hash": "c442aa2c1d988bffd23eb2962aecbc72"
+  },
+  "/home/simon/ATS/scratch/kis_formatter.py": {
+    "mtime": 1779157354.0,
+    "ast_hash": "543cf314de12b51c8c6de1db34413528",
+    "semantic_hash": "543cf314de12b51c8c6de1db34413528"
+  },
   "/home/simon/ATS/scratch/headless_browser_test.py": {
-    "mtime": 1779214244.0844476,
+    "mtime": 1779214244.0,
     "ast_hash": "52e49ea021fb2468ec81d93484d61beb",
+    "semantic_hash": "52e49ea021fb2468ec81d93484d61beb"
+  },
+  "/home/simon/ATS/scratch/test_strategy_creation.py": {
+    "mtime": 1778928891.0,
+    "ast_hash": "88f633c4d1745a1567b84d1865351e18",
+    "semantic_hash": "88f633c4d1745a1567b84d1865351e18"
+  },
+  "/home/simon/ATS/scratch/test_kis_ranking.py": {
+    "mtime": 1779446629.4029913,
+    "ast_hash": "e9347d838e2cce20ed7b73336c94d2bc",
+    "semantic_hash": "e9347d838e2cce20ed7b73336c94d2bc"
+  },
+  "/home/simon/ATS/scratch/check_db.py": {
+    "mtime": 1779712264.6830342,
+    "ast_hash": "f95a1928203e5a8ae00916ed5bf08473",
     "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/graphify-wiki-enrichment/enrich_labels.py": {
-    "mtime": 1779162658.9382176,
+    "mtime": 1779162658.0,
     "ast_hash": "24924e04346a36ed4d802cb644f1680b",
+    "semantic_hash": "24924e04346a36ed4d802cb644f1680b"
+  },
+  "/home/simon/ATS/frontend/stream.js": {
+    "mtime": 1779196710.0,
+    "ast_hash": "fed07d07bae065ec680bcf9811100954",
+    "semantic_hash": "fed07d07bae065ec680bcf9811100954"
+  },
+  "/home/simon/ATS/frontend/portfolio-view.js": {
+    "mtime": 1779798864.495635,
+    "ast_hash": "457688d8dd41fa5ed13b753a2e1f0e22",
     "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/portfolio-chart.js": {
+    "mtime": 1779752682.0205812,
+    "ast_hash": "5643697d4b2126740e7c740bf55453b6",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/store.js": {
+    "mtime": 1779366326.563939,
+    "ast_hash": "8ac16e25a2f9eb9661d534695f50adca",
+    "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
+  },
+  "/home/simon/ATS/frontend/app.js": {
+    "mtime": 1779864924.21937,
+    "ast_hash": "08ca47321bef0c7e0d6a78bb5de4ebb3",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/backtest.js": {
+    "mtime": 1779806682.4541953,
+    "ast_hash": "114ed2c61267559ade307ac8b512be4c",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/settings.js": {
+    "mtime": 1779757902.8592901,
+    "ast_hash": "d43bfec64b82161f146b8b1a47beaa89",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/strategy.js": {
+    "mtime": 1779757892.839058,
+    "ast_hash": "01fe2256165a38f238fe51ab4d428877",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/chart.js": {
+    "mtime": 1779841547.4418864,
+    "ast_hash": "938d2b267c9f184e153f64afdd31ae21",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/indicators.js": {
+    "mtime": 1779207777.0,
+    "ast_hash": "829486a891927a0de4bb398e21b9e921",
+    "semantic_hash": "829486a891927a0de4bb398e21b9e921"
+  },
+  "/home/simon/ATS/frontend/restored-view.js": {
+    "mtime": 1779757911.0274513,
+    "ast_hash": "964116cdb83473fcb9f5325aacae9fae",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/utils.js": {
+    "mtime": 1779757875.762691,
+    "ast_hash": "776a96274e6ec7e73af3d83a7482eeab",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/portfolio-adapter.js": {
+    "mtime": 1779805819.58645,
+    "ast_hash": "d96efd9c9cbace53f925e7f27ad686e8",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/package.json": {
+    "mtime": 1779752575.2181485,
+    "ast_hash": "680616916177accb9a15dce41311ad56",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/market.js": {
+    "mtime": 1779864937.1567125,
+    "ast_hash": "c2cbfe530482f7dfd5119c4ea5652f64",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/ranking.js": {
+    "mtime": 1779757884.6788394,
+    "ast_hash": "b0a7ac7b6549ffa297ba1f731b35597c",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/portfolio.js": {
+    "mtime": 1779807004.5415492,
+    "ast_hash": "c037012078067d77505f4acba884ab92",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
+    "mtime": 1779752784.4508939,
+    "ast_hash": "6abd0414d9439dcc36eca6932776f16d",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/client.js": {
+    "mtime": 1779854698.374444,
+    "ast_hash": "ed380f814791b896d07ee607325d12a8",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/router.js": {
+    "mtime": 1779183996.0,
+    "ast_hash": "3a8160f8e09bf858e0e7837419f9bcdf",
+    "semantic_hash": "3a8160f8e09bf858e0e7837419f9bcdf"
+  },
+  "/home/simon/ATS/frontend/alerts.js": {
+    "mtime": 1779192798.0,
+    "ast_hash": "f831e01c67a83053f057ded95ad8aef2",
+    "semantic_hash": "f831e01c67a83053f057ded95ad8aef2"
   },
   "/home/simon/ATS/src/__init__.py": {
-    "mtime": 1778241512.0247161,
+    "mtime": 1778241512.0,
     "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
     "semantic_hash": "478fc53ddcedf11eed4a0e700cf71c8a"
   },
-  "/home/simon/ATS/src/database/test_db_writer.py": {
-    "mtime": 1779112683.0435848,
-    "ast_hash": "61730db6dbf0dd3e6469503cfcc87b9e",
-    "semantic_hash": "61730db6dbf0dd3e6469503cfcc87b9e"
-  },
-  "/home/simon/ATS/src/database/connection.py": {
-    "mtime": 1779118261.752917,
-    "ast_hash": "f0f3b4eb09530f928104af82ef5e52cf",
-    "semantic_hash": "f0f3b4eb09530f928104af82ef5e52cf"
-  },
-  "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1779214204.5796535,
-    "ast_hash": "840a9c9482f5bddafa6463238992c345",
+  "/home/simon/ATS/src/strategy_daemon.py": {
+    "mtime": 1779785531.1462526,
+    "ast_hash": "9aeaf6079662b682b0c64f851b9e2e9d",
     "semantic_hash": ""
   },
-  "/home/simon/ATS/src/database/test_repository.py": {
-    "mtime": 1779103678.30592,
-    "ast_hash": "0a3a7a612a3b94dad2b4bd0b987dc8ae",
-    "semantic_hash": "0a3a7a612a3b94dad2b4bd0b987dc8ae"
-  },
-  "/home/simon/ATS/src/database/writer.py": {
-    "mtime": 1779112670.92289,
-    "ast_hash": "ffc0c06b74098add3c424cf24bba145d",
-    "semantic_hash": "ffc0c06b74098add3c424cf24bba145d"
-  },
-  "/home/simon/ATS/src/database/db_writer.py": {
-    "mtime": 1778953037.8446794,
-    "ast_hash": "255b085c828b3d2ef38945638bb8556f",
-    "semantic_hash": "255b085c828b3d2ef38945638bb8556f"
-  },
-  "/home/simon/ATS/src/database/check_db.py": {
-    "mtime": 1778807832.5969048,
-    "ast_hash": "66a5f477a062814628811bee8a9b9055",
-    "semantic_hash": "66a5f477a062814628811bee8a9b9055"
-  },
-  "/home/simon/ATS/src/database/__init__.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
-    "semantic_hash": "478fc53ddcedf11eed4a0e700cf71c8a"
-  },
-  "/home/simon/ATS/src/database/schema.py": {
-    "mtime": 1779118271.6177883,
-    "ast_hash": "2be918736d3689b92dd47c898a97ca5d",
-    "semantic_hash": "2be918736d3689b92dd47c898a97ca5d"
-  },
-  "/home/simon/ATS/src/collector/upbit_ws.py": {
-    "mtime": 1778953073.9571888,
-    "ast_hash": "b38011e6090d0b3b898eb1dfedb75f92",
-    "semantic_hash": "b38011e6090d0b3b898eb1dfedb75f92"
-  },
-  "/home/simon/ATS/src/collector/__init__.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
-    "semantic_hash": "478fc53ddcedf11eed4a0e700cf71c8a"
-  },
-  "/home/simon/ATS/src/api/test_api.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "db2e084157b10461cc9d89f2aad09206",
-    "semantic_hash": "db2e084157b10461cc9d89f2aad09206"
-  },
-  "/home/simon/ATS/src/api/main.py": {
-    "mtime": 1778819939.155872,
-    "ast_hash": "5c33b189cabccc9c0c88d97bc8ddab3a",
-    "semantic_hash": "5c33b189cabccc9c0c88d97bc8ddab3a"
-  },
-  "/home/simon/ATS/src/engine/collector.py": {
-    "mtime": 1779095828.3398688,
-    "ast_hash": "1824de4e397a8523e7dbff91ce0f20f0",
-    "semantic_hash": "1824de4e397a8523e7dbff91ce0f20f0"
-  },
-  "/home/simon/ATS/src/engine/test_candles.py": {
-    "mtime": 1779098729.1201432,
-    "ast_hash": "21796a9beaa31218b1176b29a5ab7676",
-    "semantic_hash": "21796a9beaa31218b1176b29a5ab7676"
-  },
-  "/home/simon/ATS/src/engine/strategy_host.py": {
-    "mtime": 1778951722.6089132,
-    "ast_hash": "b63d6939d0c085e2f0f916cb50ef7486",
-    "semantic_hash": "b63d6939d0c085e2f0f916cb50ef7486"
-  },
-  "/home/simon/ATS/src/engine/strategy.py": {
-    "mtime": 1778936807.0370274,
-    "ast_hash": "a3c4c4b6217bc77b4e11ff927534064f",
-    "semantic_hash": "a3c4c4b6217bc77b4e11ff927534064f"
-  },
-  "/home/simon/ATS/src/engine/pipeline.py": {
-    "mtime": 1779018627.1771176,
-    "ast_hash": "fc5c60ee15aaea3e13e7f64c368539dd",
-    "semantic_hash": "fc5c60ee15aaea3e13e7f64c368539dd"
+  "/home/simon/ATS/src/collector_daemon.py": {
+    "mtime": 1779764884.8042254,
+    "ast_hash": "67d62144ef04368fb8dd215912b9be4d",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_loader_tdd.py": {
-    "mtime": 1778241512.0285957,
+    "mtime": 1778241512.0,
     "ast_hash": "41efc176a38af10ec07df944a6a667ac",
     "semantic_hash": "41efc176a38af10ec07df944a6a667ac"
   },
-  "/home/simon/ATS/src/engine/portfolio.py": {
-    "mtime": 1779118288.4145339,
-    "ast_hash": "4d4bcfb1319183a6eb8415ca1d4287fc",
-    "semantic_hash": "4d4bcfb1319183a6eb8415ca1d4287fc"
+  "/home/simon/ATS/src/engine/strategy.py": {
+    "mtime": 1778936807.0,
+    "ast_hash": "a3c4c4b6217bc77b4e11ff927534064f",
+    "semantic_hash": "a3c4c4b6217bc77b4e11ff927534064f"
   },
-  "/home/simon/ATS/src/engine/collector_bithumb.py": {
-    "mtime": 1779038991.6615055,
-    "ast_hash": "c85a33abc35ea61539c8ab3f1d448590",
-    "semantic_hash": "c85a33abc35ea61539c8ab3f1d448590"
-  },
-  "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1779211753.1837964,
-    "ast_hash": "f52cabda7c9cfb4f74b6b734edd180db",
+  "/home/simon/ATS/src/engine/strategy_host.py": {
+    "mtime": 1779648943.8624518,
+    "ast_hash": "e9c075b11e4076145765e960a38890da",
     "semantic_hash": ""
-  },
-  "/home/simon/ATS/src/engine/trade_engine.py": {
-    "mtime": 1779106459.2761407,
-    "ast_hash": "84227079612642b36b1cc76bc52de6d4",
-    "semantic_hash": "84227079612642b36b1cc76bc52de6d4"
-  },
-  "/home/simon/ATS/src/engine/indicators.py": {
-    "mtime": 1779211759.568006,
-    "ast_hash": "13778afd43535f0a34eb5797495fdc9e",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/src/engine/system.py": {
-    "mtime": 1779118297.6621227,
-    "ast_hash": "b1ca297f8357de973e9ed09c18058b40",
-    "semantic_hash": "b1ca297f8357de973e9ed09c18058b40"
-  },
-  "/home/simon/ATS/src/engine/test_execution_pipeline.py": {
-    "mtime": 1779118342.7662108,
-    "ast_hash": "c2cc3bc8d00c72bd38de3cfc3680dc99",
-    "semantic_hash": "c2cc3bc8d00c72bd38de3cfc3680dc99"
-  },
-  "/home/simon/ATS/src/engine/backtest.py": {
-    "mtime": 1778819918.4396076,
-    "ast_hash": "16313107a50a992fa077c9e8b0ffc9b6",
-    "semantic_hash": "16313107a50a992fa077c9e8b0ffc9b6"
-  },
-  "/home/simon/ATS/src/engine/test_indicators.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "38b134b6cea8bad520c1cd5c75189dce",
-    "semantic_hash": "38b134b6cea8bad520c1cd5c75189dce"
-  },
-  "/home/simon/ATS/src/engine/loader.py": {
-    "mtime": 1778951954.4767716,
-    "ast_hash": "b4dd5b86df5c65f59c41873257f9ec38",
-    "semantic_hash": "b4dd5b86df5c65f59c41873257f9ec38"
-  },
-  "/home/simon/ATS/src/engine/test_portfolio.py": {
-    "mtime": 1779118431.319802,
-    "ast_hash": "217393239bd20f981d3595b8c1d0f51c",
-    "semantic_hash": "217393239bd20f981d3595b8c1d0f51c"
-  },
-  "/home/simon/ATS/src/engine/matching.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "3ad9f791bf396b1434e3c98d2141521f",
-    "semantic_hash": "3ad9f791bf396b1434e3c98d2141521f"
   },
   "/home/simon/ATS/src/engine/__init__.py": {
-    "mtime": 1778241512.0285957,
+    "mtime": 1778241512.0,
     "ast_hash": "fb54fab14bfdc6d335473d93c8f2d948",
     "semantic_hash": "fb54fab14bfdc6d335473d93c8f2d948"
   },
-  "/home/simon/ATS/src/engine/test_matching.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "96d609c96fcff6996a2bf0b1485108a7",
-    "semantic_hash": "96d609c96fcff6996a2bf0b1485108a7"
+  "/home/simon/ATS/src/engine/test_execution_pipeline.py": {
+    "mtime": 1779118342.0,
+    "ast_hash": "c2cc3bc8d00c72bd38de3cfc3680dc99",
+    "semantic_hash": "c2cc3bc8d00c72bd38de3cfc3680dc99"
+  },
+  "/home/simon/ATS/src/engine/pipeline.py": {
+    "mtime": 1779704549.7488887,
+    "ast_hash": "b2082a0f1e9edcf4467eea37227b2cc3",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/backtest.py": {
+    "mtime": 1779715449.886751,
+    "ast_hash": "10c53ff7ce48cd2b8fa8e8ce28349dbb",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_indicators.py": {
+    "mtime": 1778241512.0,
+    "ast_hash": "38b134b6cea8bad520c1cd5c75189dce",
+    "semantic_hash": "38b134b6cea8bad520c1cd5c75189dce"
+  },
+  "/home/simon/ATS/src/engine/system.py": {
+    "mtime": 1779854636.5513384,
+    "ast_hash": "acbe462465e9468a73409d566c64f4c6",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/test_candles.py": {
+    "mtime": 1779098729.0,
+    "ast_hash": "21796a9beaa31218b1176b29a5ab7676",
+    "semantic_hash": "21796a9beaa31218b1176b29a5ab7676"
+  },
+  "/home/simon/ATS/src/engine/collector.py": {
+    "mtime": 1779716146.3143315,
+    "ast_hash": "e0c51ca40212e0407ab59389202c5326",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/portfolio.py": {
+    "mtime": 1779806189.2999876,
+    "ast_hash": "47ca705e96abb6bcd90aae191ab7be64",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/indicators.py": {
+    "mtime": 1779211759.0,
+    "ast_hash": "13778afd43535f0a34eb5797495fdc9e",
+    "semantic_hash": "13778afd43535f0a34eb5797495fdc9e"
+  },
+  "/home/simon/ATS/src/engine/matching.py": {
+    "mtime": 1778241512.0,
+    "ast_hash": "3ad9f791bf396b1434e3c98d2141521f",
+    "semantic_hash": "3ad9f791bf396b1434e3c98d2141521f"
+  },
+  "/home/simon/ATS/src/engine/test_market.py": {
+    "mtime": 1779847795.123403,
+    "ast_hash": "20979830985e359472072e43c4cec616",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/loader.py": {
+    "mtime": 1778951954.0,
+    "ast_hash": "b4dd5b86df5c65f59c41873257f9ec38",
+    "semantic_hash": "b4dd5b86df5c65f59c41873257f9ec38"
+  },
+  "/home/simon/ATS/src/engine/trade_engine.py": {
+    "mtime": 1779106459.0,
+    "ast_hash": "84227079612642b36b1cc76bc52de6d4",
+    "semantic_hash": "84227079612642b36b1cc76bc52de6d4"
   },
   "/home/simon/ATS/src/engine/candles.py": {
-    "mtime": 1779089291.2815871,
+    "mtime": 1779089291.0,
     "ast_hash": "338917e12c0fc5a220aadfb0f68aea66",
     "semantic_hash": "338917e12c0fc5a220aadfb0f68aea66"
   },
   "/home/simon/ATS/src/engine/test_strategy_params.py": {
-    "mtime": 1779015880.6746066,
+    "mtime": 1779015880.0,
     "ast_hash": "e0744fbb05c537911dc8b7219dce89cb",
     "semantic_hash": "e0744fbb05c537911dc8b7219dce89cb"
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1779089291.2815871,
-    "ast_hash": "88334b5b3c4c806bc38ad2cd2967bf0b",
-    "semantic_hash": "88334b5b3c4c806bc38ad2cd2967bf0b"
+    "mtime": 1779439526.4448981,
+    "ast_hash": "5453df0a9fd141da25ebef16c67dcebb",
+    "semantic_hash": "5453df0a9fd141da25ebef16c67dcebb"
   },
-  "/home/simon/ATS/src/engine/strategies/volume_power_strategy.py": {
-    "mtime": 1778929219.3601964,
-    "ast_hash": "357fc7556c8e653b7863a0a1247ea2f4",
-    "semantic_hash": "357fc7556c8e653b7863a0a1247ea2f4"
+  "/home/simon/ATS/src/engine/test_portfolio.py": {
+    "mtime": 1779805877.312215,
+    "ast_hash": "55c4f2f1f9fd6bddc849d3175c8a11a0",
+    "semantic_hash": ""
   },
-  "/home/simon/ATS/src/engine/strategies/sequential_strategy.py": {
-    "mtime": 1778929265.0725346,
-    "ast_hash": "16746d246558f6b6084a90e8f3b8d886",
-    "semantic_hash": "16746d246558f6b6084a90e8f3b8d886"
+  "/home/simon/ATS/src/engine/collector_base.py": {
+    "mtime": 1779419922.0756123,
+    "ast_hash": "d3ee8ed852efefc95a8f9b6df05a856b",
+    "semantic_hash": "d3ee8ed852efefc95a8f9b6df05a856b"
+  },
+  "/home/simon/ATS/src/engine/test_matching.py": {
+    "mtime": 1778241512.0,
+    "ast_hash": "96d609c96fcff6996a2bf0b1485108a7",
+    "semantic_hash": "96d609c96fcff6996a2bf0b1485108a7"
+  },
+  "/home/simon/ATS/src/engine/collector_bithumb.py": {
+    "mtime": 1779784507.3572457,
+    "ast_hash": "343dedf058482067165d4b1797354b6b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market/base.py": {
+    "mtime": 1779849529.3271952,
+    "ast_hash": "69b287c6efbe6692a72c59479cde3e6f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market/upbit.py": {
+    "mtime": 1779854574.0535872,
+    "ast_hash": "be6c760801dc0f0a5be43734c277b9ef",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market/kis.py": {
+    "mtime": 1779850978.9913108,
+    "ast_hash": "8ea2c0b169c37083ed9e521fc84e76fc",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market/dto.py": {
+    "mtime": 1779845362.587394,
+    "ast_hash": "c24eaf2a68869df5628b065f828d6733",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market/bithumb.py": {
+    "mtime": 1779854593.819163,
+    "ast_hash": "6ce27dfe6c700c37b29d0858de145f05",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/strategies/macd_strategy.py": {
-    "mtime": 1778929286.3021379,
+    "mtime": 1778929286.0,
     "ast_hash": "f064b426367ff07bd8111b911f222da6",
     "semantic_hash": "f064b426367ff07bd8111b911f222da6"
   },
+  "/home/simon/ATS/src/engine/strategies/sequential_strategy.py": {
+    "mtime": 1778929265.0,
+    "ast_hash": "16746d246558f6b6084a90e8f3b8d886",
+    "semantic_hash": "16746d246558f6b6084a90e8f3b8d886"
+  },
+  "/home/simon/ATS/src/engine/strategies/trend_bend.py": {
+    "mtime": 1778929244.0,
+    "ast_hash": "4c3aec41e4cd87a8b655e95b1b75d706",
+    "semantic_hash": "4c3aec41e4cd87a8b655e95b1b75d706"
+  },
+  "/home/simon/ATS/src/engine/strategies/volume_power_strategy.py": {
+    "mtime": 1778929219.0,
+    "ast_hash": "357fc7556c8e653b7863a0a1247ea2f4",
+    "semantic_hash": "357fc7556c8e653b7863a0a1247ea2f4"
+  },
+  "/home/simon/ATS/src/engine/strategies/panic.py": {
+    "mtime": 1778929224.0,
+    "ast_hash": "3b5245b6c2b8616239ffd46b3382e096",
+    "semantic_hash": "3b5245b6c2b8616239ffd46b3382e096"
+  },
   "/home/simon/ATS/src/engine/strategies/momentum_spike_strategy.py": {
-    "mtime": 1778929258.11431,
+    "mtime": 1778929258.0,
     "ast_hash": "c9b413b2c701cbe68f6da36731276fb9",
     "semantic_hash": "c9b413b2c701cbe68f6da36731276fb9"
   },
   "/home/simon/ATS/src/engine/strategies/rsi_strategy.py": {
-    "mtime": 1778926049.7365448,
+    "mtime": 1778926049.0,
     "ast_hash": "faacae0e286ef06652657a40ad3262d0",
     "semantic_hash": "faacae0e286ef06652657a40ad3262d0"
   },
-  "/home/simon/ATS/src/engine/strategies/panic.py": {
-    "mtime": 1778929224.2825353,
-    "ast_hash": "3b5245b6c2b8616239ffd46b3382e096",
-    "semantic_hash": "3b5245b6c2b8616239ffd46b3382e096"
-  },
-  "/home/simon/ATS/src/engine/strategies/trend_bend.py": {
-    "mtime": 1778929244.8975725,
-    "ast_hash": "4c3aec41e4cd87a8b655e95b1b75d706",
-    "semantic_hash": "4c3aec41e4cd87a8b655e95b1b75d706"
-  },
   "/home/simon/ATS/src/engine/utils/telemetry.py": {
-    "mtime": 1778953394.9984596,
+    "mtime": 1778953394.0,
     "ast_hash": "d8f866f3133fa00e7310b4f997bf07e8",
     "semantic_hash": "d8f866f3133fa00e7310b4f997bf07e8"
   },
   "/home/simon/ATS/src/engine/utils/stock_mapper.py": {
-    "mtime": 1779022035.1690457,
-    "ast_hash": "9b0387395d723578e61f151ae4a98653",
-    "semantic_hash": "9b0387395d723578e61f151ae4a98653"
+    "mtime": 1779853515.7334878,
+    "ast_hash": "48e30341a74473dbcb542973c45a0e24",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/utils/market_hours.py": {
-    "mtime": 1778952186.545092,
-    "ast_hash": "b4f42fe0751bd9f279ce83c9bb348f23",
-    "semantic_hash": "b4f42fe0751bd9f279ce83c9bb348f23"
+    "mtime": 1779372240.9594593,
+    "ast_hash": "e22e9e06381c6759de5ddd0bb59d68a9",
+    "semantic_hash": "e22e9e06381c6759de5ddd0bb59d68a9"
+  },
+  "/home/simon/ATS/src/ipc/bus.py": {
+    "mtime": 1779359761.009537,
+    "ast_hash": "f4e17da9218b082f5c741866afb384af",
+    "semantic_hash": "f4e17da9218b082f5c741866afb384af"
   },
   "/home/simon/ATS/src/server/websocket.py": {
-    "mtime": 1779211735.4831984,
+    "mtime": 1779211735.0,
     "ast_hash": "3299fbc9b52c78e8a3bbfe6400829709",
-    "semantic_hash": ""
+    "semantic_hash": "3299fbc9b52c78e8a3bbfe6400829709"
   },
   "/home/simon/ATS/src/server/main.py": {
-    "mtime": 1779211740.2553558,
-    "ast_hash": "98c08648c88274f816e4dd17d8b499ae",
+    "mtime": 1779786631.8482423,
+    "ast_hash": "77fc148fb5a77b373ba1e402b5b43bc1",
     "semantic_hash": ""
   },
-  "/home/simon/ATS/src/server/routers/collector.py": {
-    "mtime": 1779017864.4819326,
-    "ast_hash": "cdfaf21a6ec73c0686901ddd9d60872f",
-    "semantic_hash": "cdfaf21a6ec73c0686901ddd9d60872f"
-  },
   "/home/simon/ATS/src/server/routers/strategy.py": {
-    "mtime": 1779017869.0986989,
+    "mtime": 1779017869.0,
     "ast_hash": "af5491115ea3ac93e0fdf2eb9bec0114",
     "semantic_hash": "af5491115ea3ac93e0fdf2eb9bec0114"
   },
-  "/home/simon/ATS/src/server/routers/portfolio.py": {
-    "mtime": 1779037996.8947258,
-    "ast_hash": "0092fd8a71b22abd924e38d9a82ac4ae",
-    "semantic_hash": "0092fd8a71b22abd924e38d9a82ac4ae"
+  "/home/simon/ATS/src/server/routers/backtest.py": {
+    "mtime": 1779805796.6856298,
+    "ast_hash": "f93b0b2964092a15c31822417795eb42",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/server/routers/collector.py": {
+    "mtime": 1779412052.5010054,
+    "ast_hash": "ad946e208350dcc2a7de6c2978549bf3",
+    "semantic_hash": "ad946e208350dcc2a7de6c2978549bf3"
   },
   "/home/simon/ATS/src/server/routers/telemetry.py": {
-    "mtime": 1779112723.4094272,
-    "ast_hash": "3154d5ad9ee06509f63f37f138873188",
-    "semantic_hash": "3154d5ad9ee06509f63f37f138873188"
+    "mtime": 1779415914.9998796,
+    "ast_hash": "5b2389707c270a7d4ff56dde53f11ede",
+    "semantic_hash": "5b2389707c270a7d4ff56dde53f11ede"
+  },
+  "/home/simon/ATS/src/server/routers/portfolio.py": {
+    "mtime": 1779805773.8032033,
+    "ast_hash": "efd4d9917d14b9ecebe98d413572f4ee",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/market.py": {
-    "mtime": 1779103694.758541,
-    "ast_hash": "96dffa6da79e3d3dd24def7e6a3bfe3f",
-    "semantic_hash": "96dffa6da79e3d3dd24def7e6a3bfe3f"
-  },
-  "/home/simon/ATS/src/utils/visualizer.py": {
-    "mtime": 1778241512.0285957,
-    "ast_hash": "024b498dc5def531db6a048fb6e0d861",
-    "semantic_hash": "024b498dc5def531db6a048fb6e0d861"
+    "mtime": 1779865102.2770405,
+    "ast_hash": "1ce9c26b550f349dfb475a28607529bd",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
-    "mtime": 1778951675.4102771,
+    "mtime": 1778951675.0,
     "ast_hash": "d899d3b3032997f48f7886a6ea7186d7",
     "semantic_hash": "d899d3b3032997f48f7886a6ea7186d7"
   },
-  "/home/simon/ATS/BACKTEST_ENGINE_DESIGN.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "b84d41e5126e17c4e056f687a5fd9b6b",
-    "semantic_hash": "b84d41e5126e17c4e056f687a5fd9b6b"
+  "/home/simon/ATS/src/utils/visualizer.py": {
+    "mtime": 1778241512.0,
+    "ast_hash": "024b498dc5def531db6a048fb6e0d861",
+    "semantic_hash": "024b498dc5def531db6a048fb6e0d861"
   },
-  "/home/simon/ATS/COLLECTOR_DESIGN.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "47fe7b07aa5f78ffb2e2e396346fc850",
-    "semantic_hash": "47fe7b07aa5f78ffb2e2e396346fc850"
+  "/home/simon/ATS/src/database/repository.py": {
+    "mtime": 1779845437.5035424,
+    "ast_hash": "bb7ced4aabe74e4ecdccf7ac57d84ac2",
+    "semantic_hash": ""
   },
-  "/home/simon/ATS/requirements.txt": {
-    "mtime": 1778319732.1457856,
-    "ast_hash": "a2b9bbe06bcd45eb1e452f6553b04a3c",
-    "semantic_hash": "a2b9bbe06bcd45eb1e452f6553b04a3c"
+  "/home/simon/ATS/src/database/__init__.py": {
+    "mtime": 1778241512.0,
+    "ast_hash": "478fc53ddcedf11eed4a0e700cf71c8a",
+    "semantic_hash": "478fc53ddcedf11eed4a0e700cf71c8a"
   },
-  "/home/simon/ATS/UI_DESIGN.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "21dfacf2ea3e66493698840944846604",
-    "semantic_hash": "21dfacf2ea3e66493698840944846604"
+  "/home/simon/ATS/src/database/connection.py": {
+    "mtime": 1779611694.8896232,
+    "ast_hash": "d1995935229d16cd3f04c5a98b345f8f",
+    "semantic_hash": ""
   },
-  "/home/simon/ATS/ARCHITECTURE.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "b55bd18b6cbfd55a84044590324dcab7",
-    "semantic_hash": "b55bd18b6cbfd55a84044590324dcab7"
+  "/home/simon/ATS/src/database/test_repository.py": {
+    "mtime": 1779103678.0,
+    "ast_hash": "0a3a7a612a3b94dad2b4bd0b987dc8ae",
+    "semantic_hash": "0a3a7a612a3b94dad2b4bd0b987dc8ae"
+  },
+  "/home/simon/ATS/src/database/seed_kis_master.py": {
+    "mtime": 1779764940.2617044,
+    "ast_hash": "f09b99323af455290ee0a33497bfa9fe",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/test_stock_mapper.py": {
+    "mtime": 1779765575.674519,
+    "ast_hash": "a7702689f052c5ae65d7119134960557",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/writer.py": {
+    "mtime": 1779359795.3938096,
+    "ast_hash": "901061f8caaa0b3ad1aeab0faa73f490",
+    "semantic_hash": "901061f8caaa0b3ad1aeab0faa73f490"
+  },
+  "/home/simon/ATS/src/database/db_writer.py": {
+    "mtime": 1778953037.0,
+    "ast_hash": "255b085c828b3d2ef38945638bb8556f",
+    "semantic_hash": "255b085c828b3d2ef38945638bb8556f"
+  },
+  "/home/simon/ATS/src/database/schema.py": {
+    "mtime": 1779853064.6655526,
+    "ast_hash": "e94773fa2d34495859233b287dbf022b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/database/retry.py": {
+    "mtime": 1779359751.1254573,
+    "ast_hash": "c5046a1812b3acbd6287a5db079c99ff",
+    "semantic_hash": "c5046a1812b3acbd6287a5db079c99ff"
+  },
+  "/home/simon/ATS/src/database/test_db_writer.py": {
+    "mtime": 1779112683.0,
+    "ast_hash": "61730db6dbf0dd3e6469503cfcc87b9e",
+    "semantic_hash": "61730db6dbf0dd3e6469503cfcc87b9e"
+  },
+  "/home/simon/ATS/src/database/check_db.py": {
+    "mtime": 1778807832.0,
+    "ast_hash": "66a5f477a062814628811bee8a9b9055",
+    "semantic_hash": "66a5f477a062814628811bee8a9b9055"
   },
   "/home/simon/ATS/CONTEXT.md": {
-    "mtime": 1779155398.6204283,
+    "mtime": 1779155398.0,
     "ast_hash": "162b29b3d69e02a302b00c5ef72ba664",
     "semantic_hash": "162b29b3d69e02a302b00c5ef72ba664"
   },
-  "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1779207782.259878,
-    "ast_hash": "13b853019ebd9279188f02d7e5f4b95b",
-    "semantic_hash": ""
+  "/home/simon/ATS/AGENTS.md": {
+    "mtime": 1779539129.3708556,
+    "ast_hash": "da99419c0f1383bc6b6a5a900e757484",
+    "semantic_hash": "da99419c0f1383bc6b6a5a900e757484"
   },
-  "/home/simon/ATS/frontend/README.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "a28dc4cb878325f3e9e5649f3e1469ac",
-    "semantic_hash": "a28dc4cb878325f3e9e5649f3e1469ac"
+  "/home/simon/ATS/BACKTEST_ENGINE_DESIGN.md": {
+    "mtime": 1778241512.0,
+    "ast_hash": "b84d41e5126e17c4e056f687a5fd9b6b",
+    "semantic_hash": "b84d41e5126e17c4e056f687a5fd9b6b"
+  },
+  "/home/simon/ATS/ARCHITECTURE.md": {
+    "mtime": 1778241512.0,
+    "ast_hash": "b55bd18b6cbfd55a84044590324dcab7",
+    "semantic_hash": "b55bd18b6cbfd55a84044590324dcab7"
+  },
+  "/home/simon/ATS/requirements.txt": {
+    "mtime": 1779359679.4488707,
+    "ast_hash": "ba58e3029d9f576847cd8ac74fb9d8c0",
+    "semantic_hash": "ba58e3029d9f576847cd8ac74fb9d8c0"
+  },
+  "/home/simon/ATS/COLLECTOR_DESIGN.md": {
+    "mtime": 1778241512.0,
+    "ast_hash": "47fe7b07aa5f78ffb2e2e396346fc850",
+    "semantic_hash": "47fe7b07aa5f78ffb2e2e396346fc850"
+  },
+  "/home/simon/ATS/UI_DESIGN.md": {
+    "mtime": 1778241512.0,
+    "ast_hash": "21dfacf2ea3e66493698840944846604",
+    "semantic_hash": "21dfacf2ea3e66493698840944846604"
+  },
+  "/home/simon/ATS/scratch/parsed_tr_details.txt": {
+    "mtime": 1779439423.712335,
+    "ast_hash": "72dcf7be568240a5d7e86ed48a0b5d08",
+    "semantic_hash": "72dcf7be568240a5d7e86ed48a0b5d08"
   },
   "/home/simon/ATS/scratch/multi-portfolio-ui/issue.md": {
-    "mtime": 1778812423.3187108,
+    "mtime": 1778812423.0,
     "ast_hash": "0ff58ae40eea5a8ba98d5c2792e34fe4",
     "semantic_hash": "0ff58ae40eea5a8ba98d5c2792e34fe4"
   },
   "/home/simon/ATS/scratch/portfolio-ui/issue.md": {
-    "mtime": 1778810976.9628105,
+    "mtime": 1778810976.0,
     "ast_hash": "eaa2b090598aab1522d62536ee33af2e",
     "semantic_hash": "eaa2b090598aab1522d62536ee33af2e"
   },
+  "/home/simon/ATS/scratch/graphify-wiki-enrichment/PRD.md": {
+    "mtime": 1779162181.0,
+    "ast_hash": "72ecec4a8b0b878d59c45996a88f1c61",
+    "semantic_hash": "72ecec4a8b0b878d59c45996a88f1c61"
+  },
+  "/home/simon/ATS/scratch/graphify-wiki-enrichment/issues/01-semantic-cluster-naming.md": {
+    "mtime": 1779162892.0,
+    "ast_hash": "ad2364dc019c4290b9489d8c3fe5458e",
+    "semantic_hash": "ad2364dc019c4290b9489d8c3fe5458e"
+  },
   "/home/simon/ATS/scratch/bithumb-collector-reconnect-bug/PRD.md": {
-    "mtime": 1779035472.7948024,
+    "mtime": 1779035472.0,
     "ast_hash": "1b21bddeee635e05c54713fdf458fbf0",
     "semantic_hash": "1b21bddeee635e05c54713fdf458fbf0"
   },
   "/home/simon/ATS/scratch/bithumb-collector-reconnect-bug/issues/01-reconnect-loop.md": {
-    "mtime": 1779036142.6004343,
+    "mtime": 1779036142.0,
     "ast_hash": "729d8b22a58878df1f03ae603ae9a38f",
     "semantic_hash": "729d8b22a58878df1f03ae603ae9a38f"
   },
   "/home/simon/ATS/scratch/code-stabilization/issue.md": {
-    "mtime": 1778815382.159185,
+    "mtime": 1778815382.0,
     "ast_hash": "0265ed25f5700f774a0b9a1e752ae08f",
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
-  "/home/simon/ATS/scratch/graphify-wiki-enrichment/PRD.md": {
-    "mtime": 1779162181.3087964,
-    "ast_hash": "72ecec4a8b0b878d59c45996a88f1c61",
-    "semantic_hash": ""
-  },
-  "/home/simon/ATS/scratch/graphify-wiki-enrichment/issues/01-semantic-cluster-naming.md": {
-    "mtime": 1779162892.9347398,
-    "ast_hash": "ad2364dc019c4290b9489d8c3fe5458e",
-    "semantic_hash": ""
-  },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1779038973.97684,
-    "ast_hash": "d87797dc96cb1ab9ce28784dbf207ce1",
-    "semantic_hash": "d87797dc96cb1ab9ce28784dbf207ce1"
+    "mtime": 1779424473.7917376,
+    "ast_hash": "142fd9f73b5b0b01eb59672286b95c7d",
+    "semantic_hash": "142fd9f73b5b0b01eb59672286b95c7d"
+  },
+  "/home/simon/ATS/frontend/README.md": {
+    "mtime": 1778241512.0,
+    "ast_hash": "a28dc4cb878325f3e9e5649f3e1469ac",
+    "semantic_hash": "a28dc4cb878325f3e9e5649f3e1469ac"
+  },
+  "/home/simon/ATS/frontend/index_raw_1895.txt": {
+    "mtime": 1779674491.8004453,
+    "ast_hash": "1924fa143257e2035e6166e37686e67b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/index_restored_perfect.html": {
+    "mtime": 1779674623.1988583,
+    "ast_hash": "faffde2fb42b2816ba228f3219c0a12f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/step_1048_restored.html": {
+    "mtime": 1779674638.1391177,
+    "ast_hash": "8f79ddd7bdc6f0724d669419e17237b5",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/index_restored.html": {
+    "mtime": 1779674448.9876597,
+    "ast_hash": "faffde2fb42b2816ba228f3219c0a12f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/index.html": {
+    "mtime": 1779855119.500184,
+    "ast_hash": "26b6caf58e06e6184553fd118f29d20b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/frontend/index_restored_cleaned.html": {
+    "mtime": 1779674578.2340593,
+    "ast_hash": "faffde2fb42b2816ba228f3219c0a12f",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
+    "mtime": 1778807211.0,
+    "ast_hash": "050c1abc728a5b4044680b461c0b8b1b",
+    "semantic_hash": "050c1abc728a5b4044680b461c0b8b1b"
+  },
+  "/home/simon/ATS/docs/adr/0003-portfolio-manager-decoupling.md": {
+    "mtime": 1778808041.0,
+    "ast_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c",
+    "semantic_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c"
+  },
+  "/home/simon/ATS/docs/adr/0006-explicit-exchange-field-separation.md": {
+    "mtime": 1778936684.0,
+    "ast_hash": "a5a31a91bd9b91c38395bd1424759c22",
+    "semantic_hash": "a5a31a91bd9b91c38395bd1424759c22"
+  },
+  "/home/simon/ATS/docs/adr/0001-trade-engine-centralization.md": {
+    "mtime": 1778807203.0,
+    "ast_hash": "e8ab29e50c3f2b7ffd7913dc9373d3c7",
+    "semantic_hash": "e8ab29e50c3f2b7ffd7913dc9373d3c7"
+  },
+  "/home/simon/ATS/docs/adr/0005-market-specific-portfolio-separation.md": {
+    "mtime": 1778935568.0,
+    "ast_hash": "dc854d661c7a09668fa9b5c30665627f",
+    "semantic_hash": "dc854d661c7a09668fa9b5c30665627f"
+  },
+  "/home/simon/ATS/docs/ manual/kis/kis_derivative.md": {
+    "mtime": 1779157365.0,
+    "ast_hash": "6116f17cff9a1fe558fd83c01daf96de",
+    "semantic_hash": "6116f17cff9a1fe558fd83c01daf96de"
+  },
+  "/home/simon/ATS/docs/ manual/kis/kis_bond_etc.md": {
+    "mtime": 1779157365.0,
+    "ast_hash": "dad26f307056f18e94688d7059d01ca0",
+    "semantic_hash": "dad26f307056f18e94688d7059d01ca0"
+  },
+  "/home/simon/ATS/docs/ manual/kis/kis_api_list.md": {
+    "mtime": 1779157365.0,
+    "ast_hash": "6a18a97ae4d289a259d17a4236e6918e",
+    "semantic_hash": "6a18a97ae4d289a259d17a4236e6918e"
+  },
+  "/home/simon/ATS/docs/ manual/kis/kis_overseas_stock.md": {
+    "mtime": 1779157365.0,
+    "ast_hash": "b9d81b1adf1e31c66c43fbc7da8801a5",
+    "semantic_hash": "b9d81b1adf1e31c66c43fbc7da8801a5"
+  },
+  "/home/simon/ATS/docs/ manual/kis/kis_domestic_stock.md": {
+    "mtime": 1779157365.0,
+    "ast_hash": "be39f7290c2b167a03828ac110b23cf0",
+    "semantic_hash": "be39f7290c2b167a03828ac110b23cf0"
   },
   "/home/simon/ATS/docs/agents/domain.md": {
-    "mtime": 1778241512.0169573,
+    "mtime": 1778241512.0,
     "ast_hash": "1a3e1a81467c94f4b333a0fdfcf989f4",
     "semantic_hash": "1a3e1a81467c94f4b333a0fdfcf989f4"
   },
   "/home/simon/ATS/docs/agents/issue-tracker.md": {
-    "mtime": 1778241512.0169573,
+    "mtime": 1778241512.0,
     "ast_hash": "60c8445820f3c0ae6be7d21a48f2658e",
     "semantic_hash": "60c8445820f3c0ae6be7d21a48f2658e"
   },
   "/home/simon/ATS/docs/agents/triage-labels.md": {
-    "mtime": 1778241512.0169573,
-    "ast_hash": "ff190078f702ab95bb34b65498878cc6",
-    "semantic_hash": "ff190078f702ab95bb34b65498878cc6"
-  },
-  "/home/simon/ATS/docs/adr/0005-market-specific-portfolio-separation.md": {
-    "mtime": 1778935568.816332,
-    "ast_hash": "dc854d661c7a09668fa9b5c30665627f",
-    "semantic_hash": "dc854d661c7a09668fa9b5c30665627f"
-  },
-  "/home/simon/ATS/docs/adr/0001-trade-engine-centralization.md": {
-    "mtime": 1778807203.2823358,
-    "ast_hash": "e8ab29e50c3f2b7ffd7913dc9373d3c7",
-    "semantic_hash": "e8ab29e50c3f2b7ffd7913dc9373d3c7"
-  },
-  "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
-    "mtime": 1778807211.6594594,
-    "ast_hash": "050c1abc728a5b4044680b461c0b8b1b",
-    "semantic_hash": "050c1abc728a5b4044680b461c0b8b1b"
-  },
-  "/home/simon/ATS/docs/adr/0006-explicit-exchange-field-separation.md": {
-    "mtime": 1778936684.7865562,
-    "ast_hash": "a5a31a91bd9b91c38395bd1424759c22",
-    "semantic_hash": "a5a31a91bd9b91c38395bd1424759c22"
-  },
-  "/home/simon/ATS/docs/adr/0003-portfolio-manager-decoupling.md": {
-    "mtime": 1778808041.9711604,
-    "ast_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c",
-    "semantic_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c"
-  },
-  "/home/simon/ATS/docs/ manual/kis/kis_domestic_stock.md": {
-    "mtime": 1779157365.504419,
-    "ast_hash": "be39f7290c2b167a03828ac110b23cf0",
-    "semantic_hash": "be39f7290c2b167a03828ac110b23cf0"
-  },
-  "/home/simon/ATS/docs/ manual/kis/kis_bond_etc.md": {
-    "mtime": 1779157365.5084193,
-    "ast_hash": "dad26f307056f18e94688d7059d01ca0",
-    "semantic_hash": "dad26f307056f18e94688d7059d01ca0"
-  },
-  "/home/simon/ATS/docs/ manual/kis/kis_overseas_stock.md": {
-    "mtime": 1779157365.5164192,
-    "ast_hash": "b9d81b1adf1e31c66c43fbc7da8801a5",
-    "semantic_hash": "b9d81b1adf1e31c66c43fbc7da8801a5"
-  },
-  "/home/simon/ATS/docs/ manual/kis/kis_derivative.md": {
-    "mtime": 1779157365.5284195,
-    "ast_hash": "6116f17cff9a1fe558fd83c01daf96de",
-    "semantic_hash": "6116f17cff9a1fe558fd83c01daf96de"
-  },
-  "/home/simon/ATS/docs/ manual/kis/kis_api_list.md": {
-    "mtime": 1779157365.5324194,
-    "ast_hash": "6a18a97ae4d289a259d17a4236e6918e",
-    "semantic_hash": "6a18a97ae4d289a259d17a4236e6918e"
+    "mtime": 1779539143.0150752,
+    "ast_hash": "84a296f5e7aec7335c2e93f8a0654299",
+    "semantic_hash": "84a296f5e7aec7335c2e93f8a0654299"
   },
   "/home/simon/ATS/backtest_macd_golden_cross.png": {
-    "mtime": 1778418794.3681433,
+    "mtime": 1778418794.0,
     "ast_hash": "cb4c75a5ac5351a6745142784760529e",
     "semantic_hash": "cb4c75a5ac5351a6745142784760529e"
+  },
+  "/home/simon/ATS/scratch/debug_backtest_result.png": {
+    "mtime": 1779617510.1524642,
+    "ast_hash": "01874c2967baa1abeff1a06a162e666b",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/debug_backtest_mock_result.png": {
+    "mtime": 1779673343.9874475,
+    "ast_hash": "27cd4118ae0c1e0d8f071f9c466fdde8",
+    "semantic_hash": ""
   }
 }

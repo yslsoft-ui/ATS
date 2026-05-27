@@ -321,15 +321,41 @@ async def init_db(db_path: str = None):
         ''')
         await ensure_column(db, 'candles', 'exchange', 'TEXT')
 
+        # 8. asset_master
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS asset_master (
+                symbol TEXT PRIMARY KEY,
+                korean_name TEXT NOT NULL,
+                asset_type TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 9. exchange_assets
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS exchange_assets (
+                exchange TEXT,
+                symbol TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (exchange, symbol),
+                FOREIGN KEY (symbol) REFERENCES asset_master(symbol) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+        ''')
+
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_orders_history_portfolio_id ON orders_history (portfolio_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_positions_portfolio_id ON positions (portfolio_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_assets_active ON exchange_assets (exchange, is_active)')
         
         await db.commit()
     
     await migrate_data(target_path)
+    await seed_initial_assets(target_path)
     logger.info("Database initialization and migration complete.")
 
 async def migrate_data(db_path: str = None):
@@ -344,48 +370,26 @@ async def migrate_data(db_path: str = None):
             except Exception as e:
                 logger.error(f"Migration error for {table}: {e}")
 
-        # --- 실시간 모의투자 단일 default 통합 마이그레이션 ---
+        # KIS is_active 오염 복구
         try:
-            # 1. 기존 포트폴리오들 잔고 정보 로드
-            async with db.execute("SELECT id, cash, initial_cash FROM portfolios WHERE id IN ('default', 'stock_default', 'bithumb_default')") as cursor:
-                p_rows = await cursor.fetchall()
-            p_data = {row['id']: (row['cash'], row['initial_cash']) for row in p_rows}
-
-            # 2. 거래소별 현금 잔고 산출 (기존 포트폴리오가 존재했으면 그 잔고 사용, 없으면 기본값 1,000만 원)
-            upbit_cash = p_data.get('default', (10000000.0, 10000000.0))[0]
-            kis_cash = p_data.get('stock_default', (10000000.0, 10000000.0))[0]
-            bithumb_cash = p_data.get('bithumb_default', (10000000.0, 10000000.0))[0]
-
-            # 3. default 포트폴리오 보장 및 정보 갱신 (초기자금 30,000,000원, 총 가용금액 합산)
-            total_cash = upbit_cash + kis_cash + bithumb_cash
+            # candles 또는 trades 테이블에 실제 데이터(수집 이력)가 전혀 없는 KIS 종목은 is_active를 0으로 원복시킵니다.
             await db.execute('''
-                INSERT OR REPLACE INTO portfolios (id, name, exchange_id, type, initial_cash, cash, updated_at)
-                VALUES ('default', '기본 모의투자', 'all', 'simulation', 30000000.0, ?, datetime('now'))
-            ''', (total_cash,))
+                UPDATE exchange_assets
+                SET is_active = 0, updated_at = datetime('now')
+                WHERE exchange = 'kis'
+                  AND is_active = 1
+                  AND symbol NOT IN (
+                      SELECT DISTINCT symbol FROM candles WHERE exchange = 'kis'
+                      UNION
+                      SELECT DISTINCT symbol FROM trades WHERE exchange = 'kis'
+                  )
+            ''')
+            logger.info("Successfully cleaned up contaminated KIS assets: restored is_active to 0 for uncollected symbols.")
+        except Exception as e:
+            logger.error(f"Failed to restore KIS assets is_active: {e}")
 
-            # 4. portfolio_exchanges 거래소별 레코드 삽입/갱신 (각각 초기자금 1,000만 원)
-            await db.execute('''
-                INSERT OR REPLACE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                VALUES ('default', 'upbit', 10000000.0, ?, datetime('now'))
-            ''', (upbit_cash,))
-            await db.execute('''
-                INSERT OR REPLACE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                VALUES ('default', 'kis', 10000000.0, ?, datetime('now'))
-            ''', (kis_cash,))
-            await db.execute('''
-                INSERT OR REPLACE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                VALUES ('default', 'bithumb', 10000000.0, ?, datetime('now'))
-            ''', (bithumb_cash,))
-
-            # 5. 기존 포지션 및 이력 데이터 default 포트폴리오 ID로 맵핑 변경 (외래키 제약을 위해 portfolio_exchanges 생성 후 수행)
-            await db.execute("UPDATE positions SET portfolio_id = 'default' WHERE portfolio_id IN ('stock_default', 'bithumb_default')")
-            await db.execute("UPDATE orders_history SET portfolio_id = 'default' WHERE portfolio_id IN ('stock_default', 'bithumb_default')")
-
-            # 6. 병합 완료된 구버전 포트폴리오 마스터 및 하위 자금 레코드 삭제
-            await db.execute("DELETE FROM portfolio_exchanges WHERE portfolio_id IN ('stock_default', 'bithumb_default')")
-            await db.execute("DELETE FROM portfolios WHERE id IN ('stock_default', 'bithumb_default')")
-            
-            # 7. orders_history 중복 저장 이력 클리닝 (백테스트 체결 내역 2중 저장 버그 소거 대응)
+        # 7. orders_history 중복 저장 이력 클리닝 (백테스트 체결 내역 2중 저장 버그 소거 대응)
+        try:
             await db.execute('''
                 DELETE FROM orders_history
                 WHERE rowid NOT IN (
@@ -395,12 +399,46 @@ async def migrate_data(db_path: str = None):
                 )
             ''')
             logger.info("Cleaned up duplicate orders_history records.")
-            
-            logger.info("Real-time simulation portfolios consolidation migration success.")
         except Exception as e:
-            logger.error(f"Failed to migrate and consolidate simulation portfolios: {e}")
+            logger.error(f"Failed to clean duplicate orders: {e}")
 
         await db.commit()
+
+async def seed_initial_assets(db_path: str = None):
+    """기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1회 수행합니다."""
+    target_path = db_path if db_path is not None else DB_PATH
+    import json
+    
+    # data/stock_master.json 경로 획득
+    json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'stock_master.json')
+    if not os.path.exists(json_path):
+        logger.info(f"Seed file not found at {json_path}. Skipping initial seeding.")
+        return
+
+    logger.info(f"Seeding initial assets from {json_path} to database...")
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        async with get_db_conn(target_path) as db:
+            for exchange, symbols in data.items():
+                asset_type = 'crypto' if exchange in ('upbit', 'bithumb') else 'stock'
+                for symbol, name in symbols.items():
+                    # 1. asset_master에 삽입
+                    await db.execute('''
+                        INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type)
+                        VALUES (?, ?, ?)
+                    ''', (symbol, name, asset_type))
+
+                    # 2. exchange_assets에 삽입 (기존 마스터 종목들은 모두 기본 활성 상태로 이식)
+                    await db.execute('''
+                        INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active)
+                        VALUES (?, ?, 1)
+                    ''', (exchange, symbol))
+            await db.commit()
+            logger.info("Initial assets seeding successfully completed.")
+    except Exception as e:
+        logger.error(f"Failed to seed initial assets from JSON: {e}")
 
 if __name__ == "__main__":
     asyncio.run(init_db())

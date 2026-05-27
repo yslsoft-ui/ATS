@@ -5,6 +5,37 @@
 // 전역 마켓 데이터 적재 변수
 let marketData = [];
 
+// 최종 수집 시각 (Date 객체)
+let lastMarketFetchedAt = null;
+
+// 경과 시간 갱신 인터벌 ID
+let elapsedInterval = null;
+
+/**
+ * Date 객체를 받아 현재 시간과의 차이를 'X분 Y초 전' 형식으로 반환합니다.
+ */
+function formatElapsedTime(date) {
+    if (!date) return '';
+    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (diffSec < 0) return '방금 전';
+    if (diffSec < 60) return `${diffSec}초 전`;
+    const min = Math.floor(diffSec / 60);
+    const sec = diffSec % 60;
+    if (sec === 0) return `${min}분 전`;
+    return `${min}분 ${sec}초 전`;
+}
+
+/**
+ * 경과 시간 표시를 1초마다 갱신합니다.
+ */
+function startElapsedTimer() {
+    if (elapsedInterval) clearInterval(elapsedInterval);
+    elapsedInterval = setInterval(() => {
+        const el = document.getElementById('market-elapsed');
+        if (el) el.innerText = lastMarketFetchedAt ? `(${formatElapsedTime(lastMarketFetchedAt)})` : '';
+    }, 1000);
+}
+
 /**
  * 마켓 데이터를 테이블 포맷에 맞춰 화면에 렌더링합니다.
  * @param {Array} data - 마켓 데이터 배열
@@ -27,9 +58,10 @@ function renderMarketTable(data) {
         if (exchange === 'upbit') {
             iconUrl = `https://static.upbit.com/logos/${ticker}.png`;
         } else if (exchange === 'bithumb') {
-            iconUrl = `https://resource.bithumb.com/coin/icon/${symbolLower}.png`;
-            fallbackUrl = `https://static.upbit.com/logos/${ticker.toUpperCase()}.png`;
+            iconUrl = `https://static.upbit.com/logos/${ticker.toUpperCase()}.png`;
         }
+
+        const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%231E293B' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='9' font-family='sans-serif' font-weight='bold' fill='%2394A3B8' text-anchor='middle'>${ticker.slice(0, 3)}</text></svg>`;
 
         const rate = coin.signed_change_rate * 100;
         const rateClass = rate >= 0 ? 'bull' : 'bear';
@@ -40,8 +72,7 @@ function renderMarketTable(data) {
         tr.innerHTML = `
             <td class="rank">${idx + 1}</td>
             <td class="coin-cell">
-                <img src="${iconUrl}" alt="${ticker}" class="coin-icon"
-                     onerror="if(this.src !== '${fallbackUrl}' && '${fallbackUrl}') { this.src='${fallbackUrl}'; } else { this.style.display='none'; }">
+                <img src="${iconUrl}" alt="${ticker}" class="coin-icon">
                 <div class="coin-names">
                     <span class="coin-kr">${coin.korean_name}</span>
                     <span class="coin-code">${ticker}</span>
@@ -53,6 +84,15 @@ function renderMarketTable(data) {
             <td class="num">${formatPrice(coin.low_price)}</td>
             <td class="num secondary">${formatVolume(coin.acc_trade_price_24h)}</td>
         `;
+
+        // 이미지 로드 에러 시 안전하게 SVG 텍스트 대체
+        const img = tr.querySelector('.coin-icon');
+        if (img) {
+            img.onerror = () => {
+                img.onerror = null;
+                img.src = fallbackSvg;
+            };
+        }
 
         // 클릭 시 모니터링 페이지로 전환
         tr.addEventListener('click', () => {
@@ -79,9 +119,35 @@ async function loadMarket() {
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;">&#x23F3; 데이터 로딩 중...</td></tr>';
     try {
-        marketData = await APIClient.fetchMarketData();
+        const res = await APIClient.fetchMarketData();
+        marketData = res.tickers || [];
+        window.marketData = marketData; // 타 모듈(app.js 등)에서 참조 가능하도록 전역 노출
+
         const countEl = document.getElementById('market-count');
         if (countEl) countEl.innerText = `${marketData.length}종목`;
+        
+        // 레이턴시 정보 및 최종 갱신 시간 렌더링
+        const updateLatency = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.innerText = val !== undefined ? val : '-';
+        };
+        const lat = res.latency || {};
+        updateLatency('latency-upbit', lat.upbit);
+        updateLatency('latency-bithumb', lat.bithumb);
+        updateLatency('latency-kis', lat.kis);
+        
+        const timeEl = document.getElementById('market-last-updated');
+        if (timeEl) timeEl.innerText = res.timestamp || '-';
+
+        // 경과 시간 실시간 갱신
+        if (res.timestamp) {
+            // 서버 타임스탬프 'YYYY-MM-DD HH:MM:SS' → Date 객체 (로컬 시각으로 파싱)
+            lastMarketFetchedAt = new Date(res.timestamp.replace(' ', 'T'));
+            const elEl = document.getElementById('market-elapsed');
+            if (elEl) elEl.innerText = `(${formatElapsedTime(lastMarketFetchedAt)})`;
+            startElapsedTimer();
+        }
+
         renderMarketTable(marketData);
         // 초기 로드시 헤더 정보 업데이트
         updateHeaderInfo(state.currentExchange, state.currentSymbol);
@@ -90,28 +156,33 @@ async function loadMarket() {
     }
 }
 
+
 /**
  * 서버에서 거래 가능한 심볼 목록을 가져와 모니터링 드롭다운 메뉴를 초기화합니다.
  */
 async function loadSymbols() {
     try {
         const symbols = await APIClient.fetchSymbols();
-        const select = document.getElementById('symbol-select');
-        if (!select) return;
-        select.innerHTML = '';
         
+        // 한글 종목명 매핑은 select 드롭다운 존재 유무와 관계없이 항상 수행
         symbols.forEach(symObj => {
-            // 한글명 매핑 저장
             if (window.state) {
                 if (!window.state.symbolNames) window.state.symbolNames = {};
                 window.state.symbolNames[`${symObj.exchange}:${symObj.symbol}`] = symObj.name;
             }
-            const opt = document.createElement('option');
-            opt.value = `${symObj.exchange}:${symObj.symbol}`;
-            opt.textContent = symObj.name || symObj.symbol;
-            if (symObj.symbol === state.currentSymbol && symObj.exchange === state.currentExchange) opt.selected = true;
-            select.appendChild(opt);
         });
+
+        const select = document.getElementById('symbol-select');
+        if (select) {
+            select.innerHTML = '';
+            symbols.forEach(symObj => {
+                const opt = document.createElement('option');
+                opt.value = `${symObj.exchange}:${symObj.symbol}`;
+                opt.textContent = symObj.name || symObj.symbol;
+                if (symObj.symbol === state.currentSymbol && symObj.exchange === state.currentExchange) opt.selected = true;
+                select.appendChild(opt);
+            });
+        }
     } catch (e) { 
         console.error("Symbol list load failed", e); 
     }
@@ -137,7 +208,7 @@ function initMarketTabs() {
     });
 }
 
-// 마켓 검색 실시간 이벤트 리스너 정의
+// 마켓 검색 및 수동 새로고침 실시간 이벤트 리스너 정의
 document.addEventListener('DOMContentLoaded', () => {
     const searchInput = document.getElementById('market-search');
     if (searchInput) {
@@ -154,7 +225,13 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMarketTable(filtered);
         });
     }
+
+    const refreshBtn = document.getElementById('btn-market-refresh');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', loadMarket);
+    }
 });
+
 
 // 전역 window 바인딩으로 타 파일 결합 유연성 확보
 window.marketData = marketData;

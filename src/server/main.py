@@ -75,9 +75,17 @@ async def zmq_listener_loop():
                 if data.get('type') == 'collector_status':
                     exch = data.get('exchange')
                     if exch:
-                        logger.info(f"[Web ZMQ Signal Listener] 수집기 상태 수신: exch={exch}, is_running={data.get('is_running')}")
+                        prev_status = system.collector_statuses.get(exch, {})
+                        prev_running = prev_status.get('is_running')
+                        current_running = data.get('is_running', False)
+                        
+                        if prev_running != current_running:
+                            logger.info(f"[Web ZMQ Signal Listener] 수집기 상태 변경 감지: exch={exch}, is_running={prev_running} -> {current_running}")
+                        else:
+                            logger.debug(f"[Web ZMQ Signal Listener] 수집기 하트비트 수신: exch={exch}, is_running={current_running}")
+                            
                         system.collector_statuses[exch] = {
-                            "is_running": data.get('is_running', False),
+                            "is_running": current_running,
                             "error": data.get('error', None)
                         }
                 elif data.get('type') == 'queue_status':
@@ -110,10 +118,19 @@ async def zmq_listener_loop():
                 # 실시간 전략 엔진 상태 패킷 수신 시 캐시 업데이트
                 if data.get('type') == 'strategy_status' and 'strategy_id' not in data:
                     import time
-                    logger.info(f"[Web ZMQ Strategy Listener] 전략 엔진 상태 수신: is_running={data.get('is_running')}, active_engines={data.get('active_engines')}")
+                    prev_running = system.strategy_status.get('is_running')
+                    prev_engines = system.strategy_status.get('active_engines')
+                    current_running = data.get('is_running', False)
+                    current_engines = data.get('active_engines', 0)
+                    
+                    if prev_running != current_running or prev_engines != current_engines:
+                        logger.info(f"[Web ZMQ Strategy Listener] 전략 엔진 상태 변경 감지: is_running={prev_running} -> {current_running}, active_engines={prev_engines} -> {current_engines}")
+                    else:
+                        logger.debug(f"[Web ZMQ Strategy Listener] 전략 엔진 하트비트 수신: is_running={current_running}, active_engines={current_engines}")
+                        
                     system.strategy_status = {
-                        "is_running": data.get('is_running', False),
-                        "active_engines": data.get('active_engines', 0),
+                        "is_running": current_running,
+                        "active_engines": current_engines,
                         "last_heartbeat": time.time(),
                         "error": data.get('error', None)
                     }
@@ -153,6 +170,7 @@ async def startup_event():
     await system.boot()
     # ZMQ 제어 Publisher 생성
     app.state.control_publisher = EventBusPublisher("collector_control")
+    app.state.strategy_control_publisher = EventBusPublisher("strategy_control")
     # ZMQ 구독 비동기 루프 기동
     app.state.zmq_loop_task = asyncio.create_task(zmq_listener_loop())
     logger.info("시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다. (Web-only + ZMQ Listener)")
@@ -170,6 +188,9 @@ async def shutdown_event():
     if hasattr(app.state, 'control_publisher'):
         app.state.control_publisher.close()
         logger.info("[Web Server] ZMQ control publisher closed.")
+    if hasattr(app.state, 'strategy_control_publisher'):
+        app.state.strategy_control_publisher.close()
+        logger.info("[Web Server] ZMQ strategy control publisher closed.")
     await system.shutdown()
     logger.info("Shutdown complete.")
 

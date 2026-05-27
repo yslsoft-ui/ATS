@@ -36,6 +36,7 @@ async def get_market(request: Request):
     results = await system.get_all_market_data()
     return results
 
+
 @router.get("/symbols")
 async def get_symbols(request: Request):
     """수집 가능한 전체 종목 목록을 반환합니다."""
@@ -50,6 +51,7 @@ async def get_symbols(request: Request):
             
         fixed_symbols = config.get('symbols', [])
         if fixed_symbols:
+            # settings.yaml에 명시된 고정 종목 목록
             for s in fixed_symbols:
                 all_symbols.append({
                     "exchange": exch,
@@ -57,13 +59,23 @@ async def get_symbols(request: Request):
                     "name": stock_mapper.get_name(exch, s)
                 })
         else:
-            cached_symbols = stock_mapper._mapping.get(exch, {})
-            for s, name in cached_symbols.items():
-                all_symbols.append({
-                    "exchange": exch,
-                    "symbol": s,
-                    "name": name or s
-                })
+            # DB의 exchange_assets에서 거래소별 종목을 조회하고, 한글명은 메모리 캐시에서 가져옴
+            from src.database.connection import get_db_conn
+            try:
+                async with get_db_conn(system.db_path) as db:
+                    async with db.execute(
+                        'SELECT symbol FROM exchange_assets WHERE exchange = ?', (exch,)
+                    ) as cursor:
+                        rows = await cursor.fetchall()
+                for row in rows:
+                    s = row['symbol']
+                    all_symbols.append({
+                        "exchange": exch,
+                        "symbol": s,
+                        "name": stock_mapper.get_name(exch, s)
+                    })
+            except Exception as e:
+                logger.error(f"[get_symbols] Failed to load symbols for {exch}: {e}")
                 
     return all_symbols
 
@@ -808,6 +820,10 @@ async def fetch_ranking(request: Request, tr_id: str):
 
                     name = name.strip() if name else code
 
+                    # 새로운 종목 발견 시 DB 및 메모리에 비동기 추가
+                    if code not in kis_symbols:
+                        await stock_mapper.add_mapping_async('kis', code, name, system.db_path)
+
                     processed.append({
                         "code": code,
                         "name": name,
@@ -825,24 +841,53 @@ async def fetch_ranking(request: Request, tr_id: str):
 
 @router.post("/market/symbols/kis/toggle")
 async def toggle_kis_symbol(request: Request, body: dict):
-    """KIS 수집 종목을 토글하고 data/stock_master.json 에 동기화한 뒤 ZMQ IPC 메시지를 퍼블리시합니다."""
+    """KIS 수집 종목을 토글하고 DB에 동기화한 뒤 ZMQ IPC 메시지를 퍼블리시합니다."""
     code = body.get("code")
     name = body.get("name")
     if not code or not name:
         raise HTTPException(status_code=400, detail="종목 코드(code)와 종목명(name)이 필요합니다.")
 
+    system = request.app.state.system
+    db_path = system.db_path
+
     async with file_lock:
-        kis_symbols = stock_mapper._mapping.get('kis', {})
-        is_collected = code in kis_symbols
-
-        if is_collected:
-            stock_mapper._mapping['kis'].pop(code, None)
-            new_status = False
-        else:
-            stock_mapper.add_mapping('kis', code, name)
-            new_status = True
-
-        stock_mapper.save_cache()
+        from src.database.connection import get_db_conn
+        
+        async with get_db_conn(db_path) as db:
+            # 1. asset_master 에 종목이 존재하는지 확인하고 없으면 등록
+            await db.execute('''
+                INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type)
+                VALUES (?, ?, 'stock')
+            ''', (code, name))
+            
+            # 2. exchange_assets 에 해당 종목이 존재하는지 확인
+            async with db.execute('''
+                SELECT is_active FROM exchange_assets 
+                WHERE exchange = 'kis' AND symbol = ?
+            ''', (code,)) as cursor:
+                row = await cursor.fetchone()
+                
+            if row is not None:
+                # 존재하면 is_active 플래그 반전
+                current_active = row['is_active']
+                new_status_val = 0 if current_active == 1 else 1
+                await db.execute('''
+                    UPDATE exchange_assets SET is_active = ?, updated_at = datetime('now')
+                    WHERE exchange = 'kis' AND symbol = ?
+                ''', (new_status_val, code))
+                new_status = (new_status_val == 1)
+            else:
+                # 존재하지 않으면 is_active=1 로 추가
+                await db.execute('''
+                    INSERT INTO exchange_assets (exchange, symbol, is_active)
+                    VALUES ('kis', ?, 1)
+                ''', (code,))
+                new_status = True
+                
+            await db.commit()
+            
+        # 3. StockMapper 메모리 캐시 리로드
+        await stock_mapper.load_from_db(db_path)
 
     # ZMQ IPC 메시지 발행
     publisher = getattr(request.app.state, 'control_publisher', None)

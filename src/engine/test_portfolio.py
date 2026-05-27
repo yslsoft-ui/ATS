@@ -127,3 +127,30 @@ async def test_portfolio_manager_handle_signal():
     assert result is not None
     assert result['side'] == 'SELL'
     assert portfolio.positions[("upbit", "KRW-BTC")].quantity == 0
+
+@pytest.mark.asyncio
+async def test_portfolio_report_data_generation():
+    """get_portfolio_current_prices 및 get_portfolio_report_data 메서드가 정상적으로 데이터를 빌드하는지 검증합니다."""
+    pm = PortfolioManager(db_path=TEST_DB_PATH)
+    portfolio = Portfolio(portfolio_id="test_report_id", name="Report Portfolio", initial_cash=1000000, exchange_id="upbit")
+    pm.add_portfolio(portfolio)
+    await pm.save_to_db("test_report_id")
+    
+    class DummySystem:
+        def __init__(self):
+            self.latest_prices = {}
+            
+    system = DummySystem()
+    
+    # 1. 가격 헬퍼 테스트
+    prices = await pm.get_portfolio_current_prices("test_report_id", system)
+    assert isinstance(prices, dict)
+    
+    # 2. 리포트 데이터 테스트
+    report = await pm.get_portfolio_report_data("test_report_id", system)
+    assert report["status"] == "success"
+    assert report["id"] == "test_report_id"
+    assert report["initial_cash"] == 1000000
+    assert report["cash"] == 1000000
+    assert report["summary"]["initial_cash"] == 1000000
+    assert isinstance(report["results"], list)

@@ -3,6 +3,7 @@ import json
 import aiohttp
 import time
 from src.engine.utils.telemetry import get_logger
+from src.engine.utils.stock_mapper import stock_mapper
 from typing import List, Dict, Optional, Any
 from src.engine.collector_base import BaseCollector, CollectorRegistry
 from src.engine.candles import Candle
@@ -26,19 +27,6 @@ class BithumbCollector(BaseCollector):
             
             if not self.session or self.session.closed:
                 self.session = aiohttp.ClientSession()
-            
-            # --- 1. [NEW] 빗썸 공식 V1 API를 통해 한글명 동적 캐싱 로드 ---
-            try:
-                async with self.session.get(f"{api_url}/market/all") as resp:
-                    v1_markets = await resp.json()
-                    from src.engine.utils.stock_mapper import stock_mapper
-                    for m in v1_markets:
-                        if m['market'].startswith('KRW-'):
-                            m_code = m['market'].replace('KRW-', '')
-                            stock_mapper.add_mapping('bithumb', m_code, m['korean_name'])
-                logger.info(f"[{self.exchange.upper()}] 공식 V1 API로부터 한글 코인명 매핑 로드 완료")
-            except Exception as ex:
-                logger.error(f"[{self.exchange.upper()}] 공식 V1 한글명 로드 실패 (Fallback 우회 작동): {ex}")
             
             # --- 2. 설정에 지정된 심볼 목록 로드 및 검증 ---
             if configured_symbols:
@@ -74,7 +62,6 @@ class BithumbCollector(BaseCollector):
             # 설정된 심볼이 없을 경우, 458개 전체 종목 자동 로드 (Fallback - 신형 V1 API)
             all_krw_markets = []
             try:
-                from src.engine.utils.stock_mapper import stock_mapper
                 all_krw_markets = [f"KRW-{k}" for k in stock_mapper._mapping.get('bithumb', {}).keys()]
             except:
                 pass

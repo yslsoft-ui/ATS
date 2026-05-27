@@ -52,6 +52,14 @@ class BaseMarketDataRepository(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        0으로 마비된 KIS 실시간 캐시 복구를 위해 DB에서 최근 가격 및 변동 지표 데이터를 획득합니다.
+        """
+        pass
+
+
 
 
 class SqliteMarketDataRepository(BaseMarketDataRepository):
@@ -374,6 +382,58 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             sorted_restored = sorted(restored.values(), key=lambda x: x['timestamp'], reverse=True)
             return sorted_restored
 
+    async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
+        db_price = 0.0
+        db_high = 0.0
+        db_low = 0.0
+        db_volume = 0.0
+        db_change_rate = 0.0
+        
+        try:
+            async with get_db_conn() as db:
+                # 1. trades에서 최근 체결가 조회
+                async with db.execute(
+                    "SELECT trade_price FROM trades WHERE exchange = 'kis' AND symbol = ? ORDER BY trade_timestamp DESC LIMIT 1",
+                    (symbol,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        db_price = row[0]
+                
+                # 2. candles(1분봉)에서 오늘 혹은 마지막 캔들 지표 획득
+                async with db.execute(
+                    "SELECT close, high, low, volume FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 ORDER BY timestamp DESC LIMIT 1",
+                    (symbol,)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row:
+                        if db_price == 0.0:
+                            db_price = row[0]
+                        db_high = row[1]
+                        db_low = row[2]
+                        db_volume = row[3]
+                        
+                # 3. 전일 종가와 비교하여 24h 변동률 근사치 추정
+                async with db.execute(
+                    "SELECT close FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 AND timestamp < (SELECT COALESCE(MAX(timestamp), 0) FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60) - 24*3600 ORDER BY timestamp DESC LIMIT 1",
+                    (symbol, symbol)
+                ) as cursor:
+                    row = await cursor.fetchone()
+                    if row and row[0] > 0:
+                        db_change_rate = (db_price - row[0]) / row[0]
+
+            return {
+                'trade_price': db_price,
+                'signed_change_rate': db_change_rate,
+                'high_price': db_high or db_price,
+                'low_price': db_low or db_price,
+                'acc_trade_price_24h': db_volume * db_price
+            }
+        except Exception as e:
+            logger.warning(f"[KIS] Database warm-up failed for {symbol} in repository: {e}")
+            return None
+
+
 
 
 class InMemoryMarketDataRepository(BaseMarketDataRepository):
@@ -450,6 +510,10 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
         return []
+
+    async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
+        return None
+
 
 
 

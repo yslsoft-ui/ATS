@@ -10,6 +10,10 @@ from src.engine.portfolio import PortfolioManager, Portfolio
 from src.engine.strategy import StrategyRegistry
 from src.engine.loader import load_dynamic_strategies
 from src.engine.utils.stock_mapper import stock_mapper
+from src.engine.market.upbit import UpbitMarketAdapter
+from src.engine.market.bithumb import BithumbMarketAdapter
+from src.engine.market.kis import KisMarketAdapter
+
 
 logger = get_logger(__name__)
 
@@ -88,35 +92,9 @@ class TradingSystem:
         # 1. DB 초기화 및 포트폴리오 로드
         from src.database.schema import init_db
         await init_db(self.db_path)
+        await stock_mapper.load_from_db(self.db_path)
         await self.portfolio_manager.load_from_db(exclude_types=['simulationR'])
         
-        # 기본 포트폴리오 보장 및 각 거래소별 초기 세팅 확보
-        if 'default' not in self.portfolio_manager.portfolios:
-            p = Portfolio("default", "기본 모의투자", 30000000.0, "all")
-            p.exchange_cash = {
-                'upbit': 10000000.0,
-                'kis': 10000000.0,
-                'bithumb': 10000000.0
-            }
-            self.portfolio_manager.add_portfolio(p)
-            await self.portfolio_manager.save_to_db("default")
-        else:
-            p = self.portfolio_manager.portfolios['default']
-            p.name = "기본 모의투자"
-            p.exchange_id = "all"
-            p.initial_cash = 30000000.0
-            
-            # 거래소별 격리 자금 보장
-            changed = False
-            for ex in ['upbit', 'kis', 'bithumb']:
-                if ex not in p.exchange_cash:
-                    p.exchange_cash[ex] = 10000000.0
-                    changed = True
-            
-            p.cash = sum(p.exchange_cash.values())
-            if changed:
-                await self.portfolio_manager.save_to_db("default")
-
         # 2. 전략 동적 로드 및 동기화 [NEW]
         load_dynamic_strategies(self.strategies_dir)
         self.sync_strategies()
@@ -238,184 +216,63 @@ class TradingSystem:
         # 인증 정보 동기화
         self.cred_provider.config = new_config
 
-    async def get_all_market_data(self) -> List[Dict[str, Any]]:
-        """전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다."""
+    async def get_all_market_data(self) -> Dict[str, Any]:
+        """전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 비동기 병렬로 취합하여 반환합니다."""
         results = []
+        latency = {"upbit": 0, "bithumb": 0, "kis": 0}
         try:
             async with aiohttp.ClientSession() as session:
-                # 1. Upbit API를 사용하여 실시간으로 현재가 조회
-                async with session.get("https://api.upbit.com/v1/market/all?is_details=false") as resp:
-                    all_markets = await resp.json()
-                krw_markets = [m for m in all_markets if m['market'].startswith('KRW-')]
-                market_codes = [m['market'] for m in krw_markets]
+                adapters = [
+                    ("upbit", UpbitMarketAdapter()),
+                    ("bithumb", BithumbMarketAdapter()),
+                    ("kis", KisMarketAdapter())
+                ]
 
-                tickers = []
-                for i in range(0, len(market_codes), 100):
-                    batch = ','.join(market_codes[i:i+100])
-                    async with session.get(f"https://api.upbit.com/v1/ticker?markets={batch}") as resp:
-                        tickers.extend(await resp.json())
-
-                market_map = {m['market']: m['korean_name'] for m in krw_markets}
-                for t in tickers:
-                    m_code = t['market'].replace('KRW-', '')
-                    korean_name = market_map.get(t['market'], t['market'])
-                    
-                    # stock_mapper에 최신 한글명을 동적 주입 및 캐시화 [NEW]
-                    stock_mapper.add_mapping('upbit', m_code, korean_name)
-                    
-                    results.append({
-                        "exchange": "upbit",
-                        "market": m_code,
-                        "korean_name": korean_name,
-                        "trade_price": t.get('trade_price', 0),
-                        "signed_change_rate": t.get('signed_change_rate', 0),
-                        "acc_trade_price_24h": t.get('acc_trade_price_24h', 0),
-                        "high_price": t.get('high_price', 0),
-                        "low_price": t.get('low_price', 0),
-                    })
-
-                # 2. Bithumb 가상자산 종목 추가 (신형 V1 REST Ticker API 실시간 연동 최적화)
-                bithumb_symbols = set()
-                bithumb_config_symbols = self.config_manager.get('exchanges.bithumb.symbols', [])
-                if bithumb_config_symbols:
-                    bithumb_symbols.update(bithumb_config_symbols)
-                for key in self.latest_prices.keys():
-                    if key.startswith('bithumb:'):
-                        bithumb_symbols.add(key.split(':')[1])
-                bithumb_mapper_symbols = stock_mapper._mapping.get('bithumb', {})
-                if bithumb_mapper_symbols:
-                    bithumb_symbols.update(bithumb_mapper_symbols.keys())
-
-                if bithumb_symbols:
-                    bithumb_config = self.config_manager.get('exchanges.bithumb', {})
-                    bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com/v1')
-                    bithumb_markets = [f"KRW-{s}" for s in bithumb_symbols]
-                    
-                    bithumb_tickers = []
+                async def measure_adapter(name, adapter):
+                    start = time.time()
                     try:
-                        for i in range(0, len(bithumb_markets), 100):
-                            batch = ",".join(bithumb_markets[i:i+100])
-                            async with session.get(f"{bithumb_api_url}/ticker?markets={batch}") as resp:
-                                if resp.status == 200:
-                                    bithumb_tickers.extend(await resp.json())
+                        res = await adapter.fetch_market_data(session, self)
+                        ms = int((time.time() - start) * 1000)
+                        return name, res, ms
                     except Exception as e:
-                        logger.error(f"Failed to fetch Bithumb tickers in get_all_market_data: {e}")
+                        ms = int((time.time() - start) * 1000)
+                        return name, e, ms
 
-                    ticker_map = {t['market'].replace('KRW-', ''): t for t in bithumb_tickers if 'market' in t}
+                tasks = [measure_adapter(name, adapter) for name, adapter in adapters]
+                adapter_results = await asyncio.gather(*tasks)
+                
+                for name, res, ms in adapter_results:
+                    latency[name] = ms
+                    if isinstance(res, Exception):
+                        logger.error(f"Market adapter {name} failed: {res}")
+                        continue
                     
-                    for s_code in bithumb_symbols:
-                        t = ticker_map.get(s_code, {})
-                        if t:
-                            key = f"bithumb:{s_code}"
-                            prev = self.latest_prices.get(key, {})
-                            self.latest_prices[key] = {
-                                'exchange': 'bithumb',
-                                'market': s_code,
-                                'trade_price': float(t.get('trade_price') if t.get('trade_price') is not None else prev.get('trade_price', 0)),
-                                'signed_change_rate': float(t.get('signed_change_rate') if t.get('signed_change_rate') is not None else prev.get('signed_change_rate', 0)),
-                                'timestamp': int(t.get('timestamp') if t.get('timestamp') is not None else prev.get('timestamp', time.time() * 1000)),
-                                'high_price': float(t.get('high_price') if t.get('high_price') is not None else prev.get('high_price', 0)),
-                                'low_price': float(t.get('low_price') if t.get('low_price') is not None else prev.get('low_price', 0)),
-                                'acc_trade_price_24h': float(t.get('acc_trade_price_24h') if t.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0))
-                            }
-                        
-                        latest = self.get_latest_price('bithumb', s_code)
-                        results.append({
-                            "exchange": "bithumb",
-                            "market": s_code,
-                            "korean_name": stock_mapper.get_name('bithumb', s_code),
-                            "trade_price": latest.get('trade_price', 0),
-                            "signed_change_rate": latest.get('signed_change_rate', 0),
-                            "acc_trade_price_24h": latest.get('acc_trade_price_24h', 0),
-                            "high_price": latest.get('high_price', 0),
-                            "low_price": latest.get('low_price', 0)
-                        })
-
-                # 3. 국내 주식 종목 추가 (KIS)
-                kis_symbols = set()
-                kis_config_symbols = self.config_manager.get('exchanges.kis.symbols', [])
-                if kis_config_symbols:
-                    kis_symbols.update(kis_config_symbols)
-                for key in self.latest_prices.keys():
-                    if key.startswith('kis:'):
-                        kis_symbols.add(key.split(':')[1])
-                kis_mapper_symbols = stock_mapper._mapping.get('kis', {})
-                if kis_mapper_symbols:
-                    kis_symbols.update(kis_mapper_symbols.keys())
-
-                for s_code in kis_symbols:
-                    key = f"kis:{s_code}"
-                    latest = self.get_latest_price('kis', s_code)
-                    
-                    # 0으로 마비된 KIS 실시간 캐시 긴급 Warm-Up 복구 (DB 역조회)
-                    if not latest or latest.get('trade_price', 0) == 0:
-                        db_price = 0.0
-                        db_high = 0.0
-                        db_low = 0.0
-                        db_volume = 0.0
-                        db_change_rate = 0.0
-                        
-                        try:
-                            async with get_db_conn() as db:
-                                # 1. trades에서 최근 체결가 조회
-                                async with db.execute(
-                                    "SELECT trade_price FROM trades WHERE exchange = 'kis' AND symbol = ? ORDER BY trade_timestamp DESC LIMIT 1",
-                                    (s_code,)
-                                ) as cursor:
-                                    row = await cursor.fetchone()
-                                    if row:
-                                        db_price = row[0]
+                    for dto in res:
+                        # 업비트의 한글명 신규 매핑 건은 가드 조건 후 캐시/DB 기록
+                        if dto.exchange == "upbit":
+                            if stock_mapper.get_name('upbit', dto.market) != dto.korean_name:
+                                await stock_mapper.add_mapping_async('upbit', dto.market, dto.korean_name, self.db_path)
                                 
-                                # 2. candles(1분봉)에서 오늘 혹은 마지막 캔들 지표 획득
-                                async with db.execute(
-                                    "SELECT close, high, low, volume FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 ORDER BY timestamp DESC LIMIT 1",
-                                    (s_code,)
-                                ) as cursor:
-                                    row = await cursor.fetchone()
-                                    if row:
-                                        if db_price == 0.0:
-                                            db_price = row[0]
-                                        db_high = row[1]
-                                        db_low = row[2]
-                                        db_volume = row[3]
-                                        
-                                # 3. 전일 종가와 비교하여 24h 변동률 근사치 추정
-                                async with db.execute(
-                                    "SELECT close FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 AND timestamp < (SELECT COALESCE(MAX(timestamp), 0) FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60) - 24*3600 ORDER BY timestamp DESC LIMIT 1",
-                                    (s_code, s_code)
-                                ) as cursor:
-                                    row = await cursor.fetchone()
-                                    if row and row[0] > 0:
-                                        db_change_rate = (db_price - row[0]) / row[0]
-                        except Exception as e:
-                            logger.warning(f"[KIS] Database warm-up failed for {s_code}: {e}")
-
-                        # 캐시 저장 및 갱신
-                        self.latest_prices[key] = {
-                            'exchange': 'kis',
-                            'market': s_code,
-                            'trade_price': db_price,
-                            'signed_change_rate': db_change_rate,
-                            'timestamp': int(time.time() * 1000),
-                            'high_price': db_high or db_price,
-                            'low_price': db_low or db_price,
-                            'acc_trade_price_24h': db_volume * db_price
-                        }
-                        latest = self.latest_prices[key]
-
-                    results.append({
-                        "exchange": "kis",
-                        "market": s_code,
-                        "korean_name": stock_mapper.get_name('kis', s_code),
-                        "trade_price": latest.get('trade_price', 0),
-                        "signed_change_rate": latest.get('signed_change_rate', 0),
-                        "acc_trade_price_24h": latest.get('acc_trade_price_24h', 0),
-                        "high_price": latest.get('high_price', 0),
-                        "low_price": latest.get('low_price', 0)
-                    })
-
-            logger.debug(f"get_all_market_data: Total {len(results)} items (Bithumb: {len(bithumb_symbols)}, KIS: {len(kis_symbols)})")
-            return sorted(results, key=lambda x: x['acc_trade_price_24h'], reverse=True)
+                        results.append(dto.model_dump())
+                        
+            sorted_tickers = sorted(results, key=lambda x: x['acc_trade_price_24h'], reverse=True)
+            
+            import datetime
+            now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            return {
+                "tickers": sorted_tickers,
+                "latency": latency,
+                "timestamp": now_str
+            }
         except Exception as e:
             logger.error(f"Error in get_all_market_data: {e}")
-            return results
+            import datetime
+            return {
+                "tickers": results,
+                "latency": latency,
+                "timestamp": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+
+

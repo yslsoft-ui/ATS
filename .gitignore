@@ -26,6 +26,10 @@ graphify-out/cache/
 graphify-out/.graphify_*
 .DS_Store
 docs/
+logs/
 
 # 인증 토큰 캐시
 config/.*_token.json
+
+# uvicorn log
+uvicorn.log
