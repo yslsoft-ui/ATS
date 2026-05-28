@@ -39,6 +39,7 @@ class UpbitMarketAdapter(MarketAdapter):
                     korean_name=korean_name,
                     trade_price=float(t.get('trade_price') or 0.0),
                     signed_change_rate=float(t.get('signed_change_rate') or 0.0),
+                    change_price=float(t.get('signed_change_price') or t.get('change_price') or 0.0),
                     acc_trade_price_24h=float(t.get('acc_trade_price_24h') or 0.0),
                     high_price=float(t.get('high_price') or 0.0),
                     low_price=float(t.get('low_price') or 0.0)

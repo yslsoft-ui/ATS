@@ -156,16 +156,26 @@ class TradingSystem:
             # 기존 캐시값 활용 (변동률, 고가, 저가, 거래대금의 유실 방지)
             prev = self.latest_prices.get(key, {})
             
+            # 실시간 변동액 파싱/정규화
+            change_price = data.get('change_price')
+            if change_price is None:
+                change_price = data.get('signed_change_price')
+                
             self.latest_prices[key] = {
                 'exchange': ex,
                 'market': sym,
                 'trade_price': data.get('trade_price') if data.get('trade_price') is not None else prev.get('trade_price'),
                 'signed_change_rate': data.get('signed_change_rate') if data.get('signed_change_rate') is not None else prev.get('signed_change_rate', 0),
+                'change_price': change_price if change_price is not None else prev.get('change_price', 0.0),
                 'timestamp': data.get('trade_timestamp') if data.get('trade_timestamp') is not None else prev.get('timestamp'),
                 'high_price': data.get('high_price') if data.get('high_price') is not None else prev.get('high_price'),
                 'low_price': data.get('low_price') if data.get('low_price') is not None else prev.get('low_price'),
                 'acc_trade_price_24h': data.get('acc_trade_price_24h') if data.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0)
             }
+            
+            # 브로드캐스트 데이터에도 change_price 필드 공통화 적용
+            if 'change_price' not in data:
+                data['change_price'] = change_price or 0.0
         
         elif data.get('type') == 'rank':
             # KIS 등에서 넘어온 랭킹 데이터 처리
@@ -179,6 +189,7 @@ class TradingSystem:
                     'market': sym,
                     'trade_price': item.get('price'),
                     'signed_change_rate': item.get('change_rate'),
+                    'change_price': item.get('change_price', 0.0),
                     'korean_name': item.get('name'),
                     'acc_trade_price_24h': item.get('volume'),
                     'rank': item.get('rank')

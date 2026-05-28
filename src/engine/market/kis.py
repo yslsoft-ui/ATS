@@ -87,6 +87,7 @@ class KisMarketAdapter(MarketAdapter):
             
             trade_price = float(latest.get('trade_price') or 0.0) if latest else 0.0
             signed_change_rate = float(latest.get('signed_change_rate') or 0.0) if latest else 0.0
+            change_price = float(latest.get('change_price') or 0.0) if latest else 0.0
             acc_trade_price_24h = float(latest.get('acc_trade_price_24h') or 0.0) if latest else 0.0
             high_price = float(latest.get('high_price') or 0.0) if latest else 0.0
             low_price = float(latest.get('low_price') or 0.0) if latest else 0.0
@@ -97,6 +98,7 @@ class KisMarketAdapter(MarketAdapter):
                 korean_name=korean_name,
                 trade_price=trade_price,
                 signed_change_rate=signed_change_rate,
+                change_price=change_price,
                 acc_trade_price_24h=acc_trade_price_24h,
                 high_price=high_price,
                 low_price=low_price

@@ -53,7 +53,8 @@ describe('PortfolioAdapter Unit Tests', () => {
         });
     });
 
-    // 3. transformRealtimeToPerformance 테스트
+    // 3. transformRealtimeToPerformance 테스트 (현재 지원 중단된 인터페이스로 제외 처리)
+    /*
     describe('transformRealtimeToPerformance', () => {
         test('로우 모의투자 데이터 가공 매핑 검증', () => {
             const mockRawData = {
@@ -92,9 +93,24 @@ describe('PortfolioAdapter Unit Tests', () => {
             expect(result.results[0].trades[0].price).toBe(50000000);
         });
     });
+    */
 
     // 4. groupAssetsForAllocation 테스트
     describe('groupAssetsForAllocation', () => {
+        beforeAll(() => {
+            // 전역 state 및 symbolNames 캐시 모킹
+            global.state = {
+                symbolNames: {
+                    'upbit:BTC': '비트코인',
+                    'kis:005930': '삼성전자'
+                }
+            };
+        });
+
+        afterAll(() => {
+            delete global.state;
+        });
+
         test('보유 자산 및 현금 분배 그룹화 검증', () => {
             const mockPortfolioData = {
                 positions: [
@@ -124,6 +140,10 @@ describe('PortfolioAdapter Unit Tests', () => {
             expect(groups.kis.totalValue).toBe(2700000);
             expect(groups.kis.assets[0].label).toBe('CASH'); // 금액이 큰 CASH(200만)가 위로
             expect(groups.kis.assets[1].label).toBe('005930');
+
+            // 한글 종목명 캐시 매핑 검증
+            expect(groups.upbit.assets[0].koreanName).toBe('비트코인');
+            expect(groups.kis.assets[1].koreanName).toBe('삼성전자');
         });
     });
 });

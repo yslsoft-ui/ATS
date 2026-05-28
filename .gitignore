@@ -14,9 +14,6 @@ env/
 *.sqlite3
 data/
 
-# 의존성 패키지 (프론트엔드)
-frontend/node_modules/
-
 # 에디터 및 에디터 설정
 .vscode/
 

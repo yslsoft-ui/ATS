@@ -1,0 +1,197 @@
+# 데몬 시스템 구성 및 구동 흐름 명세 (Daemon Architecture)
+
+이 문서는 실시간 수집 및 트레이딩 시뮬레이션을 담당하는 두 개의 핵심 데몬 프로세스인 `collector_daemon.py`와 `strategy_daemon.py`의 구조, 동작 매커니즘, 라이프사이클 및 프로세스 간 제어 흐름을 명세합니다.
+
+---
+
+## 1. 두 데몬의 역할 분담 개요
+
+시스템의 자원 격리 및 단일 장애점(SPOF) 방지를 위해 수집 프로세스와 전략 연산 프로세스를 분리하여 기동합니다. 이들은 **ZeroMQ IPC 버스**를 통해 데이터를 전달하고 제어 신호를 동적으로 조율합니다.
+
+```
+       ┌────────────────────────┐                  ┌────────────────────────┐
+       │    Collector Daemon    │                  │    Strategy Daemon     │
+       │  (collector_daemon.py) │                  │  (strategy_daemon.py)  │
+       └───────────┬────────────┘                  └───────────▲────────────┘
+                   │                                           │
+                   │  ZMQ IPC: market_data (tick/candle)       │
+                   └───────────────────────────────────────────┘
+```
+
+---
+
+## 2. 데이터 수집 데몬 (Collector Daemon)
+
+### 2.1. 주요 구성 컴포넌트
+- **ConfigManager**: `settings.yaml` 파일 변경을 실시간 감시(Config Watcher)하고 핫리로드합니다.
+- **DatabaseWriter**: 큐에 적재된 데이터를 SQLite3 DB에 배치(Batch 50~100) 방식으로 영속화합니다.
+- **ZMQ Publishers**: 시세 전송용 `market_data` 및 상태 모니터링용 `signal_data` 퍼블리셔.
+- **Publishing Queues (`TickPublishingQueue`, `CandlePublishingQueue`)**: 수집된 개별 틱 및 캔들을 `DatabaseWriter`에 인큐함과 동시에 ZMQ IPC 버스로 실시간 퍼블리시합니다.
+- **CollectorRegistry**: 거래소 모듈(Upbit, KIS, Bithumb 등)의 수집 클래스를 동적으로 생성하고 생명주기를 주관합니다.
+
+### 2.2. 구동 시퀀스 및 흐름
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Daemon as collector_daemon.py
+    participant DB as SQLite DB
+    participant DBW as DatabaseWriter
+    participant Reg as CollectorRegistry
+    participant ZMQ as ZeroMQ Bus
+
+    Daemon->>Daemon: 1. 설정 및 도메인 마스터 로드
+    Daemon->>DB: 2. 스키마 초기화 및 자산(Asset) 1회 동기화
+    Daemon->>DBW: 3. DB Writer 백그라운드 시작
+    Daemon->>Reg: 4. 거래소별 수집기 인스턴스 등록
+    Daemon->>ZMQ: 5. 제어 구독(collector_control) 리스너 시작
+    Daemon->>Daemon: 6. 하트비트(5s) 및 큐 모니터링(1s) 루프 기동
+    Daemon->>Reg: 7. 활성화된 거래소 수집기 기동 (WebSocket 수신 시작)
+    Reg->>ZMQ: 8. 실시간 틱/캔들 발생 시 ZMQ로 퍼블리시
+```
+
+### 2.3. 동적 제어 (ZMQ collector_control)
+- 웹 서버나 외부에서 ZMQ `collector_control` 토픽으로 `{ "type": "update_symbols", "exchange": "kis", "code": "005930", "is_collected": true }`와 같은 신호를 보낼 시, 수집 데몬은 실시간으로 구독 자산을 해제 또는 추가(`update_subscription`)하며, `StockMapper` 캐시를 리로드합니다.
+- 만약 `exchange` 파라미터가 `"all"`인 경우, 구동 중인 모든 수집기에 대해 전체 활성 자산 목록을 DB로부터 새로 읽어와 실시간 핫리로드합니다.
+
+---
+
+## 3. 전략 엔진 데몬 (Strategy Daemon)
+
+### 3.1. 주요 구성 컴포넌트
+- **PortfolioManager**: DB로부터 활성(시뮬레이션 중인) 포트폴리오를 로드하고 보유 포지션 및 잔고 자산을 운용합니다.
+- **ExecutionPipeline**: 매매 신호(BUY/SELL)가 감지되었을 때, 실제 자산 단가 계산, 수수료 산정 및 DB 상태 기록을 실행하고, 체결 여부를 ZMQ `strategy_signal`로 통지합니다.
+- **StrategyRegistry**: 동적으로 전략 디렉토리(`src/engine/strategies`)를 탐색하여 전략 클래스 명세를 파일 시스템에서 동적 로드(`load_dynamic_strategies`)합니다.
+- **TradeEngine (종목별)**: 자산 심볼 단위로 독립 생성되어 틱 데이터를 캔들로 병합하고 SMA, RSI 등의 보조지표 연산과 전략 규칙을 매 초마다 판단합니다.
+
+### 3.2. 구동 시퀀스 및 흐름
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Daemon as strategy_daemon.py
+    participant Loader as StrategyLoader
+    participant PM as PortfolioManager
+    participant Pipeline as ExecutionPipeline
+    participant ZMQ as ZeroMQ Bus
+    participant TE as TradeEngine (종목별)
+
+    Daemon->>Loader: 1. 전략 디렉토리 동적 탐색 및 바인딩
+    Daemon->>PM: 2. 활성 상태인 모의투자 세션 로드
+    Daemon->>Pipeline: 3. 주문 체결 파이프라인 생성 및 콜백 등록
+    Daemon->>ZMQ: 4. 제어 구독(strategy_control) 리스너 시작
+    Daemon->>Daemon: 5. 3초 주기 하트비트 루프 기동 (웹서버 생존 통보)
+    Note over Daemon: 활성 포트폴리오 세션 감지 시
+    Daemon->>TE: 6. 세션 전략 파라미터 기반 TradeEngine 동적 기동
+    TE->>PM: 7. DB 기반 과거 데이터 조회 및 지표 워밍업 (Warm-up)
+    ZMQ->>Daemon: 8. 실시간 market_data (틱) 스트리밍 수신
+    Daemon->>TE: 9. 틱 주입 및 지표 연산 트리거
+    TE->>Pipeline: 10. 매매 타점 포착 시 주문 발주 (Execution)
+    Pipeline->>ZMQ: 11. 체결 결과 strategy_signal 토픽으로 Pub
+```
+
+### 3.3. 세션 핫리로드 (ZMQ strategy_control)
+- 사용자가 웹 대시보드에서 특정 모의투자 세션을 시작하거나 종료할 때, 웹서버는 ZMQ `strategy_control` 토픽으로 `{ "type": "update_portfolio" }` 메시지를 전파합니다.
+- 이를 감지한 전략 데몬은 기존 종목별 `TradeEngine` 맵을 완전히 클리어한 후, 새롭게 활성화된 포트폴리오 정보에 맞춰 자산군 및 전략 파라미터를 읽어와 TradeEngine을 **실시간으로 재생성하고 초기 웜업 과정을 동적 수행**합니다.
+
+---
+
+## 4. 데몬 제어 IPC 메시지 프로토콜
+
+프로세스 간 조율을 위해 정의된 ZeroMQ IPC 메시지 전문 형식입니다.
+
+### 4.1. `collector_control` 토픽 (수집기 제어)
+```json
+{
+  "type": "update_symbols",
+  "exchange": "kis",
+  "code": "005930",
+  "is_collected": true
+}
+```
+
+### 4.2. `strategy_control` 토픽 (전략 엔진 제어)
+```json
+{
+  "type": "update_portfolio"
+}
+```
+
+### 4.3. `signal_data` 토픽 (수집 데몬 상태 송출)
+```json
+{
+  "type": "collector_status",
+  "exchange": "upbit",
+  "is_running": true,
+  "error": null
+}
+```
+
+### 4.4. `strategy_signal` 토픽 (전략 데몬 상태 및 체결 송출)
+```json
+{
+  "type": "strategy_status",
+  "is_running": true,
+  "active_engines": 15,
+  "error": null
+}
+```
+
+---
+
+## 5. Graceful Shutdown (안전 종료 처리)
+
+두 데몬 프로세스는 운영체제 종료 시그널(`SIGINT`, `SIGTERM`) 감지 시 다음과 같은 자원 정리 절차를 순차 진행하여 메모리 누수 및 데이터 정합성 깨짐을 방지합니다.
+
+1. **설정 감시 중단**: Config 파일 감시 및 ZMQ 제어 채널 리스너 태스크를 즉시 취소합니다.
+2. **WebSocket 연결 해제**: 구동 중인 수집기 인스턴스의 WebSocket 세션을 안전하게 `close`하고 종료 상태를 방출합니다.
+3. **DB 큐 플러시**: `DatabaseWriter`의 데이터 인큐 루프를 종료하고, 내부 큐에 남아 있던 마지막 틱/캔들 데이터를 완전하게 DB 파일에 벌크 커밋 처리한 후 파일 핸들을 닫습니다.
+4. **ZMQ 소켓 클로즈**: ZeroMQ 컨텍스트 및 Publisher/Subscriber 소켓을 완전히 닫아 stale 파일 핸들(.ipc 소켓 파일)을 제거합니다.
+
+---
+
+## 6. 성능 최적화를 위한 메모리 캐싱 및 버퍼링 정책 (Core Memory Caching & Buffering Policy)
+
+실시간 고빈도 체결 시세와 지표 계산은 디스크 I/O와 메모리 할당 병목을 최소화하기 위해 강력한 메모리 버퍼 및 캐시 정책을 사용합니다.
+
+### 6.1. 데이터 수집 데몬 (Collector Daemon)의 캐싱 및 버퍼링
+- **매핑 사전 메모리 캐싱 (`StockMapper`)**: 
+  - [stock_mapper.py](file:///home/simon/ATS/src/engine/utils/stock_mapper.py)
+  - 기동 시 데이터베이스 `asset_master` 테이블 전체를 단 1회 로드하여 메모리 사전(`self._mapping`)에 캐시합니다. 
+  - 매 틱(Tick) 수신 시 한글명 매핑을 위한 디스크/API 호출 없이 O(1) 복잡도의 메모리 캐시 룩업을 수행합니다.
+- **SQLite3 벌크 쓰기 버퍼링 (`DatabaseWriter`)**:
+  - [writer.py](file:///home/simon/ATS/src/database/writer.py)
+  - 틱 데이터를 발생할 때마다 개별 디스크에 쓰지 않고, 메모리 큐(`db_queue`)에 우선 적재 및 임시 보관(버퍼링)합니다.
+  - 50건 또는 100건 단위로 큐의 패킷이 누적되거나 시간 초과(1초)가 발생하면, 메모리 버퍼의 데이터를 `executemany()` 메서드를 사용해 단일 SQLite3 트랜잭션으로 한 번에 영속화(Commit)합니다. 이는 디스크 쓰기 병목과 DB 락을 원천 예방합니다.
+
+### 6.2. 전략 엔진 데몬 (Strategy Daemon)의 캐싱 및 롤링 버퍼
+- **캔들 롤링 캐시 버퍼 (`StrategyHost`)**:
+  - [strategy_host.py](file:///home/simon/ATS/src/engine/strategy_host.py)
+  - 실시간 전략 검증을 위해 매번 과거 데이터베이스에서 캔들 이력을 쿼리하지 않습니다. 
+  - 데몬 가동(Warm-up) 시점에만 DB에서 종목별 과거 캔들을 1회 조회해 메모리 덱(List) 구조인 `self.candles`에 로딩(캐시)합니다.
+  - 런타임에는 새로 유입되어 마감된 실시간 캔들만 `self.candles.append()`를 통해 메모리 상에 추가하며, 메모리 과부하를 방지하기 위해 최대 200개만 유지하고 이전 데이터는 즉각 메모리에서 제거(`len(self.candles) > 200: pop(0)`) 관리합니다.
+- **보조지표 증분 계산 기법 (`IndicatorCalculator`)**:
+  - [indicators.py](file:///home/simon/ATS/src/engine/indicators.py)
+  - 캔들이 갱신될 때마다 전체 데이터셋을 pandas DataFrame 등으로 파싱하여 루프 연산하는 방식(O(N))을 사용하지 않습니다.
+  - 최근 유입된 단일 가격만 갱신하여 점진적 보정으로 지표값(SMA, RSI, Bollinger Bands)을 산출해내는 증분 계산(Incremental Calculation) 알고리즘을 사용합니다. 이를 통해 O(1) 수준의 연산 속도를 보장하여 CPU 연산 부하를 최소화합니다.
+
+---
+
+## 7. 실시간 예외 상황 처리 및 자격 복구 정책 (Edge Case & Error Recovery Policies)
+
+실시간 데이터 스트리밍 환경에서 빈번히 마주하는 시장 외 시간 및 거래소 특이 종목에 대한 시스템 예외 처리 및 복구 정책입니다.
+
+### 7.1. 국내 주식 장마감(소켓 차단) 시 시세 복구 정책 (KIS 웜업)
+국내 주식(KIS) 장마감(오후 6시 10분 이후) 시점에는 실시간 WebSocket 서버가 닫혀 틱 데이터 전송이 완전히 차단됩니다. 이 상황에서 웹 서버나 전략 엔진이 재기동되는 경우 메모리 캐시 소멸로 마켓 대시보드가 텅 비는 오류를 복구하기 위해 다음 정책을 수행합니다.
+- **동적 DB 역산 복구**: KIS 어댑터([kis.py](file:///home/simon/ATS/src/engine/market/kis.py))는 메모리 시세 캐시에 가격이 0으로 잡힐 시 `SqliteMarketDataRepository.warm_up_kis_cache(symbol)`를 호출합니다.
+- **복구 순서**:
+  1. `trades` 테이블에서 해당 종목의 마지막 기록된 틱 체결가를 로드합니다.
+  2. `candles`(1분봉) 테이블에서 당일 최고가, 최저가, 누적 거래량을 로드합니다.
+  3. 전일 자 동시간대 종가 캔들을 조회하여 현재 복구된 체결가와 대조한 뒤, 24시간 주가 등락률(`signed_change_rate`)을 역산하여 메모리 시세 캐시(`latest_prices`)에 강제 적재합니다.
+- 이를 통해 소켓이 차단된 비영업 시간에도 대시보드 화면에 최종 마감 단가와 등락률이 정상 노출되도록 보장합니다.
+
+### 7.2. 거래 미발생 및 정지/신규 대기 종목의 예외 처리
+자산 동기화 과정을 거쳐 거래소 목록상에는 존재하지만 실제 거래(체결)가 발생하지 않는 종목(예: 빗썸 `BILL` 코인, 거래정지 주식 등)이 활성화될 경우에 대한 예외 방침입니다.
+- **현상**: 거래소 Websocket 구독 목록에 등록되어 요청되더라도 실제 체결 틱이 방출되지 않으므로 DB에 틱과 캔들이 누적되지 않으며, Ticker API 질의 시에도 가격 및 타임스탬프가 `None` 또는 `0`으로 반환됩니다.
+- **시스템 정책**:
+  - `BaseCollector`는 해당 종목을 구독 목록(`available_symbols`)에는 올리지만, 데이터가 유입되지 않을 때 임의로 더미 가격을 생성하지 않고 실제 체결 틱이 최초 유입될 때까지 영속화 처리를 대기합니다.
+  - 프론트엔드 UI는 최신 캐시의 가격 정보가 `None` 또는 `0`일 경우, 차트 영역에 '준비중(Waiting for Data)' 상태를 출력하거나 차트 렌더링을 보류하여 비정상적인 지표 연산(나누기 0 오류 등)으로 인한 스크립트 크래시를 미연에 방지합니다.
+

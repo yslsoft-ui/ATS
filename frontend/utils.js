@@ -7,8 +7,14 @@
  * @param {number} price - 가격
  * @returns {string} 포맷팅된 가격 문자열
  */
-function formatPrice(price) {
+function formatPrice(price, decimals) {
     if (price === undefined || price === null) return '0';
+    if (decimals !== undefined) {
+        return price.toLocaleString(undefined, { 
+            minimumFractionDigits: decimals, 
+            maximumFractionDigits: decimals 
+        });
+    }
     if (price >= 1000) return price.toLocaleString();
     return price.toFixed(price < 1 ? 4 : 2);
 }

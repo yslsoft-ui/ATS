@@ -1,16 +1,16 @@
-# Graph Report - ATS  (2026-05-27)
+# Graph Report - ATS  (2026-05-28)
 
 ## Corpus Check
-- 160 files · ~560,546 words
+- 169 files · ~561,908 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3567 nodes · 3987 edges · 508 communities (468 shown, 40 thin omitted)
-- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 381 edges (avg confidence: 0.68)
+- 3797 nodes · 4244 edges · 520 communities (475 shown, 45 thin omitted)
+- Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 401 edges (avg confidence: 0.68)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c9d076c1`
+- Built from commit: `a72bac3b`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -488,6 +488,18 @@
 - [[_COMMUNITY_Community 505|Community 505]]
 - [[_COMMUNITY_Community 506|Community 506]]
 - [[_COMMUNITY_Community 507|Community 507]]
+- [[_COMMUNITY_Community 508|Community 508]]
+- [[_COMMUNITY_Community 509|Community 509]]
+- [[_COMMUNITY_Community 510|Community 510]]
+- [[_COMMUNITY_Community 511|Community 511]]
+- [[_COMMUNITY_Community 512|Community 512]]
+- [[_COMMUNITY_Community 513|Community 513]]
+- [[_COMMUNITY_Community 514|Community 514]]
+- [[_COMMUNITY_Community 515|Community 515]]
+- [[_COMMUNITY_Community 516|Community 516]]
+- [[_COMMUNITY_Community 517|Community 517]]
+- [[_COMMUNITY_Community 518|Community 518]]
+- [[_COMMUNITY_Community 519|Community 519]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `upbit` - 262 edges
@@ -496,9 +508,9 @@
 4. `📉 KIS 선물옵션/파생상품 오픈 API 정제 규격 마스터` - 80 edges
 5. `🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터` - 52 edges
 6. `kis` - 52 edges
-7. `get_db_conn()` - 48 edges
+7. `get_db_conn()` - 51 edges
 8. `PortfolioManager` - 31 edges
-9. `Candle` - 29 edges
+9. `Candle` - 31 edges
 10. `TradingSystem` - 26 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -508,12 +520,12 @@
   run_backtest_sample.py → src/engine/strategies/macd_strategy.py
 - `main()` --calls--> `MomentumSpikeStrategy`  [INFERRED]
   run_backtest_sample.py → src/engine/strategies/momentum_spike_strategy.py
-- `test_bithumb_collector()` --calls--> `BithumbCollector`  [INFERRED]
-  scratch/test_bithumb.py → src/engine/collector_bithumb.py
-- `test_kis_token()` --calls--> `ConfigManager`  [INFERRED]
-  scratch/test_kis_auth.py → src/config/manager.py
+- `test_bithumb_collector()` --calls--> `PortfolioManager`  [INFERRED]
+  scratch/test_bithumb.py → src/engine/portfolio.py
+- `main()` --calls--> `ConfigManager`  [INFERRED]
+  scratch/detailed_symbol_analysis.py → src/config/manager.py
 
-## Communities (508 total, 40 thin omitted)
+## Communities (520 total, 45 thin omitted)
 
 ### Community 0 - "업비트 코인 마스터 데이터"
 Cohesion: 0.01
@@ -524,72 +536,72 @@ Cohesion: 0.01
 Nodes (186): bithumb, 0G, A, AAVE, ADA, AERGO, AGLD, ALT (+178 more)
 
 ### Community 2 - "IPC 버스 및 DB 저장소"
-Cohesion: 0.15
-Nodes (10): cleanup_stale_socket(), ensure_ipc_dir(), EventBusPublisher, EventBusSubscriber, 과거 비정상 종료 등으로 남아있는 stale 소켓 파일을 안전하게 제거합니다., 이벤트 발행을 처리하는 ZeroMQ IPC Publisher 래퍼입니다.     ZeroMQ의 세부 구성을 내부로 격리하여 외부 모듈은 Zero, 메시지를 지정된 토픽 카테고리로 비동기 발행합니다., 이벤트를 비동기로 수신하는 ZeroMQ IPC Subscriber 래퍼입니다. (+2 more)
+Cohesion: 0.13
+Nodes (13): cleanup_stale_socket(), ensure_ipc_dir(), EventBusPublisher, EventBusSubscriber, 과거 비정상 종료 등으로 남아있는 stale 소켓 파일을 안전하게 제거합니다., 이벤트 발행을 처리하는 ZeroMQ IPC Publisher 래퍼입니다.     ZeroMQ의 세부 구성을 내부로 격리하여 외부 모듈은 Zero, 메시지를 지정된 토픽 카테고리로 비동기 발행합니다., 이벤트를 비동기로 수신하는 ZeroMQ IPC Subscriber 래퍼입니다. (+5 more)
 
 ### Community 3 - "주식 마스터 데이터"
 Cohesion: 0.04
 Nodes (52): kis, 000270, 000660, 004870, 005380, 005490, 005930, 005935 (+44 more)
 
 ### Community 4 - "거래소 데이터 수집기"
-Cohesion: 0.1
-Nodes (14): BaseCollector, CollectorRegistry, _fetch_historical_candles(), _fetch_symbols(), _get_websocket_url(), _parse_message(), 종목별 워밍업 및 과거 캔들 히스토리 로드를 수행합니다., 큐에서 데이터를 꺼내 분석 및 전략 실행을 담당하는 공통 워커 (+6 more)
+Cohesion: 0.08
+Nodes (19): BaseCollector, _fetch_historical_candles(), _fetch_symbols(), _get_websocket_url(), _parse_message(), 종목별 워밍업 및 과거 캔들 히스토리 로드를 수행합니다., 큐에서 데이터를 꺼내 분석 및 전략 실행을 담당하는 공통 워커, 데이터베이스의 exchange_assets 테이블에서         해당 거래소(self.exchange)의 활성화된(is_active = 1) (+11 more)
 
 ### Community 5 - "백테스트 및 포트폴리오 관리"
-Cohesion: 0.21
-Nodes (10): PortfolioManager, 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., MockSignal, test_apply_slippage(), test_calculate_position_size() (+2 more)
+Cohesion: 0.11
+Nodes (18): PortfolioManager, 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용) (+10 more)
 
 ### Community 6 - "한국 주식 수집 및 매핑"
 Cohesion: 0.09
-Nodes (7): KisCollector, ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다., 한국투자증권(KIS) API로부터 국내 주식 실시간 체결 데이터를 수집합니다., 한국투자증권(KIS) REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., TestKisDynamicSubscription, MarketHours, 국내외 시장별 운영 시간을 관리하는 유틸리티입니다.     Python 3.9+ 표준 라이브러리인 zoneinfo를 사용하여 시간대를 처리합니다
+Nodes (11): KisCollector, ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다., ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다., ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다., ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제합니다., 한국투자증권(KIS) API로부터 국내 주식 실시간 체결 데이터를 수집합니다., 한국투자증권(KIS) REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 한국투자증권(KIS) REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다. (+3 more)
 
 ### Community 7 - "트레이딩 시스템 및 DB 스키마"
-Cohesion: 0.15
-Nodes (10): test_bithumb_market_adapter(), test_kis_market_adapter(), test_upbit_market_adapter(), BithumbMarketAdapter, MarketTickerDTO, 거래소별 실시간 시세 요약 정보 데이터 전송 객체 (Typed DTO), KisMarketAdapter, 국내 주식(KIS) 시세 조회 전용 어댑터 (+2 more)
+Cohesion: 0.12
+Nodes (14): ABC, test_bithumb_market_adapter(), test_kis_market_adapter(), test_upbit_market_adapter(), MarketAdapter, 각 거래소별 시세 수집을 담당하는 어댑터 인터페이스 (Seam), BithumbMarketAdapter, MarketTickerDTO (+6 more)
 
 ### Community 8 - "프론트엔드 앱 및 전략 관리"
 Cohesion: 0.09
 Nodes (17): btnCleanup, chartDiv, cleanupDateInput, exchangeState, lastSeenErrors, loadRankingResult(), loadRankingView(), loadStrategies() (+9 more)
 
 ### Community 9 - "프론트엔드 마켓 뷰 및 초기화"
-Cohesion: 0.12
-Nodes (20): init(), initCollectorControls(), initDatabaseControls(), initRankingControls(), initTradingControls(), initViewNavigation(), loadRecentTrades(), updateCollectorStatus() (+12 more)
+Cohesion: 0.19
+Nodes (12): updateHeaderInfo(), filtered, formatElapsedTime(), initMarketTabs(), loadMarket(), loadSymbols(), marketData, q (+4 more)
 
 ### Community 10 - "서버 마켓 라우터"
-Cohesion: 0.09
-Nodes (23): fetch_ranking(), get_candles(), get_market(), get_prev_trading_day(), get_ranking_types(), get_restored_candles(), get_symbols(), 12종 순위 분석 항목의 제목, 설명, 연동할 TR_ID 목록을 반환합니다. (+15 more)
+Cohesion: 0.08
+Nodes (25): api_sync_assets(), fetch_ranking(), get_candles(), get_market(), get_prev_trading_day(), get_ranking_types(), get_restored_candles(), get_symbols() (+17 more)
 
 ### Community 11 - "프론트엔드 백테스트 및 알림"
-Cohesion: 0.14
-Nodes (11): btnCleanup, cleanupDateInput, exchangeState, initCollectorControls(), initDatabaseControls(), lastSeenErrors, previewCandles, previewPanel (+3 more)
+Cohesion: 0.1
+Nodes (20): init(), initCollectorControls(), initDatabaseControls(), initRankingControls(), initTradingControls(), initViewNavigation(), loadRecentTrades(), updateCollectorStatus() (+12 more)
 
 ### Community 12 - "라벨 인리치먼트 및 위키 도구"
 Cohesion: 0.23
 Nodes (12): generate_rule_based_label(), is_target_label(), load_json_file(), main(), make_semantic_prompt(), Gemini API에 전송할 한글 전용 고품질 시맨틱 라벨 추천 프롬프트를 빌드합니다., 네이티브 urllib 라이브러리를 사용하여 Gemini API를 호출하고 재시도 백오프를 수행합니다., 라벨 정보를 파일에 점진적으로 영속화하여 안전한 체크포인팅을 수행합니다. (+4 more)
 
 ### Community 13 - "서버 텔레메트리 라우터"
-Cohesion: 0.15
-Nodes (12): cleanup_data(), cleanup_data_preview(), clear_alerts(), get_alerts(), get_queue_status(), 지정된 날짜 이전의 체결 데이터 및 캔들 데이터를 영구 삭제합니다., 각 작업 큐의 현재 적체량 및 누적 처리량을 반환합니다., UI 확인용 테스트 알림을 강제로 발생시킵니다. (+4 more)
+Cohesion: 0.1
+Nodes (7): BaseCollector, 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., UpbitCollector, UpbitCollector
 
 ### Community 14 - "프론트엔드 실시간 처리 및 유틸리티"
 Cohesion: 0.24
 Nodes (10): addAlertToTable(), exitExplorerMode(), loadHistory(), processTick(), updateMetrics(), updatePortfolioRealtime(), updateStrategyStatusUI(), updateTable() (+2 more)
 
 ### Community 15 - "서버 포트폴리오 라우터"
-Cohesion: 0.1
-Nodes (20): _create_upbit_jwt(), get_portfolio(), get_upbit_assets(), list_portfolios(), panic_sell(), 모든 포지션을 즉시 시장가 청산하고 비상 정지합니다., 관리 중인 모든 포트폴리오 목록을 반환합니다., 업비트 실제 잔고를 조회하고 실시간 시세를 반영하여 평가금액이 높은 순서대로 정렬해 반환합니다. (+12 more)
+Cohesion: 0.06
+Nodes (37): _create_upbit_jwt(), end_portfolio_session(), _end_portfolio_session_internal(), get_portfolio(), get_trades(), get_upbit_assets(), list_portfolios(), panic_sell() (+29 more)
 
 ### Community 16 - "웹소켓 연결 관리"
-Cohesion: 0.08
-Nodes (19): 로컬 캐시에 없는 KIS 종목코드가 발견되면 KIS REST API 주식현재가 시세조회를 통해         한글 종목명을 실시간 질의하여 DB, 로컬 캐시에 없는 KIS 종목코드가 발견되면 KIS REST API 주식현재가 시세조회를 통해         한글 종목명을 실시간 질의하여 DB, 빗썸 단독 상장 등의 이유로 한글명이 없는 경우, 빗썸 공식 V1 API(/market/all)를 통해         해당 심볼의 한글명을 찾아, 빗썸 단독 상장 등의 이유로 한글명이 없는 경우, 빗썸 공식 V1 API(/market/all)를 통해         해당 심볼의 한글명을 찾아, 거래소와 심볼을 받아 한글명을 반환합니다. 단일 캐시에서 조회합니다., [DEPRECATED] 동기식 매핑 추가는 비동기 add_mapping_async()를 권장합니다., 거래소와 심볼을 받아 한글명을 반환합니다., [DEPRECATED] 동기식 매핑 추가는 비동기 add_mapping_async()를 권장합니다. (+11 more)
+Cohesion: 0.15
+Nodes (9): [DEPRECATED] 동기식 매핑 추가는 비동기 add_mapping_async()를 권장합니다., [DEPRECATED] 동기식 매핑 추가는 비동기 add_mapping_async()를 권장합니다., [DEPRECATED] 동기식 매핑 추가는 비동기 add_mapping_async()를 권장합니다., [DEPRECATED] 하위 호환용 빈 래퍼 함수입니다., [DEPRECATED] 하위 호환용 빈 래퍼 함수입니다., [DEPRECATED] 하위 호환용 빈 래퍼 함수입니다., [DEPRECATED] 하위 호환용 빈 래퍼 함수입니다., 종목 코드와 한글명을 매핑하는 싱글톤 유틸 (+1 more)
 
 ### Community 17 - "프론트엔드 포트폴리오 관리"
 Cohesion: 0.1
 Nodes (37): showAlert(), backtestStrategyMetadata, deleteBacktestHistory(), hideBacktestResultPanels(), loadBacktestFromHistory(), loadBacktestHistoryList(), loadBacktestView(), renderBacktestResults() (+29 more)
 
 ### Community 18 - "인메모리 데이터 저장소"
-Cohesion: 0.24
-Nodes (9): Portfolio, 개별 포트폴리오의 자산 상태(현금, 포지션)를 관리합니다., 테스트 세션 시작 전 격리된 테스트용 DB를 초기화하고, 완료 후 말끔히 삭제합니다., get_portfolio_current_prices 및 get_portfolio_report_data 메서드가 정상적으로 데이터를 빌드하는지 검, setup_test_db(), test_portfolio_basic_operations(), test_portfolio_manager_handle_signal(), test_portfolio_report_data_generation() (+1 more)
+Cohesion: 0.14
+Nodes (13): Portfolio, 개별 포트폴리오의 자산 상태(현금, 포지션)를 관리합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., get_portfolio_current_prices 및 get_portfolio_report_data 메서드가 정상적으로 데이터를 빌드하는지 검, test_portfolio_basic_operations() (+5 more)
 
 ### Community 19 - "서버 수집기 라우터"
 Cohesion: 0.22
@@ -597,19 +609,19 @@ Nodes (6): get_status(), 지정한 거래소의 수집기를 수동 시작합니
 
 ### Community 20 - "SQLite 마켓 데이터 및 브로드캐스트"
 Cohesion: 0.07
-Nodes (23): BaseStrategy, SUPER, 전략 클래스들을 관리하고 인스턴스화하는 레지스트리입니다., StrategyRegistry, StrategyResult, get_metadata(), MACDStrategy, MACD 골든크로스(매수) 및 데드크로스(매도) 신호를 생성합니다. (+15 more)
+Nodes (24): BaseStrategy, SUPER, CollectorRegistry, 전략 클래스들을 관리하고 인스턴스화하는 레지스트리입니다., StrategyRegistry, StrategyResult, get_metadata(), MACDStrategy (+16 more)
 
 ### Community 21 - "기술 지표 계산 엔진"
-Cohesion: 0.11
-Nodes (14): get_db_conn(), 최적화된 설정을 적용한 SQLite 연결을 제공하는 컨텍스트 매니저입니다.     - WAL 모드: 읽기/쓰기 동시성 향상     - Synch, 실제 SQLite 데이터베이스 및 실시간 수집기의 메모리 상태를 연동하는 실거래용 어댑터입니다., 실제 SQLite 데이터베이스 및 실시간 수집기의 메모리 상태를 연동하는 실거래용 어댑터입니다., SqliteMarketDataRepository, 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         거래소별 초기 예수금을 격리하여 백테스트를 수행합니다., 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         단일 포트폴리오의 자금(가용 현금의 20% 분산 투자)을 공유하는 백, 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         단일 포트폴리오의 자금(가용 현금의 20% 분산 투자)을 공유하는 백 (+6 more)
+Cohesion: 0.09
+Nodes (20): get_db_conn(), 최적화된 설정을 적용한 SQLite 연결을 제공하는 컨텍스트 매니저입니다.     - WAL 모드: 읽기/쓰기 동시성 향상     - Synch, 실제 SQLite 데이터베이스 및 실시간 수집기의 메모리 상태를 연동하는 실거래용 어댑터입니다., 실제 SQLite 데이터베이스 및 실시간 수집기의 메모리 상태를 연동하는 실거래용 어댑터입니다., SqliteMarketDataRepository, 포트폴리오의 보유 종목들에 대한 현재가(종가) 맵을 공통으로 산출합니다.         1순위: 진행 중인 경우 system.latest_pri, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, cleanup_data() (+12 more)
 
 ### Community 22 - "마켓 데이터 저장소 기본 정의"
 Cohesion: 0.09
 Nodes (19): BacktestEngine, BacktestPortfolioManagerProxy, StrategyHost가 포트폴리오 요약을 조회할 때      특정 백테스트 임시 포트폴리오 ID를 바라보도록 우회해 주는 프록시 객체입니다., StrategyHost가 포트폴리오 요약을 조회할 때      특정 백테스트 임시 포트폴리오 ID를 바라보도록 우회해 주는 프록시 객체입니다., 저장된 틱 데이터를 기반으로 과거 리플레이 백테스트를 수행합니다., 저장된 틱 데이터를 기반으로 과거 리플레이 백테스트를 수행합니다., Candle, BaseStrategy (+11 more)
 
 ### Community 23 - "프론트엔드 상태 스토어"
-Cohesion: 0.12
-Nodes (17): end_portfolio_session(), _end_portfolio_session_internal(), get_trades(), 최근 체결 데이터를 DB에서 조회하여 반환합니다., 보유 포지션 청산 없이 실시간 모의투자 세션을 마감(동결) 처리합니다., 모의투자 마감 내부 공통 처리 메서드 (미실현 평가가 박제), 새로운 실시간 모의투자 세션을 시작합니다., 새로운 실시간 모의투자 세션을 시작합니다. (+9 more)
+Cohesion: 0.17
+Nodes (9): [수정] 실시간 동작 중 DB 쓰기 작업을 배제하고 오직 메모리 캐시 최신화만 수행합니다.         마스터 쓰기는 데몬 기동 시의 1회성, 로컬 캐시에 없는 KIS 종목코드가 발견되면 KIS REST API 주식현재가 시세조회를 통해         한글 종목명을 실시간 질의하여 DB, 로컬 캐시에 없는 KIS 종목코드가 발견되면 KIS REST API 주식현재가 시세조회를 통해         한글 종목명을 실시간 질의하여 DB, 로컬 캐시에 없는 KIS 종목코드가 발견되면 KIS REST API 주식현재가 시세조회를 통해         한글 종목명을 실시간 질의하여 DB, 빗썸 단독 상장 등의 이유로 한글명이 없는 경우, 빗썸 공식 V1 API(/market/all)를 통해         해당 심볼의 한글명을 찾아, 빗썸 단독 상장 등의 이유로 한글명이 없는 경우, 빗썸 공식 V1 API(/market/all)를 통해         해당 심볼의 한글명을 찾아, 빗썸 단독 상장 등의 이유로 한글명이 없는 경우, 빗썸 공식 V1 API(/market/all)를 통해         해당 심볼의 한글명을 찾아, 새로운 종목의 한글명을 asset_master 테이블에만 영속화하고 메모리 캐시를 업데이트합니다.         exchange_assets(수 (+1 more)
 
 ### Community 24 - "KIS 랭킹 테스트"
 Cohesion: 0.83
@@ -621,7 +633,7 @@ Nodes (21): Example, Example, Example, Fields, 📑 KIS 오픈 API 전체 일람
 
 ### Community 68 - "Community 68"
 Cohesion: 0.1
-Nodes (20): BacktestRunRequest, delete_all_backtest_history(), delete_backtest_history(), get_backtest_history(), 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 특정 백테스트 세트 또는 마감된 실시간 모의투자 세션의 상세 정보를 DB에서 영구 삭제합니다., 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다. (+12 more)
+Nodes (19): delete_all_backtest_history(), delete_backtest_history(), get_backtest_history(), 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 특정 백테스트 세트 또는 마감된 실시간 모의투자 세션의 상세 정보를 DB에서 영구 삭제합니다., 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다., 틱 리플레이 기반 백테스트를 실행합니다. (+11 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.11
@@ -640,8 +652,8 @@ Cohesion: 0.13
 Nodes (9): main(), run_and_print(), RSI 전략의 파라미터 변경이 신호 발생에 정확히 반영되는지 테스트합니다., TestStrategyParams, StrategyHost로부터 전달받은 컨텍스트를 사용하여 판단을 내립니다., RSI 지표를 기반으로 과매도(Buy) 및 과매수(Sell) 신호를 생성합니다., RSIStrategy, plot_backtest_result() (+1 more)
 
 ### Community 73 - "Community 73"
-Cohesion: 0.18
-Nodes (9): execute_pipeline_order(), 포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다., 포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다., 포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다., 포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다., 체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다., 체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다., 체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다. (+1 more)
+Cohesion: 0.08
+Nodes (23): execute_pipeline_order(), OrderExecutor, Position, OrderbookMatchingEngine을 사용하여 가상 주문을 체결합니다., OrderbookMatchingEngine을 사용하여 가상 주문을 체결합니다., 실행 시점에 수수료율을 동적으로 변경합니다., 실행 시점에 수수료율을 동적으로 변경합니다., 실행 시점에 수수료율을 동적으로 변경합니다. (+15 more)
 
 ### Community 74 - "Community 74"
 Cohesion: 0.11
@@ -664,8 +676,8 @@ Cohesion: 0.14
 Nodes (9): load_dynamic_strategies(), 지정된 디렉토리 내의 모든 .py 파일을 찾아 전략 클래스로 로드합니다., 메모리 레지스트리에서 전략을 제거합니다.     (파일은 삭제하지 않고 관리 목록에서만 제외), unload_strategy(), 문법 오류가 있는 파일을 로드할 때 시스템이 중단되지 않는지 확인합니다., 전략 해제 시 레지스트리 제거 및 파일 삭제가 이루어지는지 확인합니다., 동일한 클래스명을 가진 전략이 여러 파일에 있을 때의 처리를 확인합니다., TestStrategyLoaderTDD (+1 more)
 
 ### Community 79 - "Community 79"
-Cohesion: 0.09
-Nodes (9): BaseCollector, BithumbCollector, 빗썸 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 빗썸 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다. (+1 more)
+Cohesion: 0.12
+Nodes (8): BithumbCollector, 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 빗썸 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 빗썸 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 빗썸 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., test_bithumb_collector()
 
 ### Community 80 - "Community 80"
 Cohesion: 0.18
@@ -680,32 +692,32 @@ Cohesion: 0.17
 Nodes (11): Example, Example, Fields, Fields, 📉 KIS 선물옵션/파생상품 오픈 API 정제 규격 마스터, Response Header, 개요, 기본정보 (+3 more)
 
 ### Community 83 - "Community 83"
-Cohesion: 0.2
-Nodes (5): CandlePublishingQueue, main(), 틱 수집 데이터를 DBWriter 큐에 넣고, 동시에 ZeroMQ market_data 채널로 발행합니다., 완성된 캔들 데이터를 DBWriter 큐에 넣고, 동시에 ZeroMQ market_data 채널로 발행합니다., TickPublishingQueue
+Cohesion: 0.1
+Nodes (12): _listeners, set(), _state, Store, ConnectionManager, WebSocket 연결 및 종목별 구독을 관리합니다., 클라이언트가 특정 시장의 종목을 구독합니다., 해당 종목을 구독 중인 클라이언트에게만 O(1) 속도로 선별 전송합니다. (+4 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.14
-Nodes (11): BacktestRequest, get_candles(), get_recent_trades(), get_status(), 틱 데이터를 기반으로 캔들(OHLC) 데이터를 생성하고 기술 지표를 추가하여 반환합니다., 지정된 파라미터로 백테스트 엔진을 실행합니다., 시스템의 현재 연결 상태와 버전 정보를 반환합니다., 지정된 종목의 최근 체결 데이터를 반환합니다. (+3 more)
+Cohesion: 0.13
+Nodes (12): BacktestRequest, get_candles(), get_recent_trades(), get_status(), 틱 데이터를 기반으로 캔들(OHLC) 데이터를 생성하고 기술 지표를 추가하여 반환합니다., 지정된 파라미터로 백테스트 엔진을 실행합니다., 시스템의 현재 연결 상태와 버전 정보를 반환합니다., 지정된 종목의 최근 체결 데이터를 반환합니다. (+4 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외옵션 호가
 
 ### Community 86 - "Community 86"
-Cohesion: 0.18
-Nodes (10): ensure_column(), init_db(), migrate_data(), 기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1, 기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1, seed_initial_assets(), test_stock_mapper_db_flow(), 테스트 구동 전 임시 DB를 셋업하고, 테스트 완료 후 디스크에서 완전히 삭제합니다. (+2 more)
+Cohesion: 0.15
+Nodes (13): ensure_column(), init_db(), migrate_data(), 기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1, 기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1, 기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1, seed_initial_assets(), test_stock_mapper_db_flow() (+5 more)
 
 ### Community 87 - "Community 87"
 Cohesion: 0.22
 Nodes (8): description, devDependencies, jest, jest-environment-jsdom, name, scripts, test, version
 
 ### Community 88 - "Community 88"
-Cohesion: 0.17
-Nodes (5): ConnectionManager, WebSocket 연결 및 종목별 구독을 관리합니다., 클라이언트가 특정 시장의 종목을 구독합니다., 해당 종목을 구독 중인 클라이언트에게만 O(1) 속도로 선별 전송합니다., 시스템 경고 또는 전체 이벤트 로그를 구독 상태와 무관하게 전역 전송합니다.
+Cohesion: 0.25
+Nodes (6): 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 시스템의 모든 구성 요소를 올바른 순서로 기동합니다., 시스템의 모든 구성 요소를 올바른 순서로 기동합니다.
 
 ### Community 89 - "Community 89"
-Cohesion: 0.13
-Nodes (8): InMemoryMarketDataRepository, 단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 어댑터입니다., 단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 어댑터입니다., 인메모리 저장소의 캔들 적재, 조회 및 보조지표 자동 계산 기능을 테스트합니다., 인메모리 저장소의 최근 틱 데이터 조회 및 정렬 기능을 테스트합니다., 시장 데이터 저장소 모듈(MarketDataRepository)에 대한 정밀 단위 테스트 클래스입니다., 실제 SQLite 데이터베이스 어댑터의 캔들 쿼리 동작 안정성을 테스트합니다., TestMarketDataRepository
+Cohesion: 0.1
+Nodes (9): InMemoryMarketDataRepository, 단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 어댑터입니다., 단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 어댑터입니다., 단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 어댑터입니다., 인메모리 저장소의 캔들 적재, 조회 및 보조지표 자동 계산 기능을 테스트합니다., 인메모리 저장소의 최근 틱 데이터 조회 및 정렬 기능을 테스트합니다., 시장 데이터 저장소 모듈(MarketDataRepository)에 대한 정밀 단위 테스트 클래스입니다., 실제 SQLite 데이터베이스 어댑터의 캔들 쿼리 동작 안정성을 테스트합니다. (+1 more)
 
 ### Community 90 - "Community 90"
 Cohesion: 0.33
@@ -720,7 +732,7 @@ Cohesion: 0.25
 Nodes (6): PortfolioAdapter, groups, mockPortfolioData, mockRawData, PortfolioAdapter, result
 
 ### Community 93 - "Community 93"
-Cohesion: 0.22
+Cohesion: 0.25
 Nodes (4): CandleGenerator, 틱 데이터를 실시간으로 수집하여 여러 타임프레임의 캔들을 생성합니다., 새로운 틱 데이터를 처리하고, 완성된(Closed) 캔들이 있다면 반환합니다.                  :param side: 'BID', TestCandleGenerator
 
 ### Community 94 - "Community 94"
@@ -732,8 +744,8 @@ Cohesion: 0.29
 Nodes (6): 3. Logging & Telemetry, 4. KIS (한국투자증권) API 연동 규격 원칙, Flagged ambiguities, Language, Multi-Market Real-time Trading System, Relationships
 
 ### Community 96 - "Community 96"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 기간별시세(일)
+Cohesion: 0.29
+Nodes (6): Example, Fields, 📊 KIS 채권/ELW/기타자산 오픈 API 정제 규격 마스터, 개요, 기본정보, 장내채권 기간별시세(일)
 
 ### Community 97 - "Community 97"
 Cohesion: 0.4
@@ -764,8 +776,8 @@ Cohesion: 0.33
 Nodes (5): ADR 0006: 거래소 필드 명시적 분리 및 심볼 정규화, 결과, 결정, 맥락, 상태
 
 ### Community 104 - "Community 104"
-Cohesion: 0.33
-Nodes (4): Agent skills, Domain docs, Issue tracker, Triage labels
+Cohesion: 0.18
+Nodes (9): Agent skills, Documentation Synchronization Protocol, Domain docs, Issue tracker, KIS API 필수 선행 조회 규칙 (Mandatory Reference Lookup), Triage labels, 강제 Workflow 실행, 공식 참조 문서 (+1 more)
 
 ### Community 105 - "Community 105"
 Cohesion: 0.33
@@ -1056,8 +1068,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 매도주문
 
 ### Community 177 - "Community 177"
-Cohesion: 0.29
-Nodes (6): Example, Fields, 📊 KIS 채권/ELW/기타자산 오픈 API 정제 규격 마스터, 개요, 기본정보, 장내채권 정정취소주문
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 정정취소주문
 
 ### Community 178 - "Community 178"
 Cohesion: 0.4
@@ -1092,8 +1104,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 장내채권현재가(일별)
 
 ### Community 186 - "Community 186"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, (야간)선물옵션 증거금 상세
+Cohesion: 0.29
+Nodes (6): 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 비동기 병렬로 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 비동기 병렬로 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다.
 
 ### Community 187 - "Community 187"
 Cohesion: 0.4
@@ -1104,8 +1116,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, (야간)선물옵션 주문가능 조회
 
 ### Community 189 - "Community 189"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 잔고정산손익내역
+Cohesion: 0.09
+Nodes (28): 1.1. 수집기 제어 (Data Collector), 1.2. 마켓 데이터 조회 (Market & Symbols), 1.3. 포트폴리오 & 모의 트레이딩 (Portfolios & Simulation), 1.4. 백테스트 (Backtest Execution), 1.5. 시스템 텔레메트리 & 데이터 클리닝 (Telemetry & Cleanup), 1.5. 트레이딩 전략 관리 (Strategies), 1.6. 시스템 텔레메트리 & 데이터 클리닝 (Telemetry & Cleanup), 1. REST API 명세 (HTTP REST Endpoints) (+20 more)
 
 ### Community 190 - "Community 190"
 Cohesion: 0.4
@@ -1116,8 +1128,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 기준일체결내역
 
 ### Community 192 - "Community 192"
-Cohesion: 0.16
-Nodes (11): 특정 종목의 최신 가격 정보를 반환합니다., 특정 종목의 최신 가격 정보를 반환합니다., 전략 엔진에서 발생한 신호를 처리합니다., 설정 파일 변경 시 전략 파라미터 및 인증 정보를 실시간으로 업데이트합니다., 설정 파일 변경 시 전략 파라미터 및 인증 정보를 실시간으로 업데이트합니다., 특정 종목의 최신 가격 정보를 반환합니다., 전략 엔진에서 발생한 신호를 처리합니다., 전략 엔진에서 발생한 신호를 처리합니다. (+3 more)
+Cohesion: 0.09
+Nodes (19): 특정 종목의 최신 가격 정보를 반환합니다., 특정 종목의 최신 가격 정보를 반환합니다., 전략 엔진에서 발생한 신호를 처리합니다., 전략의 실시간 상태 정보(Audit Log)를 처리합니다., 전략의 실시간 상태 정보(Audit Log)를 처리합니다., 특정 종목의 최신 가격 정보를 반환합니다., 전략 엔진에서 발생한 신호를 처리합니다., 설정 파일 변경 시 전략 파라미터 및 인증 정보를 실시간으로 업데이트합니다. (+11 more)
 
 ### Community 193 - "Community 193"
 Cohesion: 0.4
@@ -1132,28 +1144,28 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션기간별시세(일_주_월_년)
 
 ### Community 196 - "Community 196"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 국내옵션전광판_선물, 기본정보
+Cohesion: 0.2
+Nodes (5): CandlePublishingQueue, main(), 틱 수집 데이터를 DBWriter 큐에 넣고, 동시에 ZeroMQ market_data 채널로 발행합니다., 완성된 캔들 데이터를 DBWriter 큐에 넣고, 동시에 ZeroMQ market_data 채널로 발행합니다., TickPublishingQueue
 
 ### Community 197 - "Community 197"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 분봉조회
+Cohesion: 0.33
+Nodes (6): get_backtest_history_detail(), 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다.
 
 ### Community 198 - "Community 198"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 국내옵션전광판_옵션월물리스트, 기본정보
+Cohesion: 0.33
+Nodes (5): 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         거래소별 초기 예수금을 격리하여 백테스트를 수행합니다., 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         단일 포트폴리오의 자금(가용 현금의 20% 분산 투자)을 공유하는 백, 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         단일 포트폴리오의 자금(가용 현금의 20% 분산 투자)을 공유하는 백, 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         거래소별 초기 예수금을 격리하여 백테스트를 수행합니다., 다중 종목들의 틱 데이터를 시간 순서대로 융합 리플레이하며,         거래소별 초기 예수금을 격리하여 백테스트를 수행합니다.
 
 ### Community 199 - "Community 199"
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 시세호가
 
 ### Community 200 - "Community 200"
-Cohesion: 0.17
-Nodes (9): 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), 현재 활성화된(즉 type이 'simulation'인) 가장 최근의 모의투자 포트폴리오 객체를 반환합니다., 특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.         (전략 컨텍스트 공급용), [DEPRECATED] 하위 호환성을 유지하기 위한 래퍼입니다.          실제 주문 처리는 ExecutionPipeline.process, [DEPRECATED] 하위 호환성을 유지하기 위한 래퍼입니다.          실제 주문 처리는 ExecutionPipeline.process, [DEPRECATED] 하위 호환성을 유지하기 위한 래퍼입니다.          실제 주문 처리는 ExecutionPipeline.process (+1 more)
+Cohesion: 0.07
+Nodes (29): 1. 두 데몬의 역할 분담 개요, 2.1. 주요 구성 컴포넌트, 2.2. 구동 시퀀스 및 흐름, 2.3. 동적 제어 (ZMQ collector_control), 2. 데이터 수집 데몬 (Collector Daemon), 3.1. 주요 구성 컴포넌트, 3.2. 구동 시퀀스 및 흐름, 3.3. 세션 핫리로드 (ZMQ strategy_control) (+21 more)
 
 ### Community 201 - "Community 201"
-Cohesion: 0.11
-Nodes (13): OrderbookMatchingEngine, 시장가 주문 시뮬레이션을 수행합니다.                  :param order_type: 'BUY' (매수) 또는 'SELL' (매, 호가창(Orderbook) 데이터를 기반으로 현실적인 슬리피지와 수수료를 반영하여     가중 평균 체결가(VWAP)를 계산하는 체결 엔진입니다, OrderbookMatchingEngine을 사용하여 가상 주문을 체결합니다., OrderbookMatchingEngine을 사용하여 가상 주문을 체결합니다., 실행 시점에 수수료율을 동적으로 변경합니다., 실행 시점에 수수료율을 동적으로 변경합니다., 실행 시점에 수수료율을 동적으로 변경합니다. (+5 more)
+Cohesion: 0.22
+Nodes (4): OrderbookMatchingEngine, 시장가 주문 시뮬레이션을 수행합니다.                  :param order_type: 'BUY' (매수) 또는 'SELL' (매, 호가창(Orderbook) 데이터를 기반으로 현실적인 슬리피지와 수수료를 반영하여     가중 평균 체결가(VWAP)를 계산하는 체결 엔진입니다, run_test()
 
 ### Community 202 - "Community 202"
 Cohesion: 0.4
@@ -1312,12 +1324,12 @@ Cohesion: 0.4
 Nodes (5): ELW 거래량순위, Example, Fields, 개요, 기본정보
 
 ### Community 242 - "Community 242"
-Cohesion: 0.4
-Nodes (5): ELW 기초자산 목록조회, Example, Fields, 개요, 기본정보
+Cohesion: 0.53
+Nodes (5): download_and_parse_mst(), fetch_bithumb_symbols(), fetch_upbit_symbols(), 거래소 API 전체 종목 정보를 조회하여 DB(asset_master, exchange_assets)와 1회성 동기화를 진행합니다.     -, sync_exchange_assets()
 
 ### Community 243 - "Community 243"
 Cohesion: 0.4
-Nodes (5): ELW 기초자산별 종목시세, Example, Fields, 개요, 기본정보
+Nodes (5): Example, Fields, 개요, 기본정보, 해외선물 상품기본정보
 
 ### Community 244 - "Community 244"
 Cohesion: 0.4
@@ -1580,20 +1592,20 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 국내주식 시간외등락율순위, 기본정보
 
 ### Community 309 - "Community 309"
-Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 장운영정보 (통합), 기본정보
+Cohesion: 0.31
+Nodes (7): MockCandle, 테스트용 임시 SQLite 테이블 구조를 세팅합니다., 테스트 완료 후 임시 파일을 청소합니다., DatabaseWriter의 비동기 라이프사이클과 최종 플러시 기능의 무결성을 검증합니다., setup_test_db(), teardown_test_db(), test_database_writer_flow()
 
 ### Community 311 - "Community 311"
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기간별손익일별합산조회, 기본정보
 
 ### Community 312 - "Community 312"
-Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 실시간회원사 (NXT), 기본정보
+Cohesion: 0.11
+Nodes (18): 1.1. 슬리피지 (Slippage) 모델링, 1.2. 수수료 (Fee) 계산, 1. 체결 엔진 로직 (Matching Engine Logic), 2.1. 실시간 윈도우 업데이트 (Sliding Window) — `IndicatorCalculator.update()`, 2.2. 배치 지표 계산 — `IndicatorCalculator.calculate_all_indicators()`, 2.3. 프론트엔드 실시간 지표 — `app.js: calculateIndicators()`, 2. 지표 연산 로직 (Indicator Calculation), 3.1. 전략 인터페이스 (+10 more)
 
 ### Community 313 - "Community 313"
 Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 실시간호가 (통합), 기본정보
+Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 잔고정산손익내역
 
 ### Community 314 - "Community 314"
 Cohesion: 0.4
@@ -1604,12 +1616,12 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 매도가능수량조회
 
 ### Community 317 - "Community 317"
-Cohesion: 0.15
-Nodes (10): 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 트레이딩 시스템의 모든 컴포넌트와 백그라운드 서비스를 총괄하는 슈퍼바이저입니다., 트레이딩 시스템의 모든 컴포넌트와 백그라운드 서비스를 총괄하는 슈퍼바이저입니다., TradingSystem, main() (+2 more)
+Cohesion: 0.09
+Nodes (17): [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다., [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다., [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다., SqliteTradingRepository, 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 모든 서비스를 안전하게 종료하고 데이터를 플러시합니다., 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다. (+9 more)
 
 ### Community 318 - "Community 318"
-Cohesion: 0.7
-Nodes (4): loadStrategies(), renderStrategyCards(), saveStrategyParams(), toggleStrategyStatus()
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 실시간체결가 (통합), 기본정보
 
 ### Community 319 - "Community 319"
 Cohesion: 0.4
@@ -1624,8 +1636,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 국내옵션전광판_콜풋, 기본정보
 
 ### Community 322 - "Community 322"
-Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 장운영정보 (NXT), 기본정보
+Cohesion: 0.7
+Nodes (4): get_bithumb_api_count(), get_kis_api_count(), get_upbit_api_count(), main()
 
 ### Community 323 - "Community 323"
 Cohesion: 0.4
@@ -2084,12 +2096,12 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 거래회전율순위
 
 ### Community 437 - "Community 437"
-Cohesion: 0.29
-Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 해외뉴스종합(제목)
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 기본정보, 해외뉴스종합(제목)
 
 ### Community 438 - "Community 438"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 당사 해외주식담보대출 가능 종목
+Cohesion: 0.29
+Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 당사 해외주식담보대출 가능 종목
 
 ### Community 439 - "Community 439"
 Cohesion: 0.4
@@ -2155,21 +2167,25 @@ Nodes (3): get_category(), main(), 섹션 내의 헤더 및 메뉴 위치 기반
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외선물종목현재가
 
+### Community 466 - "Community 466"
+Cohesion: 0.53
+Nodes (4): clearAlertHistory(), loadAlertHistory(), renderAlerts(), setAlertFilter()
+
 ### Community 467 - "Community 467"
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션기간약정수수료일별
 
 ### Community 468 - "Community 468"
-Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 실시간회원사 (통합), 기본정보
+Cohesion: 0.7
+Nodes (4): loadStrategies(), renderStrategyCards(), saveStrategyParams(), toggleStrategyStatus()
 
 ### Community 474 - "Community 474"
 Cohesion: 0.18
 Nodes (6): BaseMarketDataRepository, 시장 데이터(Candle, Trade)를 조회하기 위한 추상 저장소 인터페이스(Seam)입니다., IndicatorCalculator, 새로운 틱 가격을 업데이트하고 현재 계산된 지표를 반환합니다.                  :param price: 현재 체결가, 틱(Tick) 단위로 유입되는 실시간 데이터를 효율적으로 처리하기 위해     슬라이딩 윈도우(Sliding Window) 방식으로 지표를 계산, run_test()
 
 ### Community 475 - "Community 475"
-Cohesion: 0.18
-Nodes (9): Position, DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다. (+1 more)
+Cohesion: 0.2
+Nodes (8): DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 저장된 모든 포트폴리오 정보를 불러옵니다., DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다., DB에서 저장된 포트폴리오 정보를 불러옵니다.
 
 ### Community 477 - "Community 477"
 Cohesion: 0.4
@@ -2177,18 +2193,18 @@ Nodes (5): Example, Fields, Response Header, 국내주식 실시간체결가 (NX
 
 ### Community 478 - "Community 478"
 Cohesion: 0.4
-Nodes (5): Example, Fields, Response Header, 국내주식 실시간호가 (NXT), 기본정보
+Nodes (5): Example, Fields, 개요, 기본정보, (야간)선물옵션 증거금 상세
 
 ### Community 480 - "Community 480"
-Cohesion: 0.22
-Nodes (3): [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다., [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다., SqliteTradingRepository
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 실시간회원사 (NXT), 기본정보
 
 ### Community 482 - "Community 482"
 Cohesion: 0.4
 Nodes (5): Example, Fields, Response Header, 국내주식 실시간프로그램매매 (통합), 기본정보
 
 ### Community 491 - "Community 491"
-Cohesion: 0.21
+Cohesion: 0.24
 Nodes (4): get_all_metadata(), get_metadata(), StrategyType, Enum
 
 ### Community 492 - "Community 492"
@@ -2196,76 +2212,100 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외옵션 분봉조회
 
 ### Community 493 - "Community 493"
-Cohesion: 0.22
-Nodes (8): OrderExecutor, 현재 가를 반영한 총 자산 가치를 계산합니다., 주문 실행 인터페이스입니다. (가상/실제 공통), 현재 가를 반영한 총 자산 가치를 계산합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., 현재 가를 반영한 총 자산 가치를 계산합니다., 주문 실행 인터페이스입니다. (가상/실제 공통), 주문 실행 인터페이스입니다. (가상/실제 공통)
+Cohesion: 0.7
+Nodes (4): get_bithumb_api_symbols(), get_kis_api_symbols(), get_upbit_api_symbols(), main()
 
 ### Community 494 - "Community 494"
-Cohesion: 0.25
-Nodes (6): 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 디스크의 전략 파일과 설정 파일(YAML)을 동기화합니다., 시스템의 모든 구성 요소를 올바른 순서로 기동합니다., 시스템의 모든 구성 요소를 올바른 순서로 기동합니다.
+Cohesion: 0.7
+Nodes (4): download_and_parse_mst(), fetch_bithumb_symbols(), fetch_upbit_symbols(), main()
 
 ### Community 495 - "Community 495"
-Cohesion: 0.33
-Nodes (5): 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다., 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다., 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다., 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다., 수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다.
-
-### Community 496 - "Community 496"
-Cohesion: 0.33
-Nodes (5): 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 비동기 병렬로 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다., 전체 마켓(Upbit, Bithumb, KIS) 종목 정보를 취합하여 반환합니다.
-
-### Community 497 - "Community 497"
-Cohesion: 0.53
-Nodes (4): clearAlertHistory(), loadAlertHistory(), renderAlerts(), setAlertFilter()
-
-### Community 498 - "Community 498"
-Cohesion: 0.31
-Nodes (7): MockCandle, 테스트용 임시 SQLite 테이블 구조를 세팅합니다., 테스트 완료 후 임시 파일을 청소합니다., DatabaseWriter의 비동기 라이프사이클과 최종 플러시 기능의 무결성을 검증합니다., setup_test_db(), teardown_test_db(), test_database_writer_flow()
-
-### Community 499 - "Community 499"
-Cohesion: 0.33
-Nodes (6): get_backtest_history_detail(), 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다.
-
-### Community 500 - "Community 500"
-Cohesion: 0.5
-Nodes (3): ABC, MarketAdapter, 각 거래소별 시세 수집을 담당하는 어댑터 인터페이스 (Seam)
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 국내옵션전광판_선물, 기본정보
 
 ### Community 501 - "Community 501"
-Cohesion: 0.4
-Nodes (4): 전략의 실시간 상태 정보(Audit Log)를 처리합니다., 전략의 실시간 상태 정보(Audit Log)를 처리합니다., 전략의 실시간 상태 정보(Audit Log)를 처리합니다., 전략의 실시간 상태 정보(Audit Log)를 처리합니다.
+Cohesion: 0.13
+Nodes (14): 1. 거시적 시스템 구조 (Macro System View), 2.1. 실시간 시세 수집 및 차트 갱신 시퀀스, 2.2. 모의투자 매매 신호 및 체결 처리 시퀀스, 2. 미시적 데이터 및 제어 흐름 (Micro View), 3.1. 거래소 수집기 및 데이터 정규화 (Collector & Adapters), 3.2. 포트폴리오 관리자 및 체결 엔진 (PortfolioManager & Executor), 3.3. 지표 및 전략 계산기 (Indicators & Strategy), 3. 핵심 컴포넌트 구조 (+6 more)
 
 ### Community 502 - "Community 502"
-Cohesion: 0.4
-Nodes (3): _listeners, _state, Store
+Cohesion: 0.13
+Nodes (14): 1. 디자인 컨셉 (Design Concept), 2. 기술 스택 (Frontend Tech Stack), 3.1. 사이드바 (Sidebar) — 260px 고정 너비, 3.2. 메인 콘텐츠 영역 (Main Section), 3. 전체 레이아웃 구조 (Layout) — `frontend/index.html`, 4. 사용자 시나리오 (User Scenario), 5. 실시간 데이터 흐름 (WebSocket), 6. 모바일 및 반응형 대응 (Mobile & Responsive) (+6 more)
 
 ### Community 503 - "Community 503"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 국내선물 기초자산 시세, 기본정보
+Cohesion: 0.14
+Nodes (13): 1.10. exchange_assets (거래소별 취급 자산 관리), 1.1. exchanges (거래소 마스터), 1.2. trades (실시간 틱 데이터), 1.3. portfolios (시뮬레이션 포트폴리오 마스터), 1.4. portfolio_exchanges (포트폴리오-거래소 맵 및 세부 잔고), 1.5. positions (보유 자산 포지션), 1.6. orders_history (주문 내역 이력), 1.7. alerts (급등락 실시간 알림) (+5 more)
 
 ### Community 504 - "Community 504"
 Cohesion: 0.4
 Nodes (5): Example, Fields, Response Header, 국내주식 실시간프로그램매매 (NXT), 기본정보
 
+### Community 505 - "Community 505"
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 실시간호가 (통합), 기본정보
+
 ### Community 506 - "Community 506"
-Cohesion: 0.67
-Nodes (3): fetch_exchange_symbols(), main(), 설정에 정의된 symbols를 가져오거나, 없으면 거래소 API를 통해 전종목 리스트를 받아옵니다.
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 국내옵션전광판_옵션월물리스트, 기본정보
+
+### Community 507 - "Community 507"
+Cohesion: 0.17
+Nodes (11): 1.1. `trades` 테이블, 1.2. `orderbooks` 테이블, 1. 데이터베이스 스키마 (Database Schema), 2.1. 통합 서버 내장 수집기 — `src/server/main.py: CollectorManager` (메인), 2.2. 독립 수집기 — `src/collector/upbit_ws.py: UpbitCollector` (대체), 2.3. 데이터 관리 API — `src/server/main.py`, 2.4. 재연결 및 안정성 전략, 2. 수집기 아키텍처 (Collector Architecture) (+3 more)
+
+### Community 509 - "Community 509"
+Cohesion: 0.22
+Nodes (8): 1. 주요 특징 (Key Features), 2.1. 개발 환경 설정, 2.2. 실행 구성, 2. 퀵 스타트 (Quick Start), 3. 프로젝트 전체 문서 지도 (Documentation Map), code:bash (# 1. 가상환경 생성 및 활성화), code:bash (# 3. 데이터베이스 초기화 및 uvicorn 웹 서버 실행), Multi-Market Real-time Trading System (ATS)
+
+### Community 510 - "Community 510"
+Cohesion: 0.22
+Nodes (8): 1. 아키텍처 개요 (Overview), 2.1. 진입점 및 제어 (Entrypoint & Routing), 2.2. 데이터 레이어 (Data & State Management), 2.3. 컴포넌트 & 뷰 레이어 (Views & Visualization), 2. 핵심 프론트엔드 모듈, 3. 실시간 UI 갱신 시퀀스 (Real-time Flow), code:block1 ([ FastAPI Server (/ws, /api) ]), 프론트엔드 아키텍처 명세 (Frontend Architecture)
+
+### Community 511 - "Community 511"
+Cohesion: 0.4
+Nodes (5): ELW 기초자산 목록조회, Example, Fields, 개요, 기본정보
+
+### Community 512 - "Community 512"
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 실시간회원사 (통합), 기본정보
+
+### Community 513 - "Community 513"
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 국내선물 기초자산 시세, 기본정보
+
+### Community 514 - "Community 514"
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 장운영정보 (통합), 기본정보
+
+### Community 515 - "Community 515"
+Cohesion: 0.4
+Nodes (4): 거래소와 심볼을 받아 한글명을 반환합니다. 단일 캐시에서 조회합니다., 거래소와 심볼을 받아 한글명을 반환합니다. 단일 캐시에서 조회합니다., 거래소와 심볼을 받아 한글명을 반환합니다., 거래소와 심볼을 받아 한글명을 반환합니다.
+
+### Community 516 - "Community 516"
+Cohesion: 0.4
+Nodes (5): ELW 기초자산별 종목시세, Example, Fields, 개요, 기본정보
+
+### Community 517 - "Community 517"
+Cohesion: 0.4
+Nodes (5): Example, Fields, Response Header, 국내주식 장운영정보 (NXT), 기본정보
 
 ## Knowledge Gaps
-- **2103 isolated node(s):** `PYTHONPATH`, `version`, `source`, `sourceType`, `skillPath` (+2098 more)
+- **2224 isolated node(s):** `PYTHONPATH`, `version`, `source`, `sourceType`, `skillPath` (+2219 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **40 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **45 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `upbit` connect `업비트 코인 마스터 데이터` to `주식 마스터 데이터`, `SQLite 마켓 데이터 및 브로드캐스트`?**
-  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+  _High betweenness centrality (0.077) - this node is a cross-community bridge._
 - **Why does `SUPER` connect `SQLite 마켓 데이터 및 브로드캐스트` to `업비트 코인 마스터 데이터`, `한국 주식 수집 및 매핑`, `Community 72`, `웹소켓 연결 관리`, `Community 80`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
-- **Why does `🇰🇷 KIS 국내주식 오픈 API 정제 규격 마스터` connect `Community 77` to `Community 132`, `Community 133`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 141`, `Community 142`, `Community 143`, `Community 144`, `Community 145`, `Community 146`, `Community 147`, `Community 148`, `Community 149`, `Community 150`, `Community 231`, `Community 240`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 249`, `Community 250`, `Community 251`, `Community 252`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 259`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 269`, `Community 270`, `Community 271`, `Community 272`, `Community 273`, `Community 274`, `Community 275`, `Community 276`, `Community 277`, `Community 278`, `Community 279`, `Community 280`, `Community 281`, `Community 282`, `Community 283`, `Community 284`, `Community 285`, `Community 286`, `Community 287`, `Community 288`, `Community 289`, `Community 290`, `Community 291`, `Community 292`, `Community 293`, `Community 294`, `Community 295`, `Community 296`, `Community 297`, `Community 298`, `Community 299`, `Community 300`, `Community 301`, `Community 302`, `Community 303`, `Community 304`, `Community 305`, `Community 306`, `Community 307`, `Community 308`, `Community 309`, `Community 311`, `Community 312`, `Community 313`, `Community 314`, `Community 315`, `Community 320`, `Community 322`, `Community 323`, `Community 324`, `Community 325`, `Community 326`, `Community 327`, `Community 328`, `Community 329`, `Community 330`, `Community 331`, `Community 332`, `Community 333`, `Community 334`, `Community 335`, `Community 336`, `Community 337`, `Community 338`, `Community 339`, `Community 340`, `Community 341`, `Community 342`, `Community 343`, `Community 344`, `Community 345`, `Community 346`, `Community 347`, `Community 348`, `Community 349`, `Community 350`, `Community 351`, `Community 352`, `Community 353`, `Community 354`, `Community 355`, `Community 356`, `Community 357`, `Community 358`, `Community 359`, `Community 360`, `Community 361`, `Community 362`, `Community 363`, `Community 364`, `Community 365`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 371`, `Community 372`, `Community 373`, `Community 374`, `Community 375`, `Community 376`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 382`, `Community 383`, `Community 384`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 391`, `Community 392`, `Community 393`, `Community 394`, `Community 395`, `Community 396`, `Community 397`, `Community 398`, `Community 399`, `Community 400`, `Community 401`, `Community 402`, `Community 403`, `Community 468`, `Community 477`, `Community 478`, `Community 482`, `Community 504`?**
-  _High betweenness centrality (0.056) - this node is a cross-community bridge._
+  _High betweenness centrality (0.067) - this node is a cross-community bridge._
+- **Why does `🇰🇷 KIS 국내주식 오픈 API 정제 규격 마스터` connect `Community 77` to `Community 512`, `Community 514`, `Community 516`, `Community 517`, `Community 132`, `Community 133`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 141`, `Community 142`, `Community 143`, `Community 144`, `Community 145`, `Community 146`, `Community 147`, `Community 148`, `Community 149`, `Community 150`, `Community 231`, `Community 240`, `Community 241`, `Community 244`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 249`, `Community 250`, `Community 251`, `Community 252`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 259`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 269`, `Community 270`, `Community 271`, `Community 272`, `Community 273`, `Community 274`, `Community 275`, `Community 276`, `Community 277`, `Community 278`, `Community 279`, `Community 280`, `Community 281`, `Community 282`, `Community 283`, `Community 284`, `Community 285`, `Community 286`, `Community 287`, `Community 288`, `Community 289`, `Community 290`, `Community 291`, `Community 292`, `Community 293`, `Community 294`, `Community 295`, `Community 296`, `Community 297`, `Community 298`, `Community 299`, `Community 300`, `Community 301`, `Community 302`, `Community 303`, `Community 304`, `Community 305`, `Community 306`, `Community 307`, `Community 308`, `Community 311`, `Community 314`, `Community 315`, `Community 318`, `Community 320`, `Community 323`, `Community 324`, `Community 325`, `Community 326`, `Community 327`, `Community 328`, `Community 329`, `Community 330`, `Community 331`, `Community 332`, `Community 333`, `Community 334`, `Community 335`, `Community 336`, `Community 337`, `Community 338`, `Community 339`, `Community 340`, `Community 341`, `Community 342`, `Community 343`, `Community 344`, `Community 345`, `Community 346`, `Community 347`, `Community 348`, `Community 349`, `Community 350`, `Community 351`, `Community 352`, `Community 353`, `Community 354`, `Community 355`, `Community 356`, `Community 357`, `Community 358`, `Community 359`, `Community 360`, `Community 361`, `Community 362`, `Community 363`, `Community 364`, `Community 365`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 371`, `Community 372`, `Community 373`, `Community 374`, `Community 375`, `Community 376`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 382`, `Community 383`, `Community 384`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 391`, `Community 392`, `Community 393`, `Community 394`, `Community 395`, `Community 396`, `Community 397`, `Community 398`, `Community 399`, `Community 400`, `Community 401`, `Community 402`, `Community 403`, `Community 477`, `Community 480`, `Community 482`, `Community 504`, `Community 505`, `Community 511`?**
+  _High betweenness centrality (0.057) - this node is a cross-community bridge._
 - **What connects `PYTHONPATH`, `version`, `source` to the rest of the system?**
-  _2103 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2224 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `업비트 코인 마스터 데이터` be split into smaller, more focused modules?**
   _Cohesion score 0.01 - nodes in this community are weakly interconnected._
 - **Should `빗썸 코인 마스터 데이터` be split into smaller, more focused modules?**
   _Cohesion score 0.01 - nodes in this community are weakly interconnected._
-- **Should `주식 마스터 데이터` be split into smaller, more focused modules?**
-  _Cohesion score 0.04 - nodes in this community are weakly interconnected._
+- **Should `IPC 버스 및 DB 저장소` be split into smaller, more focused modules?**
+  _Cohesion score 0.13 - nodes in this community are weakly interconnected._

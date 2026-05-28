@@ -63,9 +63,17 @@ function renderMarketTable(data) {
 
         const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%231E293B' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='9' font-family='sans-serif' font-weight='bold' fill='%2394A3B8' text-anchor='middle'>${ticker.slice(0, 3)}</text></svg>`;
 
-        const rate = coin.signed_change_rate * 100;
+        const rate = (coin.signed_change_rate || 0) * 100;
         const rateClass = rate >= 0 ? 'bull' : 'bear';
         const rateStr = (rate >= 0 ? '+' : '') + rate.toFixed(2) + '%';
+
+        // 현재가 소수점 자릿수와 변동액 소수점 자릿수 동기화
+        const decimals = coin.trade_price < 1 ? 4 : (coin.trade_price < 1000 ? 2 : 0);
+
+        // 백엔드에서 제공된 전일 대비 변동 금액 직접 사용
+        const changePrice = coin.change_price || 0;
+        const changeSign = rate >= 0 ? '▲' : '▼';
+        const changePriceStr = changeSign + ' ' + formatPrice(Math.abs(changePrice), decimals);
 
         const tr = document.createElement('tr');
         tr.className = 'market-row';
@@ -78,8 +86,9 @@ function renderMarketTable(data) {
                     <span class="coin-code">${ticker}</span>
                 </div>
             </td>
-            <td class="num">${formatPrice(coin.trade_price)}</td>
+            <td class="num">${formatPrice(coin.trade_price, decimals)}</td>
             <td class="num ${rateClass}">${rateStr}</td>
+            <td class="num ${rateClass}">${changePriceStr}</td>
             <td class="num">${formatPrice(coin.high_price)}</td>
             <td class="num">${formatPrice(coin.low_price)}</td>
             <td class="num secondary">${formatVolume(coin.acc_trade_price_24h)}</td>
@@ -117,7 +126,7 @@ function renderMarketTable(data) {
 async function loadMarket() {
     const tbody = document.getElementById('market-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;">&#x23F3; 데이터 로딩 중...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;">&#x23F3; 데이터 로딩 중...</td></tr>';
     try {
         const res = await APIClient.fetchMarketData();
         marketData = res.tickers || [];
@@ -152,7 +161,7 @@ async function loadMarket() {
         // 초기 로드시 헤더 정보 업데이트
         updateHeaderInfo(state.currentExchange, state.currentSymbol);
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">&#x26A0;&#xFE0F; 데이터 로드 실패</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">&#x26A0;&#xFE0F; 데이터 로드 실패</td></tr>';
     }
 }
 

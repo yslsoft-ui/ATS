@@ -60,8 +60,21 @@ class KisCollector(BaseCollector):
             await asyncio.sleep(0.1)
 
     def _parse_message(self, msg) -> Optional[Dict]:
+        if msg.type != aiohttp.WSMsgType.TEXT:
+            return None
+
         if msg.type == aiohttp.WSMsgType.TEXT:
             raw_data = msg.data
+
+            # KIS 서버는 약 110초 간격으로 JSON PINGPONG 메시지를 보내 세션 유지를 확인한다.
+            # 실제 포맷: {"header":{"tr_id":"PINGPONG","datetime":"YYYYMMDDHHMMSS"}}
+            # 응답하지 않으면 서버가 연결을 끊으므로, 수신한 JSON을 그대로 echo 해야 한다.
+            if '"PINGPONG"' in raw_data:
+                logger.info(f"[KIS] PINGPONG 수신 → echo 응답")
+                if self.ws and not self.ws.closed:
+                    asyncio.ensure_future(self.ws.send_str(raw_data))
+                return None
+
             if raw_data.startswith('0') or raw_data.startswith('1'):
                 parts = raw_data.split('|')
                 if len(parts) < 4: return None
@@ -77,6 +90,10 @@ class KisCollector(BaseCollector):
                 low = float(data_parts[9]) if len(data_parts) > 9 and data_parts[9] else 0.0
                 acc_price = float(data_parts[14]) if len(data_parts) > 14 and data_parts[14] else 0.0
                 
+                sign = data_parts[3]
+                raw_change = float(data_parts[4]) if len(data_parts) > 4 and data_parts[4] else 0.0
+                change_price = -raw_change if sign in ('4', '5') else raw_change
+
                 tick_data = {
                     'type': 'tick',
                     'exchange': 'kis',
@@ -84,6 +101,7 @@ class KisCollector(BaseCollector):
                     'trade_price': price,
                     'trade_volume': volume,
                     'signed_change_rate': float(data_parts[5]) / 100.0,
+                    'change_price': change_price,
                     'ask_bid': 'BID', 
                     'trade_timestamp': int(time.time() * 1000),
                     'high_price': high,
@@ -92,6 +110,8 @@ class KisCollector(BaseCollector):
                 }
                 return tick_data
         return None
+
+
 
     async def _pre_connect_check(self) -> float:
         kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}

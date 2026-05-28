@@ -388,6 +388,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
         db_low = 0.0
         db_volume = 0.0
         db_change_rate = 0.0
+        db_change_price = 0.0
         
         try:
             async with get_db_conn() as db:
@@ -421,10 +422,12 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                     row = await cursor.fetchone()
                     if row and row[0] > 0:
                         db_change_rate = (db_price - row[0]) / row[0]
+                        db_change_price = db_price - row[0]
 
             return {
                 'trade_price': db_price,
                 'signed_change_rate': db_change_rate,
+                'change_price': db_change_price,
                 'high_price': db_high or db_price,
                 'low_price': db_low or db_price,
                 'acc_trade_price_24h': db_volume * db_price

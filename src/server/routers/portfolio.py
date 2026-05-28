@@ -438,7 +438,7 @@ async def get_upbit_assets(request: Request):
                 return {"total_eval_value": 0, "formatted_total_value": "0", "assets": []}
                 
             # 2. [OPTIMIZED] 매번 REST API로 마켓 리스트를 호출하는 대신, 메모리에 대량 적재된 stock_mapper 캐시 사용
-            valid_krw_markets = {f"KRW-{k}" for k in stock_mapper._mapping.get('upbit', {}).keys()}
+            valid_krw_markets = {f"KRW-{k}" for k in stock_mapper.get_active_symbols('upbit')}
             
             # 실시간 시세가 존재하는 실제 코인만 추려서 Ticker 일괄 요청 (에러 방지)
             coins = [a for a in accounts if a['currency'] != 'KRW']

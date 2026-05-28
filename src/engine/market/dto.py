@@ -9,6 +9,7 @@ class MarketTickerDTO(BaseModel):
     korean_name: str
     trade_price: float = 0.0
     signed_change_rate: float = 0.0
+    change_price: float = 0.0
     acc_trade_price_24h: float = 0.0
     high_price: float = 0.0
     low_price: float = 0.0

@@ -73,12 +73,17 @@ const PortfolioAdapter = {
             
             const value = pos.quantity * currentPrice;
             if (value > 0) {
+                const displaySymbol = pos.symbol.replace(/^(KRW-|UPB-|KIS-)/, '');
+                
+                // 전역 state.symbolNames 캐시에서 한글 종목명 조회 (키: "upbit:BTC" 또는 "kis:005930" 형태)
+                const cacheKey = `${ex}:${displaySymbol}`;
+                const cachedName = (typeof state !== 'undefined' && state.symbolNames) ? state.symbolNames[cacheKey] : null;
+                const koreanName = cachedName || displaySymbol;
+
                 exchangeGroups[ex].assets.push({
                     symbol: pos.symbol,
-                    label: pos.symbol.replace(/^(KRW-|UPB-|KIS-)/, ''), 
-                    koreanName: (!isBacktest) 
-                        ? (marketData.find(c => c.market === pos.symbol)?.korean_name || pos.symbol.replace(/^(KRW-|UPB-|KIS-)/, '')) 
-                        : pos.symbol.replace(/^(KRW-|UPB-|KIS-)/, ''),
+                    label: displaySymbol, 
+                    koreanName: koreanName,
                     value: value,
                     color: colors[idx % colors.length],
                     exchange: ex

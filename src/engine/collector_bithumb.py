@@ -118,6 +118,7 @@ class BithumbCollector(BaseCollector):
                     if prev_close > 0:
                         signed_change_rate = (trade_price - prev_close) / prev_close
                     
+                    change_price = trade_price - prev_close
                     tick_data = {
                         'type': 'tick',
                         'exchange': 'bithumb',
@@ -127,7 +128,8 @@ class BithumbCollector(BaseCollector):
                         'ask_bid': data.get('ask_bid', 'BID'),
                         'trade_timestamp': int(data.get('trade_timestamp', time.time() * 1000)),
                         'change': data.get('change', 'EVEN'),
-                        'signed_change_rate': signed_change_rate
+                        'signed_change_rate': signed_change_rate,
+                        'change_price': change_price
                     }
                     return tick_data
             except Exception as e:

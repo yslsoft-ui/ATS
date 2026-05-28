@@ -53,6 +53,7 @@ class BithumbMarketAdapter(MarketAdapter):
                         'market': s_code,
                         'trade_price': float(t.get('trade_price') if t.get('trade_price') is not None else prev.get('trade_price', 0.0)),
                         'signed_change_rate': float(t.get('signed_change_rate') if t.get('signed_change_rate') is not None else prev.get('signed_change_rate', 0.0)),
+                        'change_price': float(t.get('signed_change_price') or t.get('change_price') or 0.0) if (t.get('signed_change_price') is not None or t.get('change_price') is not None) else prev.get('change_price', 0.0),
                         'timestamp': int(t.get('timestamp') if t.get('timestamp') is not None else prev.get('timestamp', time.time() * 1000)),
                         'high_price': float(t.get('high_price') if t.get('high_price') is not None else prev.get('high_price', 0.0)),
                         'low_price': float(t.get('low_price') if t.get('low_price') is not None else prev.get('low_price', 0.0)),
@@ -72,6 +73,7 @@ class BithumbMarketAdapter(MarketAdapter):
                     korean_name=korean_name,
                     trade_price=latest.get('trade_price', 0.0),
                     signed_change_rate=latest.get('signed_change_rate', 0.0),
+                    change_price=latest.get('change_price', 0.0),
                     acc_trade_price_24h=latest.get('acc_trade_price_24h', 0.0),
                     high_price=latest.get('high_price', 0.0),
                     low_price=latest.get('low_price', 0.0)
