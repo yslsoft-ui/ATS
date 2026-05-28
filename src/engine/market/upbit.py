@@ -2,6 +2,7 @@ from typing import List
 import aiohttp
 from src.engine.market.base import MarketAdapter
 from src.engine.market.dto import MarketTickerDTO
+from src.engine.utils.stock_mapper import stock_mapper
 
 class UpbitMarketAdapter(MarketAdapter):
     """
@@ -27,17 +28,19 @@ class UpbitMarketAdapter(MarketAdapter):
                 tickers = await resp.json()
 
         dto_list = []
+        active_symbols = stock_mapper.get_active_symbols('upbit')
         for t in tickers:
             m_code = t['market'].replace('KRW-', '')
-            korean_name = market_map.get(t['market'], t['market'])
-            dto_list.append(MarketTickerDTO(
-                exchange="upbit",
-                market=m_code,
-                korean_name=korean_name,
-                trade_price=float(t.get('trade_price') or 0.0),
-                signed_change_rate=float(t.get('signed_change_rate') or 0.0),
-                acc_trade_price_24h=float(t.get('acc_trade_price_24h') or 0.0),
-                high_price=float(t.get('high_price') or 0.0),
-                low_price=float(t.get('low_price') or 0.0)
-            ))
+            if m_code in active_symbols:
+                korean_name = market_map.get(t['market'], t['market'])
+                dto_list.append(MarketTickerDTO(
+                    exchange="upbit",
+                    market=m_code,
+                    korean_name=korean_name,
+                    trade_price=float(t.get('trade_price') or 0.0),
+                    signed_change_rate=float(t.get('signed_change_rate') or 0.0),
+                    acc_trade_price_24h=float(t.get('acc_trade_price_24h') or 0.0),
+                    high_price=float(t.get('high_price') or 0.0),
+                    low_price=float(t.get('low_price') or 0.0)
+                ))
         return dto_list

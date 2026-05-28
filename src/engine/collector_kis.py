@@ -27,10 +27,13 @@ class KisCollector(BaseCollector):
         return 'kis'
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
-        kis_symbols = config.get('exchanges', {}).get('kis', {}).get('symbols', [])
-        if not kis_symbols:
-            kis_symbols = list(stock_mapper._mapping.get('kis', {}).keys())
-        return kis_symbols
+        # DB에서 활성 종목 조회
+        symbols = await self._fetch_active_symbols_from_db(config)
+        if not symbols:
+            # DB 조회 실패 혹은 비어있을 때 기본 폴백 종목 지정 (예: 삼성전자 '005930')
+            symbols = ["005930"]
+            logger.info(f"[{self.exchange.upper()}] DB에 활성 종목이 없어 기본 종목으로 폴백합니다: {symbols}")
+        return symbols
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
         kis_config = config.get('exchanges', {}).get('kis', {})

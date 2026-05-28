@@ -911,5 +911,43 @@ async def toggle_kis_symbol(request: Request, body: dict):
         "is_collected": new_status
     }
 
+@router.post("/market/sync-assets")
+async def api_sync_assets(request: Request):
+    """
+    거래소 API 전체 종목 정보를 조회하여 DB와 메모리 캐시를 수동으로 동기화합니다.
+    """
+    system = request.app.state.system
+    db_path = system.db_path
+    
+    # 동기화 작업을 파일 락 안전하게 수행
+    async with file_lock:
+        from src.database.sync_assets import sync_exchange_assets
+        try:
+            logger.info("[Web API] 어드민 요청으로 거래소 자산 동기화(sync_exchange_assets)를 수동 구동합니다.")
+            results = await sync_exchange_assets(db_path)
+            
+            # StockMapper 메모리 캐시 최신화
+            from src.engine.utils.stock_mapper import stock_mapper
+            await stock_mapper.load_from_db(db_path)
+            
+            # 수집기 데몬에게 ZMQ IPC 제어 신호를 보내 구독 리스트 리로드 지시 (KIS 등)
+            publisher = getattr(request.app.state, 'control_publisher', None)
+            if publisher:
+                msg = {
+                    "type": "update_symbols",
+                    "exchange": "all",
+                    "code": "all",
+                    "name": "all",
+                    "is_collected": True
+                }
+                await publisher.publish("collector_control", msg)
+                logger.info("[Web API] ZMQ IPC control message for full sync published.")
+                
+            return {"success": True, "message": "거래소 자산 동기화 성공", "results": results}
+        except Exception as e:
+            logger.error(f"[Web API] 수동 자산 동기화 중 에러 발생: {e}")
+            raise HTTPException(status_code=500, detail=f"동기화 실패: {str(e)}")
+
+
 
 

@@ -338,10 +338,11 @@ async def init_db(db_path: str = None):
                 exchange TEXT,
                 symbol TEXT,
                 is_active INTEGER DEFAULT 1,
+                is_delisted INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (exchange, symbol),
-                FOREIGN KEY (symbol) REFERENCES asset_master(symbol) ON UPDATE CASCADE ON DELETE CASCADE
+                FOREIGN KEY (symbol) REFERENCES asset_master(symbol) ON UPDATE CASCADE
             )
         ''')
 
@@ -360,6 +361,9 @@ async def init_db(db_path: str = None):
 
 async def migrate_data(db_path: str = None):
     async with get_db_conn(db_path) as db:
+        # exchange_assets 테이블에 is_delisted 컬럼이 없으면 마이그레이션 수행
+        await ensure_column(db, 'exchange_assets', 'is_delisted', 'INTEGER DEFAULT 0')
+
         tables = ['trades', 'candles', 'positions', 'orders_history']
         for table in tables:
             try:

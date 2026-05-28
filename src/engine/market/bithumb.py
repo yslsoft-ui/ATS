@@ -40,38 +40,40 @@ class BithumbMarketAdapter(MarketAdapter):
         ticker_map = {t['market'].replace('KRW-', ''): t for t in bithumb_tickers if 'market' in t}
 
         dto_list = []
+        active_symbols = stock_mapper.get_active_symbols('bithumb')
         for code in market_map.keys():
             s_code = code.replace('KRW-', '')
-            t = ticker_map.get(s_code, {})
-            if t:
-                key = f"bithumb:{s_code}"
-                prev = system.latest_prices.get(key, {})
-                system.latest_prices[key] = {
-                    'exchange': 'bithumb',
-                    'market': s_code,
-                    'trade_price': float(t.get('trade_price') if t.get('trade_price') is not None else prev.get('trade_price', 0.0)),
-                    'signed_change_rate': float(t.get('signed_change_rate') if t.get('signed_change_rate') is not None else prev.get('signed_change_rate', 0.0)),
-                    'timestamp': int(t.get('timestamp') if t.get('timestamp') is not None else prev.get('timestamp', time.time() * 1000)),
-                    'high_price': float(t.get('high_price') if t.get('high_price') is not None else prev.get('high_price', 0.0)),
-                    'low_price': float(t.get('low_price') if t.get('low_price') is not None else prev.get('low_price', 0.0)),
-                    'acc_trade_price_24h': float(t.get('acc_trade_price_24h') if t.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0.0))
-                }
+            if s_code in active_symbols:
+                t = ticker_map.get(s_code, {})
+                if t:
+                    key = f"bithumb:{s_code}"
+                    prev = system.latest_prices.get(key, {})
+                    system.latest_prices[key] = {
+                        'exchange': 'bithumb',
+                        'market': s_code,
+                        'trade_price': float(t.get('trade_price') if t.get('trade_price') is not None else prev.get('trade_price', 0.0)),
+                        'signed_change_rate': float(t.get('signed_change_rate') if t.get('signed_change_rate') is not None else prev.get('signed_change_rate', 0.0)),
+                        'timestamp': int(t.get('timestamp') if t.get('timestamp') is not None else prev.get('timestamp', time.time() * 1000)),
+                        'high_price': float(t.get('high_price') if t.get('high_price') is not None else prev.get('high_price', 0.0)),
+                        'low_price': float(t.get('low_price') if t.get('low_price') is not None else prev.get('low_price', 0.0)),
+                        'acc_trade_price_24h': float(t.get('acc_trade_price_24h') if t.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0.0))
+                    }
 
-            latest = system.get_latest_price('bithumb', s_code)
-            korean_name = market_map.get(code, s_code)
-            
-            # stock_mapper에 이미 캐시된 한글명과 다르면 DB 영속화 (가드 조건)
-            if stock_mapper.get_name('bithumb', s_code) != korean_name:
-                await stock_mapper.add_mapping_async('bithumb', s_code, korean_name, system.db_path)
-            
-            dto_list.append(MarketTickerDTO(
-                exchange="bithumb",
-                market=s_code,
-                korean_name=korean_name,
-                trade_price=latest.get('trade_price', 0.0),
-                signed_change_rate=latest.get('signed_change_rate', 0.0),
-                acc_trade_price_24h=latest.get('acc_trade_price_24h', 0.0),
-                high_price=latest.get('high_price', 0.0),
-                low_price=latest.get('low_price', 0.0)
-            ))
+                latest = system.get_latest_price('bithumb', s_code)
+                korean_name = market_map.get(code, s_code)
+                
+                # stock_mapper에 이미 캐시된 한글명과 다르면 DB 영속화 (가드 조건)
+                if stock_mapper.get_name('bithumb', s_code) != korean_name:
+                    await stock_mapper.add_mapping_async('bithumb', s_code, korean_name, system.db_path)
+                
+                dto_list.append(MarketTickerDTO(
+                    exchange="bithumb",
+                    market=s_code,
+                    korean_name=korean_name,
+                    trade_price=latest.get('trade_price', 0.0),
+                    signed_change_rate=latest.get('signed_change_rate', 0.0),
+                    acc_trade_price_24h=latest.get('acc_trade_price_24h', 0.0),
+                    high_price=latest.get('high_price', 0.0),
+                    low_price=latest.get('low_price', 0.0)
+                ))
         return dto_list

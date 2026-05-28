@@ -49,14 +49,14 @@ class StockMapper:
 
     async def load_from_db(self, db_path: Optional[str] = None):
         """
-        데이터베이스의 asset_master 테이블의 모든 종목 한글명을 한번에 로드하여
-        단일 플랫 메모리 딕셔너리 캐시를 최신화합니다.
+        데이터베이스의 asset_master와 exchange_assets 테이블을 로드하여
+        메모리 캐시(메모리 A & B)를 최신화합니다.
         """
         from src.database.connection import get_db_conn
-        logger.info("Loading stock master mapping from database...")
+        logger.info("Loading stock master mapping and active symbols from database...")
         try:
             async with get_db_conn(db_path) as db:
-                # asset_master 테이블의 모든 심볼과 한글명 로드
+                # 1. asset_master 테이블의 모든 심볼과 한글명 로드 (메모리 A)
                 async with db.execute('SELECT symbol, korean_name FROM asset_master') as cursor:
                     rows = await cursor.fetchall()
                 
@@ -69,36 +69,44 @@ class StockMapper:
                     self._mapping[symbol] = name
                     count += 1
                 
-                logger.info(f"Loaded {count} symbols from database to StockMapper memory cache.")
+                # 2. exchange_assets에서 is_active = 1 AND is_delisted = 0 인 활성 종목 로드 (메모리 B)
+                async with db.execute(
+                    "SELECT exchange, symbol FROM exchange_assets WHERE is_active = 1 AND is_delisted = 0"
+                ) as cursor:
+                    exch_rows = await cursor.fetchall()
+                
+                self._active_symbols = {}
+                for row in exch_rows:
+                    exch = row['exchange']
+                    sym = row['symbol']
+                    self._active_symbols.setdefault(exch, set()).add(sym)
+                
+                logger.info(
+                    f"Loaded {count} symbols and active symbols: "
+                    f"Upbit={len(self.get_active_symbols('upbit'))}, "
+                    f"Bithumb={len(self.get_active_symbols('bithumb'))}, "
+                    f"KIS={len(self.get_active_symbols('kis'))}"
+                )
         except Exception as e:
-            logger.error(f"Failed to load stock master mapping from database: {e}")
+            logger.error(f"Failed to load stock master mapping and active symbols from database: {e}")
+
+    def get_active_symbols(self, exchange: str) -> set:
+        """거래소별 활성(is_active=1, is_delisted=0) 종목 목록을 반환합니다."""
+        if not hasattr(self, '_active_symbols'):
+            self._active_symbols = {}
+        return self._active_symbols.get(exchange, set())
 
     async def add_mapping_async(self, exchange: str, symbol: str, name: str, db_path: Optional[str] = None):
         """
-        새로운 종목의 한글명을 asset_master 테이블에만 영속화하고 메모리 캐시를 업데이트합니다.
-        exchange_assets(수집 구독 관리)는 건드리지 않아 is_active 오염을 원천 방지합니다.
+        [수정] 실시간 동작 중 DB 쓰기 작업을 배제하고 오직 메모리 캐시 최신화만 수행합니다.
+        마스터 쓰기는 데몬 기동 시의 1회성 sync 또는 수동 어드민 호출을 통해서만 이루어집니다.
         """
         if not symbol:
             return
         
-        from src.database.connection import get_db_conn
-        asset_type = 'crypto' if exchange in ('upbit', 'bithumb') else 'stock'
         name_str = str(name) if name is not None else symbol
-
-        try:
-            async with get_db_conn(db_path) as db:
-                # asset_master에만 한글명 영속화 (exchange_assets는 수집 구독 관리이므로 건드리지 않음)
-                await db.execute('''
-                    INSERT OR REPLACE INTO asset_master (symbol, korean_name, asset_type, updated_at)
-                    VALUES (?, ?, ?, datetime('now'))
-                ''', (symbol, name_str, asset_type))
-                await db.commit()
-            
-            # 단일 메모리 캐시 업데이트
-            self._mapping[symbol] = name_str
-            logger.debug(f"[StockMapper] Successfully added symbol to DB and memory: {symbol} ({name_str})")
-        except Exception as e:
-            logger.error(f"[StockMapper] Failed to add mapping dynamically: {exchange}:{symbol} - {e}")
+        self._mapping[symbol] = name_str
+        logger.debug(f"[StockMapper] Memory mapping updated: {symbol} -> {name_str}")
 
     async def fetch_and_add_kis_symbol(self, symbol: str, db_path: Optional[str] = None) -> str:
         """

@@ -24,9 +24,9 @@ class KisMarketAdapter(MarketAdapter):
         for key in system.latest_prices.keys():
             if key.startswith('kis:'):
                 kis_symbols.add(key.split(':')[1])
-        kis_mapper_symbols = stock_mapper._mapping.get('kis', {})
-        if kis_mapper_symbols:
-            kis_symbols.update(kis_mapper_symbols.keys())
+        kis_active_symbols = stock_mapper.get_active_symbols('kis')
+        if kis_active_symbols:
+            kis_symbols.update(kis_active_symbols)
 
         if mode == "serial":
             # 순수 동기식(순차) 루프 DB 웜업으로 대기 시간 체감

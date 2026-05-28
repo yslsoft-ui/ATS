@@ -275,3 +275,125 @@ window.renderCollectorStatuses = renderCollectorStatuses;
 window.initCollectorControls = initCollectorControls;
 window.updateCleanupPreview = updateCleanupPreview;
 window.initDatabaseControls = initDatabaseControls;
+
+/**
+ * 거래소 종목 동기화 관련 단추 이벤트 리스너를 설정합니다.
+ */
+function initAssetSyncControls() {
+    const btnSync = document.getElementById('btn-sync-assets');
+    const resultPanel = document.getElementById('sync-result-panel');
+    const resultText = document.getElementById('sync-result-text');
+
+    if (btnSync) {
+        btnSync.addEventListener('click', async () => {
+            const confirmMsg = "🌐 거래소 API를 호출하여 종목 정보를 DB와 실시간 동기화하시겠습니까?\n\n" +
+                "이 작업은 각 거래소(업비트/빗썸/KIS)의 최신 종목 목록을 다운로드하여:\n" +
+                "- 신규 상장 종목을 마스터에 등록합니다.\n" +
+                "- 상장폐지된 종목은 수집 비활성화(is_active=0) 및 사용안함(is_delisted=1) 처리합니다.";
+            
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+
+            btnSync.disabled = true;
+            btnSync.innerText = "🔄 동기화 진행 중...";
+            if (resultPanel) resultPanel.style.display = 'none';
+
+            try {
+                const response = await fetch('/market/sync-assets', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    const results = data.results || {};
+                    let htmlContent = `<span style="color: #4caf50; font-weight: bold; font-size: 0.95rem;">✔️ 동기화 성공</span><br><br>`;
+                    
+                    // 1. 거래소별 활성 종목 수 요약
+                    htmlContent += `
+                        <div style="background: rgba(15, 23, 42, 0.25); padding: 12px; border-radius: 6px; border: 1px solid rgba(148,163,184,0.1); margin-bottom: 15px; font-size: 0.85rem; line-height: 1.6;">
+                            <strong>📌 거래소별 현재 활성 종목 현황:</strong><br>
+                            - <strong style="color: #FF4B4B;">업비트 (Upbit):</strong> ${results.upbit?.total_active || 0}개 수집 중 / 전체 ${results.upbit?.total_registered || 0}개<br>
+                            - <strong style="color: #F59E0B;">빗썸 (Bithumb):</strong> ${results.bithumb?.total_active || 0}개 수집 중 / 전체 ${results.bithumb?.total_registered || 0}개<br>
+                            - <strong style="color: #0072FF;">국내주식 (KIS):</strong> ${results.kis?.total_active || 0}개 수집 중 / 전체 ${results.kis?.total_registered || 0}개
+                        </div>
+                    `;
+
+                    // 2. 추가/삭제된 상세 리스트 추출
+                    let details = [];
+                    const exchanges = { upbit: "업비트", bithumb: "빗썸", kis: "국내주식" };
+                    
+                    for (const [exchKey, exchName] of Object.entries(exchanges)) {
+                        const exchRes = results[exchKey] || { added: [], delisted: [] };
+                        
+                        // 추가된 종목
+                        if (exchRes.added && exchRes.added.length > 0) {
+                            details.push(`
+                                <div style="margin-bottom: 8px;">
+                                    <span style="color: #4caf50; font-weight: bold; font-size: 0.82rem;">[${exchName} 신규 추가 종목]</span><br>
+                                    <span style="font-size: 0.8rem; color: #94A3B8; font-family: 'Pretendard', sans-serif;">${exchRes.added.join(', ')}</span>
+                                </div>
+                            `);
+                        }
+                        // 상폐/유실된 종목
+                        if (exchRes.delisted && exchRes.delisted.length > 0) {
+                            details.push(`
+                                <div style="margin-bottom: 8px;">
+                                    <span style="color: #FF4B4B; font-weight: bold; font-size: 0.82rem;">[${exchName} 상장폐지/비활성 종목]</span><br>
+                                    <span style="font-size: 0.8rem; color: #64748B; font-family: 'Pretendard', sans-serif;">${exchRes.delisted.join(', ')}</span>
+                                </div>
+                            `);
+                        }
+                    }
+
+                    if (details.length > 0) {
+                        htmlContent += `
+                            <div style="margin-top: 10px; border-top: 1px dashed rgba(148,163,184,0.15); padding-top: 10px;">
+                                <strong style="color: #F8FAFC; font-size: 0.88rem; display: inline-block; margin-bottom: 6px;">🔍 신규 상장 / 상장 폐지 내역:</strong>
+                                ${details.join('')}
+                            </div>
+                        `;
+                    } else {
+                        htmlContent += `
+                            <div style="margin-top: 10px; color: #94A3B8; font-size: 0.82rem; border-top: 1px dashed rgba(148,163,184,0.15); padding-top: 10px;">
+                                📢 이번 동기화에서 새로 추가되거나 삭제된 종목이 없습니다 (이미 최신 정보입니다).
+                            </div>
+                        `;
+                    }
+
+                    htmlContent += `
+                        <span style="color: #64748B; font-size: 11px; display: inline-block; margin-top: 15px; border-top: 1px solid rgba(148,163,184,0.1); padding-top: 8px; width: 100%;">
+                            * 동기화된 신규 종목은 수집기 데몬 기동 시에 자동 반영됩니다.<br>
+                            * 변경된 정보(KIS 등)는 데몬에 실시간 신호(ZMQ)로 전달되었습니다.
+                        </span>
+                    `;
+
+                    if (resultText) {
+                        resultText.innerHTML = htmlContent;
+                    }
+                    if (resultPanel) resultPanel.style.display = 'block';
+                    showAlert({ msg: "🌐 종목 동기화가 완료되었습니다." });
+                } else {
+                    throw new Error(data.detail || "서버 응답 오류");
+                }
+            } catch (e) {
+                console.error("Asset sync failed", e);
+                if (resultText) {
+                    resultText.innerHTML = `
+                        <span style="color: #FF4B4B; font-weight: bold; font-size: 0.95rem;">❌ 동기화 실패</span><br><br>
+                        <span style="color: #EF4444;">오류 상세: ${e.message || '네트워크 통신 중 에러가 발생했습니다.'}</span>
+                    `;
+                }
+                if (resultPanel) resultPanel.style.display = 'block';
+                showAlert({ msg: "❌ 종목 동기화에 실패했습니다.", alert_type: 'error' });
+            } finally {
+                btnSync.disabled = false;
+                btnSync.innerText = "🔄 관리종목 변경 확인 및 동기화";
+            }
+        });
+    }
+}
+
+window.initAssetSyncControls = initAssetSyncControls;
+

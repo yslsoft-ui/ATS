@@ -523,6 +523,7 @@ async function init() {
     initTradingControls();
     initCollectorControls();
     initDatabaseControls();
+    initAssetSyncControls();
     initRankingControls();
 }
 

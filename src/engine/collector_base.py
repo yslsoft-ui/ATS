@@ -201,6 +201,46 @@ class BaseCollector(ABC):
                         instances.append(strat)
                 self.trade_engines[symbol] = TradeEngine(self.exchange, symbol, instances, on_status_callback=self.on_status_callback)
 
+    async def _fetch_active_symbols_from_db(self, config: Dict[str, Any]) -> List[str]:
+        """
+        데이터베이스의 exchange_assets 테이블에서
+        해당 거래소(self.exchange)의 활성화된(is_active = 1) 종목 목록을 조회합니다.
+        """
+        db_path = config.get('db_path', 'data/backtest.db') if config else 'data/backtest.db'
+        from src.database.connection import get_db_conn
+        
+        active_symbols = []
+        try:
+            async with get_db_conn(db_path) as db:
+                async with db.execute(
+                    "SELECT symbol FROM exchange_assets WHERE exchange = ? AND is_active = 1",
+                    (self.exchange,)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    active_symbols = sorted([row['symbol'] for row in rows])
+            logger.info(f"[{self.exchange.upper()}] DB exchange_assets에서 {len(active_symbols)}개 활성 종목 로드 완료")
+        except Exception as e:
+            logger.error(f"[{self.exchange.upper()}] DB 활성 종목 조회 실패: {e}")
+            
+        return active_symbols
+
+    async def reload_symbols(self, config: Dict[str, Any] = None):
+        """DB에서 활성 종목을 실시간 재조회하여 소켓 구독 목록을 실시간으로 갱신합니다."""
+        # 1. DB에서 active 종목 재조회
+        new_symbols = await self._fetch_active_symbols_from_db(config or self.config)
+        self.available_symbols = new_symbols
+        
+        # 2. 거래소 전략 엔진 재구성 (제거된 종목 엔진은 자동 정리됨)
+        self._init_trade_engines(config or self.config)
+        
+        # 3. WebSocket 구독 재전송
+        if self.ws and not self.ws.closed:
+            try:
+                await self._subscribe(self.ws, config or self.config)
+                logger.info(f"[{self.exchange.upper()}] 활성 구독 목록 실시간 리로드 완료: {len(self.available_symbols)}개 종목")
+            except Exception as e:
+                logger.error(f"[{self.exchange.upper()}] 실시간 구독 리로드 실패: {e}")
+
     @abstractmethod
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         """종목 목록 로드 (REST API 또는 config)"""
@@ -236,73 +276,74 @@ class BaseCollector(ABC):
             if not self.is_running:
                 break
             
-            last_timestamp = None
             try:
-                async with get_db_conn(db_path) as db:
-                    cursor = await db.execute(
-                        "SELECT max(timestamp) FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60",
-                        (self.exchange, symbol)
-                    )
-                    row = await cursor.fetchone()
-                    if row and row[0] is not None:
-                        last_timestamp = row[0]
-            except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} DB 조회 실패: {e}")
-                continue
-
-            # DB에 저장된 캔들이 없다면 최대 룩백 시간부터 시작
-            if last_timestamp is None:
-                start_time = max_lookback
-            else:
-                start_time = max(last_timestamp + 60, max_lookback)
-
-            # 마감된 분봉까지만 조회 (현재 분의 1분 전)
-            end_time = current_time - 60
-
-            if start_time > end_time:
-                logger.debug(f"[{self.exchange.upper()}] {symbol} 백필 불필요 (마지막 저장: {last_timestamp}, 수집 대상: {end_time})")
-                continue
-
-            logger.info(f"[{self.exchange.upper()}] {symbol} 백필 수행 구간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))} ~ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
-
-            try:
-                # 거래소별 REST API 호출
-                candles = await self._fetch_historical_candles(symbol, start_time, end_time)
-                if not candles:
-                    logger.debug(f"[{self.exchange.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다.")
-                    continue
-
-                # 시간 순서로 정렬
-                candles.sort(key=lambda x: x.timestamp)
-
-                # 중복 저장 방지를 위해 구간 내 이미 존재하는 타임스탬프 로드
-                existing_timestamps = set()
+                last_timestamp = None
                 try:
                     async with get_db_conn(db_path) as db:
                         cursor = await db.execute(
-                            "SELECT timestamp FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
-                            (self.exchange, symbol, start_time, end_time)
+                            "SELECT max(timestamp) FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60",
+                            (self.exchange, symbol)
                         )
-                        rows = await cursor.fetchall()
-                        existing_timestamps = {r[0] for r in rows}
+                        row = await cursor.fetchone()
+                        if row and row[0] is not None:
+                            last_timestamp = row[0]
                 except Exception as e:
-                    logger.error(f"[{self.exchange.upper()}] {symbol} 중복 검사용 DB 조회 실패: {e}")
+                    logger.error(f"[{self.exchange.upper()}] {symbol} DB 조회 실패: {e}")
+                    continue
 
-                # 캔들 발행 큐에 적재
-                count = 0
-                for candle in candles:
-                    if candle.interval == 60 and candle.timestamp not in existing_timestamps:
-                        if self.candle_queue:
-                            await self.candle_queue.put(candle)
-                            count += 1
-                
-                logger.info(f"[{self.exchange.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
+                # DB에 저장된 캔들이 없다면 최대 룩백 시간부터 시작
+                if last_timestamp is None:
+                    start_time = max_lookback
+                else:
+                    start_time = max(last_timestamp + 60, max_lookback)
 
-            except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
+                # 마감된 분봉까지만 조회 (현재 분의 1분 전)
+                end_time = current_time - 60
 
-            # Throttling 적용
-            await asyncio.sleep(delay)
+                if start_time > end_time:
+                    logger.debug(f"[{self.exchange.upper()}] {symbol} 백필 불필요 (마지막 저장: {last_timestamp}, 수집 대상: {end_time})")
+                    continue
+
+                logger.info(f"[{self.exchange.upper()}] {symbol} 백필 수행 구간: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_time))} ~ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_time))}")
+
+                try:
+                    # 거래소별 REST API 호출
+                    candles = await self._fetch_historical_candles(symbol, start_time, end_time)
+                    if not candles:
+                        logger.debug(f"[{self.exchange.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다.")
+                        continue
+
+                    # 시간 순서로 정렬
+                    candles.sort(key=lambda x: x.timestamp)
+
+                    # 중복 저장 방지를 위해 구간 내 이미 존재하는 타임스탬프 로드
+                    existing_timestamps = set()
+                    try:
+                        async with get_db_conn(db_path) as db:
+                            cursor = await db.execute(
+                                "SELECT timestamp FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
+                                (self.exchange, symbol, start_time, end_time)
+                            )
+                            rows = await cursor.fetchall()
+                            existing_timestamps = {r[0] for r in rows}
+                    except Exception as e:
+                        logger.error(f"[{self.exchange.upper()}] {symbol} 중복 검사용 DB 조회 실패: {e}")
+
+                    # 캔들 발행 큐에 적재
+                    count = 0
+                    for candle in candles:
+                        if candle.interval == 60 and candle.timestamp not in existing_timestamps:
+                            if self.candle_queue:
+                                await self.candle_queue.put(candle)
+                                count += 1
+                    
+                    logger.info(f"[{self.exchange.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
+
+                except Exception as e:
+                    logger.error(f"[{self.exchange.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
+            finally:
+                # Throttling 적용 (어떠한 조건에서도 반드시 대기 보장)
+                await asyncio.sleep(delay)
 
     @abstractmethod
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:

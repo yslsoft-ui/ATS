@@ -671,6 +671,20 @@
                         </div>
                         <button id="btn-cleanup" class="btn danger" style="width: 100%; margin-top: 15px;">선택 날짜 이전 삭제</button>
                     </div>
+
+                    <div class="settings-card">
+                        <h3>거래소 종목 동기화</h3>
+                        <p class="status-text">거래소 API를 호출하여 DB의 종목 마스터 정보를 최신화하고 유실/상폐 상태를 동기화합니다.</p>
+                        
+                        <!-- 동기화 결과 현황 패널 -->
+                        <div id="sync-result-panel" style="display: none; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.15); margin-top: 15px; padding: 12px; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: #94A3B8; font-size: 0.9rem;">📊 동기화 실행 결과</h4>
+                            <div style="font-size: 0.85rem; color: #F8FAFC; line-height: 1.5;" id="sync-result-text">
+                                <!-- 결과 메시지가 들어갈 곳 -->
+                            </div>
+                        </div>
+                        <button id="btn-sync-assets" class="btn success" style="width: 100%; margin-top: 15px;">🔄 관리종목 변경 확인 및 동기화</button>
+                    </div>
                 </div>
             </section>
 

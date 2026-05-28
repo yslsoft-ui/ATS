@@ -19,16 +19,25 @@ class UpbitCollector(BaseCollector):
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         try:
-            if not self.session or self.session.closed:
-                self.session = aiohttp.ClientSession()
+            # 1. DB에서 활성 종목 조회
+            symbols = await self._fetch_active_symbols_from_db(config)
             
-            async with self.session.get("https://api.upbit.com/v1/market/all") as resp:
-                markets = await resp.json()
-                symbols = sorted([m['market'].replace('KRW-', '') for m in markets if m['market'].startswith('KRW-')])
-                logger.info(f"[{self.exchange.upper()}] {len(symbols)}개 종목 로드 완료")
-                return symbols
+            # 2. DB에 활성 종목이 전혀 없을 경우 API를 통해 전체 KRW 마켓 종목 자동 로드 (Fallback)
+            if not symbols:
+                logger.warning(f"[{self.exchange.upper()}] DB에 활성화된 종목이 없습니다. API에서 전체 KRW 종목 로드를 시도합니다.")
+                if not self.session or self.session.closed:
+                    self.session = aiohttp.ClientSession()
+                
+                async with self.session.get("https://api.upbit.com/v1/market/all") as resp:
+                    markets = await resp.json()
+                    symbols = sorted([m['market'].replace('KRW-', '') for m in markets if m['market'].startswith('KRW-')])
+                    
+                if not symbols:
+                    symbols = ["BTC", "ETH", "XRP"]
+                    logger.info(f"[{self.exchange.upper()}] 최종 Fallback 기본 종목 적용: {symbols}")
+            return symbols
         except Exception as e:
-            logger.error(f"[{self.exchange.upper()}] 종목 조회 실패: {e}")
+            logger.error(f"[{self.exchange.upper()}] 종목 조회 치명적 실패: {e}")
             return ["BTC", "ETH", "XRP"]
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:

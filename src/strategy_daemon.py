@@ -21,7 +21,7 @@ from src.ipc.bus import EventBusPublisher, EventBusSubscriber
 from src.engine.utils.telemetry import get_logger, setup_logging
 
 # 각 거래소 수집기가 Registry에 등록되도록 import 수행 (종목 조회용)
-import src.engine.collector
+import src.engine.collector_upbit
 import src.engine.collector_kis
 import src.engine.collector_bithumb
 

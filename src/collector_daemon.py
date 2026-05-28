@@ -13,7 +13,7 @@ from src.ipc.bus import EventBusPublisher, EventBusSubscriber
 from src.engine.collector_base import CollectorRegistry
 from src.engine.credentials import CredentialProvider
 # 각 거래소 수집기가 Registry에 자동 등록되도록 import 수행
-import src.engine.collector
+import src.engine.collector_upbit
 import src.engine.collector_kis
 import src.engine.collector_bithumb
 from src.engine.utils.telemetry import get_logger, setup_logging
@@ -82,6 +82,15 @@ async def main():
     # 2. SQLite 스키마 초기화 확인
     from src.database.schema import init_db
     await init_db(db_path)
+
+    # [추가] 기동 전 거래소 마스터 자산 동기화 1회 수행
+    from src.database.sync_assets import sync_exchange_assets
+    try:
+        logger.info("[Collector Daemon] Starting boot-time asset synchronization...")
+        await sync_exchange_assets(db_path)
+        logger.info("[Collector Daemon] Boot-time asset synchronization completed successfully.")
+    except Exception as e:
+        logger.error(f"[Collector Daemon] Failed to run boot-time asset sync: {e}")
 
     # 2.5 StockMapper 메모리 캐시 적재
     from src.engine.utils.stock_mapper import stock_mapper
@@ -173,9 +182,15 @@ async def main():
                     await stock_mapper.load_from_db(db_path)
                     
                     # 2. 수집기에 통지
-                    collector = collectors.get(exchange)
-                    if collector and hasattr(collector, 'update_subscription'):
-                        await collector.update_subscription(code, is_collected)
+                    if exchange == "all":
+                        # 전체 동기화 신호 수신 시, 모든 구동 중인 수집기를 DB 기준으로 실시간 리로드
+                        for col_id, col_obj in collectors.items():
+                            if hasattr(col_obj, 'reload_symbols'):
+                                await col_obj.reload_symbols(full_config)
+                    else:
+                        collector = collectors.get(exchange)
+                        if collector and hasattr(collector, 'update_subscription'):
+                            await collector.update_subscription(code, is_collected)
             except asyncio.CancelledError:
                 break
             except Exception as e:
