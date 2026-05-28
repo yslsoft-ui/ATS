@@ -13,23 +13,24 @@ env/
 *.db
 *.sqlite3
 data/
-data/ipc/
 
+# 의존성 패키지 (프론트엔드)
+frontend/node_modules/
 
-# 커서 및 에디터 설정
+# 에디터 및 에디터 설정
 .vscode/
-.cursor/
 
-# 기타 잡동사니
+# 프로젝트 임시 작업 및 로그
 scratch/
-graphify-out/cache/
-graphify-out/.graphify_*
-.DS_Store
-docs/
 logs/
+uvicorn.log
 
-# 인증 토큰 캐시
+# 인증 토큰 캐시 (보안 민감 정보)
 config/.*_token.json
 
-# uvicorn log
-uvicorn.log
+# graphify 캐시 데이터 (단, GRAPH_REPORT.md나 wiki는 추적 유지)
+graphify-out/cache/
+graphify-out/.graphify_*
+
+# 문서 폴더 중 임시 메뉴얼만 제외 (docs/adr, docs/agents 등은 추적할 수 있도록 보존)
+docs/manual/
