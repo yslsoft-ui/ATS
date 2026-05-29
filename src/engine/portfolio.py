@@ -101,17 +101,12 @@ class OrderExecutor(ABC):
     async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         pass
 
-class VirtualExecutor(OrderExecutor):
+class VirtualOrderExecutorAdapter(OrderExecutor):
     """
-    OrderbookMatchingEngine을 사용하여 가상 주문을 체결합니다.
+    OrderbookMatchingEngine을 완전히 내포하여 슬리피지 및 수수료가 반영된 가상 주문 체결을 집행하는 어댑터입니다.
     """
-    def __init__(self, default_fee_rate: float = 0.0005):
-        # 기본 수수료율은 설정되어 있으나, 실행 시 포트폴리오 설정을 우선함
-        self.matching_engine = OrderbookMatchingEngine(fee_rate=default_fee_rate)
-
-    def set_fee_rate(self, fee_rate: float):
-        """실행 시점에 수수료율을 동적으로 변경합니다."""
-        self.matching_engine.fee_rate = fee_rate
+    def __init__(self, fee_rate: float = 0.0005):
+        self.matching_engine = OrderbookMatchingEngine(fee_rate=fee_rate)
 
     async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         orderbook = kwargs.get('orderbook')
@@ -139,7 +134,7 @@ class VirtualExecutor(OrderExecutor):
             executed_value = vwap * executed_qty
             fee = executed_value * self.matching_engine.fee_rate
         else:
-            logger.error(f"VirtualExecutor: Both orderbook and trade_price missing for {symbol}")
+            logger.error(f"VirtualOrderExecutorAdapter: Both orderbook and trade_price missing for {symbol}")
             return None
         
         if vwap == 0 or executed_qty <= 0:
@@ -165,7 +160,7 @@ class PortfolioManager:
         self.portfolios: Dict[str, Portfolio] = {}
         self.exchange_configs: Dict[str, Dict] = {} # [NEW] 거래소별 수수료 등 설정 캐시
         self.executors: Dict[str, OrderExecutor] = {
-            'simulation': VirtualExecutor()
+            'simulation': VirtualOrderExecutorAdapter()
         }
 
     def add_portfolio(self, portfolio: Portfolio):
@@ -176,14 +171,12 @@ class PortfolioManager:
         sim_ports = [p for p in self.portfolios.values() if p.portfolio_type == 'simulation']
         if not sim_ports:
             return None
-        # ID가 simulation_1716629910 형식의 타임스탬프 기반이므로 정렬하여 가장 최신 것을 반환
         sim_ports.sort(key=lambda x: x.id, reverse=True)
         return sim_ports[0]
 
     def get_portfolio_summary(self, symbol: str, portfolio_id: str = "default", exchange: Optional[str] = None) -> Dict[str, Any]:
         """
         특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.
-        (전략 컨텍스트 공급용)
         """
         portfolio = None
         if portfolio_id == "default" or not portfolio_id:
@@ -257,9 +250,11 @@ class PortfolioManager:
         exchange_config = self.exchange_configs.get(exchange_key, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         
-        executor = self.executors.get('simulation')
-        if isinstance(executor, VirtualExecutor):
-            executor.set_fee_rate(fee_rate)
+        # [방안 B] 거래소 설정별로 주입된 어댑터 캐싱 및 다형적 호출
+        executor_key = f"simulation_{exchange_key.lower()}"
+        if executor_key not in self.executors:
+            self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
+        executor = self.executors[executor_key]
 
         result = await executor.execute_order(
             exchange=signal.exchange,

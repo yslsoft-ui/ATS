@@ -35,27 +35,21 @@
 
 ## 2. 지표 연산 로직 (Indicator Calculation)
 
-틱 데이터 기반이므로 연산 효율성이 중요합니다. `src/engine/indicators.py`에 구현.
+연산 효율성과 중복 연산 방지(Locality & Depth)를 최우선으로 합니다. `src/engine/indicators.py` 및 `src/engine/market_data_context.py`에 구현.
 
-### 2.1. 실시간 윈도우 업데이트 (Sliding Window) — `IndicatorCalculator.update()`
+### 2.1. MarketDataContext 기반 동적 계산 및 캐싱
+- 완성된 캔들이 발생하면 중앙 `MarketDataContext`에 캔들이 누적되고, 기존 지표 계산 캐시가 즉시 무효화됩니다.
+- 개별 전략(`StrategyHost`)은 실행 시 `StrategyContext`를 통해 필요한 지표를 동적으로 요청합니다 (`context.get_indicator('rsi', window=14)` 등).
+- 동일한 캔들 상황(동일 타임스탬프)에서 들어오는 여러 전략의 지표 연산 요청은 계산 성능 낭비를 막기 위해 **캐시 테이블**에서 즉시 반환(1회 계산 후 재사용)됩니다.
 
-- `collections.deque`를 사용하여 지표를 효율적으로 업데이트합니다.
-- 매 틱 호출 시 다음 지표를 반환:
-  - **SMA** (window_size 기반)
-  - **RSI** (상승/하락 평균)
-  - **Bollinger Bands** (20, 2σ)
-  - **MACD** (12, 26, 9) — EMA 기반, signal line 포함
+### 2.2. 독립 함수형 지표 연산
+- `src/engine/indicators.py`에 numpy 기반의 독립 지표 연산 함수(`calculate_sma`, `calculate_rsi`, `calculate_bollinger_bands`, `calculate_macd`)를 제공합니다.
+- 특정 클래스 인스턴스 없이도 종가(close) 배열과 필요한 파라미터(window 등)만 주입하면 고속으로 수학적 연산 결과를 얻을 수 있도록 설계되었습니다.
+- 기존의 레거시 `IndicatorCalculator` 클래스는 하위 호환성을 유지하기 위해 내부적으로 이 함수들을 호출하는 래퍼 형태로 보존됩니다.
 
-### 2.2. 배치 지표 계산 — `IndicatorCalculator.calculate_all_indicators()`
-
-- 캔들 리스트를 pandas DataFrame으로 변환 후 rolling window로 일괄 계산.
-- `/candles` API에서 과거 데이터 조회 시 사용.
-- SMA(20), Bollinger Bands(20, 2σ), RSI(14) 계산.
-
-### 2.3. 프론트엔드 실시간 지표 — `app.js: calculateIndicators()`
-
-- 브라우저에서 틱 수신 시마다 JavaScript로 SMA(20), BB(20, 2σ), RSI(14) 계산.
-- 서버 부하 없이 클라이언트 측에서 즉시 지표 업데이트.
+### 2.3. 배치 및 프론트엔드 지표 계산
+- **배치 계산**: 캔들 리스트를 pandas DataFrame으로 변환 후 일괄 계산하여 API 응답에 서빙합니다 (`calculate_all_indicators`).
+- **프론트엔드 실시간 지표**: 브라우저 부하 및 반응성을 고려하여 클라이언트 단 JavaScript(`app.js`)에서 자체적으로 실시간 SMA, BB, RSI를 캔버스/차트에 트레이싱합니다.
 
 ## 3. 전략 엔진 (Strategy Engine) — `src/engine/strategy.py`
 

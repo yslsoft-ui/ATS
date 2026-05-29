@@ -6,7 +6,7 @@ from .matching import OrderbookMatchingEngine
 from .candles import CandleGenerator, Candle
 from .strategy import BaseStrategy, StrategyRegistry, TradeSignal
 from .trade_engine import TradeEngine
-from .portfolio import Portfolio, PortfolioManager, VirtualExecutor
+from .portfolio import Portfolio, PortfolioManager, VirtualOrderExecutorAdapter
 
 from src.engine.pipeline import ExecutionPipeline
 
@@ -26,7 +26,7 @@ class BacktestEngine:
     def __init__(self, db_path: str = None):
         self.db_path = db_path
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
-        self.virtual_executor = VirtualExecutor()
+        self.virtual_executor = VirtualOrderExecutorAdapter()
         self.portfolio_manager.executors['simulation'] = self.virtual_executor
         self.execution_pipeline = ExecutionPipeline(self.portfolio_manager)
         
@@ -58,11 +58,14 @@ class BacktestEngine:
             if not rows:
                 return {"status": "error", "message": "해당 기간에 조회된 틱 데이터가 없습니다."}
 
-        # 2. 거래소 수수료 설정 로드
+        # 2. 거래소 수수료 설정 로드 및 주입된 어댑터 바인딩
         await self.portfolio_manager.load_exchange_configs()
         exchange_config = self.portfolio_manager.exchange_configs.get(exchange, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
-        self.virtual_executor.set_fee_rate(fee_rate)
+        
+        self.virtual_executor = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
+        self.portfolio_manager.executors['simulation'] = self.virtual_executor
+        self.portfolio_manager.executors[f"simulation_{exchange.lower()}"] = self.virtual_executor
 
         # 3. 백테스트용 임시 포트폴리오 생성
         # ID 예: backtest_upbit_BTC_1716382103
@@ -223,8 +226,11 @@ class BacktestEngine:
             if not rows:
                 return {"status": "error", "message": "해당 기간에 조회된 틱 데이터가 없습니다."}
 
-        # 2. 거래소 수수료 설정 로드
+        # 2. 거래소 수수료 설정 로드 및 거래소별 수수료 적용 어댑터 사전 등록
         await self.portfolio_manager.load_exchange_configs()
+        for ex_id, config in self.portfolio_manager.exchange_configs.items():
+            f_rate = config.get('fee_rate', 0.0005)
+            self.portfolio_manager.executors[f"simulation_{ex_id.lower()}"] = VirtualOrderExecutorAdapter(fee_rate=f_rate)
 
         # 3. 조회된 틱 데이터로부터 실제 데이터가 존재하는 종목 조합(pairs) 추출
         seen_pairs = {}

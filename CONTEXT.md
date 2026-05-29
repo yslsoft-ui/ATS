@@ -74,12 +74,15 @@ _Avoid_: 십자봉, 무변동 봉
 _Avoid_: 자산 관리자, 매매 관리기
 
 **OrderExecutor**:
-주문을 실제로 집행하는 추상 레이어. 가상 체결(**VirtualExecutor**)과 실제 API 체결을 동일한 인터페이스로 제공함.
+주문을 실제로 집행하는 추상 레이어. 가상 체결(**VirtualOrderExecutorAdapter**)과 실제 API 체결을 동일한 인터페이스로 제공함.
 _Avoid_: 주문기, 체결 처리기
 
 **Collector**:
 특정 거래소(Market)의 실시간 **Tick** 데이터를 WebSocket으로 수집하고, 내부 **TradeEngine**으로 배분하는 모듈.
 _Avoid_: 수집기 (혼재 방지를 위해 영문 용어 통일)
+
+**MarketDataContext**:
+특정 자산(`Composite Key`) 및 인터벌(`Interval`) 단위로 시세(캔들) 상태를 유지하고, 기술 지표를 동적으로 연산 및 캐싱하여 다수의 전략 실행 컨텍스트(`StrategyContext`)에 공유하는 중앙 데이터 콘텍스트 관리자.
 
 ## Relationships
 

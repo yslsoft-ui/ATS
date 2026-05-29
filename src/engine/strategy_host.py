@@ -1,22 +1,25 @@
-from src.engine.utils.telemetry import get_logger
-import asyncio
-import time
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional
 from src.engine.candles import Candle
-from src.engine.strategy import BaseStrategy, TradeSignal
-from src.engine.indicators import IndicatorCalculator
-
-logger = get_logger(__name__)
+from src.engine.strategy import BaseStrategy
 
 class StrategyContext:
-    def __init__(self, exchange: str, symbol: str, interval: int, candles: List[Candle], indicators: Dict[str, Any], params: Dict[str, Any], portfolio: Dict[str, Any]):
+    """전략 실행 시점에 전달되는 풍부한 데이터 컨텍스트입니다."""
+    def __init__(self, exchange: str, symbol: str, interval: int, 
+                 market_data_context: Any, params: Dict[str, Any], portfolio: Dict[str, Any]):
         self.exchange = exchange
         self.symbol = symbol
         self.interval = interval
-        self.candles = candles
-        self.indicators = indicators
+        self.market_data_context = market_data_context
         self.params = params
         self.portfolio = portfolio
+        
+        # 하위 호환성을 위해 기존 required_indicators 사전 연산값을 채워둘 딕셔너리
+        self._indicators_dict = {}
+
+    @property
+    def candles(self) -> List[Candle]:
+        """컨텍스트가 속한 MarketDataContext로부터 캔들 리스트를 조회합니다."""
+        return self.market_data_context.candles
 
     @property
     def last_candle(self) -> Optional[Candle]:
@@ -26,130 +29,62 @@ class StrategyContext:
     def current_price(self) -> float:
         return self.last_candle.close if self.last_candle else 0.0
 
+    def get_indicator(self, name: str, **kwargs) -> Any:
+        """동적으로 지표를 계산하거나 캐시에서 즉시 반환합니다."""
+        return self.market_data_context.get_indicator(name, **kwargs)
+
+    @property
+    def indicators(self) -> Dict[str, Any]:
+        """하위 호환성 지원용 indicators 딕셔너리 프로퍼티"""
+        return self._indicators_dict
+
 class StrategyHost:
-    def __init__(self, strategy: BaseStrategy, exchange: str, symbol: str, interval: int, on_status_callback: Optional[Callable] = None):
+    """
+    각 전략(Strategy)을 래핑하여 실행하는 얇은 추상화 Runner 모듈입니다.
+    데이터 보관, 로깅, 신호 가공 등 인프라스트럭처 책임을 배제한 순수 실행 단위입니다.
+    """
+    def __init__(self, strategy: BaseStrategy, exchange: str, symbol: str, interval: int):
         self.strategy = strategy
         self.exchange = exchange
         self.symbol = symbol
         self.interval = interval
-        self.candles: List[Candle] = []
-        self.indicators: Dict[str, Any] = {}
-        self.last_df = None  # 지표 계산 최적화를 위한 캐시
-        self.on_status_callback = on_status_callback
         
         # 전략에 설정된 파라미터 가져오기
         self.params = getattr(strategy, 'params', {})
 
-    async def on_candle(self, candle: Candle, portfolio_manager: Any = None) -> Optional[TradeSignal]:
-        """새로운 캔들이 들어왔을 때 지표를 업데이트하고 전략을 실행합니다."""
-        # 1. 캔들 추가
-        self.candles.append(candle)
-        
-        # 최대 캔들 유지 (메모리 관리 - 200개 정도면 대부분의 지표 충분)
-        if len(self.candles) > 200:
-            self.candles.pop(0)
-
-        # 2. 지표 업데이트 (증분 계산 논리 포함)
-        await self._update_indicators()
-
-        # 3. 포트폴리오 상태 구성 (필요 시)
+    async def execute(self, market_data_context: Any, portfolio_manager: Any = None) -> Optional[Any]:
+        """
+        주입된 MarketDataContext 기반으로 전략을 실행하고 원시 실행 결과(StrategyResult 또는 str)를 반환합니다.
+        """
+        # 1. 포트폴리오 상태 구성
         portfolio_status = {}
         if portfolio_manager:
-            # 포트폴리오 매니저에서 현재 종목의 포지션 및 잔고 정보를 가져옴
             portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol, exchange=self.exchange)
 
-        # 4. 컨텍스트 생성
+        # 2. 컨텍스트 생성
         context = StrategyContext(
             exchange=self.exchange,
             symbol=self.symbol,
             interval=self.interval,
-            candles=self.candles,
-            indicators=self.indicators,
+            market_data_context=market_data_context,
             params=self.params,
             portfolio=portfolio_status
         )
 
-        # 5. 전략 실행
-        try:
-            action_result = None
-            if hasattr(self.strategy, 'on_update'):
-                action_result = self.strategy.on_update(context)
-            else:
-                # 하위 호환성 유지 (점진적 리팩토링용)
-                action_result = self.strategy.on_candle(candle)
-
-            # --- [NEW] 실시간 상태 브로드캐스트 (Audit Log) ---
-            if self.on_status_callback:
-                status_info = {
-                    "type": "strategy_status",
-                    "strategy_id": self.strategy.id,
-                    "exchange": self.exchange,
-                    "symbol": self.symbol,
-                    "indicators": self.indicators,
-                    "last_action": action_result.action if hasattr(action_result, 'action') else str(action_result),
-                    "timestamp": int(time.time() * 1000)
-                }
-                asyncio.create_task(self.on_status_callback(status_info))
-            # -----------------------------------------------
-
-            if not action_result:
-                return None
-
-            # StrategyResult 객체인 경우 처리
-            from src.engine.strategy import StrategyResult
-            if isinstance(action_result, StrategyResult):
-                if action_result.action in ['BUY', 'SELL']:
-                    return TradeSignal(
-                        exchange=self.exchange,
-                        symbol=self.symbol,
-                        action=action_result.action,
-                        price=action_result.price or candle.close,
-                        reason=action_result.reason or f"Strategy {self.strategy.id} signal",
-                        interval=self.interval,
-                        strategy_id=self.strategy.id,
-                        context=action_result.context
-                    )
-            # 문자열인 경우 처리 (하위 호환)
-            elif action_result in ['BUY', 'SELL']:
-                return TradeSignal(
-                    exchange=self.exchange,
-                    symbol=self.symbol,
-                    action=action_result,
-                    price=candle.close,
-                    reason=f"Strategy {self.strategy.id} legacy signal",
-                    interval=self.interval,
-                    strategy_id=self.strategy.id
-                )
-        except Exception as e:
-            logger.error(f"Error executing strategy {self.strategy.id}: {str(e)}")
-            
-        return None
-
-    async def _update_indicators(self):
-        """
-        전략에서 선언한 지표들을 계산합니다.
-        IndicatorCalculator 인스턴스를 유지하여 증분 계산을 수행합니다.
-        """
+        # 3. 하위 호환성: 전략에 등록된 required_indicators 사전 계산
         required = getattr(self.strategy, 'required_indicators', [])
-        if not required:
-            return
-
-        if not hasattr(self, 'calculator'):
-            # 전략이 요구하는 윈도우 사이즈를 파라미터에서 가져옴 (기본 20)
+        for ind in required:
             window = self.params.get('rsi_window', self.params.get('sma_window', 20))
-            self.calculator = IndicatorCalculator(window_size=window)
+            val = context.get_indicator(ind, window=window)
+            context._indicators_dict[ind] = val
 
-        try:
-            # 마지막 캔들의 종가로 지표 업데이트 (증분 계산)
-            if self.candles:
-                results = self.calculator.update(self.candles[-1].close)
-                # 계산된 결과 중 전략이 요구하는 지표만 필터링하여 저장
-                for ind in required:
-                    if ind in results:
-                        self.indicators[ind] = results[ind]
-                    elif isinstance(results.get('bb'), dict) and ind in ['bb_upper', 'bb_lower']:
-                        # 볼린저 밴드 특수 처리
-                        self.indicators['bb_upper'] = results['bb']['upper']
-                        self.indicators['bb_lower'] = results['bb']['lower']
-        except Exception as e:
-            logger.error(f"Indicator incremental calculation error for {self.symbol}: {str(e)}")
+        # 4. 전략 실행
+        action_result = None
+        if hasattr(self.strategy, 'on_update'):
+            action_result = self.strategy.on_update(context)
+        else:
+            # 하위 호환성
+            action_result = self.strategy.on_candle(context.last_candle)
+
+        return action_result
+

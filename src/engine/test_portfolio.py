@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 import os
-from src.engine.portfolio import Portfolio, PortfolioManager, VirtualExecutor
+from src.engine.portfolio import Portfolio, PortfolioManager, VirtualOrderExecutorAdapter
 from src.engine.trade_engine import TradeSignal
 from src.database.schema import init_db
 
@@ -42,8 +42,8 @@ async def test_portfolio_basic_operations():
 @pytest.mark.asyncio
 async def test_virtual_executor():
     portfolio = Portfolio(portfolio_id="sim_id", name="Simulation", initial_cash=1000000, exchange_id="upbit")
-    # default_fee_rate 키워드 인자 매핑 버그 수정
-    executor = VirtualExecutor(default_fee_rate=0.0005)
+    # VirtualOrderExecutorAdapter 사용 및 fee_rate 주입 구조로 변경
+    executor = VirtualOrderExecutorAdapter(fee_rate=0.0005)
     
     orderbook_data = {
         'asks': [[50000000, 1.0], [50100000, 1.0]],

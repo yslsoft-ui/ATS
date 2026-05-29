@@ -119,6 +119,8 @@ sequenceDiagram
     autonumber
     participant ZMQ as ZeroMQ IPC Bus
     participant TE as TradeEngine (종목별)
+    participant MDC as MarketDataContext
+    participant Host as StrategyHost
     participant Strat as Strategy Logic
     participant PM as PortfolioManager
     participant Exec as OrderExecutor (Virtual)
@@ -126,10 +128,17 @@ sequenceDiagram
 
     ZMQ->>TE: 실시간 틱 수신
     TE->>TE: 틱 데이터를 캔들(OHLCV)로 합산
-    TE->>TE: 기술 지표 계산 (SMA, RSI, Bollinger Bands)
-    TE->>Strat: 지표 값 제공 및 판단 요청
+    TE->>MDC: 완성된 캔들 추가 및 지표 캐시 무효화 (add_candle)
+    TE->>Host: 전략 실행 요청 (execute)
+    Host->>MDC: 필요한 지표 동적 계산/조회 (get_indicator)
+    MDC->>MDC: 캐시 확인 또는 numpy 기반 지표 연산 및 캐싱
+    Host->>Strat: StrategyContext 제공 및 판단 요청 (on_update)
     Note over Strat: 예: RSI < 30 (과매도 진입)
-    Strat->>PM: 매수 주문 신호 발행 (BUY, 수량, 사유)
+    Strat->>Host: 판단 결과 반환 (StrategyResult)
+    Host->>TE: 원시 판단 결과 전달
+    TE->>TE: 신호 유효성 검증 및 TradeSignal 빌드
+    TE->>TE: 실시간 상태/지표 스냅샷 브로드캐스트 (콜백)
+    TE->>PM: 매수 주문 신호 발행 (BUY, 수량, 사유)
     PM->>Exec: 가상 주문 실행 요청
     Exec->>Exec: 호가창(Orderbook) 기반 슬리피지/체결가 산정
     Exec->>DB: 주문 이력(orders_history) 저장
@@ -151,6 +160,7 @@ sequenceDiagram
 
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
+- **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
 
 ---
 
