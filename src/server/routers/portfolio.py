@@ -393,9 +393,131 @@ def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     ).digest()
     return f"{signing_input}.{base64url(sig)}"
 
+async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, force_sync: bool = False):
+    """
+    업비트 거래소로부터 실제 완료된 거래 내역을 긁어와 로컬 DB real_orders에 누적 저장합니다.
+    - 기록이 아예 없는 경우: page=1부터 루프를 돌아 전체 주문을 긁어오는 Full Backfill 수행.
+    - 기록이 있고 force_sync=True인 경우: 최근 1페이지(최대 100건)만 수동 업데이트(Incremental Sync).
+    - 기록이 있고 force_sync=False인 경우: 아무 것도 하지 않고 스킵(평시 페이지 진입용).
+    """
+    import hashlib
+    import uuid
+    import base64
+    import hmac
+    import os
+    import urllib.parse
+
+    # 1. 로컬 DB에 업비트 거래 기록이 이미 있는지 조회 및 미체결(wait) 주문 감지
+    has_records = False
+    has_pending = False
+    async with get_db_conn() as db:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'upbit' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_records = True
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'upbit' AND state = 'wait' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_pending = True
+
+    # 평시 페이지 진입인데 이미 이력이 있고 대기 중인 주문도 없다면 스킵
+    if has_records and not has_pending and not force_sync:
+        return
+
+    # 루프를 돌면서 주문 내역 수집
+    page = 1
+    limit = 100
+    base_url = api_url.rstrip('/')
+    upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+    
+    headers = {
+        "Accept": "application/json"
+    }
+
+    async with aiohttp.ClientSession() as session:
+        for state_val in ["done", "cancel"]:
+            page = 1
+            while True:
+                params = [
+                    ("state", state_val),
+                    ("limit", str(limit)),
+                    ("page", str(page))
+                ]
+                
+                query_string = urllib.parse.urlencode(params).encode("utf-8")
+                
+                m = hashlib.sha512()
+                m.update(query_string)
+                query_hash = m.hexdigest()
+                
+                token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+                headers["Authorization"] = f"Bearer {token}"
+                
+                target_url = f"{upbit_v1_url}/orders?{query_string.decode('utf-8')}"
+                
+                try:
+                    async with session.get(target_url, headers=headers) as resp:
+                        if resp.status != 200:
+                            err_txt = await resp.text()
+                            logger.error(f"Upbit API error during order sync ({state_val}): {resp.status} - {err_txt}")
+                            break
+                        
+                        orders = await resp.json()
+                        if not orders:
+                            break  # 더 이상 주문이 없으면 루프 종료
+                        
+                        # 로컬 DB에 적재
+                        async with get_db_conn() as db:
+                            for o in orders:
+                                # 취소된 주문 중 체결 수량이 0인 완전 미체결 주문은 스킵
+                                if o.get("state") == "cancel" and float(o.get("executed_volume") or 0.0) == 0.0:
+                                    continue
+                                    
+                                market = o.get("market", "")
+                                symbol = market.replace("KRW-", "").upper() if market.startswith("KRW-") else market
+                                created_at = o.get("created_at")
+                                
+                                # SQLite의 ON CONFLICT DO UPDATE 문법을 사용해 이미 Ignore 된 가격이 0.0인 레코드도 올바르게 보정
+                                await db.execute('''
+                                    INSERT INTO real_orders 
+                                    (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    ON CONFLICT(uuid) DO UPDATE SET
+                                        price = excluded.price,
+                                        volume = excluded.volume,
+                                        executed_volume = excluded.executed_volume,
+                                        fee = excluded.fee,
+                                        state = excluded.state
+                                ''', (
+                                    'upbit',
+                                    o.get("uuid"),
+                                    symbol,
+                                    "BUY" if o.get("side") == "bid" else "SELL",
+                                    float(o.get("avg_price") or o.get("price") or 0.0),
+                                    float(o.get("volume") or 0.0),
+                                    float(o.get("executed_volume") or 0.0),
+                                    float(o.get("paid_fee") or 0.0),
+                                    o.get("state"),
+                                    created_at
+                                ))
+                            await db.commit()
+                            
+                        # 만약 Full Backfill이 아니라 Incremental Sync (최근 1페이지) 라면 한 페이지만 받고 루프 강제 탈출
+                        if has_records and force_sync:
+                            break
+                            
+                        # 다음 페이지로
+                        page += 1
+                        await asyncio.sleep(0.05)
+                except Exception as e:
+                    logger.error(f"Failed to fetch order page {page} for state {state_val}: {e}")
+                    break
+
 @router.get("/api/exchanges/upbit/assets")
-async def get_upbit_assets(request: Request):
-    """업비트 실제 잔고를 조회하고 실시간 시세를 반영하여 평가금액이 높은 순서대로 정렬해 반환합니다."""
+async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = False):
+    """업비트 실제 잔고를 조회하고 실시간 시세를 반영하여 평가금액이 높은 순서대로 정렬해 반환합니다. (처분 완료 자산 필터 지원)"""
+    import os
+    import hashlib
     # Real-time .env reloading helper to capture updates without uvicorn restart
     from pathlib import Path
     root_dir = Path(__file__).resolve().parents[3]
@@ -420,6 +542,12 @@ async def get_upbit_assets(request: Request):
     api_url = system.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
     
     try:
+        # 실거래 주문 이력 동기화 기동 (최초 풀 백필 또는 수동 갱신 요청 또는 처분 완료 자산 조회 시)
+        try:
+            await _sync_real_orders(access_key, secret_key, api_url, force_sync=(sync or mode == "liquidated"))
+        except Exception as sync_err:
+            logger.error(f"Failed to sync real orders: {sync_err}")
+
         # 1. 업비트 잔고 조회
         token = _create_upbit_jwt(access_key, secret_key)
         headers = {
@@ -437,77 +565,153 @@ async def get_upbit_assets(request: Request):
             if not accounts:
                 return {"total_eval_value": 0, "formatted_total_value": "0", "assets": []}
                 
-            # 2. [OPTIMIZED] 매번 REST API로 마켓 리스트를 호출하는 대신, 메모리에 대량 적재된 stock_mapper 캐시 사용
             valid_krw_markets = {f"KRW-{k}" for k in stock_mapper.get_active_symbols('upbit')}
-            
-            # 실시간 시세가 존재하는 실제 코인만 추려서 Ticker 일괄 요청 (에러 방지)
-            coins = [a for a in accounts if a['currency'] != 'KRW']
-            coin_symbols = [f"KRW-{c['currency']}" for c in coins if f"KRW-{c['currency']}" in valid_krw_markets]
-            
-            prices = {}
-            if coin_symbols:
-                for i in range(0, len(coin_symbols), 100):
-                    batch = ','.join(coin_symbols[i:i+100])
-                    async with session.get(f"{api_url}/ticker?markets={batch}") as resp:
-                        if resp.status == 200:
-                            tickers = await resp.json()
-                            for t in tickers:
-                                prices[t['market']] = float(t['trade_price'])
-                                
-            # 3. 자산 리스트 재구성 및 평가액 연산
-            asset_list = []
-            total_eval_value = 0.0
-            
-            for a in accounts:
-                currency = a['currency']
-                balance = float(a['balance']) + float(a['locked'])
-                avg_buy_price = float(a['avg_buy_price'])
+
+            if mode == "liquidated":
+                # [Liquidated Mode] 처분 완료 자산 (현재 잔고는 0 이나 과거 거래가 있었던 자산)
+                # 보유 중인 코인 목록
+                active_set = {a['currency'].upper() for a in accounts if float(a['balance']) + float(a['locked']) > 0}
                 
-                if balance <= 0:
-                    continue
-                
-                if currency == 'KRW':
-                    current_price = 1.0
-                    eval_value = balance
-                    korean_name = "원화"
-                else:
+                # 로컬 DB real_orders에서 거래 이력이 있는 코인 조회
+                traded_coins = []
+                sell_info = {}
+                async with get_db_conn() as db:
+                    async with db.execute(
+                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'upbit' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                    ) as cursor:
+                        rows = await cursor.fetchall()
+                        traded_coins = [r['symbol'].upper() for r in rows]
+
+                    # 각 코인별 가장 최근의 매도 완료/부분체결 취소 체결 데이터 조회
+                    query = """
+                        SELECT r.symbol, r.price, r.executed_volume
+                        FROM real_orders r
+                        INNER JOIN (
+                            SELECT symbol, MAX(created_at) as max_created_at
+                            FROM real_orders
+                            WHERE exchange = 'upbit' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                            GROUP BY symbol
+                        ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
+                        WHERE r.exchange = 'upbit' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                    """
+                    async with db.execute(query) as cursor:
+                        rows = await cursor.fetchall()
+                        for r in rows:
+                            sym = r['symbol'].upper()
+                            sell_info[sym] = {
+                                "price": float(r['price'] or 0.0),
+                                "volume": float(r['executed_volume'] or 0.0)
+                            }
+
+                # 처분된 코인 목록 도출 (KRW 제외)
+                liquidated_coins = sorted(list((set(traded_coins) - active_set) - {"KRW"}))
+
+                prices = {}
+                coin_symbols = [f"KRW-{c}" for c in liquidated_coins if f"KRW-{c}" in valid_krw_markets]
+                if coin_symbols:
+                    for i in range(0, len(coin_symbols), 100):
+                        batch = ','.join(coin_symbols[i:i+100])
+                        async with session.get(f"{api_url}/ticker?markets={batch}") as resp:
+                            if resp.status == 200:
+                                tickers = await resp.json()
+                                for t in tickers:
+                                    prices[t['market']] = float(t['trade_price'])
+
+                asset_list = []
+                for currency in liquidated_coins:
                     symbol = f"KRW-{currency}"
-                    # 실존 마켓에 존재하면 실시간 현재가, 없으면 0.0 처리 (상장폐지/에어드랍 찌꺼기 방어)
                     if symbol in valid_krw_markets:
-                        current_price = prices.get(symbol, avg_buy_price)
-                        eval_value = balance * current_price
+                        current_price = prices.get(symbol, 0.0)
                     else:
                         current_price = 0.0
-                        eval_value = 0.0
                     
-                    # [OPTIMIZED] 메모리 캐시(stock_mapper)에서 번개처럼 한글명 조회
                     korean_name = stock_mapper.get_name('upbit', currency)
-                        
-                total_eval_value += eval_value
+                    
+                    # 최종 매각 정보 조회 (기본값은 0.0)
+                    info = sell_info.get(currency.upper(), {"price": 0.0, "volume": 0.0})
+                    sell_price = info["price"]
+                    sell_volume = info["volume"]
+                    sell_value = sell_price * sell_volume
+                    
+                    asset_list.append({
+                        "currency": currency,
+                        "korean_name": korean_name,
+                        "balance": 0.0,
+                        "avg_buy_price": sell_price,
+                        "current_price": current_price,
+                        "eval_value": sell_value,
+                        "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
+                        "percent": 0.0
+                    })
                 
-                asset_list.append({
-                    "currency": currency,
-                    "korean_name": korean_name,
-                    "balance": balance,
-                    "avg_buy_price": avg_buy_price,
-                    "current_price": current_price,
-                    "eval_value": eval_value,
-                    "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}"
-                })
+                return {
+                    "total_eval_value": 0.0,
+                    "formatted_total_value": "0",
+                    "assets": asset_list
+                }
+            else:
+                # [Active Mode] 보유 중인 자산 조회 (기존 로직)
+                coins = [a for a in accounts if a['currency'] != 'KRW']
+                coin_symbols = [f"KRW-{c['currency']}" for c in coins if f"KRW-{c['currency']}" in valid_krw_markets]
                 
-            # 4. 비중(percent) 산정 및 평가금액 많은 순 정렬
-            for asset in asset_list:
-                asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
+                prices = {}
+                if coin_symbols:
+                    for i in range(0, len(coin_symbols), 100):
+                        batch = ','.join(coin_symbols[i:i+100])
+                        async with session.get(f"{api_url}/ticker?markets={batch}") as resp:
+                            if resp.status == 200:
+                                tickers = await resp.json()
+                                for t in tickers:
+                                    prices[t['market']] = float(t['trade_price'])
+                                    
+                asset_list = []
+                total_eval_value = 0.0
                 
-            # 평가금액 기준 내림차순 정렬
-            asset_list.sort(key=lambda x: x["eval_value"], reverse=True)
-            
-            return {
-                "total_eval_value": total_eval_value,
-                "formatted_total_value": f"{int(total_eval_value):,}",
-                "assets": asset_list
-            }
-            
+                for a in accounts:
+                    currency = a['currency']
+                    balance = float(a['balance']) + float(a['locked'])
+                    avg_buy_price = float(a['avg_buy_price'])
+                    
+                    if balance <= 0:
+                        continue
+                    
+                    if currency == 'KRW':
+                        current_price = 1.0
+                        eval_value = balance
+                        korean_name = "원화"
+                    else:
+                        symbol = f"KRW-{currency}"
+                        if symbol in valid_krw_markets:
+                            current_price = prices.get(symbol, avg_buy_price)
+                            eval_value = balance * current_price
+                        else:
+                            current_price = 0.0
+                            eval_value = 0.0
+                        korean_name = stock_mapper.get_name('upbit', currency)
+                            
+                    total_eval_value += eval_value
+                    
+                    asset_list.append({
+                        "currency": currency,
+                        "korean_name": korean_name,
+                        "balance": balance,
+                        "avg_buy_price": avg_buy_price,
+                        "current_price": current_price,
+                        "eval_value": eval_value,
+                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}"
+                    })
+                    
+                for asset in asset_list:
+                    asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
+                    
+                asset_list.sort(key=lambda x: x["eval_value"], reverse=True)
+                
+                return {
+                    "total_eval_value": total_eval_value,
+                    "formatted_total_value": f"{int(total_eval_value):,}",
+                    "assets": asset_list
+                }
+                
     except Exception as e:
         logger.error(f"Error fetching upbit assets: {e}")
         raise HTTPException(status_code=500, detail=str(e))

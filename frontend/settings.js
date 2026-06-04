@@ -222,6 +222,10 @@ async function updateCleanupPreview() {
 function initDatabaseControls() {
     const btnCleanup = document.getElementById('btn-cleanup');
     const cleanupDateInput = document.getElementById('cleanup-date');
+    const progressPanel = document.getElementById('cleanup-progress-panel');
+    const progressStatus = document.getElementById('cleanup-progress-status');
+    const progressPercent = document.getElementById('cleanup-progress-percent');
+    const progressBar = document.getElementById('cleanup-progress-bar');
 
     if (cleanupDateInput) {
         cleanupDateInput.addEventListener('change', updateCleanupPreview);
@@ -239,6 +243,11 @@ function initDatabaseControls() {
             const candlesCount = parseInt(btnCleanup.dataset.candles || "0");
             const totalCount = parseInt(btnCleanup.dataset.total || "0");
 
+            if (totalCount === 0) {
+                alert("삭제할 대상 데이터가 없습니다.");
+                return;
+            }
+
             const warnMessage = `⚠️ [데이터베이스 영구 삭제 경고]\n\n` +
                 `선택하신 날짜 (${selectedDate}) 이전의 과거 데이터를 데이터베이스에서 영구히 삭제합니다.\n\n` +
                 `[삭제 정리 대상]\n` +
@@ -252,18 +261,51 @@ function initDatabaseControls() {
                 return;
             }
 
+            // UI 상태 초기화
             btnCleanup.disabled = true;
             btnCleanup.innerText = "삭제 진행 중...";
+            if (progressPanel) progressPanel.style.display = 'block';
+            if (progressStatus) progressStatus.innerText = "삭제 준비 중...";
+            if (progressPercent) progressPercent.innerText = "0%";
+            if (progressBar) progressBar.style.width = "0%";
 
             try {
-                const data = await APIClient.runCleanup(selectedDate);
-                alert(`🧹 정리 완료!\n\n${data.message}`);
+                let deletedCount = 0;
+                const chunkSize = 100000;
+
+                while (deletedCount < totalCount) {
+                    // 백엔드 API를 청크 사이즈(100000)만큼 호출
+                    const response = await APIClient.runCleanup(selectedDate, chunkSize);
+                    const stepDeleted = response.total_deleted || 0;
+                    
+                    if (stepDeleted === 0) {
+                        break; // 더 이상 삭제할 건수가 없으면 정지
+                    }
+
+                    deletedCount += stepDeleted;
+                    
+                    // 진행률(%) 계산 및 UI 반영
+                    const percent = Math.min(100, Math.floor((deletedCount / totalCount) * 100));
+                    if (progressStatus) progressStatus.innerText = `데이터 삭제 중... (${deletedCount.toLocaleString()} / ${totalCount.toLocaleString()})`;
+                    if (progressPercent) progressPercent.innerText = `${percent}%`;
+                    if (progressBar) progressBar.style.width = `${percent}%`;
+
+                    // 브라우저 렌더링 양보 및 사용자가 진행률을 시각적으로 인지할 수 있도록 지연시간(20ms) 부여
+                    await new Promise(resolve => setTimeout(resolve, 20));
+                }
+
+                if (progressStatus) progressStatus.innerText = "삭제 정리 완료!";
+                alert(`🧹 정리 완료!\n\n총 ${deletedCount.toLocaleString()}건의 데이터가 안전하게 삭제 정리되었습니다.`);
                 await updateCleanupPreview();
             } catch (e) {
-                alert("정리 작업 도중 오류가 발생했습니다.");
+                console.error("Cleanup failed", e);
+                alert(`정리 작업 도중 오류가 발생했습니다: ${e.message || e}`);
             } finally {
                 btnCleanup.disabled = false;
                 btnCleanup.innerText = "선택 날짜 이전 삭제";
+                setTimeout(() => {
+                    if (progressPanel) progressPanel.style.display = 'none';
+                }, 3000);
             }
         });
     }

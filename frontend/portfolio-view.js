@@ -192,12 +192,12 @@ const PortfolioView = {
     /**
      * 업비트 API를 통해 받아온 실제 잔고 정보를 렌더링합니다.
      */
-    renderRealAssetsTable(tbodyId, data, totalValueEl, assetCountEl, onAssetDblClick) {
+    renderRealAssetsTable(tbodyId, data, totalValueEl, assetCountEl, onOrderClick, onHistoryClick, onAssetDblClick) {
         const tbody = document.getElementById(tbodyId);
         if (!tbody) return;
 
         if (!data || !data.assets) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:rgba(255,255,255,0.4);">자산 내역이 비어있거나 키를 확인하세요.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:rgba(255,255,255,0.4);;">자산 내역이 비어있거나 키를 확인하세요.</td></tr>';
             return;
         }
 
@@ -208,7 +208,7 @@ const PortfolioView = {
         tbody.innerHTML = '';
         
         if (data.assets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;">보유 자산이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">보유 자산이 없습니다.</td></tr>';
             return;
         }
 
@@ -244,6 +244,14 @@ const PortfolioView = {
                 const iconUrl = `https://static.upbit.com/logos/${asset.currency}.png`;
                 iconHtml = `<img src="${iconUrl}" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'24\\' height=\\'24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%231E293B\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'9\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'%2394A3B8\\' text-anchor=\\'middle\\'>${asset.currency.slice(0, 3)}</text></svg>';">`;
             }
+
+            const isOrderDisabled = asset.currency === 'KRW' || asset.current_price <= 0;
+            const actionsHtml = `
+                <div class="real-asset-actions">
+                    <button class="btn-action-order" ${isOrderDisabled ? 'disabled' : ''}>주문</button>
+                    <button class="btn-action-history">이력</button>
+                </div>
+            `;
             
             tr.innerHTML = `
                 <td>
@@ -260,10 +268,34 @@ const PortfolioView = {
                 <td class="num" style="text-align:right;">${asset.current_price > 0 ? (asset.current_price >= 100 ? Math.floor(asset.current_price).toLocaleString() : asset.current_price.toLocaleString()) : '-'}</td>
                 <td class="num" style="text-align:right; font-weight:bold; color:#F8FAFC;">${asset.formatted_eval_value} 원</td>
                 <td>${barHtml}</td>
+                <td>${actionsHtml}</td>
             `;
             
+            // 주문 버튼 클릭 리스너
+            const orderBtn = tr.querySelector('.btn-action-order');
+            if (orderBtn) {
+                orderBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (typeof onOrderClick === 'function') {
+                        onOrderClick(asset);
+                    }
+                });
+            }
+
+            // 이력 버튼 클릭 리스너
+            const historyBtn = tr.querySelector('.btn-action-history');
+            if (historyBtn) {
+                historyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (typeof onHistoryClick === 'function') {
+                        onHistoryClick(asset);
+                    }
+                });
+            }
+
             // 더블 클릭 시 차트 연동 트리거 호출
-            tr.addEventListener('dblclick', () => {
+            tr.addEventListener('dblclick', (e) => {
+                e.stopPropagation(); // 단순 클릭 이벤트 전파 차단
                 if (asset.currency !== 'KRW' && typeof onAssetDblClick === 'function') {
                     onAssetDblClick(asset);
                 }

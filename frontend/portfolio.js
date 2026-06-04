@@ -527,17 +527,48 @@ function closeAssetModal() {
 /**
  * 업비트 API를 통해 실제 잔고를 불러와 화면에 요약 정보를 출력합니다.
  */
-async function loadRealAssets() {
+async function loadRealAssets(sync = false) {
     const tbody = document.getElementById('real-assets-tbody');
     const totalValueEl = document.getElementById('real-total-value');
     const assetCountEl = document.getElementById('real-asset-count');
     
     if (!tbody) return;
     
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; 업비트 API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; 업비트 API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>';
     
     try {
-        const data = await APIClient.fetchRealAssets('upbit');
+        const filter = state.realAssetFilter || 'active';
+        
+        // 테이블 헤더 텍스트 동적 변경 (보유자산 vs 처분완료자산)
+        const thElements = document.querySelectorAll('#real-assets-table th');
+        if (thElements.length >= 5) {
+            if (filter === 'liquidated') {
+                thElements[2].innerText = '매각 체결가';
+                thElements[4].innerText = '매각 총액';
+            } else {
+                thElements[2].innerText = '평균 매수가';
+                thElements[4].innerText = '평가금액';
+            }
+        }
+
+        const data = await APIClient.fetchRealAssets('upbit', filter, sync);
+        
+        if (data && data.assets) {
+            const krwAsset = data.assets.find(asset => asset.currency === 'KRW');
+            if (krwAsset) {
+                state.realKRWBalance = krwAsset.balance;
+            }
+        }
+
+        // liquidated 일 때는 평가액이 0 원이 되므로 active 기준 평가액 캐시 유지
+        if (totalValueEl) {
+            if (filter === 'active') {
+                state.realTotalValue = data.formatted_total_value;
+                totalValueEl.innerText = `${data.formatted_total_value} 원`;
+            } else {
+                totalValueEl.innerText = `${state.realTotalValue || '0'} 원`;
+            }
+        }
         
         // 실시간 더블클릭 차트 이동 콜백 어댑터
         const onAssetDblClick = (asset) => {
@@ -559,11 +590,653 @@ async function loadRealAssets() {
             showAlert(`${asset.korean_name} 차트로 이동합니다.`, 'info');
         };
 
-        PortfolioView.renderRealAssetsTable('real-assets-tbody', data, totalValueEl, assetCountEl, onAssetDblClick);
+        const onOrderClick = (asset) => {
+            openRealAssetOrderModal(asset);
+        };
+
+        const onHistoryClick = (asset) => {
+            openRealAssetHistoryModal(asset);
+        };
+
+        PortfolioView.renderRealAssetsTable('real-assets-tbody', data, totalValueEl, assetCountEl, onOrderClick, onHistoryClick, onAssetDblClick);
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#FF4B4B;">&#x26A0;&#xFE0F; 자산 조회 실패 (API 키 권한 또는 인터넷 연결 상태를 확인하세요)</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#FF4B4B;">&#x26A0;&#xFE0F; 자산 조회 실패 (API 키 권한 또는 인터넷 연결 상태를 확인하세요)</td></tr>';
         console.error("Asset load failed", e);
     }
+}
+
+/**
+ * 실자산 필터를 변경합니다 (보유 자산 / 처분 완료 자산).
+ */
+function changeRealAssetFilter(filter) {
+    state.realAssetFilter = filter;
+    const activeBtn = document.getElementById('btn-real-asset-filter-active');
+    const liquidatedBtn = document.getElementById('btn-real-asset-filter-liquidated');
+    if (activeBtn && liquidatedBtn) {
+        if (filter === 'active') {
+            activeBtn.classList.add('active');
+            activeBtn.style.background = 'var(--accent-color)';
+            activeBtn.style.color = 'white';
+            liquidatedBtn.classList.remove('active');
+            liquidatedBtn.style.background = '#475569';
+            liquidatedBtn.style.color = '#94A3B8';
+        } else {
+            liquidatedBtn.classList.add('active');
+            liquidatedBtn.style.background = 'var(--accent-color)';
+            liquidatedBtn.style.color = 'white';
+            activeBtn.classList.remove('active');
+            activeBtn.style.background = '#475569';
+            activeBtn.style.color = '#94A3B8';
+        }
+    }
+    loadRealAssets(false);
+}
+
+/**
+ * 거래소로부터 과거 MTS/외부 주문 내역을 동기화하여 로컬 DB를 최신화합니다.
+ */
+async function syncRealOrderHistory() {
+    showAlert("거래소로부터 과거 주문/체결 내역을 동기화하고 있습니다. 잠시만 기다려주세요...", "info");
+    try {
+        await loadRealAssets(true);
+        showAlert("거래소 이력 동기화가 완료되었습니다.", "success");
+    } catch (e) {
+        showAlert("거래소 이력 동기화 중 오류가 발생했습니다.", "error");
+        console.error(e);
+    }
+}
+
+// 실자산 주문 모달 상태
+state.realOrderState = {
+    exchange: 'upbit',
+    symbol: '',
+    side: 'BUY',
+    asset: null,
+    orderbookTimer: null
+};
+
+/**
+ * 실자산 매수/매도 주문 모달을 엽니다.
+ */
+function openRealAssetOrderModal(asset) {
+    if (asset.currency === 'KRW') {
+        showAlert("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
+        return;
+    }
+    
+    state.realOrderState.asset = asset;
+    state.realOrderState.symbol = asset.currency;
+    state.realOrderState.exchange = 'upbit';
+    
+    // 모달 타이틀 설정
+    const orderExchange = document.getElementById('real-order-exchange');
+    const orderSymbol = document.getElementById('real-order-symbol');
+    const orderName = document.getElementById('real-order-name');
+    
+    if (orderExchange) orderExchange.innerText = 'UPBIT';
+    if (orderSymbol) orderSymbol.innerText = asset.currency;
+    if (orderName) orderName.innerText = asset.korean_name;
+    
+    // 주문가능 정보 바인딩
+    const availableKrw = document.getElementById('real-order-available-krw');
+    const availableQty = document.getElementById('real-order-available-qty');
+    
+    if (availableKrw) {
+        const balance = state.realKRWBalance || 0;
+        availableKrw.innerText = `${Math.floor(balance).toLocaleString()} 원`;
+    }
+    if (availableQty) {
+        availableQty.innerText = `${asset.balance} ${asset.currency}`;
+    }
+    
+    const qtyUnit = document.getElementById('real-order-volume-unit');
+    if (qtyUnit) qtyUnit.innerText = asset.currency;
+    
+    // 인풋 초기화
+    const priceInput = document.getElementById('real-order-price');
+    const volInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    if (priceInput) priceInput.value = '';
+    if (volInput) volInput.value = '';
+    if (totalInput) totalInput.value = '';
+    
+    // 기본 주문 사이드: BUY
+    setOrderSide('BUY');
+    
+    // 라디오 버튼 초기화 (limit)
+    const limitRadio = document.querySelector('input[name="real-order-type"][value="limit"]');
+    if (limitRadio) limitRadio.checked = true;
+    onOrderTypeChange();
+    
+    // 모달 보이기
+    const modal = document.getElementById('real-asset-order-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.onclick = (e) => {
+            if (e.target === modal) closeRealAssetOrderModal();
+        };
+    }
+    
+    // 호가창 폴링 시작
+    pollRealOrderbook();
+}
+
+/**
+ * 실자산 주문 모달을 닫습니다.
+ */
+function closeRealAssetOrderModal() {
+    const modal = document.getElementById('real-asset-order-modal');
+    if (modal) modal.style.display = 'none';
+    
+    if (state.realOrderState.orderbookTimer) {
+        clearTimeout(state.realOrderState.orderbookTimer);
+        state.realOrderState.orderbookTimer = null;
+    }
+}
+
+/**
+ * 호가창 데이터를 지속적으로 조회하여 실시간 반영합니다.
+ */
+async function pollRealOrderbook() {
+    if (!state.realOrderState.asset) return;
+    
+    try {
+        const symbol = `KRW-${state.realOrderState.symbol}`;
+        const data = await APIClient.fetchOrderbook('upbit', symbol);
+        
+        if (data && data.orderbook) {
+            renderRealOrderbook(data);
+            
+            // 만약 가격 인풋이 비어있으면 현재가를 기본값으로 설정
+            const priceInput = document.getElementById('real-order-price');
+            if (priceInput && !priceInput.value) {
+                priceInput.value = data.trade_price;
+            }
+        }
+    } catch (e) {
+        console.error("Failed to poll orderbook", e);
+    }
+    
+    // 2초 뒤 재호출
+    const modal = document.getElementById('real-asset-order-modal');
+    if (modal && modal.style.display === 'flex') {
+        state.realOrderState.orderbookTimer = setTimeout(pollRealOrderbook, 2000);
+    }
+}
+
+/**
+ * 호가창 HTML을 생성하여 렌더링합니다.
+ */
+function renderRealOrderbook(data) {
+    const orderbookList = document.getElementById('real-orderbook-list');
+    if (!orderbookList || !data.orderbook || !data.orderbook.orderbook_units) return;
+    
+    const units = data.orderbook.orderbook_units;
+    let html = '';
+    
+    const total_ask_size = data.orderbook.total_ask_size || units.reduce((a, b) => a + b.ask_size, 0);
+    const total_bid_size = data.orderbook.total_bid_size || units.reduce((a, b) => a + b.bid_size, 0);
+    
+    // 매도 호가 (Asks) - 내림차순 정렬 (높은 가격이 위로 가도록)
+    for (let i = units.length - 1; i >= 0; i--) {
+        const u = units[i];
+        const percentage = Math.min(100, (u.ask_size / total_ask_size) * 100);
+        html += `
+            <div class="orderbook-row ask" onclick="setOrderPrice(${u.ask_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 8px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(0, 114, 255, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
+                <span class="price bear" style="color:#0072FF; font-weight:bold;">${u.ask_price.toLocaleString()}</span>
+                <div style="position:relative; width:50%; text-align:right;">
+                    <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(0, 114, 255, 0.1); width:${percentage}%;"></div>
+                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${u.ask_size.toFixed(4)}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 현재가 구분선
+    const changeSign = data.change_rate >= 0 ? '+' : '';
+    const rateClass = data.change_rate >= 0 ? 'bull' : 'bear';
+    const rateColor = data.change_rate >= 0 ? '#FF4B4B' : '#0072FF';
+    html += `
+        <div class="orderbook-current-price" style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#1E293B; border-top:1px solid #334155; border-bottom:1px solid #334155; font-size:0.8rem; font-weight:bold; color:#F8FAFC;">
+            <span class="${rateClass}" style="color:${rateColor}">현재가: ${data.trade_price.toLocaleString()}</span>
+            <span class="${rateClass}" style="color:${rateColor}">${changeSign}${(data.change_rate * 100).toFixed(2)}%</span>
+        </div>
+    `;
+    
+    // 매수 호가 (Bids) - 내림차순 정렬 (높은 가격이 위로 가도록)
+    for (let i = 0; i < units.length; i++) {
+        const u = units[i];
+        const percentage = Math.min(100, (u.bid_size / total_bid_size) * 100);
+        html += `
+            <div class="orderbook-row bid" onclick="setOrderPrice(${u.bid_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 8px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(255, 75, 75, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
+                <span class="price bull" style="color:#FF4B4B; font-weight:bold;">${u.bid_price.toLocaleString()}</span>
+                <div style="position:relative; width:50%; text-align:right;">
+                    <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(255, 75, 75, 0.1); width:${percentage}%;"></div>
+                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${u.bid_size.toFixed(4)}</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    orderbookList.innerHTML = html;
+}
+
+/**
+ * 호가창에서 호가를 클릭하면 가격 인풋에 적용합니다.
+ */
+function setOrderPrice(price) {
+    const priceInput = document.getElementById('real-order-price');
+    if (priceInput && !priceInput.disabled) {
+        priceInput.value = price;
+        calculateTotalOrderAmount();
+    }
+}
+
+/**
+ * 주문의 매수/매도 사이드를 토글합니다.
+ */
+function setOrderSide(side) {
+    state.realOrderState.side = side;
+    
+    const buyTab = document.getElementById('order-tab-buy');
+    const sellTab = document.getElementById('order-tab-sell');
+    const orderBtn = document.getElementById('real-order-btn');
+    
+    if (buyTab && sellTab && orderBtn) {
+        if (side === 'BUY') {
+            buyTab.classList.add('active');
+            sellTab.classList.remove('active');
+            orderBtn.innerText = '실계좌 매수 주문';
+            orderBtn.className = 'btn block buy';
+            orderBtn.style.background = '#FF4B4B';
+        } else {
+            sellTab.classList.add('active');
+            buyTab.classList.remove('active');
+            orderBtn.innerText = '실계좌 매도 주문';
+            orderBtn.className = 'btn block sell';
+            orderBtn.style.background = '#0072FF';
+        }
+    }
+    
+    onOrderTypeChange();
+    calculateTotalOrderAmount();
+}
+
+/**
+ * 주문 유형 (지정가 / 시장가) 선택에 따라 폼 배치를 변경합니다.
+ */
+function onOrderTypeChange() {
+    const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    const side = state.realOrderState.side;
+    
+    const groupPrice = document.getElementById('group-order-price');
+    const groupVolume = document.getElementById('group-order-volume');
+    const groupTotal = document.getElementById('group-order-total');
+    
+    const priceInput = document.getElementById('real-order-price');
+    const volumeInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    if (orderType === 'limit') {
+        if (priceInput) priceInput.disabled = false;
+        if (volumeInput) volumeInput.disabled = false;
+        if (totalInput) totalInput.disabled = false;
+        if (groupPrice) groupPrice.style.display = 'block';
+        if (groupVolume) groupVolume.style.display = 'block';
+        if (groupTotal) groupTotal.style.display = 'block';
+    } else {
+        if (side === 'BUY') {
+            if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
+            if (volumeInput) { volumeInput.disabled = true; volumeInput.value = ''; }
+            if (totalInput) totalInput.disabled = false;
+            
+            if (groupPrice) groupPrice.style.display = 'none';
+            if (groupVolume) groupVolume.style.display = 'none';
+            if (groupTotal) groupTotal.style.display = 'block';
+        } else {
+            if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
+            if (volumeInput) volumeInput.disabled = false;
+            if (totalInput) { totalInput.disabled = true; totalInput.value = ''; }
+            
+            if (groupPrice) groupPrice.style.display = 'none';
+            if (groupVolume) groupVolume.style.display = 'block';
+            if (groupTotal) groupTotal.style.display = 'none';
+        }
+    }
+}
+
+/**
+ * 수량 * 단가 = 총액을 연산합니다.
+ */
+function calculateTotalOrderAmount() {
+    const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    if (orderType !== 'limit') return;
+    
+    const priceInput = document.getElementById('real-order-price');
+    const volumeInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    if (priceInput && volumeInput && totalInput) {
+        const price = parseFloat(priceInput.value) || 0;
+        const volume = parseFloat(volumeInput.value) || 0;
+        if (price > 0 && volume > 0) {
+            totalInput.value = Math.floor(price * volume);
+        }
+    }
+}
+
+/**
+ * 총액 입력을 통한 수량 역산
+ */
+function onTotalAmountInput() {
+    const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    if (orderType !== 'limit') return;
+    
+    const priceInput = document.getElementById('real-order-price');
+    const volumeInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    if (priceInput && volumeInput && totalInput) {
+        const price = parseFloat(priceInput.value) || 0;
+        const total = parseFloat(totalInput.value) || 0;
+        if (price > 0 && total > 0) {
+            volumeInput.value = (total / price).toFixed(8);
+        }
+    }
+}
+
+/**
+ * 비율 버튼 클릭 시 주문 설정 처리
+ */
+function setOrderRatio(ratio) {
+    const side = state.realOrderState.side;
+    const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    
+    const priceInput = document.getElementById('real-order-price');
+    const volumeInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    const currentPrice = priceInput ? (parseFloat(priceInput.value) || 0) : 0;
+    
+    if (side === 'BUY') {
+        const krwBalance = state.realKRWBalance || 0;
+        const targetKrw = Math.floor(krwBalance * ratio);
+        
+        if (orderType === 'limit') {
+            if (currentPrice > 0) {
+                if (totalInput) totalInput.value = targetKrw;
+                if (volumeInput) volumeInput.value = (targetKrw / currentPrice).toFixed(8);
+            } else {
+                showAlert("가격을 먼저 선택하거나 입력해주세요.", "warning");
+            }
+        } else {
+            if (totalInput) totalInput.value = targetKrw;
+        }
+    } else {
+        const qtyBalance = state.realOrderState.asset ? state.realOrderState.asset.balance : 0;
+        const targetQty = qtyBalance * ratio;
+        
+        if (orderType === 'limit') {
+            if (volumeInput) volumeInput.value = targetQty.toFixed(8);
+            if (currentPrice > 0 && totalInput) {
+                totalInput.value = Math.floor(currentPrice * targetQty);
+            }
+        } else {
+            if (volumeInput) volumeInput.value = targetQty.toFixed(8);
+        }
+    }
+}
+
+/**
+ * 주문을 실제로 업비트 거래소에 제출합니다.
+ */
+async function executeRealOrder() {
+    const asset = state.realOrderState.asset;
+    if (!asset) return;
+    
+    const side = state.realOrderState.side;
+    const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    
+    const priceInput = document.getElementById('real-order-price');
+    const volumeInput = document.getElementById('real-order-volume');
+    const totalInput = document.getElementById('real-order-total');
+    
+    const price = priceInput ? parseFloat(priceInput.value) : null;
+    const volume = volumeInput ? parseFloat(volumeInput.value) : null;
+    const total = totalInput ? parseFloat(totalInput.value) : null;
+    
+    let orderData = {
+        symbol: `KRW-${asset.currency}`,
+        side: side,
+        order_type: orderType
+    };
+    
+    let confirmMsg = `[실계좌 주문 경고]\n정말로 실제 자산을 사용해 주문하시겠습니까?\n\n`;
+    confirmMsg += `종목: ${asset.korean_name} (${asset.currency})\n`;
+    confirmMsg += `구분: ${side === 'BUY' ? '매수' : '매도'} / ${orderType === 'limit' ? '지정가' : '시장가'}\n`;
+    
+    if (orderType === 'limit') {
+        if (!price || price <= 0 || !volume || volume <= 0) {
+            alert("지정가 주문은 가격과 수량을 올바르게 입력해야 합니다.");
+            return;
+        }
+        orderData.price = price;
+        orderData.volume = volume;
+        confirmMsg += `가격: ${price.toLocaleString()} 원\n`;
+        confirmMsg += `수량: ${volume} ${asset.currency}\n`;
+        confirmMsg += `총액: ${Math.floor(price * volume).toLocaleString()} 원\n`;
+    } else {
+        if (side === 'BUY') {
+            if (!total || total <= 0) {
+                alert("시장가 매수는 매수 총액을 올바르게 입력해야 합니다.");
+                return;
+            }
+            orderData.order_type = 'price';
+            orderData.price = total;
+            confirmMsg += `총 매수액: ${total.toLocaleString()} 원 (시장가)\n`;
+        } else {
+            if (!volume || volume <= 0) {
+                alert("시장가 매도는 매도 수량을 올바르게 입력해야 합니다.");
+                return;
+            }
+            orderData.order_type = 'market';
+            orderData.volume = volume;
+            confirmMsg += `매도 수량: ${volume} ${asset.currency} (시장가)\n`;
+        }
+    }
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    const orderBtn = document.getElementById('real-order-btn');
+    const originalText = orderBtn ? orderBtn.innerText : '';
+    if (orderBtn) {
+        orderBtn.disabled = true;
+        orderBtn.innerText = "⏳ 주문 제출 중...";
+    }
+    
+    try {
+        const res = await APIClient.placeRealOrder('upbit', orderData);
+        showAlert("주문이 성공적으로 제출되었습니다.", "success");
+        closeRealAssetOrderModal();
+        await loadRealAssets(false);
+    } catch (e) {
+        showAlert(e.message || "주문 제출에 실패했습니다.", "error");
+        console.error(e);
+    } finally {
+        if (orderBtn) {
+            orderBtn.disabled = false;
+            orderBtn.innerText = originalText;
+        }
+    }
+}
+
+/**
+ * 실자산 거래 이력 모달을 엽니다.
+ */
+async function openRealAssetHistoryModal(asset) {
+    const histExchange = document.getElementById('real-hist-exchange');
+    const histSymbol = document.getElementById('real-hist-symbol');
+    const histName = document.getElementById('real-hist-name');
+    const tbody = document.getElementById('real-order-history-tbody');
+    
+    // 요약 카드 메트릭스 엘리먼트 6개
+    const totalBuyEl = document.getElementById('real-hist-total-buy');
+    const totalSellEl = document.getElementById('real-hist-total-sell');
+    const evalValueEl = document.getElementById('real-hist-eval-value');
+    const totalFeeEl = document.getElementById('real-hist-total-fee');
+    const totalPnlEl = document.getElementById('real-hist-total-pnl');
+    const totalRoiEl = document.getElementById('real-hist-total-roi');
+    
+    if (histExchange) histExchange.innerText = 'UPBIT';
+    if (histSymbol) histSymbol.innerText = asset.currency;
+    if (histName) histName.innerText = asset.korean_name;
+    
+    if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:15px;color:rgba(255,255,255,0.4);">&#x23F3; 업비트에서 거래 이력을 조회 중입니다...</td></tr>';
+    }
+    
+    // 요약 메트릭스 초기화
+    if (totalBuyEl) totalBuyEl.innerText = '0 원';
+    if (totalSellEl) totalSellEl.innerText = '0 원';
+    if (evalValueEl) evalValueEl.innerText = '0 원';
+    if (totalFeeEl) totalFeeEl.innerText = '0 원';
+    if (totalPnlEl) {
+        totalPnlEl.innerText = '0 원';
+        totalPnlEl.style.color = '#F8FAFC';
+    }
+    if (totalRoiEl) {
+        totalRoiEl.innerText = '0.00%';
+        totalRoiEl.style.color = '#F8FAFC';
+    }
+    
+    const modal = document.getElementById('real-asset-history-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        modal.onclick = (e) => {
+            if (e.target === modal) closeRealAssetHistoryModal();
+        };
+    }
+    
+    try {
+        const symbol = `KRW-${asset.currency}`;
+        
+        // 현재가를 가져오기 위해 오더북과 이력을 병렬 요청
+        const [orders, orderbookRes] = await Promise.all([
+            APIClient.fetchRealOrderHistory('upbit', symbol),
+            APIClient.fetchOrderbook('upbit', symbol).catch(() => null)
+        ]);
+        
+        const currentPrice = (orderbookRes && orderbookRes.trade_price) ? orderbookRes.trade_price : (asset.current_price || 0);
+        
+        if (!tbody) return;
+        tbody.innerHTML = '';
+        
+        if (!orders || orders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:15px;color:#64748B;">최근 20건 내 체결 완료된 거래 내역이 없습니다.</td></tr>';
+            return;
+        }
+        
+        let totalBuyAmount = 0;
+        let totalSellAmount = 0;
+        let paidFee = 0;
+        
+        orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(148, 163, 184, 0.08)';
+            
+            let timeStr = '-';
+            if (order.created_at) {
+                const d = new Date(order.created_at);
+                const pad = (n) => String(n).padStart(2, '0');
+                timeStr = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            }
+            const typeStr = order.side === 'BUY' ? '매수' : '매도';
+            const typeClass = order.side === 'BUY' ? 'bull' : 'bear';
+            const priceStr = order.price ? order.price.toLocaleString() : '-';
+            const volumeStr = order.executed_volume ? order.executed_volume.toString() : '0';
+            const feeVal = order.fee || 0;
+            const feeStr = feeVal > 0 ? `${feeVal.toLocaleString()} 원` : '0 원';
+            const stateStr = order.state === 'done' ? '완료' : (order.state === 'cancel' ? '취소' : order.state);
+            
+            const rawTotal = (order.price && order.executed_volume) ? (order.price * order.executed_volume) : 0;
+            const totalStr = rawTotal ? Math.floor(rawTotal).toLocaleString() : '0';
+            
+            // 체결 완료 상태일 때만 합산 연산
+            if (order.state === 'done') {
+                paidFee += feeVal;
+                if (order.side === 'BUY') {
+                    totalBuyAmount += rawTotal;
+                } else if (order.side === 'SELL') {
+                    totalSellAmount += rawTotal;
+                }
+            }
+            
+            tr.innerHTML = `
+                <td style="padding:8px; font-size:0.75rem; color:#94A3B8;">${timeStr}</td>
+                <td style="padding:8px; font-weight:bold; font-size:0.75rem;" class="${typeClass}">${typeStr}</td>
+                <td style="padding:8px; text-align:right;" class="num">${priceStr}</td>
+                <td style="padding:8px; text-align:right;" class="num">${volumeStr}</td>
+                <td style="padding:8px; text-align:right; color:#94A3B8;" class="num">${feeStr}</td>
+                <td style="padding:8px; text-align:center; font-size:0.72rem; color:#94A3B8;">${stateStr}</td>
+                <td style="padding:8px; text-align:right; font-weight:bold; color:#F8FAFC;" class="num">${totalStr} 원</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // 6개 요약 정보 계산 및 바인딩
+        const balance = asset.balance || 0;
+        const evalValue = currentPrice * balance; // 실시간 평가액
+        const estSellFee = evalValue * 0.0005; // 평가액 매각 시 예상 수수료 (0.05%)
+        const totalFee = paidFee + estSellFee; // 총 수수료 = 이미 지불한 수수료 + 평가액 매각 예상 수수료
+        
+        // 실현 손익 = 총 매도액 + 평가액 - 총 매수액 - 총 수수료
+        const pnl = totalSellAmount + evalValue - totalBuyAmount - totalFee;
+        // 실현 수익률 = 실현 손익 / 총 매수액 * 100
+        const roi = totalBuyAmount > 0 ? ((pnl / totalBuyAmount) * 100) : 0;
+        
+        if (totalBuyEl) totalBuyEl.innerText = `${Math.floor(totalBuyAmount).toLocaleString()} 원`;
+        if (totalSellEl) totalSellEl.innerText = `${Math.floor(totalSellAmount).toLocaleString()} 원`;
+        if (evalValueEl) evalValueEl.innerText = `${Math.floor(evalValue).toLocaleString()} 원`;
+        if (totalFeeEl) totalFeeEl.innerText = `${Math.floor(totalFee).toLocaleString()} 원`;
+        
+        if (totalPnlEl) {
+            totalPnlEl.innerText = `${pnl >= 0 ? '+' : ''}${Math.floor(pnl).toLocaleString()} 원`;
+            if (pnl > 0) {
+                totalPnlEl.style.color = '#FF4B4B';
+            } else if (pnl < 0) {
+                totalPnlEl.style.color = '#0072FF';
+            } else {
+                totalPnlEl.style.color = '#F8FAFC';
+            }
+        }
+        
+        if (totalRoiEl) {
+            totalRoiEl.innerText = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
+            if (roi > 0) {
+                totalRoiEl.style.color = '#FF4B4B';
+            } else if (roi < 0) {
+                totalRoiEl.style.color = '#0072FF';
+            } else {
+                totalRoiEl.style.color = '#F8FAFC';
+            }
+        }
+    } catch (e) {
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:15px;color:#FF4B4B;">&#x26A0;&#xFE0F; 이력 조회 실패</td></tr>';
+        }
+        console.error("Failed to load real order history", e);
+    }
+}
+
+/**
+ * 실자산 거래 이력 모달을 닫습니다.
+ */
+function closeRealAssetHistoryModal() {
+    const modal = document.getElementById('real-asset-history-modal');
+    if (modal) modal.style.display = 'none';
 }
 
 // 과거 백테스트 결과 성능 상세 분석 렌더러
@@ -880,3 +1553,18 @@ window.loadPortfolioHistoryList = loadPortfolioHistoryList;
 window.deletePortfolioHistory = deletePortfolioHistory;
 window.clearAllPortfolioHistory = clearAllPortfolioHistory;
 window.endSimulationSession = endSimulationSession;
+
+// 실자산 및 실계좌 관련 신규 바인딩
+window.changeRealAssetFilter = changeRealAssetFilter;
+window.syncRealOrderHistory = syncRealOrderHistory;
+window.openRealAssetOrderModal = openRealAssetOrderModal;
+window.closeRealAssetOrderModal = closeRealAssetOrderModal;
+window.setOrderSide = setOrderSide;
+window.onOrderTypeChange = onOrderTypeChange;
+window.calculateTotalOrderAmount = calculateTotalOrderAmount;
+window.onTotalAmountInput = onTotalAmountInput;
+window.setOrderRatio = setOrderRatio;
+window.executeRealOrder = executeRealOrder;
+window.openRealAssetHistoryModal = openRealAssetHistoryModal;
+window.closeRealAssetHistoryModal = closeRealAssetHistoryModal;
+window.setOrderPrice = setOrderPrice;

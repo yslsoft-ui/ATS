@@ -501,7 +501,7 @@ async def fetch_ranking(request: Request, tr_id: str):
             "fid_input_iscd": "0000",
             "fid_rank_sort_cls_code": "0",
             "fid_div_cls_code": "0",
-            "fid_input_price_1": "100000000",
+            "fid_input_price_1": "",  # 건별금액 ~ (공백=전체)
             "fid_aply_rang_prc_1": "",
             "fid_aply_rang_prc_2": "",
             "fid_input_iscd_2": "",
@@ -570,13 +570,16 @@ async def fetch_ranking(request: Request, tr_id: str):
             "fid_cond_scr_div_code": "20170",
             "fid_input_iscd": "0000",
             "fid_rank_sort_cls_code": "0",
+            "fid_input_cnt_1": "0",
+            "fid_prc_cls_code": "0",
             "fid_div_cls_code": "0",
             "fid_trgt_cls_code": "0",
             "fid_trgt_exls_cls_code": "0",
             "fid_input_price_1": "",
             "fid_input_price_2": "",
             "fid_vol_cnt": "",
-            "fid_input_date_1": "",
+            "fid_rsfl_rate1": "",
+            "fid_rsfl_rate2": "",
         }
     elif tr_id == "FHPST01720000":
         params = {
@@ -597,25 +600,29 @@ async def fetch_ranking(request: Request, tr_id: str):
             "fid_cond_scr_div_code": "20179",
             "fid_input_iscd": "0000",
             "fid_div_cls_code": "0",
-            "fid_rank_sort_cls_code": "0",
+            "fid_rank_sort_cls_code": "23",  # 23=PER 기준 (매뉴얼 기본 예시값)
+            "fid_blng_cls_code": "0",
             "fid_trgt_cls_code": "0",
             "fid_trgt_exls_cls_code": "0",
             "fid_input_price_1": "",
             "fid_input_price_2": "",
             "fid_vol_cnt": "",
+            "fid_input_option_1": str(datetime.date.today().year - 1),  # 직전 회계연도
+            "fid_input_option_2": "3",  # 3=결산
         }
     elif tr_id == "FHPST02340000":
+        # 매뉴얼 파라미터 키가 대문자임 (KIS API 대소문자 구분)
         params = {
-            "fid_cond_mrkt_div_code": "J",
-            "fid_cond_scr_div_code": "20234",
-            "fid_rank_sort_cls_code": "0",
-            "fid_input_iscd": "0000",
-            "fid_div_cls_code": "0",
-            "fid_trgt_cls_code": "0",
-            "fid_trgt_exls_cls_code": "0",
-            "fid_input_price_1": "",
-            "fid_input_price_2": "",
-            "fid_vol_cnt": "",
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_MRKT_CLS_CODE": "",       # 필수, 공백 전송
+            "FID_COND_SCR_DIV_CODE": "20234",
+            "FID_INPUT_ISCD": "0000",
+            "FID_DIV_CLS_CODE": "2",       # 2=상승률 (매뉴얼 예시값)
+            "FID_INPUT_PRICE_1": "",
+            "FID_INPUT_PRICE_2": "",
+            "FID_VOL_CNT": "",
+            "FID_TRGT_CLS_CODE": "",       # 공백 전송
+            "FID_TRGT_EXLS_CLS_CODE": "",  # 공백 전송
         }
     elif tr_id == "FHPST02350000":
         params = {
@@ -730,7 +737,7 @@ async def fetch_ranking(request: Request, tr_id: str):
 
                 raw_results = raw_results[:30]
                 processed = []
-                kis_symbols = stock_mapper._mapping.get('kis', {})
+                kis_symbols = stock_mapper.get_active_symbols('kis')
 
                 for item in raw_results:
                     code = ""
@@ -821,7 +828,7 @@ async def fetch_ranking(request: Request, tr_id: str):
                     name = name.strip() if name else code
 
                     # 새로운 종목 발견 시 DB 및 메모리에 비동기 추가
-                    if code not in kis_symbols:
+                    if code not in stock_mapper._mapping:
                         await stock_mapper.add_mapping_async('kis', code, name, system.db_path)
 
                     processed.append({
@@ -841,7 +848,15 @@ async def fetch_ranking(request: Request, tr_id: str):
 
 @router.post("/market/symbols/kis/toggle")
 async def toggle_kis_symbol(request: Request, body: dict):
-    """KIS 수집 종목을 토글하고 DB에 동기화한 뒤 ZMQ IPC 메시지를 퍼블리시합니다."""
+    """KIS 수집 종목을 토글하고 DB에 동기화한 뒤 ZMQ IPC 메시지를 퍼블리시합니다.
+
+    body 필드:
+      - code (str, 필수): 종목코드
+      - name (str, 필수): 종목명
+      - is_active (bool, 선택): 원하는 수집 상태 명시.
+          True=수집 활성, False=수집 해제.
+          생략 시 현재 상태를 반전(toggle, 하위 호환용).
+    """
     code = body.get("code")
     name = body.get("name")
     if not code or not name:
@@ -849,6 +864,9 @@ async def toggle_kis_symbol(request: Request, body: dict):
 
     system = request.app.state.system
     db_path = system.db_path
+
+    # 명시적 수집 상태 값 (None이면 toggle 방식 폴백)
+    explicit_active = body.get("is_active")  # True / False / None
 
     async with file_lock:
         from src.database.connection import get_db_conn
@@ -868,21 +886,26 @@ async def toggle_kis_symbol(request: Request, body: dict):
                 row = await cursor.fetchone()
                 
             if row is not None:
-                # 존재하면 is_active 플래그 반전
                 current_active = row['is_active']
-                new_status_val = 0 if current_active == 1 else 1
+                if explicit_active is not None:
+                    # 명시적 상태 SET — 멱등성 보장, 중복 요청 안전
+                    new_status_val = 1 if explicit_active else 0
+                else:
+                    # 기존 toggle 방식 (하위 호환)
+                    new_status_val = 0 if current_active == 1 else 1
                 await db.execute('''
                     UPDATE exchange_assets SET is_active = ?, updated_at = datetime('now')
                     WHERE exchange = 'kis' AND symbol = ?
                 ''', (new_status_val, code))
                 new_status = (new_status_val == 1)
             else:
-                # 존재하지 않으면 is_active=1 로 추가
+                # 존재하지 않으면 명시값 우선, 없으면 활성으로 추가
+                new_status_val = 1 if (explicit_active is None or explicit_active) else 0
                 await db.execute('''
                     INSERT INTO exchange_assets (exchange, symbol, is_active)
-                    VALUES ('kis', ?, 1)
-                ''', (code,))
-                new_status = True
+                    VALUES ('kis', ?, ?)
+                ''', (code, new_status_val))
+                new_status = (new_status_val == 1)
                 
             await db.commit()
             
@@ -947,6 +970,263 @@ async def api_sync_assets(request: Request):
         except Exception as e:
             logger.error(f"[Web API] 수동 자산 동기화 중 에러 발생: {e}")
             raise HTTPException(status_code=500, detail=f"동기화 실패: {str(e)}")
+
+
+# --- 🔐 실자산 호가 조회 및 실제 거래소 주문 처리 API ---
+import base64
+import hmac
+import hashlib
+import json
+import uuid
+from pydantic import BaseModel
+
+class RealOrderRequest(BaseModel):
+    symbol: str
+    side: str
+    price: Optional[float] = None
+    volume: Optional[float] = None
+    order_type: str
+
+def _create_upbit_jwt(access_key, secret_key, query_hash=None):
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "access_key": access_key,
+        "nonce": str(uuid.uuid4())
+    }
+    if query_hash:
+        payload["query_hash"] = query_hash
+        payload["query_hash_alg"] = "SHA512"
+        
+    def base64url(b):
+        return base64.urlsafe_b64encode(b).decode('utf-8').replace('=', '')
+        
+    header_b64 = base64url(json.dumps(header, separators=(',', ':')).encode('utf-8'))
+    payload_b64 = base64url(json.dumps(payload, separators=(',', ':')).encode('utf-8'))
+    signing_input = f"{header_b64}.{payload_b64}"
+    
+    sig = hmac.new(
+        secret_key.encode('utf-8'),
+        signing_input.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    return f"{signing_input}.{base64url(sig)}"
+
+@router.get("/api/exchanges/{exchange}/orderbook/{symbol}")
+async def get_exchange_orderbook(request: Request, exchange: str, symbol: str):
+    """
+    거래소(업비트/빗썸)의 호가창 및 현재가 데이터를 병렬 조회하여 반환합니다.
+    """
+    exchange = exchange.lower()
+    system = request.app.state.system
+    
+    if exchange == 'upbit':
+        api_url = system.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+    elif exchange == 'bithumb':
+        bithumb_config = system.config_manager.get('exchanges.bithumb', {})
+        api_url = bithumb_config.get('api_url', 'https://api.bithumb.com/v1')
+    else:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 거래소입니다: {exchange}")
+        
+    market_symbol = f"KRW-{symbol}" if not symbol.startswith("KRW-") else symbol
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            url_orderbook = f"{api_url}/orderbook?markets={market_symbol}"
+            url_ticker = f"{api_url}/ticker?markets={market_symbol}"
+            
+            async def fetch_json(u):
+                async with session.get(u) as r:
+                    if r.status != 200:
+                        t = await r.text()
+                        raise HTTPException(status_code=r.status, detail=f"거래소 API 에러: {t}")
+                    return await r.json()
+            
+            # 병렬 요청 실행
+            orderbook_task = fetch_json(url_orderbook)
+            ticker_task = fetch_json(url_ticker)
+            
+            orderbook_res, ticker_res = await asyncio.gather(orderbook_task, ticker_task)
+            
+            if not orderbook_res or not ticker_res:
+                raise HTTPException(status_code=404, detail="시세 데이터를 찾을 수 없습니다.")
+                
+            return {
+                "orderbook": orderbook_res[0],
+                "trade_price": float(ticker_res[0].get("trade_price") or 0.0),
+                "change_rate": float(ticker_res[0].get("signed_change_rate") or 0.0),
+                "change_price": float(ticker_res[0].get("signed_change_price") or ticker_res[0].get("change_price") or 0.0)
+            }
+    except Exception as e:
+        logger.error(f"Failed to fetch orderbook and ticker for {exchange}:{symbol}: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/exchanges/{exchange}/order")
+async def place_exchange_order(request: Request, exchange: str, body: RealOrderRequest):
+    """
+    실제 거래소(업비트)에 주문을 제출합니다.
+    """
+    exchange = exchange.lower()
+    if exchange != 'upbit':
+        raise HTTPException(status_code=400, detail=f"현재 주문은 업비트만 지원합니다.")
+        
+    # .env 파일 실시간 로드
+    from pathlib import Path
+    root_dir = Path(__file__).resolve().parents[3]
+    env_path = root_dir / '.env'
+    if env_path.exists():
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if '=' in line:
+                    k, v = line.split('=', 1)
+                    os.environ[k.strip()] = v.strip()
+                    
+    access_key = os.getenv("UPBIT_ACCESS_KEY")
+    secret_key = os.getenv("UPBIT_SECRET_KEY")
+    
+    if not access_key or not secret_key or "your_access_key" in access_key:
+        raise HTTPException(status_code=400, detail="업비트 API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.")
+        
+    system = request.app.state.system
+    api_url = system.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+    base_url = api_url.rstrip('/')
+    upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+    
+    # 2중 안전장치: 현재 KRW 마켓 거래가 유효한 종목인지 확인
+    valid_krw_markets = {k for k in stock_mapper.get_active_symbols('upbit')}
+    clean_symbol = body.symbol.replace("KRW-", "").upper()
+    if clean_symbol not in valid_krw_markets:
+        raise HTTPException(status_code=400, detail=f"{body.symbol} 종목은 현재 KRW 마켓에서 거래할 수 없습니다.")
+        
+    # 파라미터 구성
+    upbit_side = "bid" if body.side.upper() == "BUY" else "ask"
+    
+    params = {
+        "market": f"KRW-{clean_symbol}",
+        "side": upbit_side,
+        "ord_type": body.order_type
+    }
+    
+    if body.order_type == "limit":
+        if body.price is None or body.volume is None:
+            raise HTTPException(status_code=400, detail="지정가 주문은 가격(price)과 수량(volume)이 모두 필요합니다.")
+        params["price"] = str(body.price)
+        params["volume"] = str(body.volume)
+    elif body.order_type == "price":
+        if body.price is None:
+            raise HTTPException(status_code=400, detail="시장가 매수는 총액(price)이 필요합니다.")
+        params["price"] = str(body.price)
+    elif body.order_type == "market":
+        if body.volume is None:
+            raise HTTPException(status_code=400, detail="시장가 매도는 수량(volume)이 필요합니다.")
+        params["volume"] = str(body.volume)
+    else:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 주문 유형입니다: {body.order_type}")
+        
+    try:
+        import urllib.parse
+        query_string = urllib.parse.urlencode(params).encode("utf-8")
+        
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        
+        token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{upbit_v1_url}/orders", params=params, headers=headers) as resp:
+                res_data = await resp.json()
+                if resp.status not in (200, 201):
+                    err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                    raise HTTPException(status_code=resp.status, detail=f"업비트 API 오류: {err_msg}")
+                
+                # 실거래 주문 성공 시 로컬 DB real_orders에 즉시 선반영
+                try:
+                    from src.database.connection import get_db_conn
+                    async with get_db_conn(system.db_path) as db:
+                        await db.execute('''
+                            INSERT OR IGNORE INTO real_orders 
+                            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            'upbit',
+                            res_data.get("uuid"),
+                            clean_symbol,
+                            "BUY" if res_data.get("side") == "bid" else "SELL",
+                            float(res_data.get("avg_price") or res_data.get("price") or 0.0),
+                            float(res_data.get("volume") or 0.0),
+                            float(res_data.get("executed_volume") or 0.0),
+                            float(res_data.get("paid_fee") or 0.0),
+                            res_data.get("state", "wait"),
+                            res_data.get("created_at")
+                        ))
+                        await db.commit()
+                except Exception as db_err:
+                    logger.error(f"Failed to record real order in local DB: {db_err}")
+                
+                return res_data
+    except Exception as e:
+        logger.error(f"Error placing upbit order: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/exchanges/{exchange}/orders")
+async def get_exchange_orders(request: Request, exchange: str, symbol: str, limit: Optional[int] = None):
+    """
+    로컬 DB(real_orders)에 적재된 실제 거래소의 체결 완료 주문 내역을 최신순으로 가져옵니다.
+    """
+    exchange = exchange.lower()
+    if exchange != 'upbit':
+        raise HTTPException(status_code=400, detail=f"현재 주문 내역 조회는 업비트만 지원합니다.")
+        
+    system = request.app.state.system
+    if limit is None:
+        limit = system.config_manager.get(f'exchanges.{exchange}.order_history_limit', 1000) # 기본 한도를 1000건으로 확대하여 누락 방지
+        
+    clean_symbol = symbol.replace("KRW-", "").upper()
+    
+    try:
+        from src.database.connection import get_db_conn
+        async with get_db_conn(system.db_path) as db:
+            query = """
+                SELECT uuid, side, price, volume, executed_volume, fee, state, created_at, symbol
+                FROM real_orders
+                WHERE exchange = ? AND symbol = ? AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                ORDER BY created_at DESC
+                LIMIT ?
+            """
+            async with db.execute(query, (exchange, clean_symbol, limit)) as cursor:
+                rows = await cursor.fetchall()
+                
+                processed = []
+                for row in rows:
+                    processed.append({
+                        "uuid": row["uuid"],
+                        "side": row["side"],
+                        "price": float(row["price"] or 0.0),
+                        "volume": float(row["volume"] or 0.0),
+                        "executed_volume": float(row["executed_volume"] or 0.0),
+                        "fee": float(row["fee"] or 0.0),
+                        "state": row["state"],
+                        "created_at": row["created_at"],
+                        "market": f"KRW-{row['symbol']}"
+                    })
+                return processed
+    except Exception as e:
+        logger.error(f"Error reading real order history from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"로컬 DB 거래 이력 조회 실패: {str(e)}")
+
+
 
 
 

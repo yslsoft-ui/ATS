@@ -75,6 +75,23 @@ class KisCollector(BaseCollector):
                     asyncio.ensure_future(self.ws.send_str(raw_data))
                 return None
 
+            # KIS 구독 요청/해제에 대한 JSON 응답 처리
+            # 포맷: {"header":{"tr_id":"H0STCNT0",...},"body":{"rt_cd":"0","msg1":"SUBSCRIBE SUCCESS",...}}
+            if raw_data.startswith('{'):
+                try:
+                    json_msg = json.loads(raw_data)
+                    body = json_msg.get('body', {})
+                    rt_cd = body.get('rt_cd', '')
+                    msg1 = body.get('msg1', '')
+                    tr_id_resp = json_msg.get('header', {}).get('tr_id', '')
+                    if rt_cd == '0':
+                        logger.info(f"[KIS] 구독 응답 OK: tr_id={tr_id_resp}, msg={msg1}")
+                    else:
+                        logger.warning(f"[KIS] 구독 응답 에러: tr_id={tr_id_resp}, rt_cd={rt_cd}, msg={msg1}")
+                except Exception:
+                    pass
+                return None
+
             if raw_data.startswith('0') or raw_data.startswith('1'):
                 parts = raw_data.split('|')
                 if len(parts) < 4: return None

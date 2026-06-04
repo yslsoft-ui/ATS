@@ -188,7 +188,7 @@ async function loadRankingResult(trId) {
                     const isChecked = e.target.checked;
                     
                     try {
-                        const result = await APIClient.toggleKisSymbol(code, name);
+                        const result = await APIClient.toggleKisSymbol(code, name, isChecked);
                         const statusMsg = result.is_collected ? '수집 등록 완료' : '수집 해제 완료';
                         
                         showToast(`${name} (${code}) ${statusMsg}`, result.is_collected ? 'success' : 'info');

@@ -483,6 +483,13 @@ class BaseCollector(ABC):
                 
                 async with self.session.ws_connect(url, heartbeat=30.0) as ws:
                     self.ws = ws
+                    # 재연결 시 DB에서 최신 활성 종목 목록을 재로드하여
+                    # 그 사이 해제(uncheck)된 종목이 재구독되는 버그 방지
+                    latest_symbols = await self._fetch_symbols(config)
+                    if latest_symbols != self.available_symbols:
+                        logger.info(f"[{self.exchange.upper()}] ws 재연결: 종목 목록 갱신 {len(self.available_symbols)} → {len(latest_symbols)}개")
+                        self.available_symbols = latest_symbols
+                        self._init_trade_engines(config)
                     await self._subscribe(ws, config)
                     logger.info(f"[{self.exchange.upper()}] Collector Connected - {len(self.available_symbols)} symbols")
 

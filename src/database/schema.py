@@ -346,12 +346,33 @@ async def init_db(db_path: str = None):
             )
         ''')
 
+        # 10. real_orders (실계좌 거래 내역 영구 보관용)
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS real_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                exchange TEXT NOT NULL,
+                uuid TEXT UNIQUE NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                price REAL DEFAULT 0.0,
+                volume REAL DEFAULT 0.0,
+                executed_volume REAL DEFAULT 0.0,
+                fee REAL DEFAULT 0.0,
+                state TEXT NOT NULL,
+                created_at DATETIME,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_orders_history_portfolio_id ON orders_history (portfolio_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_positions_portfolio_id ON positions (portfolio_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_assets_active ON exchange_assets (exchange, is_active)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_real_orders_exch_sym ON real_orders (exchange, symbol)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades (trade_timestamp)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_timestamp ON candles (timestamp)')
         
         await db.commit()
     

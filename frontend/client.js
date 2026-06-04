@@ -16,7 +16,16 @@ const APIClient = (() => {
         try {
             const response = await fetch(url, options);
             if (!response.ok) {
-                throw new Error(`API 오류: ${response.status} ${response.statusText}`);
+                let errMsg = `${response.status} ${response.statusText}`;
+                try {
+                    const errData = await response.json();
+                    if (errData && errData.detail) {
+                        errMsg = errData.detail;
+                    }
+                } catch (e) {
+                    // JSON 파싱 실패 또는 바디가 없을 경우 기본 statusText 사용
+                }
+                throw new Error(`API 오류: ${errMsg}`);
             }
             return await response.json();
         } catch (error) {
@@ -93,10 +102,29 @@ const APIClient = (() => {
         panicSellPortfolio: (portfolioId) => 
             _fetchAPI(`/api/portfolio/${portfolioId}/panic`, { method: 'POST' }),
 
+        fetchRealAssets: (exchange = 'upbit', mode = 'active', sync = false) => 
+            _fetchAPI(`/api/exchanges/${exchange}/assets?mode=${mode}&sync=${sync}`),
+
         /**
-         * 특정 거래소(Market)의 실제 API 계좌 자산 조회
+         * 실제 거래소의 최근 주문/체결 내역 조회
          */
-        fetchRealAssets: (exchange = 'upbit') => _fetchAPI(`/api/exchanges/${exchange}/assets`),
+        fetchRealOrderHistory: (exchange, symbol, limit = '') => 
+            _fetchAPI(`/api/exchanges/${exchange}/orders?symbol=${symbol}${limit ? `&limit=${limit}` : ''}`),
+
+        /**
+         * 실제 거래소의 종목 호가창(Orderbook) 조회
+         */
+        fetchOrderbook: (exchange, symbol) => _fetchAPI(`/api/exchanges/${exchange}/orderbook/${symbol}`),
+
+        /**
+         * 실제 거래소에 매수/매도 주문 요청 제출
+         */
+        placeRealOrder: (exchange, orderData) => 
+            _fetchAPI(`/api/exchanges/${exchange}/order`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            }),
 
         /**
          * 전체 실시간 마켓 현황 및 가격 통계 조회
@@ -122,7 +150,7 @@ const APIClient = (() => {
         /**
          * 특정 기준 시간 이전의 과거 데이터 정리 실행
          */
-        runCleanup: (date) => _fetchAPI(`/data/cleanup?date=${date}`, { method: 'POST' }),
+        runCleanup: (date, limit = 20000) => _fetchAPI(`/data/cleanup?date=${date}&limit=${limit}`, { method: 'POST' }),
 
         /**
          * 백엔드 내부 지연 대기열 큐 모니터링 현황 조회
@@ -152,11 +180,11 @@ const APIClient = (() => {
         /**
          * KIS 수집 종목을 토글 (추가/제거)
          */
-        toggleKisSymbol: (code, name) => 
+        toggleKisSymbol: (code, name, isActive) => 
             _fetchAPI('/market/symbols/kis/toggle', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, name })
+                body: JSON.stringify({ code, name, ...(isActive !== undefined && { is_active: isActive }) })
             }),
 
         /**

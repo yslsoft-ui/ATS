@@ -73,6 +73,7 @@ exchanges:
     fee_rate: 0.0005
     websocket_url: wss://api.upbit.com/websocket/v1
     api_url: https://api.upbit.com/v1
+    order_history_limit: 50
   kis:
     enabled: true
     app_key: PSpNCUs5O8snmpX0pcY1QZDiPz58JINHTu3X

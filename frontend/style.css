@@ -1915,6 +1915,471 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
 }
 
 
+/* ===== 🔐 실자산 호가창 & 주문 모달 스타일 [NEW] ===== */
+.real-order-modal-content {
+    background-color: #1E293B; /* Slate Gray */
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 900px;
+    max-width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    position: relative;
+    animation: modalSlideUp 0.3s ease;
+}
+
+@keyframes modalSlideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.real-order-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background-color: #0F172A; /* Deep Navy */
+}
+
+/* 호가창 */
+.orderbook-container {
+    flex: 1.2;
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    height: 600px;
+    overflow: hidden;
+}
+
+.orderbook-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background-color: #1E293B;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.orderbook-scroll {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.orderbook-table {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.orderbook-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 20px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    position: relative;
+    transition: background 0.1s;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 0.9rem;
+}
+
+.orderbook-row:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    z-index: 2;
+}
+
+.orderbook-row .price-cell {
+    font-weight: bold;
+    z-index: 1;
+}
+
+.orderbook-row .size-cell {
+    color: var(--text-primary);
+    z-index: 1;
+    text-align: right;
+}
+
+/* 게이지 바 배경 */
+.orderbook-row .size-bg {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    height: 100%;
+    z-index: 0;
+    opacity: 0.15;
+    transition: width 0.2s ease-out;
+}
+
+.orderbook-row.ask .size-bg {
+    background-color: var(--bear-color); /* 매도 호가는 Vibrant Blue */
+}
+
+.orderbook-row.bid .size-bg {
+    background-color: var(--bull-color); /* 매수 호가는 Vibrant Red */
+}
+
+.orderbook-row.current-price-row {
+    background-color: rgba(245, 158, 11, 0.08);
+    border-top: 1px solid rgba(245, 158, 11, 0.3);
+    border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+    padding: 10px 20px;
+    font-weight: bold;
+    color: #F59E0B;
+}
+
+/* 주문 입력 폼 */
+.order-form-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background-color: #1E293B;
+}
+
+.order-tab-group {
+    display: flex;
+    border-radius: 8px;
+    background-color: #0F172A;
+    padding: 4px;
+    margin-bottom: 20px;
+}
+
+.order-tab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: none;
+    color: var(--text-secondary);
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+    font-size: 0.95rem;
+}
+
+.order-tab.active.buy {
+    background-color: var(--bull-color);
+    color: white;
+}
+
+.order-tab.active.sell {
+    background-color: var(--bear-color);
+    color: white;
+}
+
+.order-form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    flex: 1;
+}
+
+.order-balance-info {
+    background-color: #0F172A;
+    border-radius: 8px;
+    padding: 12px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.order-balance-info .balance-row {
+    display: flex;
+    justify-content: space-between;
+}
+
+.order-balance-info .balance-row .label {
+    color: var(--text-secondary);
+}
+
+.order-balance-info .balance-row .value {
+    font-weight: bold;
+    color: var(--text-primary);
+    font-family: 'Roboto Mono', monospace;
+}
+
+.order-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.order-ratio-group {
+    display: flex;
+    gap: 6px;
+    margin-top: -5px;
+    margin-bottom: 5px;
+}
+
+.btn-ratio {
+    flex: 1;
+    background-color: #0F172A;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.btn-ratio:hover {
+    background-color: #334155;
+    color: var(--text-primary);
+    border-color: #64748b;
+}
+
+.btn-ratio:active {
+    background-color: #1e293b;
+}
+
+/* 🔐 실계좌 거래 내역 테이블 스타일 */
+.real-order-history-container {
+    background-color: #1E293B;
+    border-top: 1px solid var(--border-color);
+    padding: 15px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.real-order-history-container .history-title {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: var(--text-primary);
+}
+
+.real-order-history-container .history-table-wrapper {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: #0F172A;
+}
+
+.real-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.real-history-table th, 
+.real-history-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.real-history-table th {
+    background-color: #1E293B;
+    color: var(--text-secondary);
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.real-history-table td.num {
+    font-family: 'Roboto Mono', monospace;
+    text-align: right;
+}
+
+.real-history-table .state-badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.real-history-table .state-badge.done {
+    background-color: rgba(148, 163, 184, 0.15);
+    color: #94A3B8;
+}
+
+.real-history-table .state-badge.cancel {
+    background-color: rgba(100, 116, 139, 0.1);
+    color: #64748B;
+    text-decoration: line-through;
+}
 
 
+.order-input-group label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+}
 
+.order-type-select {
+    display: flex;
+    gap: 20px;
+    padding: 5px 0;
+}
+
+.order-type-select .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.order-input-group .input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.order-input-group .input-wrapper input {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: #0F172A;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.order-input-group .input-wrapper input:focus {
+    border-color: var(--accent-color);
+}
+
+.order-input-group .input-wrapper .unit {
+    position: absolute;
+    right: 12px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: bold;
+}
+
+.order-info-text {
+    font-size: 0.75rem;
+    color: #F59E0B;
+    background-color: rgba(245, 158, 11, 0.08);
+    border-left: 3px solid #F59E0B;
+    padding: 8px 12px;
+    border-radius: 4px;
+    line-height: 1.4;
+}
+
+.btn.block {
+    width: 100%;
+    padding: 14px;
+    font-size: 1.05rem;
+    border-radius: 6px;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.btn.block.buy {
+    background-color: var(--bull-color);
+    color: white;
+}
+
+.btn.block.buy:hover {
+    background-color: #E03E3E;
+}
+
+.btn.block.sell {
+    background-color: var(--bear-color);
+    color: white;
+}
+
+.btn.block.sell:hover {
+    background-color: #005ED6;
+}
+
+.exchange-badge {
+    background-color: #F59E0B !important;
+    color: black !important;
+    font-weight: bold;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* ===== 🔐 실자산 거래 내역 전용 모달 스타일 ===== */
+.real-history-modal-content {
+    background-color: #1E293B; /* Slate Gray */
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    width: 750px;
+    max-width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+    position: relative;
+    animation: modalSlideUp 0.3s ease;
+}
+
+.real-history-body {
+    padding: 20px;
+    background-color: #0F172A; /* Deep Navy */
+    overflow-y: auto;
+    flex: 1;
+}
+
+.real-history-body .history-table-wrapper {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background-color: #1E293B;
+    overflow-x: auto;
+}
+
+.real-asset-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+}
+
+.btn-action-order, .btn-action-history {
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s, background-color 0.2s;
+    min-width: 50px;
+}
+
+.btn-action-order {
+    background-color: var(--bull-color);
+    color: white;
+}
+
+.btn-action-order:hover {
+    background-color: #E03E3E;
+}
+
+.btn-action-order:disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+.btn-action-history {
+    background-color: #475569;
+    color: #F8FAFC;
+}
+
+.btn-action-history:hover {
+    background-color: #64748B;
+}
