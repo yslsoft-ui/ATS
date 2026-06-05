@@ -50,6 +50,8 @@ async def init_db(db_path: str = None):
             )
         ''')
         await ensure_column(db, 'trades', 'exchange', 'TEXT')
+        await ensure_column(db, 'trades', 'sequential_id', 'INTEGER')
+
 
         # 3. portfolios
         await db.execute('''

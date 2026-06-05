@@ -76,3 +76,11 @@ async def stop_all_collectors(request: Request):
         system.config_manager.update(f"exchanges.{exch}.enabled", False)
     return {"message": "All collectors stop requested via configuration update"}
 
+@router.post("/collector/restart-daemon")
+async def restart_collector_daemon(request: Request):
+    """수집기 데몬 프로세스 자체를 자가 재기동시킵니다."""
+    publisher = request.app.state.control_publisher
+    await publisher.publish("collector_control", {"type": "restart_daemon"})
+    return {"message": "Collector daemon restart signal published successfully"}
+
+

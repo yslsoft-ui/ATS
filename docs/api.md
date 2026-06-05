@@ -36,6 +36,11 @@
 - **`POST /collector/stop`**
   - **설명**: 전체 거래소의 수집기 세션을 일괄 중단합니다.
 
+- **`POST /collector/restart-daemon`**
+  - **설명**: 수집기 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다.
+  - **응답 (JSON)**: `{"message": "Collector daemon restart signal published successfully"}`
+
+
 ---
 
 ### 1.2. 마켓 데이터 조회 (Market & Symbols)
@@ -180,6 +185,11 @@
 
 - **`POST /api/strategies/{strategy_id}/enable`**
   - **설명**: 특정 전략의 작동 여부를 사용/미사용으로 토글 제어합니다.
+
+- **`POST /api/strategies/restart-daemon`**
+  - **설명**: 전략 엔진 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다.
+  - **응답 (JSON)**: `{"message": "Strategy daemon restart signal published successfully"}`
+
 
 ---
 

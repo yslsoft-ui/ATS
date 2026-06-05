@@ -149,6 +149,19 @@ const APIClient = (() => {
             _fetchAPI(`/collector/${action}/${exchange}`, { method: 'POST' }),
 
         /**
+         * 수집 데몬 프로세스 자체를 자가 재기동
+         */
+        restartCollectorDaemon: () => 
+            _fetchAPI('/collector/restart-daemon', { method: 'POST' }),
+
+        /**
+         * 전략 데몬 프로세스 자체를 자가 재기동
+         */
+        restartStrategyDaemon: () => 
+            _fetchAPI('/api/strategies/restart-daemon', { method: 'POST' }),
+
+
+        /**
          * 데이터 정리(Cleanup) 실행 전 예상 데이터 수 소거 미리보기
          */
         fetchCleanupPreview: (date) => _fetchAPI(`/data/cleanup/preview?date=${date}`),

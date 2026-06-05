@@ -83,7 +83,8 @@ class DatabaseWriter:
                                     item['trade_price'],
                                     item['trade_volume'],
                                     item['ask_bid'],
-                                    item['trade_timestamp']
+                                    item['trade_timestamp'],
+                                    item.get('sequential_id')
                                 ))
                                 self.db_queue.task_done()
                         except asyncio.TimeoutError:
@@ -117,9 +118,9 @@ class DatabaseWriter:
                         buffer.append(candle)
                         self.candle_queue.task_done()
                         
-                        # 2. 추가 캔들이 연속 유입되면 최대 0.5초 또는 50개까지 흡수
+                        # 2. 추가 캔들이 연속 유입되면 최대 0.5초 또는 500개까지 흡수
                         try:
-                            while len(buffer) < 50:
+                            while len(buffer) < 500:
                                 next_candle = await asyncio.wait_for(self.candle_queue.get(), timeout=0.5)
                                 buffer.append(next_candle)
                                 self.candle_queue.task_done()
@@ -140,7 +141,7 @@ class DatabaseWriter:
     async def _write_ticks_to_db(self, db, buffer):
         """틱 리스트를 실제 DB에 벌크 삽입하고 커밋합니다 (재시도 지원)."""
         await db.executemany(
-            "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?, ?)", 
+            "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?)", 
             buffer
         )
         await db.commit()
@@ -178,13 +179,14 @@ class DatabaseWriter:
                         item['trade_price'],
                         item['trade_volume'],
                         item['ask_bid'],
-                        item['trade_timestamp']
+                        item['trade_timestamp'],
+                        item.get('sequential_id')
                     ))
                     self.db_queue.task_done()
 
                 if ticks_to_write:
                     await db.executemany(
-                        "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         ticks_to_write
                     )
                     logger.info(f"[DatabaseWriter] 종료 가드: 잔여 틱 {len(ticks_to_write)}개 최종 영속화 완수")

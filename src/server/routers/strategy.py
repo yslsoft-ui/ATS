@@ -78,3 +78,11 @@ async def enable_strategy(strategy_id: str, request: Request):
     await system._on_config_changed(system.config_manager.config)
     
     return {"message": f"Strategy {strategy_id} enabled and saved"}
+
+@router.post("/api/strategies/restart-daemon")
+async def restart_strategy_daemon(request: Request):
+    """전략 엔진 데몬 프로세스 자체를 자가 재기동시킵니다."""
+    publisher = request.app.state.strategy_control_publisher
+    await publisher.publish("strategy_control", {"type": "restart_daemon"})
+    return {"message": "Strategy daemon restart signal published successfully"}
+

@@ -165,6 +165,43 @@ function initCollectorControls() {
         }
     });
 
+    // [데몬 자가 재기동 제어]
+    const btnRestartCollector = document.getElementById('btn-restart-collector-daemon');
+    if (btnRestartCollector) {
+        btnRestartCollector.addEventListener('click', async () => {
+            if (!confirm("⚠️ 정말로 실시간 데이터 수집기(Collector Daemon) 프로세스 자체를 재시작하시겠습니까?\n\n이 작업은 실행 중인 큐의 안전 플러시를 수행한 뒤 프로세스를 리로드합니다. 약 1~2초간 데이터 수집이 끊어질 수 있습니다.")) {
+                return;
+            }
+            btnRestartCollector.disabled = true;
+            try {
+                await APIClient.restartCollectorDaemon();
+                showAlert({ msg: "🚀 수집 데몬 프로세스 재시작 신호가 전송되었습니다.", alert_type: 'success' });
+            } catch (e) {
+                showAlert({ msg: `❌ 수집 데몬 재시작 실패: ${e.message}`, alert_type: 'error' });
+            } finally {
+                setTimeout(() => { btnRestartCollector.disabled = false; }, 3000);
+            }
+        });
+    }
+
+    const btnRestartStrategy = document.getElementById('btn-restart-strategy-daemon');
+    if (btnRestartStrategy) {
+        btnRestartStrategy.addEventListener('click', async () => {
+            if (!confirm("⚠️ 정말로 실시간 전략 엔진(Strategy Daemon) 프로세스 자체를 재시작하시겠습니까?\n\n이 작업은 실시간 모의투자를 안전히 정지한 후 프로세스를 리로드합니다. 기동 시 모의투자 상태 및 설정에 따라 재구동됩니다.")) {
+                return;
+            }
+            btnRestartStrategy.disabled = true;
+            try {
+                await APIClient.restartStrategyDaemon();
+                showAlert({ msg: "🚀 전략 데몬 프로세스 재시작 신호가 전송되었습니다.", alert_type: 'success' });
+            } catch (e) {
+                showAlert({ msg: `❌ 전략 데몬 재시작 실패: ${e.message}`, alert_type: 'error' });
+            } finally {
+                setTimeout(() => { btnRestartStrategy.disabled = false; }, 3000);
+            }
+        });
+    }
+
     setInterval(() => {
         if (ViewRouter.getActiveView() === 'settings-view') {
             updateCollectorStatus();

@@ -72,6 +72,9 @@ async def main():
     logger.info("실시간 데이터 수집기 데몬(Collector Daemon) 기동 시작")
     logger.info("=========================================")
 
+    restart_requested = False
+
+
     # 1. 설정 로드
     config_path = "config/settings.yaml"
     config_manager = ConfigManager(config_path)
@@ -164,6 +167,7 @@ async def main():
     async def control_listener_loop():
         control_sub = EventBusSubscriber("collector_control")
         logger.info("[Collector Daemon] ZMQ control subscriber connected.")
+        nonlocal restart_requested
         while not stop_event.is_set():
             try:
                 topic, data = await control_sub.receive()
@@ -191,6 +195,10 @@ async def main():
                         collector = collectors.get(exchange)
                         if collector and hasattr(collector, 'update_subscription'):
                             await collector.update_subscription(code, is_collected)
+                elif data.get('type') == 'restart_daemon':
+                    logger.info("[Collector Daemon] 자가 재기동(Self-Restart) 요청 수신. 안전 종료를 시작합니다.")
+                    restart_requested = True
+                    stop_event.set()
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -321,6 +329,13 @@ async def main():
     logger.info("=========================================")
     logger.info("[Collector Daemon] 실시간 데이터 수집기 데몬 안전 종료 완료")
     logger.info("=========================================")
+
+    if restart_requested:
+        logger.info("[Collector Daemon] Self-restarting process via execv...")
+        import sys
+        import os
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
 
 
 if __name__ == "__main__":

@@ -55,6 +55,9 @@ async def main():
     logger.info("실시간 전략 엔진 데몬(Strategy Engine Daemon) 기동 시작")
     logger.info("=========================================")
 
+    restart_requested = False
+
+
     # 1. 설정 로드
     config_path = "config/settings.yaml"
     config_manager = ConfigManager(config_path)
@@ -168,7 +171,7 @@ async def main():
 
     # ZMQ 제어 명령 수신 비동기 루프 (3초 Polling 대체)
     async def control_loop():
-        nonlocal current_portfolio_id
+        nonlocal current_portfolio_id, restart_requested
         logger.info("[Strategy Daemon] ZMQ strategy_control 구독 수신 시작")
         while not stop_event.is_set():
             try:
@@ -192,6 +195,10 @@ async def main():
                             trade_engines.update(new_engs)
                         else:
                             logger.info("[Strategy Daemon] 활성 포트폴리오가 존재하지 않아 엔진 대기 모드로 전환합니다.")
+                elif data.get('type') == 'restart_daemon':
+                    logger.info("[Strategy Daemon] 자가 재기동(Self-Restart) 요청 수신. 안전 종료를 시작합니다.")
+                    restart_requested = True
+                    stop_event.set()
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -326,6 +333,13 @@ async def main():
     logger.info("=========================================")
     logger.info("[Strategy Daemon] 실시간 전략 엔진 데몬 안전 종료 완료")
     logger.info("=========================================")
+
+    if restart_requested:
+        logger.info("[Strategy Daemon] Self-restarting process via execv...")
+        import sys
+        import os
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
 
 if __name__ == "__main__":
     try:

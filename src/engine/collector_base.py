@@ -288,13 +288,33 @@ class BaseCollector(ABC):
         from src.database.connection import get_db_conn
         
         current_time = int(time.time() // 60) * 60
-        max_lookback = current_time - (max_hours * 3600)
+        default_max_lookback = current_time - (max_hours * 3600)
 
         for symbol in self.available_symbols:
             if not self.is_running:
                 break
             
             try:
+                # 0. DB 내 해당 종목의 최신 캔들 시각을 조회하여 백필 룩백 범위를 좁힙니다.
+                last_db_time = None
+                try:
+                    async with get_db_conn(db_path) as db:
+                        cursor = await db.execute(
+                            "SELECT MAX(timestamp) FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60",
+                            (self.exchange, symbol)
+                        )
+                        row = await cursor.fetchone()
+                        if row and row[0]:
+                            last_db_time = row[0]
+                except Exception as e:
+                    logger.error(f"[{self.exchange.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
+
+                if last_db_time:
+                    # 마지막 적재 시각과 기본 최대 탐색 시각(예: 24시간 전) 중 더 최근인 것을 시작점으로 삼음
+                    max_lookback = max(default_max_lookback, last_db_time)
+                else:
+                    max_lookback = default_max_lookback
+
                 # 1. 기대 타임스탬프 목록 생성 (마감된 분봉까지만 조회: 현재 분의 1분 전까지)
                 end_time = current_time - 60
                 expected_timestamps = list(range(max_lookback, end_time + 60, 60))

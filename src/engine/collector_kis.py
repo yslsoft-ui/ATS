@@ -107,24 +107,40 @@ class KisCollector(BaseCollector):
                 tick_list = []
                 for i in range(data_cnt):
                     start_idx = i * FIELD_COUNT
-                    data_parts = all_fields[start_idx : start_idx + FIELD_COUNT]
-                    if len(data_parts) < FIELD_COUNT:
+                    if start_idx + FIELD_COUNT > len(all_fields):
                         break
 
-                    symbol_code = data_parts[0]
+                    symbol_code = all_fields[start_idx]
+                    time_str = all_fields[start_idx + 1]
                     try:
-                        price = float(data_parts[2]) if data_parts[2] else 0.0
-                        volume = float(data_parts[12]) if data_parts[12] else 0.0
-                        high = float(data_parts[8]) if data_parts[8] else 0.0
-                        low = float(data_parts[9]) if data_parts[9] else 0.0
-                        acc_price = float(data_parts[14]) if data_parts[14] else 0.0
-                        signed_change_rate = (float(data_parts[5]) / 100.0) if data_parts[5] else 0.0
+                        price = float(all_fields[start_idx + 2]) if all_fields[start_idx + 2] else 0.0
+                        volume = float(all_fields[start_idx + 12]) if all_fields[start_idx + 12] else 0.0
+                        high = float(all_fields[start_idx + 8]) if all_fields[start_idx + 8] else 0.0
+                        low = float(all_fields[start_idx + 9]) if all_fields[start_idx + 9] else 0.0
+                        acc_price = float(all_fields[start_idx + 14]) if all_fields[start_idx + 14] else 0.0
+                        signed_change_rate = (float(all_fields[start_idx + 5]) / 100.0) if all_fields[start_idx + 5] else 0.0
                     except ValueError:
                         continue
 
-                    sign = data_parts[3]
-                    raw_change = float(data_parts[4]) if data_parts[4] else 0.0
+                    sign = all_fields[start_idx + 3]
+                    raw_change = float(all_fields[start_idx + 4]) if all_fields[start_idx + 4] else 0.0
                     change_price = -raw_change if sign in ('4', '5') else raw_change
+
+                    # 체결구분(CCLD_DVSN) 매핑: 1은 매수(BID), 5는 매도(ASK)
+                    raw_ask_bid = all_fields[start_idx + 21]
+                    ask_bid = 'ASK' if raw_ask_bid == '5' else 'BID'
+
+                    # KIS 체결시각(HHMMSS)을 오늘 날짜와 조합하여 Unix Timestamp(ms) 계산
+                    from zoneinfo import ZoneInfo
+                    from datetime import datetime
+                    kst = ZoneInfo('Asia/Seoul')
+                    now = datetime.now(kst)
+                    dt_str = f"{now.strftime('%Y%m%d')}{time_str}"
+                    try:
+                        dt = datetime.strptime(dt_str, '%Y%m%d%H%M%S').replace(tzinfo=kst)
+                        trade_timestamp = int(dt.timestamp() * 1000)
+                    except Exception:
+                        trade_timestamp = int(time.time() * 1000)
 
                     tick_data = {
                         'type': 'tick',
@@ -134,8 +150,8 @@ class KisCollector(BaseCollector):
                         'trade_volume': volume,
                         'signed_change_rate': signed_change_rate,
                         'change_price': change_price,
-                        'ask_bid': 'BID', 
-                        'trade_timestamp': int(time.time() * 1000),
+                        'ask_bid': ask_bid, 
+                        'trade_timestamp': trade_timestamp,
                         'high_price': high,
                         'low_price': low,
                         'acc_trade_price_24h': acc_price
