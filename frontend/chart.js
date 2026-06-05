@@ -136,10 +136,17 @@
             _chartDiv.addEventListener('mousedown', stopAutoScroll);
             _chartDiv.addEventListener('wheel', stopAutoScroll, { passive: true });
 
-            _chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+            _chart.timeScale().subscribeVisibleLogicalRangeChange((logicalRange) => {
                 const spacing = _chart.timeScale().options().barSpacing;
                 if (spacing && spacing !== state.savedBarSpacing) {
                     state.savedBarSpacing = spacing;
+                }
+
+                // 왼쪽(과거) 스크롤 끝단 접근 감지 (Lazy Loading 트리거)
+                if (logicalRange && logicalRange.from < 10) {
+                    if (typeof window.loadMoreHistory === 'function') {
+                        window.loadMoreHistory();
+                    }
                 }
             });
 

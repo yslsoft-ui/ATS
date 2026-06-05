@@ -14,6 +14,11 @@
     "ast_hash": "57b308c2d9e5c7d7765fb3f6dd97634b",
     "semantic_hash": "57b308c2d9e5c7d7765fb3f6dd97634b"
   },
+  "/home/simon/ATS/scratch/check_trades_loss.py": {
+    "mtime": 1780560810.9221795,
+    "ast_hash": "1f582c7beb53dd610afadc397cf6c75b",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/show_kis_value_rank.py": {
     "mtime": 1779420612.4287667,
     "ast_hash": "83e5a2d69227c8fbb850631336637b33",
@@ -32,6 +37,11 @@
   "/home/simon/ATS/scratch/check_symbol_diff.py": {
     "mtime": 1779926513.4499876,
     "ast_hash": "94e69cb7bf19c5fb7d2374b06a4ef840",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/compare_candles.py": {
+    "mtime": 1780562979.3551202,
+    "ast_hash": "72029ac5b932c92cfba5a0860b6860e5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/test_restore_detail.py": {
@@ -58,6 +68,11 @@
     "mtime": 1779439414.5202754,
     "ast_hash": "6dec97679939aee23fd994e3b8171758",
     "semantic_hash": "6dec97679939aee23fd994e3b8171758"
+  },
+  "/home/simon/ATS/scratch/compare_upbit_candles.py": {
+    "mtime": 1780565190.0949397,
+    "ast_hash": "e3ce23c5ca72613b48e2b7bd79abc7fc",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/debug_backtest_ui.py": {
     "mtime": 1779633617.544536,
@@ -204,6 +219,16 @@
     "ast_hash": "68557719c4cd94d52c693f060dd2cd79",
     "semantic_hash": "68557719c4cd94d52c693f060dd2cd79"
   },
+  "/home/simon/ATS/scratch/test_low_candles.py": {
+    "mtime": 1780618900.60194,
+    "ast_hash": "fe92f3ea18034ebf9ac3bb5f7555e1cb",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/test_db.py": {
+    "mtime": 1780563043.735166,
+    "ast_hash": "76d9bf1239d1893aef11c5f01e47eaae",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/check_api_count.py": {
     "mtime": 1779926594.1222422,
     "ast_hash": "2546648a91679b1545ae249435c1e6fe",
@@ -280,8 +305,8 @@
     "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1779924985.5240288,
-    "ast_hash": "0339d2c026d415c77860cef77f6b5ab3",
+    "mtime": 1780619240.4017725,
+    "ast_hash": "ee67b21398fa2f7c1272089486bfce37",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/backtest.js": {
@@ -300,8 +325,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/chart.js": {
-    "mtime": 1779841547.4418864,
-    "ast_hash": "938d2b267c9f184e153f64afdd31ae21",
+    "mtime": 1780618855.429327,
+    "ast_hash": "7c58615e128e37540525f0c3460b2547",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/indicators.js": {
@@ -350,8 +375,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/client.js": {
-    "mtime": 1780324272.6916876,
-    "ast_hash": "e494fa611f4404b7fd96a77664ddf909",
+    "mtime": 1780618870.761963,
+    "ast_hash": "c0944f4f0b3f438d0c3e5a38197e91bf",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
@@ -485,8 +510,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1780032968.646146,
-    "ast_hash": "ffee6f01760ab0fb8030531d7d398629",
+    "mtime": 1780561596.4326868,
+    "ast_hash": "650f91b37c4fe2ebc40084b0d9b150af",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_portfolio.py": {
@@ -495,8 +520,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1780059148.7225974,
-    "ast_hash": "c645381aae503102575e2f1fb3577afe",
+    "mtime": 1780567438.5191305,
+    "ast_hash": "682c5d904bb76489c1a1cd1f24ad72d1",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_matching.py": {
@@ -650,8 +675,8 @@
     "semantic_hash": "024b498dc5def531db6a048fb6e0d861"
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1779954450.5996985,
-    "ast_hash": "1a936bd8f360e4bb5a24f11ad112dd1c",
+    "mtime": 1780618847.2055757,
+    "ast_hash": "ca279414fba8d1237e8e181d4761ea06",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -715,8 +740,8 @@
     "semantic_hash": "66a5f477a062814628811bee8a9b9055"
   },
   "/home/simon/ATS/README.md": {
-    "mtime": 1779946895.8364193,
-    "ast_hash": "c38308f5167085884d7080b97b3b749e",
+    "mtime": 1780619756.5514157,
+    "ast_hash": "c8a3965dd42ad400b107ad9e8671e430",
     "semantic_hash": ""
   },
   "/home/simon/ATS/CONTEXT.md": {
@@ -775,7 +800,7 @@
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1780282852.0990155,
+    "mtime": 1780561885.4139702,
     "ast_hash": "f3580cf2b1bb24f672550eb7fda38760",
     "semantic_hash": ""
   },
@@ -785,18 +810,18 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
-    "mtime": 1778241512.0,
-    "ast_hash": "47fe7b07aa5f78ffb2e2e396346fc850",
+    "mtime": 1780619689.4978383,
+    "ast_hash": "43b1646088ac6611c793859b88cfc044",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1779946286.0686235,
-    "ast_hash": "8afef59a7a469b2e5611e1d91eba8c2d",
+    "mtime": 1780619740.52123,
+    "ast_hash": "f2c38a7274413dca36c53574210ab8ab",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
-    "mtime": 1780013730.25653,
-    "ast_hash": "b42d9b7b92d3cedb79c1a1caf606ac39",
+    "mtime": 1780619752.6398413,
+    "ast_hash": "89e5e1f07ccc198256b9598f5c7beba8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/daemons.md": {
@@ -805,8 +830,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1779953879.3818483,
-    "ast_hash": "5ef1e63bb899bf76b46d812ae25110d7",
+    "mtime": 1780619709.748891,
+    "ast_hash": "646e22df3bad97a7b9880880f87a88c5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
@@ -820,8 +845,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1779946266.442131,
-    "ast_hash": "e0acdf1ae9a24f3efc1aa363c613cd9c",
+    "mtime": 1780619744.7538445,
+    "ast_hash": "227af2365f8b1b63aedcb5551c40500a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {

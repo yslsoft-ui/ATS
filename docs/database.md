@@ -175,7 +175,7 @@
 1. **`idx_trades_exch_sym_time`**
    - 대상 테이블: `trades`
    - 인덱스 구성 컬럼: `(exchange, symbol, trade_timestamp DESC)`
-   - 목적: 특정 종목의 최근 체결 틱을 백테스트 엔진이나 캔들 복원기에서 시간 내림차순으로 매우 빠르게 조회하기 위함.
+   - 목적: 특정 종목의 최근 체결 틱을 백테스트 엔진이나 캔들 복원기에서 시간 내림차순으로 매우 빠르게 조회하기 위함. 특히 1초봉 등 초 단위 저분봉 데이터를 백엔드에서 실시간 온디맨드 즉석 조립(Aggregation)하여 제공할 때, 대량의 틱 데이터를 30분 단위(13ms 수준)로 초고속 조회 및 가공하는 데 핵심적인 역할을 수행함.
 2. **`idx_candles_exch_sym_time`**
    - 대상 테이블: `candles`
    - 인덱스 구성 컬럼: `(exchange, symbol, interval, timestamp DESC)`

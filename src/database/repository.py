@@ -246,12 +246,25 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                     query += " AND trade_timestamp BETWEEN ? AND ?"
                     params.extend([start_ts * 1000, end_ts * 1000])
                 else:
-                    if exchange == 'kis':
-                        query += " AND trade_timestamp > ?"
-                        params.append(0)
+                    # 최신 체결 시간 기준 롤링 윈도우 계산 (주말/장마감 후에도 정상 표시 보장 및 KIS 성능 병목 해결)
+                    latest_ts_ms = None
+                    try:
+                        async with db.execute(
+                            "SELECT MAX(trade_timestamp) FROM trades WHERE exchange = ? AND symbol = ?",
+                            (exchange, symbol)
+                        ) as cur:
+                            row = await cur.fetchone()
+                            if row and row[0]:
+                                latest_ts_ms = row[0]
+                    except Exception as e:
+                        logger.error(f"[get_candles] Failed to fetch latest trade timestamp: {e}")
+                    
+                    if latest_ts_ms:
+                        query += " AND trade_timestamp >= ?"
+                        params.append(latest_ts_ms - (limit * interval * 2.0 * 1000))
                     else:
                         query += " AND trade_timestamp > ?"
-                        params.append(int((time.time() - (limit * interval * 1.5)) * 1000))
+                        params.append(int((time.time() - (limit * interval * 2.0)) * 1000))
                 
                 query += " ORDER BY trade_timestamp DESC LIMIT ?"
                 params.append(min(needed_ticks, 30000))

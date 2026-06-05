@@ -22,7 +22,7 @@
      ┌──────────────────────┼──────────────────────┐
      ▼                      ▼                      ▼
   chart.js            portfolio-view.js       ranking.js / alerts.js ...
-(Plotly 차트)        (자산 분배 원형그래프)       (기타 대시보드 위젯)
+(Lightweight Charts)  (자산 분배 원형그래프)       (기타 대시보드 위젯)
 ```
 
 ---
@@ -42,7 +42,7 @@
 - **[stream.js](file:///home/simon/ATS/frontend/stream.js)**: 백엔드 `/ws` 엔드포인트와 WebSocket을 개설 및 복구 관리하며, 체결 틱(`tick`), 캔들 업데이트(`candle`) 및 시스템 경보 데이터를 실시간 수신하여 `store.js` 및 컴포넌트로 전달합니다.
 
 ### 2.3. 컴포넌트 & 뷰 레이어 (Views & Visualization)
-- **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Plotly.js를 사용하여 Candlestick 차트를 그리며, SMA/볼린저 밴드 오버레이 및 RSI 보조 지표를 별도 서브 차트에 고속 렌더링합니다.
+- **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Lightweight Charts를 사용하여 Candlestick 차트를 그리며, SMA/볼린저 밴드 오버레이 및 RSI 보조 지표를 별도 서브 차트에 고속 렌더링합니다.
 - **[portfolio-view.js](file:///home/simon/ATS/frontend/portfolio-view.js)**: 포트폴리오의 실물 보유 현황 및 가상 투자 운용 상태를 표와 폼으로 렌더링합니다.
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
@@ -54,7 +54,20 @@
 
 ## 3. 실시간 UI 갱신 시퀀스 (Real-time Flow)
 
-1. **소켓 수신**: `stream.js`가 WebSocket을 통해 신규 `candle` 혹은 `tick` 패킷을 받음.
+1. **소켓 수신**: `stream.js`가 WebSocket을 통해 신규 `tick` 패킷을 받음.
 2. **상태 업데이트**: 수신한 데이터를 `store.js` 내의 특정 배열에 누적(Push) 및 캐시 데이터 갱신.
-3. **그래프 리트레이싱**: `chart.js` 또는 `portfolio-chart.js`는 데이터 누적 이벤트를 받아 Plotly의 `Plotly.react()` 또는 `Plotly.restyle()` 메서드를 사용해 브라우저 렌더링 부하를 최소화하면서 차트만 동적으로 부분 갱신합니다.
+3. **그래프 리트레이싱**: `chart.js`는 데이터 누적 이벤트를 받아 Lightweight Charts의 `setData()` 및 `update()` 메서드를 사용해 브라우저 렌더링 부하를 최소화하며 차트를 동적으로 갱신합니다.
 4. **인터벌 전환**: 상단 시간 주기(Interval) 선택 시, 백엔드로부터 새로운 주기의 역사적 캔들 셋을 `client.js`로 호출하여 스토어를 전면 교체한 후 차트를 다시 로딩합니다.
+
+---
+
+## 4. 지연 로딩 및 롤링 윈도우 전략 (Lazy Loading & Rolling Window)
+
+1. **지연 로딩 (Lazy Loading / 무한 스크롤):**
+   - 1초봉 등 초 단위 봉의 경우 거래소 API 한계로 과거 백필이 불가능합니다.
+   - 따라서 프론트엔드 차트의 왼쪽(과거) 끝단(`logicalRange.from < 10`) 도달 시 이벤트를 트리거하여 백엔드 API에 과거 30분 단위 범위의 체결 틱 데이터를 요청합니다.
+   - 백엔드는 DB `trades` 테이블에서 해당 시간 구간을 쿼리(인덱스 스캔)해 즉석에서 초 단위 봉으로 조립하여 프론트엔드로 리턴하고, 프론트엔드는 이 데이터를 차트 맨 앞에 자연스럽게 머지(Merge)합니다.
+2. **실시간 롤링 윈도우 보존:**
+   - 캔들이 마감될 때 메모리 누수 방지를 위해 기본 500건으로 캔들 개수를 슬라이싱(`slice(-500)`)하여 롤 윈도우를 유지합니다.
+   - 단, 사용자가 과거 데이터를 당겨와 탐색하는 중(AutoScroll OFF / Explorer Mode ON)에는 실시간 틱이 유입되더라도 슬라이싱을 우회하여 과거 데이터 소실을 방지합니다.
+   - 사용자가 다시 "실시간 복귀" 버튼을 누르거나 마우스 우클릭으로 실시간 모드로 복귀할 때만 캔들 배열을 다시 500개로 축소 정제하여 성능과 탐색 편의성을 모두 달성합니다.

@@ -97,7 +97,7 @@ sequenceDiagram
     participant DB as SQLite (DB Writer)
     participant ZMQ as ZeroMQ IPC Bus
     participant Backend as FastAPI Server
-    participant UI as Web Frontend (Plotly.js)
+    participant UI as Web Frontend (Lightweight Charts)
 
     Exchange->>Collector: 틱(Tick) 데이터 전송
     Collector->>DB: 배치 큐 적재 및 50건 단위 커밋
@@ -106,7 +106,7 @@ sequenceDiagram
     Backend->>Backend: 수집 상태 큐 검증 및 캐싱
     Backend->>UI: WebSocket (/ws) 브로드캐스트 (JSON)
     UI->>UI: store.js 틱 데이터 캐시 업데이트
-    UI->>UI: Plotly.react() 부분 리트레이싱 갱신
+    UI->>UI: Lightweight Charts 실시간 캔들 갱신
 ```
 
 ---
@@ -153,6 +153,8 @@ sequenceDiagram
 ### 3.1. 거래소 수집기 및 데이터 정규화 (Collector & Adapters)
 - **독립 구동**: `src/collector/upbit_ws.py` 등은 큐 기반의 독립 수집 세션을 통해 구동됩니다.
 - **데이터 규격 일원화**: 거래소별 JSON 스키마를 공통 내부 데이터 형태인 `Tick` 데이터로 통일(Normalize)합니다.
+- **비동기 백필 기동**: 수집기 기동 시 과거 누락된 1분봉 동기화 작업이 실시간 수집 시작을 지연시키지 않도록 백필 작업을 `asyncio.create_task`로 비동기 실행하여 구동 즉시 실시간 데이터 수집을 병행합니다.
+- **벌크 병합 백필 (Bulk Merged Backfill)**: 과거 누락 캔들을 채울 때 개별 틈새마다 요청을 쪼개지 않고, 전체 누락 타임스탬프의 `[min, max]` 단일 대형 구간을 계산하여 1회의 벌크 API 호출로 데이터를 수집하고, 이미 존재하는 데이터는 메모리 상에서 중복 필터링하여 저장함으로써 API 호출 횟수를 90% 이상 절감합니다.
 
 ### 3.2. 포트폴리오 관리자 및 체결 엔진 (PortfolioManager & Executor)
 - **포트폴리오 격리**: 각 트레이딩 세션이나 백테스트 실행은 독립된 `portfolio_id`를 가져 충돌을 원천 차단합니다.
@@ -161,6 +163,12 @@ sequenceDiagram
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
 - **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
+
+### 3.4. 초 단위 온디맨드 캔들(OHLCV) 조립 및 무한 스크롤(지연 로딩) 아키텍처
+- **디스크 I/O 최적화**: 1초봉 등 초 단위 봉 데이터를 매초 디스크 DB에 쓰는 동작은 SQLite 환경에서 심각한 병목을 초래합니다. 따라서 DB에는 틱 데이터(`trades`)만 벌크 저장(50건 배치 커밋)하고, 캔들 데이터는 저장하지 않습니다.
+- **온디맨드 실시간 Aggregation**: 프론트엔드가 특정 범위의 캔들을 요청할 때 백엔드 `/candles` API가 요청 범위 내 틱 데이터를 SQLite 인덱스 스캔을 통해 조회하고, 메모리 상에서 정규화된 초 단위 봉으로 즉석 조립(Aggregation)하여 즉시 반환합니다. 복합 인덱스(`idx_trades_exch_sym_time`) 최적화 덕분에 30분 단위 데이터(수만 건의 틱) 조립 속도가 13ms 수준으로 극도로 빠릅니다.
+- **무한 스크롤 (지연 로딩)**: 프론트엔드 차트(Lightweight Charts)의 왼쪽 과거 끝단 도달 시, 백엔드에 과거 30분 단위 범위의 체결 데이터를 비동기로 추가 호출하는 지연 로딩(Lazy Loading) 방식으로 구동하여 브라우저의 초기 로딩 부하를 줄입니다.
+- **실시간 롤윈도우 상태 보존**: 캔들 마감 시 메모리 절약을 위해 기본 500개로 캔들을 슬라이싱(`slice(-500)`)하여 유지하되, 사용자가 과거 데이터를 스크롤하여 탐색하는 중(AutoScroll OFF / Explorer Mode ON)에는 실시간 틱 유입으로 인한 과거 데이터 유실(Slicing)을 우회하는 예외 처리를 적용했습니다.
 
 ---
 

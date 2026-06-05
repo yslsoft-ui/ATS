@@ -10,7 +10,7 @@
 - **실시간 데이터 스트리밍**: ZeroMQ IPC 및 FastAPI WebSocket을 결합하여 지연 시간을 최소화한 실시간 가격 데이터 전송.
 - **가변 타임프레임 캔들 생성**: 초 단위(1S, 3S, 5S, 10S, 30S) 및 분 단위(60S) 틱 데이터 정규화 및 캔들 자동 취합.
 - **모의투자 시뮬레이션 엔진**: 호가창 데이터 기반 슬리피지가 반영된 가상 체결 엔진(Virtual Order Executor).
-- **지표 오버레이 차트**: Vanilla JS 및 Plotly.js를 사용하여 프레임워크 없는 초경량 차트 및 자산 비중 원형 그래프 렌더링.
+- **지표 오버레이 차트**: Vanilla JS 및 Lightweight Charts를 사용하여 프레임워크 없는 초경량 차트 및 자산 비중 원형 그래프 렌더링.
 
 ---
 
@@ -50,7 +50,7 @@ pip install -r requirements.txt
 | **데이터베이스 명세** | [docs/database.md](file:///home/simon/ATS/docs/database.md) | SQLite 3 테이블 스키마, 기본값, 외래키 제약조건 및 복합 인덱스 구성 |
 | **API 및 웹소켓 프로토콜 명세** | [docs/api.md](file:///home/simon/ATS/docs/api.md) | 백엔드 FastAPI REST API 엔드포인트 및 실시간 구독 웹소켓 JSON 포맷 |
 | **데몬 시스템 구성 명세** | [docs/daemons.md](file:///home/simon/ATS/docs/daemons.md) | 수집기 및 전략 엔진 데몬의 구동 흐름, ZMQ IPC 제어 프로토콜 및 Graceful Shutdown |
-| **프론트엔드 아키텍처 명세** | [docs/frontend.md](file:///home/simon/ATS/docs/frontend.md) | Vanilla JS 기반 라우팅(router), 상태(store), 실시간 Plotly.js 차트 구조 |
+| **프론트엔드 아키텍처 명세** | [docs/frontend.md](file:///home/simon/ATS/docs/frontend.md) | Vanilla JS 기반 라우팅(router), 상태(store), 실시간 Lightweight Charts 차트 구조 |
 | **백테스트 엔진 설계서** | [docs/backtest-engine-design.md](file:///home/simon/ATS/docs/backtest-engine-design.md) | 역사적 데이터를 활용한 과거 수익률 테스트 및 리플레이 엔진 연산 로직 |
 | **수집기 데몬 설계서** | [docs/collector-design.md](file:///home/simon/ATS/docs/collector-design.md) | 다중 WebSocket 세션 유지보수 및 50건 배치 DB 커밋 쓰기 로직 |
 | **UI/UX 디자인 가이드** | [docs/ui-design.md](file:///home/simon/ATS/docs/ui-design.md) | 전문가용 터미널 다크 테마 색상 체계, 차트 위젯 표준 디자인 시스템 |

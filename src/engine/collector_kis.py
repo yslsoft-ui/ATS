@@ -96,36 +96,53 @@ class KisCollector(BaseCollector):
                 parts = raw_data.split('|')
                 if len(parts) < 4: return None
 
-                data_parts = parts[3].split('^')
-                symbol_code = data_parts[0]
-                price = float(data_parts[2])
-                
-                # KIS 국내주식 실시간 체결(H0STCNT0) 데이터 인덱스 명세 교정:
-                # 8: 고가, 9: 저가, 12: 체결거래량(기존 7번 시가 맵핑 오류 수정), 14: 누적거래대금(원단위, 기존 22번 HTS 단축대금 오류 수정)
-                volume = float(data_parts[12]) if len(data_parts) > 12 and data_parts[12] else 0.0
-                high = float(data_parts[8]) if len(data_parts) > 8 and data_parts[8] else 0.0
-                low = float(data_parts[9]) if len(data_parts) > 9 and data_parts[9] else 0.0
-                acc_price = float(data_parts[14]) if len(data_parts) > 14 and data_parts[14] else 0.0
-                
-                sign = data_parts[3]
-                raw_change = float(data_parts[4]) if len(data_parts) > 4 and data_parts[4] else 0.0
-                change_price = -raw_change if sign in ('4', '5') else raw_change
+                try:
+                    data_cnt = int(parts[2])
+                except ValueError:
+                    data_cnt = 1
 
-                tick_data = {
-                    'type': 'tick',
-                    'exchange': 'kis',
-                    'code': symbol_code,
-                    'trade_price': price,
-                    'trade_volume': volume,
-                    'signed_change_rate': float(data_parts[5]) / 100.0,
-                    'change_price': change_price,
-                    'ask_bid': 'BID', 
-                    'trade_timestamp': int(time.time() * 1000),
-                    'high_price': high,
-                    'low_price': low,
-                    'acc_trade_price_24h': acc_price
-                }
-                return tick_data
+                all_fields = parts[3].split('^')
+                FIELD_COUNT = 46
+                
+                tick_list = []
+                for i in range(data_cnt):
+                    start_idx = i * FIELD_COUNT
+                    data_parts = all_fields[start_idx : start_idx + FIELD_COUNT]
+                    if len(data_parts) < FIELD_COUNT:
+                        break
+
+                    symbol_code = data_parts[0]
+                    try:
+                        price = float(data_parts[2]) if data_parts[2] else 0.0
+                        volume = float(data_parts[12]) if data_parts[12] else 0.0
+                        high = float(data_parts[8]) if data_parts[8] else 0.0
+                        low = float(data_parts[9]) if data_parts[9] else 0.0
+                        acc_price = float(data_parts[14]) if data_parts[14] else 0.0
+                        signed_change_rate = (float(data_parts[5]) / 100.0) if data_parts[5] else 0.0
+                    except ValueError:
+                        continue
+
+                    sign = data_parts[3]
+                    raw_change = float(data_parts[4]) if data_parts[4] else 0.0
+                    change_price = -raw_change if sign in ('4', '5') else raw_change
+
+                    tick_data = {
+                        'type': 'tick',
+                        'exchange': 'kis',
+                        'code': symbol_code,
+                        'trade_price': price,
+                        'trade_volume': volume,
+                        'signed_change_rate': signed_change_rate,
+                        'change_price': change_price,
+                        'ask_bid': 'BID', 
+                        'trade_timestamp': int(time.time() * 1000),
+                        'high_price': high,
+                        'low_price': low,
+                        'acc_trade_price_24h': acc_price
+                    }
+                    tick_list.append(tick_data)
+                
+                return tick_list if tick_list else None
         return None
 
 
@@ -282,7 +299,8 @@ class KisCollector(BaseCollector):
                 "FID_COND_MRKT_DIV_CODE": "J",
                 "FID_INPUT_ISCD": symbol,
                 "FID_INPUT_HOUR_1": hour_str,
-                "FID_PW_DATA_INCU_YN": "Y"
+                "FID_PW_DATA_INCU_YN": "Y",
+                "FID_ETC_CLS_CODE": ""
             }
 
             try:

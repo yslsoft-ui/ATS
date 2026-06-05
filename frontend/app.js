@@ -51,6 +51,58 @@ async function loadHistory() {
     }
 }
 
+// --- 과거 데이터 비동기 추가 지연 로딩 (Lazy Loading) ---
+state.isHistoryLoading = false;
+
+async function loadMoreHistory() {
+    if (state.isHistoryLoading) return;
+    if (!state.candles || state.candles.length === 0) return;
+
+    state.isHistoryLoading = true;
+    console.log("[Lazy Loading] Fetching older history...");
+
+    try {
+        const oldestCandle = state.candles[0];
+        let oldestTs = parseInt(oldestCandle.timestamp);
+        if (oldestTs > 9999999999) {
+            oldestTs = Math.floor(oldestTs / 1000);
+        }
+
+        // 이전 30분(1800초) 분량의 캔들 데이터를 요청
+        const fetchDuration = 1800; // 30분 (초)
+        const startTs = oldestTs - fetchDuration;
+        const endTs = oldestTs - 1;
+
+        const additionalHistory = await APIClient.fetchCandlesRange(
+            state.currentExchange,
+            state.currentSymbol,
+            state.currentInterval,
+            startTs,
+            endTs,
+            1000
+        );
+
+        if (additionalHistory && additionalHistory.length > 0) {
+            console.log(`[Lazy Loading] Loaded ${additionalHistory.length} older candles.`);
+            
+            // 기존 캔들 배열 맨 앞에 안전하게 머지
+            state.candles = [...additionalHistory, ...state.candles];
+            
+            // 차트 렌더링
+            ChartEngine.render(state.candles, state.currentCandle);
+        } else {
+            console.log("[Lazy Loading] No older history found in DB.");
+        }
+    } catch (e) {
+        console.error("[Lazy Loading] Failed to load older history", e);
+    } finally {
+        // 스크롤 중 휠 바운싱으로 인한 연속 다중 호출 방지 락 해제 지연
+        setTimeout(() => {
+            state.isHistoryLoading = false;
+        }, 800);
+    }
+}
+
 // --- 실시간 캔들 생성 및 업데이트 로직 (PUSH) ---
 function processTick(tick) {
     if (tick.type === 'collector_status') {
@@ -109,7 +161,10 @@ function processTick(tick) {
 
     if (!state.currentCandle || state.currentCandle.timestamp !== bucket) {
         if (state.currentCandle) {
-            state.candles = [...state.candles, state.currentCandle].slice(-500);
+            state.candles = [...state.candles, state.currentCandle];
+            if (state.autoScroll && !state.isExplorerMode) {
+                state.candles = state.candles.slice(-500);
+            }
         }
         nextCurrentCandle = {
             timestamp: bucket,
@@ -330,6 +385,11 @@ function exitExplorerMode() {
     state.explorerCenterIdx = null;
     state.alertMarkerTs = null;
     state.autoScroll = true;
+    
+    // 실시간 복귀 시 메모리 크기를 최근 500개로 축소
+    if (state.candles.length > 500) {
+        state.candles = state.candles.slice(-500);
+    }
     
     const goLiveBtn = document.getElementById('go-live-btn');
     if (goLiveBtn) goLiveBtn.style.display = 'none';
@@ -564,6 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 전역 window 바인딩으로 격리된 모듈과의 연동 보장
 window.state = state;
 window.loadHistory = loadHistory;
+window.loadMoreHistory = loadMoreHistory;
 window.processTick = processTick;
 window.updateMetrics = updateMetrics;
 window.updateHeaderInfo = updateHeaderInfo;

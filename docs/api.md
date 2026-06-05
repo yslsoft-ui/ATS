@@ -59,13 +59,15 @@
     ]
     ```
 
-- **`GET /candles?exchange={exchange_id}&symbol={symbol}&interval={seconds}&limit={count}&start_ts={ms}&end_ts={ms}`**
-  - **설명**: 특정 종목의 최근 OHLCV 캔들스틱 목록을 반환합니다. (지표 계산용 이전 캔들 반환 지원)
+- **`GET /candles?exchange={exchange_id}&symbol={symbol}&interval={seconds}&limit={count}&start_ts={seconds}&end_ts={seconds}`**
+  - **설명**: 특정 종목의 OHLCV 캔들스틱 목록을 반환합니다.
+    - **60초 미만 저분봉(1초, 3초, 5초 등) 지원:** 저분봉 요청 시 DB에 캔들을 항시 쓰지 않고, 요청이 들어온 시점에 체결(`trades`) 테이블의 Raw 틱데이터를 디스크로부터 읽어 메모리 상에서 초 단위로 실시간 즉석 조립(Aggregation)하여 반환합니다.
+    - **지연 로딩 지원:** `start_ts` 및 `end_ts` 파라미터(초 단위 Unix Timestamp)를 통해 특정 과거 시간대 범위를 한정해 요청할 수 있으며, 인덱싱을 통해 30분 단위 데이터 조회가 약 10ms 수준의 초고속으로 완료되어 차트 무한 스크롤을 안정적으로 지원합니다.
   - **응답 (JSON)**:
     ```json
     [
       {
-        "timestamp": 1716870000000,
+        "timestamp": 1716870000,
         "open": 98450000.0,
         "high": 98600000.0,
         "low": 98300000.0,
