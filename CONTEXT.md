@@ -5,11 +5,11 @@
 ## Language
 
 **Market**:
-자산이 거래되는 장소 (예: Upbit, KIS).
-_Avoid_: 거래소, 섹터
+특정 자산이 거래 및 결제되는 세부 하부 시장 또는 결제 수단 (예: 가상자산의 `KRW`, `BTC`, `USDT` 마켓 / KIS 주식의 `KRX`, `NXT` 및 자동 라우팅을 위한 `SOR` 시장).
+_Avoid_: 섹터, 테마
 
 **Exchange (ID)**:
-시스템 내부에서 시장을 식별하는 고유 ID (예: `upbit`, `kis`).
+시스템 내부에서 물리적 거래소 서비스 또는 브로커를 식별하는 고유 ID (예: `upbit`, `bithumb`, `kis`).
 
 **AssetSymbol**:
 거래소 내의 순수 종목 코드 (예: `BTC`, `ETH`, `005930`). 더 이상 접두어를 포함하지 않음.
@@ -83,6 +83,17 @@ _Avoid_: 수집기 (혼재 방지를 위해 영문 용어 통일)
 
 **MarketDataContext**:
 특정 자산(`Composite Key`) 및 인터벌(`Interval`) 단위로 시세(캔들) 상태를 유지하고, 기술 지표를 동적으로 연산 및 캐싱하여 다수의 전략 실행 컨텍스트(`StrategyContext`)에 공유하는 중앙 데이터 콘텍스트 관리자.
+
+**Integrated Candle (통합 캔들)**:
+단일 자산(예: `005930`)에 대해 복수의 실시간 거래 시장(예: KRX와 NXT)에서 발생하는 체결 데이터(Tick)를 시간순으로 융합(Merge)하여 생성한 단일 캔들 스트림.
+_Avoid_: 분리 캔들, 개별 차트
+
+**Smart Order Routing (SOR / 최선집행주문)**:
+복수의 시장(예: KRX, NXT) 중 주문 시점에 가격 및 수량 조건이 가장 유리한 시장으로 주문을 자동 송신 및 처리해주는 KIS의 지능형 주문 집행 방식.
+
+**Market Division (시장구분)**:
+주문 발주 또는 실시간 틱 수신 시, 해당 거래가 실제로 발생한 세부 시장(KRX, NXT)을 구별하는 정보 필드.
+
 
 ## Relationships
 

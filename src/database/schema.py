@@ -40,6 +40,7 @@ async def init_db(db_path: str = None):
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 exchange TEXT,
+                market TEXT,
                 symbol TEXT,
                 trade_price REAL,
                 trade_volume REAL,
@@ -50,6 +51,7 @@ async def init_db(db_path: str = None):
             )
         ''')
         await ensure_column(db, 'trades', 'exchange', 'TEXT')
+        await ensure_column(db, 'trades', 'market', 'TEXT')
         await ensure_column(db, 'trades', 'sequential_id', 'INTEGER')
 
 
@@ -135,6 +137,7 @@ async def init_db(db_path: str = None):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 portfolio_id TEXT,
                 exchange TEXT,
+                market TEXT,
                 strategy_id TEXT,
                 symbol TEXT,
                 side TEXT,
@@ -148,6 +151,7 @@ async def init_db(db_path: str = None):
             )
         ''')
         await ensure_column(db, 'orders_history', 'exchange', 'TEXT')
+        await ensure_column(db, 'orders_history', 'market', 'TEXT')
 
         # 6. alerts (알림 내역)
         await db.execute('''

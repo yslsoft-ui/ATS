@@ -51,7 +51,7 @@ class KisCollector(BaseCollector):
                 },
                 "body": {
                     "input": {
-                        "tr_id": "H0STCNT0",
+                        "tr_id": "H0UNCNT0",  # 실시간 주식 체결가 통합
                         "tr_key": symbol_code
                     }
                 }
@@ -95,6 +95,9 @@ class KisCollector(BaseCollector):
             if raw_data.startswith('0') or raw_data.startswith('1'):
                 parts = raw_data.split('|')
                 if len(parts) < 4: return None
+
+                tr_id = parts[1]
+                market = 'UN' if tr_id == 'H0UNCNT0' else ('NXT' if tr_id == 'H0NXCNT0' else 'KRX')
 
                 try:
                     data_cnt = int(parts[2])
@@ -145,6 +148,7 @@ class KisCollector(BaseCollector):
                     tick_data = {
                         'type': 'tick',
                         'exchange': 'kis',
+                        'market': market,
                         'code': symbol_code,
                         'trade_price': price,
                         'trade_volume': volume,
@@ -160,8 +164,6 @@ class KisCollector(BaseCollector):
                 
                 return tick_list if tick_list else None
         return None
-
-
 
     async def _pre_connect_check(self) -> float:
         kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}
@@ -186,12 +188,15 @@ class KisCollector(BaseCollector):
             logger.error("Failed to get approval key. Retrying in 10s...")
             return False
         return True
-
     async def _start_additional_tasks(self, config: Dict[str, Any]):
         logger.info("[KIS] 추가적인 백그라운드 태스크가 없습니다. (동적 랭킹 수집 루프 제거됨)")
 
     async def _handle_connection_error(self, error: Exception):
-        if getattr(self.cred_provider, 'last_status', 0) not in [401, 403]:
+        if isinstance(error, ValueError):
+            self.last_error = f"설정 오류: {error}"
+            logger.critical(f"[{self.exchange.upper()}] 치명적 설정 오류 감지. 수집기를 정지합니다. Error: {error}")
+            await self.stop()
+        elif getattr(self.cred_provider, 'last_status', 0) not in [401, 403]:
             logger.error(f"[{self.exchange.upper()}] Collector Runtime Error: {error}. Reconnecting in 10s...")
             await asyncio.sleep(10)
         else:
@@ -226,13 +231,13 @@ class KisCollector(BaseCollector):
                         },
                         "body": {
                             "input": {
-                                "tr_id": "H0STCNT0",
+                                "tr_id": "H0UNCNT0",
                                 "tr_key": code
                             }
                         }
                     }
                     await self.ws.send_json(subscribe_msg)
-                    logger.info(f"[KIS] 웹소켓 실시간 구독 등록 송신 완료: {code}")
+                    logger.info(f"[KIS] 웹소켓 실시간 통합 구독 등록 송신 완료: {code}")
                 except Exception as e:
                     logger.error(f"[KIS] 웹소켓 구독 등록 실패 ({code}): {e}")
         else:
@@ -257,13 +262,13 @@ class KisCollector(BaseCollector):
                         },
                         "body": {
                             "input": {
-                                "tr_id": "H0STCNT0",
+                                "tr_id": "H0UNCNT0",
                                 "tr_key": code
                             }
                         }
                     }
                     await self.ws.send_json(unsubscribe_msg)
-                    logger.info(f"[KIS] 웹소켓 실시간 구독 해제 송신 완료: {code}")
+                    logger.info(f"[KIS] 웹소켓 실시간 통합 구독 해제 송신 완료: {code}")
                 except Exception as e:
                     logger.error(f"[KIS] 웹소켓 구독 해제 실패 ({code}): {e}")
 
@@ -312,7 +317,7 @@ class KisCollector(BaseCollector):
             }
 
             params = {
-                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_COND_MRKT_DIV_CODE": "UN",
                 "FID_INPUT_ISCD": symbol,
                 "FID_INPUT_HOUR_1": hour_str,
                 "FID_PW_DATA_INCU_YN": "Y",
@@ -356,6 +361,14 @@ class KisCollector(BaseCollector):
                         # 요청한 시작 시간보다 이전 캔들이 유입된 경우 수집 중단 대상
                         if ts < start_time:
                             continue
+
+                        # KIS 장외 시간대 가짜/오류 캔들 유입 차단 (KST 20:00 ~ 08:30)
+                        try:
+                            time_val = int(time_str)
+                            if time_val >= 200000 or time_val < 83000:
+                                continue
+                        except ValueError:
+                            pass
 
                         # API가 보낸 시, 고, 저, 종, 거래량 정보 파싱
                         try:

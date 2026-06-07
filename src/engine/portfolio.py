@@ -34,7 +34,7 @@ class Portfolio:
         self.history: List[Dict] = []
         self.strategy_info = strategy_info
 
-    def update_position(self, exchange: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None):
+    def update_position(self, exchange: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None, market: str = None):
         """체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다."""
         ex_key = exchange.lower()
         pos_key = (ex_key, symbol)
@@ -75,6 +75,7 @@ class Portfolio:
         # 히스토리 기록
         self.history.append({
             'exchange': exchange,
+            'market': market,
             'symbol': symbol,
             'side': side,
             'price': price,
@@ -111,6 +112,7 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
     async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         orderbook = kwargs.get('orderbook')
         trade_price = kwargs.get('trade_price')
+        market = kwargs.get('market', 'KRW')
         
         if orderbook:
             # OrderbookMatchingEngine 형식에 맞춰 데이터 준비
@@ -142,6 +144,7 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
         
         return {
             'exchange': exchange,
+            'market': market,
             'symbol': symbol,
             'side': side,
             'price': vwap,
@@ -226,7 +229,8 @@ class PortfolioManager:
                     quantity=result['quantity'],
                     fee=result['fee'],
                     strategy_id="liquidate",
-                    reason="전체 청산 (Liquidate All)"
+                    reason="전체 청산 (Liquidate All)",
+                    market=result.get('market')
                 )
                 results.append(result)
                 
@@ -256,8 +260,16 @@ class PortfolioManager:
             self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
         executor = self.executors[executor_key]
 
+        market_val = getattr(signal, 'market', None)
+        if not market_val:
+            if exchange_key == 'kis':
+                market_val = 'SOR'
+            else:
+                market_val = 'KRW'
+
         result = await executor.execute_order(
             exchange=signal.exchange,
+            market=market_val,
             symbol=signal.symbol,
             side=signal.action,
             quantity=quantity,
@@ -276,7 +288,8 @@ class PortfolioManager:
                 fee=result['fee'],
                 strategy_id=getattr(signal, 'strategy_id', ""),
                 reason=getattr(signal, 'reason', ""),
-                context=getattr(signal, 'context', {})
+                context=getattr(signal, 'context', {}),
+                market=result.get('market')
             )
             
             logger.info(f"TRADE EXECUTION: {portfolio.name}: {result['side']} {result['symbol']} @ {result['price']:.2f} (Qty: {result['quantity']:.4f})")
@@ -284,11 +297,12 @@ class PortfolioManager:
             async with get_db_conn(self.db_path) as db:
                 import json
                 await db.execute('''
-                    INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     portfolio_id, 
                     result['exchange'],
+                    result.get('market', market_val),
                     getattr(signal, 'strategy_id', ""),
                     result['symbol'], 
                     result['side'], 

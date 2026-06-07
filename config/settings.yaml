@@ -84,8 +84,8 @@ exchanges:
     api_url: https://openapi.koreainvestment.com:9443
     websocket_url: ws://ops.koreainvestment.com:21000
     market_hours:
-      start_time: 07:50
-      end_time: '18:10'
+      start_time: '07:50'
+      end_time: '23:50'
   bithumb:
     enabled: true
     api_key: your_bithumb_api_key

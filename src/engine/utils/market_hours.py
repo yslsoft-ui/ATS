@@ -11,6 +11,31 @@ class MarketHours:
     """
     KST = ZoneInfo('Asia/Seoul')
 
+    @staticmethod
+    def _parse_time(time_str: str, var_name: str) -> datetime.time:
+        """
+        'HH:MM' 형태의 문자열을 datetime.time 객체로 파싱합니다.
+        파싱에 실패하면 명시적인 ValueError를 발생시킵니다.
+        """
+        if not isinstance(time_str, str):
+            raise ValueError(
+                f"[{var_name}] must be a string, got {type(time_str).__name__}: {time_str}"
+            )
+        
+        parts = time_str.split(':')
+        if len(parts) != 2:
+            raise ValueError(
+                f"[{var_name}] must be in 'HH:MM' format, got: '{time_str}'"
+            )
+        
+        try:
+            h, m = map(int, parts)
+            return datetime.time(h, m)
+        except ValueError as e:
+            raise ValueError(
+                f"[{var_name}] invalid hour/minute format in '{time_str}': {e}"
+            ) from e
+
     @classmethod
     def is_krx_open(cls, dt: datetime.datetime = None, start_time_str: str = "08:30", end_time_str: str = "18:10") -> bool:
         """
@@ -32,17 +57,8 @@ class MarketHours:
         # 2. 시간 체크
         current_time = dt.time()
         
-        try:
-            sh, sm = map(int, start_time_str.split(':'))
-            start_time = datetime.time(sh, sm)
-        except Exception:
-            start_time = datetime.time(8, 30)
-
-        try:
-            eh, em = map(int, end_time_str.split(':'))
-            end_time = datetime.time(eh, em)
-        except Exception:
-            end_time = datetime.time(18, 10)
+        start_time = cls._parse_time(start_time_str, 'start_time_str')
+        end_time = cls._parse_time(end_time_str, 'end_time_str')
 
         if not (start_time <= current_time <= end_time):
             return False
@@ -55,10 +71,9 @@ class MarketHours:
         now = datetime.datetime.now(cls.KST)
         
         if exchange == 'kis':
-            try:
-                sh, sm = map(int, start_time_str.split(':'))
-            except Exception:
-                sh, sm = 8, 30
+            start_time = cls._parse_time(start_time_str, 'start_time_str')
+            sh, sm = start_time.hour, start_time.minute
+            
             # 다음 평일 sh:sm 계산
             target = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
             if now >= target or now.weekday() >= 5:

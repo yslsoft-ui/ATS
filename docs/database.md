@@ -29,7 +29,8 @@
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 체결 레코드 순번 |
-| **exchange** | TEXT | - | 거래소 ID |
+| **exchange** | TEXT | - | 거래소 ID (`upbit`, `bithumb`, `kis`) |
+| **market** | TEXT | - | 세부 시장 (예: `KRW`, `BTC` / `KRX`, `NXT`) |
 | **symbol** | TEXT | - | 순수 자산 심볼 (예: `BTC`, `005930`) |
 | **trade_price** | REAL | - | 체결 가격 |
 | **trade_volume** | REAL | - | 체결 수량 |
@@ -74,7 +75,7 @@
 ---
 
 ### 1.5. positions (보유 자산 포지션)
-포트폴리오가 현재 실시간/가상으로 보유 중인 자산 목록을 상세 기록합니다.
+포트폴리오가 현재 실시간/가상으로 보유 중인 자산 목록을 상세 기록합니다. (국내 주식의 경우 KRX와 NXT의 세부 구분 없이 단일 `symbol` 하에 통합 합산되어 잔고가 관리됩니다.)
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
@@ -98,6 +99,7 @@
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 주문 번호 (자동 증가) |
 | **portfolio_id** (FK) | TEXT | REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE | 발주한 포트폴리오 ID |
 | **exchange** | TEXT | - | 주문 거래소 |
+| **market** | TEXT | - | 주문 및 실제 체결된 세부 시장 (예: `KRW` / `KRX`, `NXT`, `SOR`) |
 | **strategy_id** | TEXT | - | 발주를 유도한 매매 전략 ID |
 | **symbol** | TEXT | - | 주문 대상 자산 심볼 |
 | **side** | TEXT | - | 주문 구분 (`BUY`: 매수, `SELL`: 매도) |

@@ -79,6 +79,19 @@ async def main():
     config_path = "config/settings.yaml"
     config_manager = ConfigManager(config_path)
     
+    # 마켓 운영 시간 사전 파싱 유효성 검사 (Fail-Fast)
+    from src.engine.utils.market_hours import MarketHours
+    exchanges_config = config_manager.get('exchanges', {})
+    for exch_id, exch_conf in exchanges_config.items():
+        if exch_conf.get('enabled', False) and 'market_hours' in exch_conf:
+            hours = exch_conf['market_hours']
+            start_time = hours.get('start_time')
+            end_time = hours.get('end_time')
+            if start_time is not None:
+                MarketHours._parse_time(start_time, f"exchanges.{exch_id}.market_hours.start_time")
+            if end_time is not None:
+                MarketHours._parse_time(end_time, f"exchanges.{exch_id}.market_hours.end_time")
+
     # DB 경로와 설정 로드
     db_path = config_manager.get('system.db_path', 'data/backtest.db')
     

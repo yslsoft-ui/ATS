@@ -309,15 +309,30 @@ class BaseCollector(ABC):
                 except Exception as e:
                     logger.error(f"[{self.exchange.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
 
-                if last_db_time:
-                    # 마지막 적재 시각과 기본 최대 탐색 시각(예: 24시간 전) 중 더 최근인 것을 시작점으로 삼음
-                    max_lookback = max(default_max_lookback, last_db_time)
-                else:
-                    max_lookback = default_max_lookback
+                # 중간에 뚫린 구멍(Gap)을 완벽하게 메우기 위해 백필 룩백의 시작점은 항상 기본 최대 탐색 시각(예: 24시간 전)으로 고정합니다.
+                max_lookback = default_max_lookback
 
                 # 1. 기대 타임스탬프 목록 생성 (마감된 분봉까지만 조회: 현재 분의 1분 전까지)
                 end_time = current_time - 60
-                expected_timestamps = list(range(max_lookback, end_time + 60, 60))
+                raw_expected = range(max_lookback, end_time + 60, 60)
+
+                if self.exchange == 'kis':
+                    from zoneinfo import ZoneInfo
+                    from datetime import datetime
+                    kst = ZoneInfo('Asia/Seoul')
+                    expected_timestamps = []
+                    for ts in raw_expected:
+                        dt = datetime.fromtimestamp(ts, tz=kst)
+                        # 주말 제외
+                        if dt.weekday() >= 5:
+                            continue
+                        # KIS 거래 시간(정규+대체): KST 08:30 ~ 20:00 (510분 ~ 1200분)
+                        m_val = dt.hour * 60 + dt.minute
+                        if 510 <= m_val < 1200:
+                            expected_timestamps.append(ts)
+                else:
+                    expected_timestamps = list(raw_expected)
+
                 if not expected_timestamps:
                     continue
 
@@ -506,7 +521,11 @@ class BaseCollector(ABC):
         except Exception as e:
             logger.error(f"[{self.exchange.upper()}] 백필 중 치명적 오류 발생: {e}")
 
-        # 9. WebSocket 연결 루프
+        # 9. WebSocket 연결 및 수신 루프 기동
+        await self._connect_and_listen(config)
+
+    async def _connect_and_listen(self, config: Dict[str, Any]):
+        """WebSocket 연결 및 메시지 수신 무한 루프를 처리합니다."""
         url = self._get_websocket_url(config)
         self.ws = None
 
