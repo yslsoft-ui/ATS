@@ -14,7 +14,7 @@ async function loadRestoredCandles() {
     const rangeSelect = document.getElementById('restored-range-select');
     if (!rangeSelect) return;
 
-    const range = parseInt(rangeSelect.value) || 1440;
+    const range = parseInt(rangeSelect.value) || 60;
 
     try {
         // exchange와 symbol을 null로 주입하여 전체 데이터를 조회해옵니다.

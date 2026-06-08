@@ -707,6 +707,27 @@
                         </div>
                         <button id="btn-sync-assets" class="btn success" style="width: 100%; margin-top: 15px;">🔄 관리종목 변경 확인 및 동기화</button>
                     </div>
+
+                    <!-- 시스템 운영 이력 로그 카드 [NEW] -->
+                    <div class="settings-card full-width">
+                        <h3>시스템 운영 이력 (System Event Log)</h3>
+                        <p class="status-text">데몬 프로세스 및 웹서버의 기동/종료, 거래소 거래정지(서킷브레이크) 발동 이력을 실시간 조회합니다.</p>
+                        <div class="table-wrapper" style="max-height: 300px; margin-top: 15px;">
+                            <table id="system-events-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 180px;">시간</th>
+                                        <th style="width: 180px;">이벤트 유형</th>
+                                        <th style="width: 180px;">대상</th>
+                                        <th>메시지</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="system-events-tbody">
+                                    <tr><td colspan="4" style="text-align: center; color: #64748B; padding: 20px;">이력을 불러오는 중...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -718,10 +739,10 @@
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <div class="control-group" style="margin: 0;">
                                 <select id="restored-range-select" class="dark-input" style="margin: 0; padding: 6px 12px; width: 150px; font-weight: bold;">
-                                    <option value="60">최근 1시간</option>
+                                    <option value="60" selected>최근 1시간</option>
                                     <option value="360">최근 6시간</option>
                                     <option value="720">최근 12시간</option>
-                                    <option value="1440" selected>최근 24시간</option>
+                                    <option value="1440">최근 24시간</option>
                                     <option value="2880">최근 48시간</option>
                                 </select>
                             </div>

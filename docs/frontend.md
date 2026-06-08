@@ -49,6 +49,7 @@
 - **[backtest.js](file:///home/simon/ATS/frontend/backtest.js)**: 백테스트 설정 값 전송, 백테스트 진행 상태 표시 및 결과 성과 리포트 출력 폼을 관리합니다.
 - **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
+- **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.
 
 ---
 

@@ -316,9 +316,9 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
         symbol: Optional[str] = None,
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
-        end_time = int(time.time())
+        end_time = int(time.time() // 60) * 60
         start_time = end_time - limit_minutes * 60
-        current_minute_bucket = (end_time // 60) * 60
+        current_minute_bucket = end_time
         
         async with get_db_conn() as db:
             # 1. DB에 존재하는 1분봉 타임스탬프 조회
@@ -362,8 +362,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                 ex, sym, price, volume, side, ts_ms = r[0], r[1], r[2], r[3], r[4], r[5]
                 bucket = (ts_ms // 1000 // 60) * 60
                 
-                # 아직 완성되지 않은 현재 진행 중인 분봉은 누락 캔들로 판단하지 않음
-                if bucket >= current_minute_bucket:
+                # 아직 완성되지 않은 현재 진행 중인 분봉 및 마감 직후 1분봉은 누락 캔들로 판단하지 않음
+                if bucket >= current_minute_bucket - 60:
                     continue
                 
                 # DB에 이미 존재하는 캔들이면 복원 대상에서 제외
@@ -533,9 +533,286 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
 
 
 
-class SqliteTradingRepository:
+class BaseTradingRepository(abc.ABC):
     """
-    [하위 호환성 자리표시자] TradingSystem 내부의 상태 관리를 위해 예약된 트레이딩 저장소 껍데기 클래스입니다.
+    포트폴리오, 주문 내역, 알림 및 거래소 설정을 관리하기 위한 추상 저장소 인터페이스(Seam)입니다.
     """
-    def __init__(self, system=None):
+    @abc.abstractmethod
+    async def save_portfolio(self, portfolio: Any):
+        pass
+
+    @abc.abstractmethod
+    async def load_portfolios(self, exclude_types: list = None) -> Dict[str, Any]:
+        pass
+
+    @abc.abstractmethod
+    async def insert_order_history(self, portfolio_id: str, order: Dict[str, Any]):
+        pass
+
+    @abc.abstractmethod
+    async def insert_alert(self, alert: Dict[str, Any]):
+        pass
+
+    @abc.abstractmethod
+    async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def insert_system_event(self, event_type: str, target: str, message: str, timestamp: Optional[int] = None, context: Optional[str] = None):
+        pass
+
+    @abc.abstractmethod
+    async def get_system_events(self, limit: int = 20) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def check_and_report_previous_crash(self, target: str):
+        pass
+
+
+class SqliteTradingRepository(BaseTradingRepository):
+    """
+    실제 SQLite 데이터베이스를 연동하는 실거래용 트레이딩 저장소 어댑터입니다.
+    """
+    def __init__(self, system=None, db_path: Optional[str] = None):
         self.system = system
+        self.db_path = db_path
+
+    async def save_portfolio(self, portfolio: Any):
+        async with get_db_conn(self.db_path) as db:
+            # 1. 포트폴리오 기본 정보 저장
+            await db.execute('''
+                INSERT INTO portfolios (id, name, type, exchange_id, initial_cash, cash, strategy_info, duration, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(id) DO UPDATE SET
+                    name = excluded.name,
+                    type = excluded.type,
+                    exchange_id = excluded.exchange_id,
+                    initial_cash = excluded.initial_cash,
+                    cash = excluded.cash,
+                    strategy_info = excluded.strategy_info,
+                    duration = COALESCE(excluded.duration, portfolios.duration),
+                    updated_at = datetime('now')
+            ''', (
+                portfolio.id,
+                portfolio.name,
+                portfolio.portfolio_type,
+                portfolio.exchange_id,
+                portfolio.initial_cash,
+                portfolio.cash,
+                getattr(portfolio, 'strategy_info', ''),
+                getattr(portfolio, 'duration', None)
+            ))
+
+            # 1.5. 거래소별 격리 자금 정보 저장 (portfolio_exchanges)
+            if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
+                for ex_id, ex_cash in portfolio.exchange_cash.items():
+                    await db.execute('''
+                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
+                        VALUES (?, ?, 10000000.0, ?, datetime('now'))
+                        ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, updated_at = datetime('now')
+                    ''', (portfolio.id, ex_id, ex_cash, ex_cash))
+
+            # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
+            await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (portfolio.id,))
+            for pos in portfolio.positions.values():
+                if pos.quantity > 0:
+                    await db.execute('''
+                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, updated_at)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                    ''', (portfolio.id, pos.exchange, pos.symbol, pos.quantity, pos.avg_price))
+            
+            await db.commit()
+
+    async def load_portfolios(self, exclude_types: list = None) -> Dict[str, Any]:
+        from src.engine.portfolio import Portfolio, Position
+        loaded_portfolios = {}
+        async with get_db_conn(self.db_path) as db:
+            # 1. 포트폴리오 로드
+            query = "SELECT * FROM portfolios"
+            if exclude_types:
+                placeholders = ",".join(["?"] * len(exclude_types))
+                query += f" WHERE type NOT IN ({placeholders})"
+                cursor = await db.execute(query, exclude_types)
+            else:
+                cursor = await db.execute(query)
+
+            async with cursor:
+                async for row in cursor:
+                    p = Portfolio(
+                        portfolio_id=row['id'], 
+                        name=row['name'], 
+                        initial_cash=row['initial_cash'], 
+                        exchange_id=row['exchange_id'],
+                        portfolio_type=row['type'],
+                        strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
+                    )
+                    p.cash = row['cash']
+                    loaded_portfolios[p.id] = p
+            
+            # 2. 각 포트폴리오의 포지션 및 거래소 격리 자금 로드
+            for pid, p in loaded_portfolios.items():
+                # 2.1. portfolio_exchanges 로드
+                p.exchange_cash = {}
+                async with db.execute("SELECT exchange_id, cash FROM portfolio_exchanges WHERE portfolio_id = ?", (pid,)) as cursor:
+                    async for row in cursor:
+                        p.exchange_cash[row['exchange_id']] = row['cash']
+                
+                # 2.2. positions 로드
+                async with db.execute("SELECT * FROM positions WHERE portfolio_id = ?", (pid,)) as cursor:
+                    async for row in cursor:
+                        ex_val = row['exchange'] if row['exchange'] else 'upbit'
+                        p.positions[(ex_val.lower(), row['symbol'])] = Position(
+                             exchange=ex_val,
+                             symbol=row['symbol'],
+                             quantity=row['quantity'],
+                             avg_price=row['avg_price'],
+                             updated_at=time.time() 
+                        )
+                
+                # 3. 최근 거래 내역 로드 (최근 100건)
+                async with db.execute("SELECT * FROM orders_history WHERE portfolio_id = ? ORDER BY timestamp DESC LIMIT 100", (pid,)) as cursor:
+                    rows = await cursor.fetchall()
+                    p.history = [dict(r) for r in reversed(rows)]
+        return loaded_portfolios
+
+    async def insert_order_history(self, portfolio_id: str, order: Dict[str, Any]):
+        async with get_db_conn(self.db_path) as db:
+            import json
+            await db.execute('''
+                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                portfolio_id, 
+                order['exchange'],
+                order.get('market', 'KRW'),
+                order.get('strategy_id', ""),
+                order['symbol'], 
+                order['side'], 
+                order['price'], 
+                order['quantity'], 
+                order['fee'], 
+                order.get('timestamp', int(time.time())), 
+                order.get('reason', ""),
+                json.dumps(order.get('context', {}) or {})
+            ))
+            await db.commit()
+
+    async def insert_alert(self, alert: Dict[str, Any]):
+        async with get_db_conn(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO alerts (exchange, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (alert['exchange'], alert['code'], alert['price'], alert['msg'], alert['timestamp'])
+            )
+            await db.commit()
+
+    async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
+        configs = {}
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute("SELECT * FROM exchanges") as cursor:
+                async for row in cursor:
+                    configs[row['id']] = dict(row)
+        return configs
+
+    async def insert_system_event(self, event_type: str, target: str, message: str, timestamp: Optional[int] = None, context: Optional[str] = None):
+        async with get_db_conn(self.db_path) as db:
+            ts = timestamp if timestamp is not None else int(time.time() * 1000)
+            await db.execute('''
+                INSERT INTO system_events (event_type, target, message, timestamp, context)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (event_type, target, message, ts, context))
+            await db.commit()
+
+    async def get_system_events(self, limit: int = 20) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM system_events ORDER BY timestamp DESC LIMIT ?",
+                (limit,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def check_and_report_previous_crash(self, target: str):
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute('''
+                SELECT event_type, timestamp FROM system_events 
+                WHERE target = ? AND event_type IN ('DAEMON_START', 'DAEMON_STOP', 'DAEMON_CRASHED')
+                ORDER BY timestamp DESC LIMIT 1
+            ''', (target,)) as cursor:
+                row = await cursor.fetchone()
+                if row and row['event_type'] == 'DAEMON_START':
+                    crash_ts = row['timestamp'] + 1
+                    from datetime import datetime
+                    last_start_time = datetime.fromtimestamp(row['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                    message = f"이전 데몬 프로세스가 정상 종료(DAEMON_STOP) 처리되지 못하고 비정상 종료(크래쉬)되었음을 감지하여 보완 기록합니다. (이전 정상 기동 시각: {last_start_time})"
+                    await db.execute('''
+                        INSERT INTO system_events (event_type, target, message, timestamp)
+                        VALUES (?, ?, ?, ?)
+                    ''', ('DAEMON_CRASHED', target, message, crash_ts))
+                    await db.commit()
+                    logger.warning(f"[{target}] 이전 프로세스의 비정상 종료 감지 및 DAEMON_CRASHED 보완 이력 적재 완료.")
+
+
+class InMemoryTradingRepository(BaseTradingRepository):
+    """
+    단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 트레이딩 저장소 어댑터입니다.
+    """
+    def __init__(self):
+        self.portfolios: Dict[str, Any] = {}
+        self.exchange_configs: Dict[str, Dict[str, Any]] = {}
+        self.order_histories: List[Dict[str, Any]] = []
+        self.alerts: List[Dict[str, Any]] = []
+        self.system_events: List[Dict[str, Any]] = []
+
+    async def save_portfolio(self, portfolio: Any):
+        self.portfolios[portfolio.id] = portfolio
+
+    async def load_portfolios(self, exclude_types: list = None) -> Dict[str, Any]:
+        if exclude_types:
+            return {k: v for k, v in self.portfolios.items() if v.portfolio_type not in exclude_types}
+        return self.portfolios
+
+    async def insert_order_history(self, portfolio_id: str, order: Dict[str, Any]):
+        order_copy = dict(order)
+        order_copy['portfolio_id'] = portfolio_id
+        self.order_histories.append(order_copy)
+        if portfolio_id in self.portfolios:
+            self.portfolios[portfolio_id].history.append(order_copy)
+
+    async def insert_alert(self, alert: Dict[str, Any]):
+        self.alerts.append(alert)
+
+    async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
+        return self.exchange_configs
+
+    async def insert_system_event(self, event_type: str, target: str, message: str, timestamp: Optional[int] = None, context: Optional[str] = None):
+        ts = timestamp if timestamp is not None else int(time.time() * 1000)
+        self.system_events.append({
+            "event_type": event_type,
+            "target": target,
+            "message": message,
+            "timestamp": ts,
+            "context": context
+        })
+
+    async def get_system_events(self, limit: int = 20) -> List[Dict[str, Any]]:
+        sorted_events = sorted(self.system_events, key=lambda x: x['timestamp'], reverse=True)
+        return sorted_events[:limit]
+
+    async def check_and_report_previous_crash(self, target: str):
+        daemon_events = [e for e in self.system_events if e['target'] == target and e['event_type'] in ('DAEMON_START', 'DAEMON_STOP', 'DAEMON_CRASHED')]
+        if daemon_events:
+            sorted_daemon = sorted(daemon_events, key=lambda x: x['timestamp'], reverse=True)
+            last_event = sorted_daemon[0]
+            if last_event['event_type'] == 'DAEMON_START':
+                crash_ts = last_event['timestamp'] + 1
+                from datetime import datetime
+                last_start_time = datetime.fromtimestamp(last_event['timestamp'] / 1000).strftime('%Y-%m-%d %H:%M:%S')
+                message = f"이전 데몬 프로세스가 정상 종료(DAEMON_STOP) 처리되지 못하고 비정상 종료(크래쉬)되었음을 감지하여 보완 기록합니다. (이전 정상 기동 시각: {last_start_time})"
+                self.system_events.append({
+                    "event_type": "DAEMON_CRASHED",
+                    "target": target,
+                    "message": message,
+                    "timestamp": crash_ts
+                })
+
