@@ -44,6 +44,11 @@
     "ast_hash": "6cfca92dd121f2983dbfc5f88618d3aa",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/scratch/verify_backfill_filter.py": {
+    "mtime": 1780910399.5052624,
+    "ast_hash": "36f1fde19a68358d3aa2469ef6f6f681",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/check_symbol_diff.py": {
     "mtime": 1779926513.4499876,
     "ast_hash": "94e69cb7bf19c5fb7d2374b06a4ef840",
@@ -575,8 +580,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1780900186.4981441,
-    "ast_hash": "b4ddff3450263521ca14f4ecabd95fc7",
+    "mtime": 1780910344.1882,
+    "ast_hash": "9e23eb61dcc7fe95f1b70d76b3f4ba93",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_portfolio.py": {
@@ -890,8 +895,8 @@
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1780901349.3364859,
-    "ast_hash": "6facf469dfb6bdddcc2143dce09ead11",
+    "mtime": 1780909156.51416,
+    "ast_hash": "6ebdc9ddf105f5505e9908a237d60a0a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {

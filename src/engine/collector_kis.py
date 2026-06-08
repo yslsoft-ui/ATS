@@ -431,6 +431,10 @@ class KisCollector(BaseCollector):
                             logger.error(f"[{self.exchange.upper()}] {symbol} 캔들 수치 변환 실패: {val_err}")
                             continue
 
+                        # 거래량이 0인 캔들은 백필 수집 대상에서 제외
+                        if vol == 0.0:
+                            continue
+
                         candle = Candle(
                             exchange=self.exchange,
                             symbol=symbol,
