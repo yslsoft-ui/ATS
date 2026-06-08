@@ -531,7 +531,10 @@ td {
 
 .status-on { background: rgba(76, 175, 80, 0.2); color: #4caf50; border: 1px solid #4caf50; }
 .status-off { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }
-.status-warn { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+.status-warn { background: rgba(255, 75, 75, 0.2); color: #FF4B4B; border: 1px solid #FF4B4B; }
+.status-suspended { background: rgba(245, 158, 11, 0.2); color: #F59E0B; border: 1px solid #F59E0B; }
+.status-neutral { background: rgba(100, 116, 139, 0.2); color: #94A3B8; border: 1px solid #64748B; }
+.status-info { background: rgba(217, 70, 239, 0.2); color: #D946EF; border: 1px solid #D946EF; }
 
 .collector-error {
     margin-top: 10px;

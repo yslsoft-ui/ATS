@@ -2,7 +2,7 @@ from src.engine.utils.telemetry import get_logger
 import time
 from typing import Optional, Callable, Dict, Any, Tuple
 from src.engine.portfolio import PortfolioManager
-from src.database.connection import get_db_conn
+from src.database.repository import BaseTradingRepository
 
 logger = get_logger(__name__)
 
@@ -11,8 +11,9 @@ class ExecutionPipeline:
     전략 신호를 수신하여 리스크 검증, 슬리피지 보정, 포지션 사이징, 알림까지의 전 과정을 총괄하는 파이프라인입니다.
     (Deep Module: 인터페이스는 단순하지만 내부에서 복잡한 실행 로직을 처리)
     """
-    def __init__(self, portfolio_manager: PortfolioManager):
+    def __init__(self, portfolio_manager: PortfolioManager, repository: Optional[BaseTradingRepository] = None):
         self.portfolio_manager = portfolio_manager
+        self.repository = repository or portfolio_manager.repository
         self.broadcast_callback: Optional[Callable] = None
 
     def set_broadcast_callback(self, callback: Callable):
@@ -235,11 +236,6 @@ class ExecutionPipeline:
     async def _save_alert_to_db(self, alert: Dict):
         """알림을 데이터베이스에 영구 저장합니다."""
         try:
-            async with get_db_conn() as db:
-                await db.execute(
-                    "INSERT INTO alerts (exchange, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
-                    (alert['exchange'], alert['code'], alert['price'], alert['msg'], alert['timestamp'])
-                )
-                await db.commit()
+            await self.repository.insert_alert(alert)
         except Exception as e:
             logger.error(f"Alert Save Error: {e}")

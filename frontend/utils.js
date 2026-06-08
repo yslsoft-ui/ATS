@@ -63,7 +63,7 @@ function formatRate(rate) {
  * @param {string} message - 메시지 내용
  * @param {string} type - 알림 타입 ('success', 'error', 'info')
  */
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', autoClose = true) {
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -88,12 +88,37 @@ function showToast(message, type = 'success') {
         font-weight: 600;
         pointer-events: auto;
         min-width: 280px;
+        max-width: 400px;
         opacity: 0;
         transform: translateY(-20px);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 15px;
     `;
     
-    toast.innerText = message;
+    const textSpan = document.createElement('span');
+    textSpan.innerText = message;
+    textSpan.style.flex = '1';
+    toast.appendChild(textSpan);
+
+    const closeToast = () => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(-20px)';
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    if (!autoClose) {
+        const closeBtn = document.createElement('span');
+        closeBtn.innerHTML = '&times;';
+        closeBtn.style.cssText = 'cursor: pointer; font-size: 1.2rem; color: #94A3B8; font-weight: bold; line-height: 1; padding: 2px 5px; transition: color 0.2s;';
+        closeBtn.addEventListener('mouseover', () => closeBtn.style.color = '#F8FAFC');
+        closeBtn.addEventListener('mouseout', () => closeBtn.style.color = '#94A3B8');
+        closeBtn.onclick = closeToast;
+        toast.appendChild(closeBtn);
+    }
+    
     container.appendChild(toast);
     
     toast.offsetHeight; // 리플로우 트리거
@@ -101,11 +126,9 @@ function showToast(message, type = 'success') {
     toast.style.opacity = '1';
     toast.style.transform = 'translateY(0)';
     
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateY(-20px)';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    if (autoClose) {
+        setTimeout(closeToast, 3000);
+    }
 }
 
 /**
@@ -196,6 +219,29 @@ function formatValueByType(val, colSpec, item) {
     }
 }
 
+/**
+ * 타임스탬프 값을 읽기 쉬운 날짜 시간 포맷으로 변환 (밀리초 단위 포함)
+ * @param {number} ts - 타임스탬프 (초 혹은 밀리초)
+ * @returns {string} 포맷팅된 일시 문자열 (YYYY-MM-DD HH:mm:ss.SSS)
+ */
+function formatTimestamp(ts) {
+    if (!ts) return '-';
+    const ms = ts < 10000000000 ? ts * 1000 : ts;
+    const d = new Date(ms);
+    const pad = (n) => String(n).padStart(2, '0');
+    const padMs = (n) => String(n).padStart(3, '0');
+    
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+    const msec = padMs(d.getMilliseconds());
+    
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${msec}`;
+}
+
 // 전역 바인딩
 window.showToast = showToast;
 window.formatValueByType = formatValueByType;
@@ -203,6 +249,7 @@ window.formatPrice = formatPrice;
 window.formatVolume = formatVolume;
 window.formatTooltipVolume = formatTooltipVolume;
 window.formatRate = formatRate;
+window.formatTimestamp = formatTimestamp;
 
 
 

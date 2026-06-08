@@ -42,7 +42,8 @@ class KisCollector(BaseCollector):
     async def _subscribe(self, ws, config: Dict[str, Any]):
         approval_key = await self.cred_provider.get_kis_approval_key()
         for symbol_code in self.available_symbols:
-            subscribe_msg = {
+            # 1. 통합 실시간 체결 구독
+            subscribe_msg_cnt = {
                 "header": {
                     "approval_key": approval_key,
                     "custtype": "P",
@@ -56,8 +57,26 @@ class KisCollector(BaseCollector):
                     }
                 }
             }
-            await ws.send_json(subscribe_msg)
-            await asyncio.sleep(0.1)
+            await ws.send_json(subscribe_msg_cnt)
+            await asyncio.sleep(0.05)
+
+            # 2. 통합 실시간 장운영정보 구독
+            subscribe_msg_mko = {
+                "header": {
+                    "approval_key": approval_key,
+                    "custtype": "P",
+                    "tr_type": "1",
+                    "content-type": "utf-8"
+                },
+                "body": {
+                    "input": {
+                        "tr_id": "H0UNMKO0",  # 국내주식 장운영정보 통합
+                        "tr_key": symbol_code
+                    }
+                }
+            }
+            await ws.send_json(subscribe_msg_mko)
+            await asyncio.sleep(0.05)
 
     def _parse_message(self, msg) -> Optional[Dict]:
         if msg.type != aiohttp.WSMsgType.TEXT:
@@ -97,6 +116,38 @@ class KisCollector(BaseCollector):
                 if len(parts) < 4: return None
 
                 tr_id = parts[1]
+                
+                # 장운영정보 통합 (H0UNMKO0) 실시간 파싱 및 감지
+                if tr_id == 'H0UNMKO0':
+                    try:
+                        all_fields = parts[3].split('^')
+                        if len(all_fields) >= 4:
+                            symbol_code = all_fields[0]
+                            trht_yn = all_fields[1]
+                            susp_reason = all_fields[2].strip()
+                            mkop_cls_code = all_fields[3]
+                            vi_cls_code = all_fields[8] if len(all_fields) > 8 else 'N'
+                            
+                            if trht_yn == 'Y':
+                                self.status = "SUSPENDED"
+                                self.status_reason = f"[{symbol_code}] 거래정지: {susp_reason}"
+                                logger.warning(f"[KIS] {symbol_code} 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code})")
+                            elif vi_cls_code not in ('N', ''):
+                                self.status = "SUSPENDED"
+                                self.status_reason = f"[{symbol_code}] VI 발동 (VI구분: {vi_cls_code})"
+                                logger.warning(f"[KIS] {symbol_code} 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code})")
+                            else:
+                                # 정상 복구
+                                if self.status == "SUSPENDED":
+                                    self.status = "RUNNING"
+                                    self.status_reason = None
+                                    logger.info(f"[KIS] {symbol_code} 거래 정지/VI 해제. RUNNING 복구.")
+                    except Exception as e:
+                        logger.error(f"[KIS] 장운영정보 통합 파싱 에러: {e}")
+                    return None
+
+
+
                 market = 'UN' if tr_id == 'H0UNCNT0' else ('NXT' if tr_id == 'H0NXCNT0' else 'KRX')
 
                 try:
@@ -188,8 +239,7 @@ class KisCollector(BaseCollector):
             logger.error("Failed to get approval key. Retrying in 10s...")
             return False
         return True
-    async def _start_additional_tasks(self, config: Dict[str, Any]):
-        logger.info("[KIS] 추가적인 백그라운드 태스크가 없습니다. (동적 랭킹 수집 루프 제거됨)")
+
 
     async def _handle_connection_error(self, error: Exception):
         if isinstance(error, ValueError):

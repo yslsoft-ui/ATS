@@ -6,9 +6,9 @@ logger = get_logger(__name__)
 from abc import ABC, abstractmethod
 import time
 import asyncio
-from src.database.connection import get_db_conn
 from src.database.retry import with_db_retry
 from src.engine.matching import OrderbookMatchingEngine
+from src.database.repository import BaseTradingRepository, SqliteTradingRepository
 
 @dataclass
 class Position:
@@ -158,13 +158,16 @@ class PortfolioManager:
     """
     여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다.
     """
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, repository: Optional[BaseTradingRepository] = None):
         self.db_path = db_path
+        self.repository = repository or SqliteTradingRepository(db_path=db_path)
         self.portfolios: Dict[str, Portfolio] = {}
         self.exchange_configs: Dict[str, Dict] = {} # [NEW] 거래소별 수수료 등 설정 캐시
         self.executors: Dict[str, OrderExecutor] = {
             'simulation': VirtualOrderExecutorAdapter()
         }
+        self.collector_statuses: Dict[str, Dict[str, Any]] = {}
+        self.broadcast_callback = None
 
     def add_portfolio(self, portfolio: Portfolio):
         self.portfolios[portfolio.id] = portfolio
@@ -236,6 +239,13 @@ class PortfolioManager:
                 
         return results
 
+    async def cancel_all_orders(self, exchange: str):
+        """거래소 정지 상태 진입 시, 해당 거래소의 모든 미체결 주문을 일괄 취소합니다."""
+        logger.warning(f"[PortfolioManager] 거래소 {exchange} 정지 상태 감지: 미체결 주문 일괄 취소를 요청합니다.")
+        # 가상 매칭 엔진의 경우 즉시 전량 체결되므로 미체결 주문 관리가 없으나,
+        # 실거래 API 확장 및 시스템 방어 인터페이스 제공을 위해 로그 및 빈 구조 구현.
+        pass
+
     @with_db_retry()
     async def execute_pipeline_order(self, portfolio_id: str, signal, quantity: float, execution_price: float, orderbook_data: Optional[Dict] = None):
         """
@@ -250,6 +260,22 @@ class PortfolioManager:
         exchange_key = getattr(signal, 'exchange', portfolio.exchange_id)
         if not exchange_key or exchange_key == 'all':
             exchange_key = portfolio.exchange_id
+
+        # 거래소 정지 상태(SUSPENDED) 여부 체크 및 주문 차단
+        status_info = self.collector_statuses.get(exchange_key.lower(), {})
+        if status_info.get('status') == 'SUSPENDED':
+            reason = status_info.get('status_reason', '정지 사유 미지정')
+            logger.warning(f"[PortfolioManager] 주문 전송 차단: 거래소 {exchange_key}가 SUSPENDED 상태입니다. 사유: {reason}")
+            if self.broadcast_callback:
+                await self.broadcast_callback({
+                    "type": "order_blocked",
+                    "portfolio_id": portfolio_id,
+                    "exchange": exchange_key,
+                    "symbol": signal.symbol,
+                    "side": signal.action,
+                    "reason": f"거래소 정지 상태 (사유: {reason})"
+                })
+            return None
             
         exchange_config = self.exchange_configs.get(exchange_key, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
@@ -294,26 +320,20 @@ class PortfolioManager:
             
             logger.info(f"TRADE EXECUTION: {portfolio.name}: {result['side']} {result['symbol']} @ {result['price']:.2f} (Qty: {result['quantity']:.4f})")
             
-            async with get_db_conn(self.db_path) as db:
-                import json
-                await db.execute('''
-                    INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    portfolio_id, 
-                    result['exchange'],
-                    result.get('market', market_val),
-                    getattr(signal, 'strategy_id', ""),
-                    result['symbol'], 
-                    result['side'], 
-                    result['price'], 
-                    result['quantity'], 
-                    result['fee'], 
-                    int(time.time()), 
-                    getattr(signal, 'reason', ""),
-                    json.dumps(result.get('context', {}) or getattr(signal, 'context', {}))
-                ))
-                await db.commit()
+            order_data = {
+                'exchange': result['exchange'],
+                'market': result.get('market', market_val),
+                'strategy_id': getattr(signal, 'strategy_id', ""),
+                'symbol': result['symbol'],
+                'side': result['side'],
+                'price': result['price'],
+                'quantity': result['quantity'],
+                'fee': result['fee'],
+                'timestamp': int(time.time()),
+                'reason': getattr(signal, 'reason', ""),
+                'context': result.get('context', {}) or getattr(signal, 'context', {})
+            }
+            await self.repository.insert_order_history(portfolio_id, order_data)
                 
             await self.save_to_db(portfolio_id)
             return result
@@ -351,113 +371,18 @@ class PortfolioManager:
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return
-
-        async with get_db_conn(self.db_path) as db:
-            # 1. 포트폴리오 기본 정보 저장
-            await db.execute('''
-                INSERT INTO portfolios (id, name, type, exchange_id, initial_cash, cash, strategy_info, duration, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    type = excluded.type,
-                    exchange_id = excluded.exchange_id,
-                    initial_cash = excluded.initial_cash,
-                    cash = excluded.cash,
-                    strategy_info = excluded.strategy_info,
-                    duration = COALESCE(excluded.duration, portfolios.duration),
-                    updated_at = datetime('now')
-            ''', (
-                portfolio.id,
-                portfolio.name,
-                portfolio.portfolio_type,
-                portfolio.exchange_id,
-                portfolio.initial_cash,
-                portfolio.cash,
-                getattr(portfolio, 'strategy_info', ''),
-                getattr(portfolio, 'duration', None)
-            ))
-
-            # 1.5. 거래소별 격리 자금 정보 저장 (portfolio_exchanges)
-            if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
-                for ex_id, ex_cash in portfolio.exchange_cash.items():
-                    await db.execute('''
-                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                        VALUES (?, ?, 10000000.0, ?, datetime('now'))
-                        ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, updated_at = datetime('now')
-                    ''', (portfolio_id, ex_id, ex_cash, ex_cash))
-
-            # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
-            await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (portfolio_id,))
-            for pos in portfolio.positions.values():
-                if pos.quantity > 0:
-                    await db.execute('''
-                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, updated_at)
-                        VALUES (?, ?, ?, ?, ?, datetime('now'))
-                    ''', (portfolio_id, pos.exchange, pos.symbol, pos.quantity, pos.avg_price))
-            
-            await db.commit()
+        await self.repository.save_portfolio(portfolio)
 
     async def load_exchange_configs(self):
         """DB에서 거래소 설정을 로드하여 메모리에 캐싱합니다."""
-        async with get_db_conn(self.db_path) as db:
-            async with db.execute("SELECT * FROM exchanges") as cursor:
-                async for row in cursor:
-                    self.exchange_configs[row['id']] = dict(row)
+        self.exchange_configs = await self.repository.load_exchange_configs()
         logger.info(f"{len(self.exchange_configs)}개의 거래소 설정을 로드했습니다.")
 
     async def load_from_db(self, exclude_types: list = None):
         """DB에서 저장된 포트폴리오 정보를 불러옵니다."""
         await self.load_exchange_configs() # 거래소 설정 먼저 로드
 
-        loaded_portfolios = {}
-        async with get_db_conn(self.db_path) as db:
-            # 1. 포트폴리오 로드
-            query = "SELECT * FROM portfolios"
-            if exclude_types:
-                # 안전한 IN 절 생성
-                placeholders = ",".join(["?"] * len(exclude_types))
-                query += f" WHERE type NOT IN ({placeholders})"
-                cursor = await db.execute(query, exclude_types)
-            else:
-                cursor = await db.execute(query)
-
-            async with cursor:
-                async for row in cursor:
-                    p = Portfolio(
-                        portfolio_id=row['id'], 
-                        name=row['name'], 
-                        initial_cash=row['initial_cash'], 
-                        exchange_id=row['exchange_id'],
-                        portfolio_type=row['type'],
-                        strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
-                    )
-                    p.cash = row['cash']
-                    loaded_portfolios[p.id] = p
-            
-            # 2. 각 포트폴리오의 포지션 및 거래소 격리 자금 로드
-            for pid, p in loaded_portfolios.items():
-                # 2.1. portfolio_exchanges 로드
-                p.exchange_cash = {}
-                async with db.execute("SELECT exchange_id, cash FROM portfolio_exchanges WHERE portfolio_id = ?", (pid,)) as cursor:
-                    async for row in cursor:
-                        p.exchange_cash[row['exchange_id']] = row['cash']
-                
-                # 2.2. positions 로드
-                async with db.execute("SELECT * FROM positions WHERE portfolio_id = ?", (pid,)) as cursor:
-                    async for row in cursor:
-                        ex_val = row['exchange'] if row['exchange'] else 'upbit'
-                        p.positions[(ex_val.lower(), row['symbol'])] = Position(
-                             exchange=ex_val,
-                             symbol=row['symbol'],
-                             quantity=row['quantity'],
-                             avg_price=row['avg_price'],
-                             updated_at=time.time() 
-                        )
-                
-                # 3. 최근 거래 내역 로드 (최근 100건)
-                async with db.execute("SELECT * FROM orders_history WHERE portfolio_id = ? ORDER BY timestamp DESC LIMIT 100", (pid,)) as cursor:
-                    rows = await cursor.fetchall()
-                    p.history = [dict(r) for r in reversed(rows)]
+        loaded_portfolios = await self.repository.load_portfolios(exclude_types=exclude_types)
         
         # 원자적 참조 교체로 메모리 동기화 및 기존 stale 세션 날리기 완수
         self.portfolios = loaded_portfolios

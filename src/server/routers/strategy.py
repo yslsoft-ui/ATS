@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, HTTPException
 from typing import Dict
 from src.engine.strategy import StrategyRegistry
 from src.engine.utils.telemetry import get_logger
+from src.engine.command import UserCommand
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -41,48 +42,53 @@ async def list_strategies(request: Request):
 async def update_strategy_params(strategy_id: str, params: Dict, request: Request):
     """특정 전략의 파라미터를 업데이트하고 파일에 저장합니다."""
     system = request.app.state.system
-    s_id = strategy_id.lower()
-    
-    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
-    current_config['params'].update(params)
-    
-    system.config_manager.update(f"strategies.{s_id}", current_config)
-    await system._on_config_changed(system.config_manager.config)
-    
-    return {"message": f"Strategy {strategy_id} updated and saved", "params": current_config['params']}
+    try:
+        await system.dispatcher.dispatch(
+            UserCommand.STRATEGY_UPDATE_PARAMS,
+            {"strategy_id": strategy_id, "params": params}
+        )
+        await system._on_config_changed(system.config_manager.config)
+        return {"message": f"Strategy {strategy_id} updated and saved", "params": params}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/api/strategies/{strategy_id}")
 async def disable_strategy(strategy_id: str, request: Request):
     """특정 전략을 비활성화하고 파일에 저장합니다."""
     system = request.app.state.system
-    s_id = strategy_id.lower()
-    
-    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
-    current_config['enabled'] = False
-    
-    system.config_manager.update(f"strategies.{s_id}", current_config)
-    await system._on_config_changed(system.config_manager.config)
-    
-    return {"message": f"Strategy {strategy_id} disabled and saved"}
+    try:
+        await system.dispatcher.dispatch(
+            UserCommand.STRATEGY_DISABLE,
+            {"strategy_id": strategy_id}
+        )
+        await system._on_config_changed(system.config_manager.config)
+        return {"message": f"Strategy {strategy_id} disabled and saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/strategies/{strategy_id}/enable")
 async def enable_strategy(strategy_id: str, request: Request):
     """특정 전략을 활성화하고 파일에 저장합니다."""
     system = request.app.state.system
-    s_id = strategy_id.lower()
-    
-    current_config = system.strategy_configs.get(s_id, {"enabled": False, "params": {}})
-    current_config['enabled'] = True
-    
-    system.config_manager.update(f"strategies.{s_id}", current_config)
-    await system._on_config_changed(system.config_manager.config)
-    
-    return {"message": f"Strategy {strategy_id} enabled and saved"}
+    try:
+        await system.dispatcher.dispatch(
+            UserCommand.STRATEGY_ENABLE,
+            {"strategy_id": strategy_id}
+        )
+        await system._on_config_changed(system.config_manager.config)
+        return {"message": f"Strategy {strategy_id} enabled and saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/strategies/restart-daemon")
 async def restart_strategy_daemon(request: Request):
     """전략 엔진 데몬 프로세스 자체를 자가 재기동시킵니다."""
-    publisher = request.app.state.strategy_control_publisher
-    await publisher.publish("strategy_control", {"type": "restart_daemon"})
-    return {"message": "Strategy daemon restart signal published successfully"}
-
+    system = request.app.state.system
+    try:
+        await system.dispatcher.dispatch(
+            UserCommand.STRATEGY_RESTART_DAEMON,
+            {"target": "strategy_daemon"}
+        )
+        return {"message": "Strategy daemon restart signal published successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

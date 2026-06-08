@@ -4,21 +4,22 @@ from typing import List, Dict, Optional, Any
 from src.engine.utils.telemetry import get_logger
 
 logger = get_logger(__name__)
-from src.database.connection import get_db_conn
 from src.engine.candles import CandleGenerator, Candle
 from src.engine.strategy import BaseStrategy, StrategyType, TradeSignal, StrategyResult
 from src.engine.strategy_host import StrategyHost
 from src.engine.market_data_context import MarketDataContext
+from src.database.repository import BaseMarketDataRepository, SqliteMarketDataRepository
 
 # 전략 레지스트리에 등록된 모든 전략을 불러오기 위해 임포트 (loader에 의해 로드됨)
 from src.engine import strategies
 
 class TradeEngine:
-    def __init__(self, exchange: str, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None):
+    def __init__(self, exchange: str, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None, market_data_repo: Optional[BaseMarketDataRepository] = None):
         self.exchange = exchange
         self.symbol = symbol
         self.strategies = strategies
         self.on_status_callback = on_status_callback
+        self.market_data_repo = market_data_repo or SqliteMarketDataRepository()
         
         # 전략들을 호스트로 래핑
         self.hosts = [StrategyHost(s, exchange, symbol, s.params.get('interval', 60)) for s in strategies]
@@ -38,55 +39,63 @@ class TradeEngine:
         self.candle_gen = CandleGenerator(intervals=self.intervals)
 
     async def warm_up(self, db_path: Optional[str] = None, lookback_ticks: int = 1000, lookback_candles: int = 100):
-        """DB에서 과거 캔들 또는 틱 데이터를 읽어와 전략의 상태를 복구합니다."""
+        """리포지토리를 사용해 과거 캔들 또는 틱 데이터를 읽어와 전략의 상태를 복구합니다."""
         try:
-            async with get_db_conn() as db:
-                # 1. 먼저 캔들 테이블에서 데이터 시도
-                has_candle_data = False
-                for interval in self.intervals:
-                    query = "SELECT * FROM candles WHERE exchange = ? AND symbol = ? AND interval = ? ORDER BY timestamp DESC LIMIT ?"
-                    async with db.execute(query, (self.exchange, self.symbol, interval, lookback_candles)) as cursor:
-                        rows = await cursor.fetchall()
-                        if rows:
-                            has_candle_data = True
-                            context = self.contexts[interval]
-                            # 시간순 처리를 위해 역순으로 데이터 컨텍스트에 주입
-                            for j, row in enumerate(reversed(rows)):
-                                candle = Candle(
-                                    exchange=row['exchange'],
-                                    symbol=row['symbol'],
-                                    interval=row['interval'],
-                                    timestamp=row['timestamp'],
-                                    open=row['open'],
-                                    high=row['high'],
-                                    low=row['low'],
-                                    close=row['close'],
-                                    volume=row['volume'],
-                                    is_closed=True
-                                )
-                                context.add_candle(candle)
-                                
-                                # 20건마다 아주 짧게 쉬어줌 (UI 응답성 최우선)
-                                if j % 20 == 0:
-                                    await asyncio.sleep(0.001)
-                    await asyncio.sleep(0.01) # 인터벌 사이 휴식
-                
-                # 2. 캔들 데이터가 없는 경우에만 틱 데이터로 워밍업 (Fallback)
-                if not has_candle_data:
-                    query = "SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?"
-                    async with db.execute(query, (self.exchange, self.symbol, lookback_ticks)) as cursor:
-                        rows = await cursor.fetchall()
-                        for i, row in enumerate(reversed(rows)):
-                            await self.process_tick({
-                                'trade_price': row['trade_price'],
-                                'trade_volume': row['trade_volume'],
-                                'ask_bid': row['ask_bid'],
-                                'trade_timestamp': row['trade_timestamp']
-                            }, None, is_warmup=True)
-                            
-                            # 20건마다 제어권 양보
-                            if i % 20 == 0:
-                                await asyncio.sleep(0.001)
+            # 1. 먼저 캔들 테이블에서 데이터 시도
+            has_candle_data = False
+            for interval in self.intervals:
+                # get_candles 메서드를 사용해 이미 지표 연산까지 처리된 캔들 데이터를 획득
+                candles_data = await self.market_data_repo.get_candles(
+                    exchange=self.exchange,
+                    symbol=self.symbol,
+                    interval=interval,
+                    limit=lookback_candles
+                )
+                if candles_data:
+                    has_candle_data = True
+                    context = self.contexts[interval]
+                    # 시간순(과거 -> 최신) 주입
+                    for j, row in enumerate(candles_data):
+                        # DB에서 반환한 딕셔너리를 Candle 객체로 변환
+                        candle = Candle(
+                            exchange=self.exchange,
+                            symbol=self.symbol,
+                            interval=interval,
+                            timestamp=row['timestamp'],
+                            open=row['open'],
+                            high=row['high'],
+                            low=row['low'],
+                            close=row['close'],
+                            volume=row['volume'],
+                            is_closed=True
+                        )
+                        context.add_candle(candle)
+                        
+                        # 20건마다 아주 짧게 쉬어줌 (UI 응답성 최우선)
+                        if j % 20 == 0:
+                            await asyncio.sleep(0.001)
+                await asyncio.sleep(0.01) # 인터벌 사이 휴식
+            
+            # 2. 캔들 데이터가 없는 경우에만 틱 데이터로 워밍업 (Fallback)
+            if not has_candle_data:
+                trades_data = await self.market_data_repo.get_recent_trades(
+                    exchange=self.exchange,
+                    symbol=self.symbol,
+                    limit=lookback_ticks
+                )
+                if trades_data:
+                    # get_recent_trades는 최신 -> 과거 순이므로 시간순 처리를 위해 reversed 사용
+                    for i, row in enumerate(reversed(trades_data)):
+                        await self.process_tick({
+                            'trade_price': row['trade_price'],
+                            'trade_volume': row['trade_volume'],
+                            'ask_bid': row['ask_bid'],
+                            'trade_timestamp': row['trade_timestamp']
+                        }, None, is_warmup=True)
+                        
+                        # 20건마다 제어권 양보
+                        if i % 20 == 0:
+                            await asyncio.sleep(0.001)
             
             logger.debug(f"{self.symbol} warmed up (Source: {'Candles' if has_candle_data else 'Ticks'}).")
         except Exception as e:

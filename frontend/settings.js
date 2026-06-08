@@ -36,7 +36,7 @@ function renderCollectorStatuses(statuses) {
     // 1. 거래소 수집기 상태 렌더링
     const exchanges = ['upbit', 'bithumb', 'kis'];
     exchanges.forEach(exch => {
-        const status = statuses[exch] || { is_running: false, error: null };
+        const status = statuses[exch] || { is_running: false, error: null, status: 'STOPPED', status_reason: null };
         const isRunning = status.is_running;
         const error = status.error;
 
@@ -44,7 +44,9 @@ function renderCollectorStatuses(statuses) {
         const sidebarStatusEl = document.getElementById(`sidebar-${exch}-status`);
         const cardEl = sidebarStatusEl ? sidebarStatusEl.closest('.compact-status-card') : null;
         if (sidebarStatusEl) {
-            if (isRunning && !error) {
+            if (status.status === 'SUSPENDED') {
+                sidebarStatusEl.style.color = '#F59E0B'; // SUSPENDED: Amber 주황
+            } else if (isRunning && !error) {
                 sidebarStatusEl.style.color = '#4caf50'; // RUNNING: 초록
             } else if (error) {
                 sidebarStatusEl.style.color = '#FF4B4B'; // ERROR: 빨강
@@ -53,8 +55,10 @@ function renderCollectorStatuses(statuses) {
             }
         }
         if (cardEl) {
-            const statusStr = isRunning ? (error ? 'ERROR' : 'RUNNING') : 'STOPPED';
-            cardEl.title = `${exch.toUpperCase()} Collector: ${statusStr}${error ? ` (${error})` : ''}`;
+            let statusStr = isRunning ? (error ? 'ERROR' : 'RUNNING') : 'STOPPED';
+            if (status.status === 'SUSPENDED') statusStr = 'SUSPENDED';
+            const reasonStr = status.status_reason ? ` (${status.status_reason})` : (error ? ` (${error})` : '');
+            cardEl.title = `${exch.toUpperCase()} Collector: ${statusStr}${reasonStr}`;
         }
 
         // 설정 화면의 거래소 수집기 위젯 상태 업데이트
@@ -66,7 +70,12 @@ function renderCollectorStatuses(statuses) {
             exchangeState[exch].isRunning = isRunning;
             btnEl.disabled = false;
 
-            if (isRunning && !error) {
+            if (status.status === 'SUSPENDED') {
+                statusEl.innerText = 'SUSPENDED';
+                statusEl.className = 'status-badge status-suspended';
+                btnEl.innerText = '⏹️ 중단';
+                btnEl.className = 'btn sm danger';
+            } else if (isRunning && !error) {
                 statusEl.innerText = 'RUNNING';
                 statusEl.className = 'status-badge status-on';
                 btnEl.innerText = '⏹️ 중단';
@@ -80,8 +89,13 @@ function renderCollectorStatuses(statuses) {
         }
 
         if (errorEl) {
-            if (error) {
+            if (status.status === 'SUSPENDED' && status.status_reason) {
+                errorEl.innerText = `⚠️ 정지 사유: ${status.status_reason}`;
+                errorEl.style.color = '#F59E0B';
+                errorEl.style.display = 'block';
+            } else if (error) {
                 errorEl.innerText = error;
+                errorEl.style.color = '#FF4B4B';
                 errorEl.style.display = 'block';
                 if (lastSeenErrors[exch] !== error) {
                     showAlert({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${error}`, alert_type: 'error' });
@@ -93,7 +107,7 @@ function renderCollectorStatuses(statuses) {
             }
         }
 
-        if (!isRunning || error) {
+        if (!isRunning || error || status.status === 'SUSPENDED') {
             hasEmergency = true;
         }
     });
@@ -202,9 +216,15 @@ function initCollectorControls() {
         });
     }
 
+    // 최초 1회 즉시 호출
+    if (ViewRouter.getActiveView() === 'settings-view') {
+        updateSystemEvents();
+    }
+
     setInterval(() => {
         if (ViewRouter.getActiveView() === 'settings-view') {
             updateCollectorStatus();
+            updateSystemEvents();
         }
     }, 2000);
 }
@@ -475,4 +495,65 @@ function initAssetSyncControls() {
 }
 
 window.initAssetSyncControls = initAssetSyncControls;
+
+/**
+ * 최근 시스템 운영 이력을 조회하여 테이블에 렌더링합니다.
+ */
+async function updateSystemEvents() {
+    const tbody = document.getElementById('system-events-tbody');
+    if (!tbody) return;
+
+    try {
+        const events = await APIClient.fetchSystemEvents(20);
+        if (!events || events.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #64748B; padding: 20px;">기록된 시스템 이력이 없습니다.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = events.map(event => {
+            const timeStr = formatTimestamp(event.timestamp);
+            let badgeClass = 'status-neutral';
+            let customStyle = '';
+
+            switch (event.event_type) {
+                case 'DAEMON_START':
+                case 'COLLECTOR_START':
+                case 'EXCHANGE_RESUMED':
+                    badgeClass = 'status-on';
+                    break;
+                case 'DAEMON_STOP':
+                case 'COLLECTOR_STOP':
+                    badgeClass = 'status-neutral';
+                    break;
+                case 'EXCHANGE_SUSPENDED':
+                    badgeClass = 'status-suspended';
+                    break;
+                case 'EXCHANGE_ERROR':
+                    badgeClass = 'status-warn';
+                    break;
+                case 'STRATEGY_SESSION_LOAD':
+                    badgeClass = 'status-info';
+                    break;
+            }
+
+            const targetText = event.target ? event.target.toUpperCase() : '-';
+
+            return `
+                <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.08);">
+                    <td style="padding: 10px 8px; font-family: 'Roboto Mono', monospace; font-size: 0.8rem; color: #94A3B8;">${timeStr}</td>
+                    <td style="padding: 10px 8px;">
+                        <span class="status-badge ${badgeClass}" style="font-size: 0.75rem; padding: 2px 6px; ${customStyle}">${event.event_type}</span>
+                    </td>
+                    <td style="padding: 10px 8px; font-weight: bold; color: #F8FAFC; font-size: 0.82rem;">${targetText}</td>
+                    <td style="padding: 10px 8px; color: #E2E8F0; font-size: 0.85rem;">${event.message || '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (e) {
+        console.error("Failed to update system events", e);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #FF4B4B; padding: 20px;">이력을 불러오지 못했습니다.</td></tr>';
+    }
+}
+
+window.updateSystemEvents = updateSystemEvents;
 

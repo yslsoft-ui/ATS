@@ -154,3 +154,41 @@ async def test_portfolio_report_data_generation():
     assert report["cash"] == 1000000
     assert report["summary"]["initial_cash"] == 1000000
     assert isinstance(report["results"], list)
+
+@pytest.mark.asyncio
+async def test_portfolio_manager_suspended_order_blocking():
+    """거래소 상태가 SUSPENDED일 때 주문 전송이 차단되는지 검증합니다."""
+    pm = PortfolioManager(db_path=TEST_DB_PATH)
+    portfolio = Portfolio(portfolio_id="test_suspend_id", name="Suspend Portfolio", initial_cash=1000000, exchange_id="kis")
+    pm.add_portfolio(portfolio)
+    await pm.save_to_db("test_suspend_id")
+    
+    # 1. 거래소 상태를 SUSPENDED로 세팅
+    pm.collector_statuses["kis"] = {
+        "status": "SUSPENDED",
+        "status_reason": "테스트 서킷브레이크",
+        "is_running": True
+    }
+    
+    # 콜백 리스너 설정하여 차단 신호 감지 검증
+    blocked_event_received = False
+    async def dummy_callback(event):
+        nonlocal blocked_event_received
+        if event.get("type") == "order_blocked":
+            blocked_event_received = True
+            
+    pm.broadcast_callback = dummy_callback
+    
+    # 2. 주문 신호 생성 (kis)
+    signal = TradeSignal(exchange="kis", symbol="005930", action="BUY", price=70000, reason="Test", interval=60)
+    
+    # 3. 주문 실행 시도 -> 차단되어 None이 반환되어야 함
+    result = await pm.execute_pipeline_order(
+        portfolio_id="test_suspend_id",
+        signal=signal,
+        quantity=10,
+        execution_price=70000
+    )
+    
+    assert result is None
+    assert blocked_event_received is True

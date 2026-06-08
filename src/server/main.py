@@ -86,6 +86,8 @@ async def zmq_listener_loop():
                             
                         system.collector_statuses[exch] = {
                             "is_running": current_running,
+                            "status": data.get('status', 'STOPPED'),
+                            "status_reason": data.get('status_reason', None),
                             "error": data.get('error', None)
                         }
                 elif data.get('type') == 'queue_status':
@@ -97,7 +99,7 @@ async def zmq_listener_loop():
                     }
 
                 # 실시간 상태 패킷 브로드캐스트 호출
-                if data.get('type') in ['collector_status', 'queue_status']:
+                if data.get('type') in ['collector_status', 'queue_status', 'system_event']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -168,9 +170,19 @@ async def zmq_listener_loop():
 async def startup_event():
     # TradingSystem 기동 (db_writer 및 수집기는 제외)
     await system.boot()
+    # 웹서버 기동 이력 적재
+    try:
+        await system.repository.check_and_report_previous_crash('web_server')
+        await system.repository.insert_system_event('DAEMON_START', 'web_server', '웹 API 서버 기동 완료')
+    except Exception as e:
+        logger.error(f"Failed to insert web server startup event: {e}")
     # ZMQ 제어 Publisher 생성
     app.state.control_publisher = EventBusPublisher("collector_control")
     app.state.strategy_control_publisher = EventBusPublisher("strategy_control")
+    system.dispatcher.set_publishers(
+        control_publisher=app.state.control_publisher,
+        strategy_control_publisher=app.state.strategy_control_publisher
+    )
     # ZMQ 구독 비동기 루프 기동
     app.state.zmq_loop_task = asyncio.create_task(zmq_listener_loop())
     logger.info("시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다. (Web-only + ZMQ Listener)")
@@ -191,6 +203,11 @@ async def shutdown_event():
     if hasattr(app.state, 'strategy_control_publisher'):
         app.state.strategy_control_publisher.close()
         logger.info("[Web Server] ZMQ strategy control publisher closed.")
+    # 웹서버 종료 이력 적재
+    try:
+        await system.repository.insert_system_event('DAEMON_STOP', 'web_server', '웹 API 서버 안전 종료 완료')
+    except Exception as e:
+        logger.error(f"Failed to insert web server shutdown event: {e}")
     await system.shutdown()
     logger.info("Shutdown complete.")
 

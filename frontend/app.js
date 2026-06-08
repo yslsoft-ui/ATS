@@ -105,6 +105,28 @@ async function loadMoreHistory() {
 
 // --- 실시간 캔들 생성 및 업데이트 로직 (PUSH) ---
 function processTick(tick) {
+    if (tick.type === 'system_event') {
+        const isErrorOrSuspended = tick.event_type.includes('ERROR') || tick.event_type.includes('SUSPENDED');
+        const alertType = isErrorOrSuspended ? 'error' : 'success';
+        
+        let displayMsg = `[${tick.event_type}] ${tick.message}`;
+        if (tick.event_type === 'EXCHANGE_SUSPENDED') {
+            displayMsg = `⚠️ 시장 정지 감지: ${tick.message}`;
+        } else if (tick.event_type === 'EXCHANGE_RESUMED') {
+            displayMsg = `🚀 시장 정상 복구: ${tick.message}`;
+        }
+        
+        showToast(displayMsg, alertType, !isErrorOrSuspended);
+
+        // 설정 탭이 활성화되어 있다면 테이블 즉시 갱신
+        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'settings-view') {
+            if (typeof updateSystemEvents === 'function') {
+                updateSystemEvents();
+            }
+        }
+        return;
+    }
+
     if (tick.type === 'collector_status') {
         const current = { ...Store.get('collectorStatuses') };
         current[tick.exchange] = {

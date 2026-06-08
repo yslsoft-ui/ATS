@@ -42,6 +42,14 @@ class TradingSystem:
         # 컴포넌트 초기화 - 주입된 DB 경로 관통 주입
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
         self.execution_pipeline = ExecutionPipeline(self.portfolio_manager) # [NEW]
+        
+        # 사용자 명령 디스패처 초기화 (의존성 분리 주입)
+        from src.engine.command import UserCommandDispatcher
+        self.dispatcher = UserCommandDispatcher(
+            repository=self.repository,
+            config_manager=self.config_manager,
+            portfolio_manager=self.portfolio_manager
+        )
         self.cred_provider = CredentialProvider(self.config_manager.config)
         
         # 실시간 가격 캐시 [NEW]

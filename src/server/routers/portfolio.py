@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
+from src.engine.command import UserCommand
 from datetime import datetime
 import aiohttp
 import asyncio
@@ -58,307 +59,55 @@ async def get_portfolio(request: Request, portfolio_id: str = "default"):
 async def start_portfolio_session(req: StartPortfolioRequest, request: Request):
     """새로운 실시간 모의투자 세션을 시작합니다."""
     system = request.app.state.system
-    
-    # 1. 기존 활성 모의투자 세션이 있다면 자동 종료 처리
-    active_p = system.portfolio_manager.get_active_simulation_portfolio()
-    if active_p:
-        try:
-            logger.info(f"기존 활성화된 모의투자 세션 종료 처리 중: {active_p.id}")
-            await _end_portfolio_session_internal(active_p.id, system)
-        except Exception as e:
-            logger.error(f"기존 활성 세션 자동 종료 중 에러: {e}")
-            
-    # 2. 신규 포트폴리오 생성 및 거래소별 자금 분배
-    portfolio_id = f"simulation_{int(time.time())}"
-    p_name = f"실시간 모의투자 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
-    initial_cash_input = req.initial_cash
-    exchange_cash_map = {}
-    total_cash = 0.0
-
-    enabled_exchanges = []
-    exchanges_config = system.config_manager.get('exchanges', {})
-    for ex_id, exch_config in exchanges_config.items():
-        if exch_config.get('enabled', True):
-            enabled_exchanges.append(ex_id.lower())
-            
-    if not enabled_exchanges:
-        enabled_exchanges = ['upbit']
-
-    if isinstance(initial_cash_input, dict):
-        for ex, cash_val in initial_cash_input.items():
-            ex_lower = ex.lower()
-            if ex_lower in enabled_exchanges:
-                val = float(cash_val)
-                exchange_cash_map[ex_lower] = val
-                total_cash += val
-        
-        if not exchange_cash_map:
-            total_cash = 30000000.0
-            each_cash = total_cash / len(enabled_exchanges)
-            exchange_cash_map = {ex: each_cash for ex in enabled_exchanges}
-    else:
-        total_cash = float(initial_cash_input)
-        each_cash = total_cash / len(enabled_exchanges)
-        exchange_cash_map = {ex: each_cash for ex in enabled_exchanges}
-
-    from src.engine.portfolio import Portfolio
-    p = Portfolio(
-        portfolio_id=portfolio_id,
-        name=p_name,
-        initial_cash=total_cash,
-        exchange_id='all',
-        portfolio_type='simulation'
-    )
-    p.cash = total_cash
-    p.exchange_cash = exchange_cash_map
-    
-    # 4. 선택 전략 메타 정보 기재
-    meta_info = {
-        "applied_strategies": req.strategies,
-        "initial_cash": req.initial_cash
-    }
-    p.strategy_info = json.dumps(meta_info)
-    
-    # 5. 메모리 등록 및 DB 영구 저장
-    system.portfolio_manager.add_portfolio(p)
-    await system.portfolio_manager.save_to_db(portfolio_id)
-    
-    # ZMQ IPC 메시지 발행
-    strategy_pub = getattr(request.app.state, 'strategy_control_publisher', None)
-    if strategy_pub:
-        try:
-            msg = {
-                "type": "update_portfolio",
-                "portfolio_id": portfolio_id
+    try:
+        res = await system.dispatcher.dispatch(
+            UserCommand.PORTFOLIO_START,
+            {
+                "initial_cash": req.initial_cash,
+                "strategies": req.strategies
             }
-            await strategy_pub.publish("strategy_control", msg)
-            logger.info(f"[Web Portfolio Router] ZMQ strategy control message published: {msg}")
-        except Exception as e:
-            logger.error(f"[Web Portfolio Router] Failed to publish ZMQ message: {e}")
-
-    logger.info(f"새 실시간 모의투자 세션이 성공적으로 시작되었습니다: {portfolio_id}")
-    return {"status": "success", "portfolio_id": portfolio_id, "name": p_name}
+        )
+        return {"status": "success", "portfolio_id": res["portfolio_id"], "name": res["name"]}
+    except Exception as e:
+        logger.error(f"Start portfolio session error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/portfolio/{portfolio_id}/end")
 async def end_portfolio_session(portfolio_id: str, request: Request):
     """보유 포지션 청산 없이 실시간 모의투자 세션을 마감(동결) 처리합니다."""
     system = request.app.state.system
     try:
-        await _end_portfolio_session_internal(portfolio_id, system)
-        
-        # ZMQ IPC 메시지 발행
-        strategy_pub = getattr(request.app.state, 'strategy_control_publisher', None)
-        if strategy_pub:
-            try:
-                msg = {
-                    "type": "update_portfolio",
-                    "portfolio_id": portfolio_id
-                }
-                await strategy_pub.publish("strategy_control", msg)
-                logger.info(f"[Web Portfolio Router] ZMQ strategy control message published: {msg}")
-            except Exception as e:
-                logger.error(f"[Web Portfolio Router] Failed to publish ZMQ message: {e}")
-
+        await system.dispatcher.dispatch(
+            UserCommand.PORTFOLIO_END,
+            {"portfolio_id": portfolio_id}
+        )
         return {"status": "success", "message": "모의투자 세션이 정상적으로 마감되었습니다."}
     except Exception as e:
         logger.error(f"End portfolio session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-async def _end_portfolio_session_internal(portfolio_id: str, system):
-    """모의투자 마감 내부 공통 처리 메서드 (미실현 평가가 박제)"""
-    portfolio = system.portfolio_manager.portfolios.get(portfolio_id)
-    if not portfolio:
-        raise Exception("Portfolio not found")
-        
-    # 1. 각 종목별 최종 평가가(현재 실시간 시세) 산출
-    current_prices = await system.portfolio_manager.get_portfolio_current_prices(portfolio_id, system)
-
-    # 2. 누적 수수료 및 거래 건수 집계
-    async with get_db_conn() as db:
-        async with db.execute("SELECT COUNT(*), SUM(fee) FROM orders_history WHERE portfolio_id = ?", (portfolio_id,)) as cursor:
-            row = await cursor.fetchone()
-            trade_count = row[0] if row else 0
-            total_fee = row[1] if row and row[1] is not None else 0.0
-
-    # 3. 최종 평가 금액 및 메타데이터 구성
-    total_value = portfolio.get_total_value(current_prices)
-    
-    meta = {}
-    if portfolio.strategy_info:
-        try:
-            meta = json.loads(portfolio.strategy_info)
-        except Exception:
-            pass
-            
-    meta["final_prices"] = current_prices
-    meta["summary"] = {
-        "initial_cash": portfolio.initial_cash,
-        "final_value": total_value,
-        "profit": total_value - portfolio.initial_cash,
-        "roi": round(((total_value - portfolio.initial_cash) / portfolio.initial_cash * 100), 2) if portfolio.initial_cash > 0 else 0.0,
-        "fee": round(total_fee, 2),
-        "trade_count": trade_count
-    }
-    
-    # 4. 타입 변경 및 저장
-    portfolio.strategy_info = json.dumps(meta)
-    portfolio.portfolio_type = 'simulation_ended'
-    
-    # DB 영구 저장
-    await system.portfolio_manager.save_to_db(portfolio_id)
-
-@router.get("/trades")
-async def get_trades(exchange: str = "upbit", symbol: str = "BTC", limit: int = 10):
-    """최근 체결 데이터를 DB에서 조회하여 반환합니다."""
-    async with get_db_conn() as db:
-        async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (exchange, symbol, limit)) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(r) for r in rows]
 
 @router.post("/api/portfolio/{portfolio_id}/panic")
 async def panic_sell(portfolio_id: str, request: Request):
     """모든 포지션을 즉시 시장가 청산하고 비상 정지합니다."""
     system = request.app.state.system
     try:
-        portfolio = system.portfolio_manager.portfolios.get(portfolio_id)
-        if not portfolio:
-            raise HTTPException(status_code=404, detail="Portfolio not found")
-
-        # 1. 청산할 종목들 추출
-        positions_to_sell = [(pos.exchange, pos.symbol, pos.quantity) 
-                             for pos in portfolio.positions.values() if pos.quantity > 0]
-        if not positions_to_sell:
-            return {"status": "success", "message": "청산할 포지션이 없습니다.", "data": []}
-
-        # 2. 실시간 가격 구성 (Upbit는 API 호출, KIS 등은 최신 캔들 종가 사용)
-        prices = {}
-        upbit_symbols = [sym for ex, sym, qty in positions_to_sell if ex.lower() == 'upbit']
-        
-        # Upbit 가격 조회
-        if upbit_symbols:
-            try:
-                formatted = [f"KRW-{s}" if not s.startswith("KRW-") else s for s in upbit_symbols]
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(f"https://api.upbit.com/v1/ticker?markets={','.join(formatted)}") as resp:
-                        if resp.status == 200:
-                            tickers = await resp.json()
-                            for t in tickers:
-                                clean_sym = t['market'].replace("KRW-", "")
-                                prices[('upbit', clean_sym)] = float(t['trade_price'])
-            except Exception as e:
-                logger.error(f"Failed to fetch upbit tickers for panic sell: {e}")
-
-        # KIS 및 기타 가격 조회 (DB 캔들 조회)
-        async with get_db_conn() as db:
-            for ex, sym, qty in positions_to_sell:
-                ex_key = ex.lower()
-                if ex_key != 'upbit':
-                    try:
-                        async with db.execute(
-                            "SELECT close FROM candles WHERE exchange = ? AND symbol = ? ORDER BY timestamp DESC LIMIT 1",
-                            (ex_key, sym)
-                        ) as cursor:
-                            row = await cursor.fetchone()
-                            if row:
-                                prices[(ex_key, sym)] = row['close']
-                            else:
-                                pos_key = (ex_key, sym)
-                                prices[(ex_key, sym)] = portfolio.positions[pos_key].avg_price
-                    except Exception as e:
-                        logger.error(f"Failed to query panic sell price for {ex_key}:{sym}: {e}")
-                        pos_key = (ex_key, sym)
-                        prices[(ex_key, sym)] = portfolio.positions[pos_key].avg_price
-                else:
-                    if ('upbit', sym) not in prices:
-                        prices[('upbit', sym)] = portfolio.positions[('upbit', sym)].avg_price
-
-        # 3. 각 종목별 청산 실행
-        results = []
-        executor = system.portfolio_manager.executors.get('simulation')
-        for ex, symbol, qty in positions_to_sell:
-            ex_key = ex.lower()
-            price = prices.get((ex_key, symbol), 0)
-            if price == 0:
-                continue
-            
-            res = await executor.execute_order(
-                exchange=ex,
-                symbol=symbol,
-                side='SELL',
-                quantity=qty,
-                trade_price=price
-            )
-            if res:
-                results.append(res)
-                # 1. 포트폴리오 상태 갱신
-                portfolio.update_position(
-                    exchange=res['exchange'],
-                    symbol=res['symbol'],
-                    side=res['side'],
-                    price=res['price'],
-                    quantity=res['quantity'],
-                    fee=res['fee'],
-                    strategy_id="panic_sell",
-                    reason="긴급 손절 (Panic Sell)"
-                )
-                
-                # 2. DB 거래 내역 저장
-                async with get_db_conn() as db:
-                    await db.execute('''
-                        INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        portfolio_id, 
-                        res['exchange'],
-                        "panic_sell", 
-                        res['symbol'], 
-                        res['side'], 
-                        res['price'], 
-                        res['quantity'], 
-                        res['fee'], 
-                        int(time.time()), 
-                        "긴급 손절 (Panic Sell)", 
-                        "{}"
-                    ))
-                    await db.commit()
-
-                # 3. 긴급 알림 브로드캐스트
-                alert = {
-                    "type": "alert",
-                    "alert_type": "panic",
-                    "exchange": ex,
-                    "code": symbol,
-                    "price": price,
-                    "msg": f"🚨 [긴급손절] {symbol} ({ex}) 전량 매도 완료"
-                }
-                await manager.broadcast_global(alert)
-                asyncio.create_task(system.save_alert(alert))
-
-        # 4. 변경된 포트폴리오 상태 DB 영구 저장
-        await system.portfolio_manager.save_to_db(portfolio_id)
-
-        # ZMQ IPC 메시지 발행
-        strategy_pub = getattr(request.app.state, 'strategy_control_publisher', None)
-        if strategy_pub:
-            try:
-                msg = {
-                    "type": "update_portfolio",
-                    "portfolio_id": portfolio_id
-                }
-                await strategy_pub.publish("strategy_control", msg)
-                logger.info(f"[Web Portfolio Router] ZMQ strategy control message published: {msg}")
-            except Exception as e:
-                logger.error(f"[Web Portfolio Router] Failed to publish ZMQ message: {e}")
-
-        return {"status": "success", "message": f"{len(results)}개 종목 청산 완료", "data": results}
-
+        res = await system.dispatcher.dispatch(
+            UserCommand.PORTFOLIO_PANIC,
+            {"portfolio_id": portfolio_id}
+        )
+        return {"status": "success", "message": res.get("message", "청산 완료"), "data": res.get("data", [])}
     except Exception as e:
         logger.error(f"Panic Sell Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    except Exception as e:
-        logger.error(f"Panic Sell Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/trades")
+async def get_trades(request: Request, exchange: str = "upbit", symbol: str = "BTC", limit: int = 10):
+    """최근 체결 데이터를 DB에서 조회하여 반환합니다."""
+    system = request.app.state.system
+    async with get_db_conn(system.portfolio_manager.db_path) as db:
+        async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (exchange, symbol, limit)) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(r) for r in rows]
 
 
 # --- 🔐 Upbit Real-Time Wallet Assets API Integration ---

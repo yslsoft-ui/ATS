@@ -370,6 +370,19 @@ async def init_db(db_path: str = None):
             )
         ''')
 
+        # 11. system_events
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS system_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                target TEXT NOT NULL,
+                message TEXT,
+                timestamp INTEGER NOT NULL,
+                context TEXT
+            )
+        ''')
+        await ensure_column(db, 'system_events', 'context', 'TEXT')
+
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
@@ -379,6 +392,8 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_real_orders_exch_sym ON real_orders (exchange, symbol)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades (trade_timestamp)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_timestamp ON candles (timestamp)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_system_events_timestamp ON system_events (timestamp DESC)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_system_events_type ON system_events (event_type)')
         
         await db.commit()
     

@@ -68,6 +68,8 @@ class BaseCollector(ABC):
         self.total_processed_count = 0
         self.last_error: Optional[str] = None
         self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
+        self.status = "STOPPED"
+        self.status_reason: Optional[str] = None
         
     @property
     @abstractmethod
@@ -79,10 +81,14 @@ class BaseCollector(ABC):
         if self.is_running:
             return
         self.is_running = True
+        self.status = "RUNNING"
+        self.status_reason = None
         self.task = asyncio.create_task(self.run(config))
 
     async def stop(self):
         self.is_running = False
+        self.status = "STOPPED"
+        self.status_reason = None
         if self._flush_task and not self._flush_task.done():
             self._flush_task.cancel()
         if self.task:

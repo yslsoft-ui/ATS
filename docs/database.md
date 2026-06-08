@@ -168,7 +168,44 @@
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 등록 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 상태 갱신 일시 |
 
+### 1.11. system_events (시스템 및 데몬 운영 이력)
+데몬 및 웹서버의 시작/종료, 거래소 수집기의 기동/중단, 사용자 수동 조작 요청, 거래소 서킷브레이커 발동 및 크래쉬 복구 감지 등 시스템 전반의 운영 상태와 이력을 영속화합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 이벤트 고유 번호 |
+| **event_type** | TEXT | NOT NULL | 이벤트 유형분류 (아래 참조) |
+| **target** | TEXT | NOT NULL | 이벤트 대상 식별자 (예: `collector_daemon`, `kis` 등) |
+| **message** | TEXT | - | 이벤트 상세 로그 메시지 |
+| **timestamp** | INTEGER | NOT NULL | 로컬 밀리초 타임스탬프 (ms) |
+| **context** | TEXT | - | 이벤트 발생 당시의 맥락 데이터 및 고유 `command_id` 정보 (JSON 스트링) |
+
+#### 주요 이벤트 유형 (event_type) 및 구분 기준:
+- **사용자 조작 감사 로그 (User Command Audit Loop)**
+  - 각 사용자 조작 요청 시 `_REQUEST` 이벤트 선행 로깅 -> 작업 시도 -> 성공 시 `_SUCCESS`, 실패 시 `_FAILED` 이벤트가 `context`에 동일한 `command_id`(UUID)를 공유하며 한 쌍으로 기록됩니다.
+  - `COLLECTOR_START_REQUEST` / `COLLECTOR_START_SUCCESS` / `COLLECTOR_START_FAILED`: 수집기 기동 제어
+  - `COLLECTOR_STOP_REQUEST` / `COLLECTOR_STOP_SUCCESS` / `COLLECTOR_STOP_FAILED`: 수집기 중단 제어
+  - `DAEMON_RESTART_SIGNAL_REQUEST` / `DAEMON_RESTART_SIGNAL_SUCCESS` / `DAEMON_RESTART_SIGNAL_FAILED`: 수집기/전략 데몬 자가 재기동 신호 송신 제어
+  - `STRATEGY_ENABLE_REQUEST` / `STRATEGY_ENABLE_SUCCESS` / `STRATEGY_ENABLE_FAILED`: 특정 전략 활성화 제어
+  - `STRATEGY_DISABLE_REQUEST` / `STRATEGY_DISABLE_SUCCESS` / `STRATEGY_DISABLE_FAILED`: 특정 전략 비활성화 제어
+  - `STRATEGY_UPDATE_PARAMS_REQUEST` / `STRATEGY_UPDATE_PARAMS_SUCCESS` / `STRATEGY_UPDATE_PARAMS_FAILED`: 전략 설정 파라미터 업데이트 제어
+  - `STRATEGY_SESSION_START_REQUEST` / `STRATEGY_SESSION_START_SUCCESS` / `STRATEGY_SESSION_START_FAILED`: 모의투자 세션 시작 제어
+  - `STRATEGY_SESSION_END_REQUEST` / `STRATEGY_SESSION_END_SUCCESS` / `STRATEGY_SESSION_END_FAILED`: 모의투자 세션 종료 제어
+  - `STRATEGY_SESSION_PANIC_REQUEST` / `STRATEGY_SESSION_PANIC_SUCCESS` / `STRATEGY_SESSION_PANIC_FAILED`: 포지션 긴급 전량 매도 및 비상 정지 제어
+- **데몬 자동/완료 상태**
+  - `DAEMON_START`: 데몬 프로세스 기동 완료 (프로그램 수정/배포 재시작 포함)
+  - `DAEMON_STOP`: 데몬 프로세스의 안전 종료 완료 (Graceful Shutdown)
+  - `COLLECTOR_START`: 거래소별 수집 모듈 실시간 기동 시작
+  - `COLLECTOR_STOP`: 거래소별 수집 모듈 기동 중단
+- **크래쉬 감지**
+  - `DAEMON_CRASHED`: 데몬 재기동 시점에 이전 실행의 정상 종료 이력(`DAEMON_STOP`)이 존재하지 않아 비정상 종료(크래쉬)가 발생했음을 자동 감지하고 보완 등록한 이력
+- **시장/거래소 상태**
+  - `EXCHANGE_SUSPENDED`: 거래소 서킷브레이크/거래정지 상태 감지
+  - `EXCHANGE_RESUMED`: 거래정지 상태 해제 및 정상 수집 복구
+  - `EXCHANGE_ERROR`: 수집/통신 중 발생한 치명적 API 오류
+
 ---
+
 
 ## 2. 데이터베이스 인덱스 (Database Indexes)
 

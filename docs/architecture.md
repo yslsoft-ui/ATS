@@ -170,6 +170,12 @@ sequenceDiagram
 - **무한 스크롤 (지연 로딩)**: 프론트엔드 차트(Lightweight Charts)의 왼쪽 과거 끝단 도달 시, 백엔드에 과거 30분 단위 범위의 체결 데이터를 비동기로 추가 호출하는 지연 로딩(Lazy Loading) 방식으로 구동하여 브라우저의 초기 로딩 부하를 줄입니다.
 - **실시간 롤윈도우 상태 보존**: 캔들 마감 시 메모리 절약을 위해 기본 500개로 캔들을 슬라이싱(`slice(-500)`)하여 유지하되, 사용자가 과거 데이터를 스크롤하여 탐색하는 중(AutoScroll OFF / Explorer Mode ON)에는 실시간 틱 유입으로 인한 과거 데이터 유실(Slicing)을 우회하는 예외 처리를 적용했습니다.
 
+### 3.5. 사용자 명령 디스패처 및 감사 로그 (UserCommandDispatcher & Audit Log)
+- **느슨한 결합 (Loose Coupling)**: FastAPI 웹 라우터(프론트엔드 API 진입점)와 핵심 도메인 모델(포트폴리오 관리자, ZMQ 제어 버스 등) 간의 직접적인 결합을 해제하기 위해 커맨드 패턴 기반의 `UserCommandDispatcher`를 도입했습니다.
+- **단일 통제 진입점**: 모든 사용자 조작 액션(수집기 시작/중지, 전략 설정 갱신, 모의투자 세션 시작/종료/긴급 매도 등)은 `UserCommand` Enum 형태로 정의되며 `dispatch(command, payload)` 단일 메서드를 통해서만 전달됩니다.
+- **감사 로그 시퀀스**: 명령 실행 시 `_REQUEST` 감사 로그를 데이터베이스에 즉각 선행 기록하고, 매핑된 비즈니스 핸들러(`handlers` 테이블)를 거쳐 성공 시 `_SUCCESS`, 실패 시 `_FAILED` 감사 로그를 자동으로 연계 적재합니다.
+- **추적성 (Traceability)**: 개별 유저 액션이 기동될 때 생성되는 고유 `command_id`(UUID)를 `system_events` 테이블의 `context` 컬럼(JSON)에 박제하여, 하나의 요청으로 발생한 요청-성공-실패 생명주기 전체를 완벽히 역추적할 수 있습니다.
+
 ---
 
 ## 4. 프로젝트 디렉토리 구조 (Directory Structure)

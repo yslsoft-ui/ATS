@@ -143,6 +143,11 @@ const APIClient = (() => {
         fetchCollectorStatus: () => _fetchAPI('/collector/status'),
 
         /**
+         * 최근의 시스템 운영 및 시장정지 이력 목록을 반환합니다.
+         */
+        fetchSystemEvents: (limit = 20) => _fetchAPI(`/collector/system-events?limit=${limit}`),
+
+        /**
          * 특정 거래소의 수집기 제어 (start / stop)
          */
         controlCollector: (exchange, action) => 
