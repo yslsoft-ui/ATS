@@ -176,6 +176,22 @@ sequenceDiagram
 - **감사 로그 시퀀스**: 명령 실행 시 `_REQUEST` 감사 로그를 데이터베이스에 즉각 선행 기록하고, 매핑된 비즈니스 핸들러(`handlers` 테이블)를 거쳐 성공 시 `_SUCCESS`, 실패 시 `_FAILED` 감사 로그를 자동으로 연계 적재합니다.
 - **추적성 (Traceability)**: 개별 유저 액션이 기동될 때 생성되는 고유 `command_id`(UUID)를 `system_events` 테이블의 `context` 컬럼(JSON)에 박제하여, 하나의 요청으로 발생한 요청-성공-실패 생명주기 전체를 완벽히 역추적할 수 있습니다.
 
+### 3.6. 머신러닝 데이터 레이어 및 변이 컴파일러 (Dataset Exporter & Feature Builder)
+전략 파라미터의 변이 이력(DAG)과 실거래 성과를 결합하여 머신러닝 학습 모델로 변환하는 결정론적(Deterministic) 데이터 파이프라인입니다.
+* **이벤트 버퍼링 및 Monotonic성 보장 (`EventBuffer`)**: 
+  - 실시간으로 발생하는 전략 변이 및 성과 이벤트를 인메모리 버퍼에 락(Lock)을 획득하여 단조 증가(Monotonic) 시퀀스로 수집합니다.
+  - 동일 밀리초 내 다중 이벤트 충돌을 차단하기 위해 단조 증가 타임스탬프와 마이크로 시퀀스 카운터를 인젝션한 `commit_timestamp`를 사용해 완전한 Total Ordering을 보장합니다.
+* **Deterministic DAG Rebuilder 및 원자적 영속화 (`DatasetExporter`)**:
+  - 배치 동기화 시점에 4단계 정렬 규칙(`created_at` → `event_priority` → `global_monotonic_id` → `commit_timestamp`)에 따라 이벤트를 엄격히 정렬하고 복합 키(`node_hash`, `event_type`, `timestamp_bucket`) 기반으로 멱등하게 병합하여 `mutation_graph.jsonl`에 기록합니다.
+  - 디스크 쓰기 병목이나 프로세스 급사 시 데이터 유실/오염을 원천 차단하기 위해 임시 파일(`.tmp`) 쓰기 → `fsync` → `rename` 방식을 적용하고, 이종 파일시스템 이동 시 `Copy-Verify-Delete` Fallback을 수행합니다.
+* **3-Tier Outcome 모델 적용**:
+  - 학습 모델의 레이블 오염(Label Leakage) 및 인과적 혼동(Causal Confusion)을 방지하고자, 노드의 성과 유형을 실제 거래 성과(OBSERVED), 가상 추적 시뮬레이션 성과(ESTIMATED), 미관측 성과(MASKED)로 구분하여 각각 다른 Label Space 및 ROI 필드에 매핑합니다.
+* **온디맨드 피처 컴파일 및 버전 캐싱 (`FeatureBuilder`)**:
+  - Raw JSONL 데이터를 바탕으로 O(N) parent traversal을 수행하여 파생 피처(`parent_roi`, `historical_roi_trend`, `parent_param_deltas`)를 런타임에 동적으로 계산합니다.
+  - 중복 연산을 제거하기 위해 LRU 캐시를 활용하되, 스냅샷 갱신 시 캐시 무효화(Invalidation)를 보장하기 위해 캐시 키에 `dataset_snapshot_id`를 전역 버전 토큰으로 바인딩하고 `visited` 셋을 활용해 무한 루프(Cycle) 유입을 DFS 가드로 이중 방어합니다.
+* **모델 뷰 분리 (`DatasetLoader`)**:
+  - 가공된 파생 피처들을 Tabular(Scikit-learn/XGBoost 등), Sequence(Time-series 모델), Graph(PyG Node/Edge List) 등 다양한 머신러닝 학습 요건에 맞게 즉시 변환해주는 어댑터 역할을 수행합니다.
+
 ---
 
 ## 4. 프로젝트 디렉토리 구조 (Directory Structure)
