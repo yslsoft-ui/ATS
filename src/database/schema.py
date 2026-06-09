@@ -503,6 +503,29 @@ async def init_db(db_path: str = None):
             )
         ''')
 
+        # 19. girs_shadow_metrics [NEW]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp REAL NOT NULL,
+                proposal_id TEXT,
+                strategy_id TEXT,
+                model_risk_score REAL,
+                fallback_risk_score REAL,
+                final_promotion_score REAL,
+                shadow_risk_score REAL,
+                replay_drift REAL,
+                correction_active INTEGER NOT NULL,
+                operation_mode TEXT,
+                model_version TEXT,
+                scaler_version TEXT,
+                strategy_version_id INTEGER,
+                simulation_session_id TEXT,
+                decision_type TEXT,
+                blocked_reason TEXT
+            )
+        ''')
+
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
@@ -519,6 +542,7 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_market_regime_sum ON market_regime_summaries (symbol, timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_prop_group ON strategy_proposals (proposal_group_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id ON proposal_evaluations (proposal_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_girs_shadow_metrics_time ON girs_shadow_metrics (timestamp DESC)')
 
         
         await db.commit()

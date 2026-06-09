@@ -7,6 +7,8 @@ from src.engine.backtest import BacktestEngine
 from src.engine.utils.telemetry import get_logger
 from src.database.repository import SqliteTradingRepository
 from src.engine.diversity_analyzer import get_combined_lambda_boost
+from src.engine.girs_types import CandidateProposal, FeatureSnapshot
+from src.engine.promotion_queue import PromotionQueue
 
 logger = get_logger("shadow_backtest")
 
@@ -351,6 +353,43 @@ class ShadowBacktestEngine:
             inserted_id = await self.repository.insert_strategy_proposal(proposal_data)
             inserted_ids.append(inserted_id)
             logger.info(f"[ShadowBacktest] 제안 등록 성공! ID={inserted_id}, Status={'PRUNED' if confidence_score < 60 else 'PENDING'}, Confidence={confidence_score}점")
+            
+            try:
+                # FeatureSnapshot 생성
+                snap = FeatureSnapshot(
+                    price_features={"close": 50000.0, "returns": roi_1d / 100.0, "volatility": atr_ratio},
+                    liquidity_features={"spread": 0.002, "volume": float(summary_7d.get("volume", 5000.0)), "depth": 10000.0},
+                    regime_features={"regime_index": float(adx > 25.0)}
+                )
+                cand_proposal = CandidateProposal(
+                    proposal_id=str(inserted_id),
+                    source_strategy_id=strategy_id,
+                    features=snap,
+                    backtest_result=metrics_data,
+                    model_version="mock_v1",
+                    scaler_version="mock_v1"
+                )
+                
+                queue = PromotionQueue(db_path=self.db_path)
+                await queue.init_table()
+                
+                # 1. Queue Ingest
+                ingest_evt = str(uuid.uuid4())
+                await queue.ingest_proposal(cand_proposal, ingest_evt)
+                
+                # 2. Ranking Dry-run을 위한 Scored 전이
+                score_evt = str(uuid.uuid4())
+                final_score = float(confidence_score) / 100.0
+                await queue.transition_state(
+                    str(inserted_id), "SCORED", score_evt,
+                    {"final_promotion_score": final_score}
+                )
+                
+                # 3. 랭킹 리스트 로깅
+                ranked = queue.get_ranked_proposals()
+                logger.info(f"[ShadowBacktest] [GIRS Queue Dry-run] Ranked proposals after ingest: {ranked}")
+            except Exception as e:
+                logger.error(f"[ShadowBacktest] [GIRS Queue Dry-run] Failed to run GIRS queue ingest/dry-run: {e}")
 
         return inserted_ids
 

@@ -44,8 +44,8 @@ async def test_upbit_market_adapter():
     ]
     
     system_mock = MagicMock()
-    
-    dtos = await adapter.fetch_market_data(session_mock, system_mock)
+    with patch('src.engine.utils.stock_mapper.stock_mapper.get_active_symbols', return_value={'BTC'}):
+        dtos = await adapter.fetch_market_data(session_mock, system_mock)
     
     assert len(dtos) == 1
     dto = dtos[0]
@@ -104,8 +104,8 @@ async def test_bithumb_market_adapter():
         'high_price': 3100000.0,
         'low_price': 2950000.0
     }
-    
-    dtos = await adapter.fetch_market_data(session_mock, system_mock)
+    with patch('src.engine.utils.stock_mapper.stock_mapper.get_active_symbols', return_value={'ETH'}):
+        dtos = await adapter.fetch_market_data(session_mock, system_mock)
     
     assert len(dtos) >= 1
     eth_dtos = [d for d in dtos if d.market == "ETH"]

@@ -61,14 +61,19 @@ def load_dynamic_strategies(strategies_dir: str):
 
 def unload_strategy(strategy_id: str):
     """
-    메모리 레지스트리에서 전략을 제거합니다.
-    (파일은 삭제하지 않고 관리 목록에서만 제외)
+    메모리 레지스트리에서 전략을 제거하고 물리 파일도 삭제합니다.
     """
     s_id = strategy_id.lower()
     
     if s_id in StrategyRegistry._strategies:
         del StrategyRegistry._strategies[s_id]
         if s_id in _strategy_files:
+            file_path = _strategy_files[s_id]
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logger.error(f"Failed to delete strategy file {file_path}: {e}")
             del _strategy_files[s_id]
         return True
     return False

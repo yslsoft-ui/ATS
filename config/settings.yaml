@@ -3,6 +3,11 @@ system:
   strategies_dir: src/engine/strategies
   log_level: INFO
   enable_auto_proposal: false
+  operation_mode: shadow
+  girs_shadow_mode: true
+  live_trading_enabled: false
+  simulation_trading_enabled: true
+  auto_strategy_promotion_enabled: false
 collector:
   warmup_enabled: true
   worker_count: 2

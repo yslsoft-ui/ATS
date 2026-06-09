@@ -7,6 +7,7 @@ from src.engine.daemon_supervisor import DaemonService, EventBus, EventBusSubscr
 from src.config.manager import ConfigManager
 from src.engine.portfolio import PortfolioManager
 from src.engine.pipeline import ExecutionPipeline
+from src.engine.girs_scorer import GIRSScorer, MockONNXModel
 from src.engine.trade_engine import TradeEngine
 from src.engine.strategy import StrategyRegistry
 from src.engine.loader import load_dynamic_strategies
@@ -37,6 +38,9 @@ class StrategyService(DaemonService):
         self.market_sub: Optional[EventBusSubscriberInterface] = None
         self.signal_sub: Optional[EventBusSubscriberInterface] = None
         self._tasks: List[asyncio.Task] = []
+        
+        self.girs_scorer: Optional[GIRSScorer] = None
+        self.current_model_version: Optional[str] = None
 
     async def fetch_exchange_symbols(self, exchange_id: str, config: Dict[str, Any]) -> List[str]:
         symbols = config.get('exchanges', {}).get(exchange_id, {}).get('symbols', [])
@@ -190,6 +194,15 @@ class StrategyService(DaemonService):
         except Exception as e:
             logger.error(f"[StrategyService] 초기 세션 로드 예외: {e}")
 
+        # GIRSScorer 싱글톤 인스턴스 초기 생성
+        onnx_path = self.config_manager.get("system.onnx_model_path", None)
+        model_ver = self.config_manager.get("system.model_version", "mock_v1")
+        self.girs_scorer = GIRSScorer(
+            model=MockONNXModel(model_version=model_ver),
+            onnx_model_path=onnx_path
+        )
+        self.current_model_version = model_ver
+
         # 5. 수신 리스너 기동
         self.market_sub = await self.event_bus.subscribe("market_data")
         self.signal_sub = await self.event_bus.subscribe("signal_data")
@@ -199,6 +212,8 @@ class StrategyService(DaemonService):
         self._tasks.append(asyncio.create_task(self._periodic_performance_snapshot_loop()))
         self._tasks.append(asyncio.create_task(self._periodic_proposal_generation_loop()))
         self._tasks.append(asyncio.create_task(self._periodic_proposal_evaluation_loop()))
+        self._tasks.append(asyncio.create_task(self._girs_shadow_metrics_collector_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_shadow_report_loop()))
 
     async def stop(self):
         # 1. 리스너 중단
@@ -673,3 +688,182 @@ class StrategyService(DaemonService):
                 await asyncio.sleep(86400)
         except asyncio.CancelledError:
             pass
+
+    def reload_girs_scorer_if_needed(self):
+        """설정에서 모델 버전이 변경되었는지 감지하고 GIRSScorer를 리로드합니다."""
+        model_ver = self.config_manager.get("system.model_version", "mock_v1")
+        if self.current_model_version != model_ver:
+            logger.info(f"[StrategyService] 모델 버전 변경 감지: {self.current_model_version} -> {model_ver}. GIRSScorer를 리로드합니다.")
+            onnx_path = self.config_manager.get("system.onnx_model_path", None)
+            self.girs_scorer = GIRSScorer(
+                model=MockONNXModel(model_version=model_ver),
+                onnx_model_path=onnx_path
+            )
+            self.current_model_version = model_ver
+
+    async def _girs_shadow_metrics_collector_loop(self):
+        """30초 주기로 GIRS 섀도 메트릭 및 추적 필드들을 수집하여 DB에 적재합니다."""
+        logger.info("[StrategyService] GIRS Shadow Metrics Collector 루프 기동")
+        from src.database.connection import get_db_conn
+        from src.engine.girs_types import FeatureSnapshot
+        
+        try:
+            while True:
+                # GIRSScorer 싱글톤 리로드 검사
+                self.reload_girs_scorer_if_needed()
+                
+                if self.girs_scorer:
+                    # 1. PENDING 제안 목록 조회
+                    pending_proposals = []
+                    try:
+                        async with get_db_conn(self.db_path) as db:
+                            async with db.execute("SELECT * FROM strategy_proposals WHERE status = 'PENDING'") as cursor:
+                                rows = await cursor.fetchall()
+                                pending_proposals = [dict(r) for r in rows]
+                    except Exception as e:
+                        logger.error(f"[StrategyService] PENDING 제안 조회 실패: {e}")
+                    
+                    if pending_proposals:
+                        active_p = self.portfolio_manager.get_active_simulation_portfolio()
+                        sim_session_id = active_p.id if active_p else None
+                        
+                        op_mode = self.config_manager.get("system.operation_mode", "shadow")
+                        girs_shadow_mode = self.config_manager.get("system.girs_shadow_mode", True)
+                        model_ver = self.config_manager.get("system.model_version", "mock_v1")
+                        scaler_ver = self.config_manager.get("system.scaler_version", "mock_v1")
+                        
+                        blocked_reason = "SHADOW_MODE_ACTIVE" if girs_shadow_mode else None
+                        
+                        try:
+                            async with get_db_conn(self.db_path) as db:
+                                for prop in pending_proposals:
+                                    proposal_id_str = str(prop["id"])
+                                    strategy_id = prop["strategy_id"]
+                                    
+                                    # 2. promotion_event_log 에서 feature_snapshot 조회
+                                    async with db.execute(
+                                        "SELECT feature_snapshot, model_version, scaler_version FROM promotion_event_log "
+                                        "WHERE proposal_id = ? ORDER BY global_sequence_no DESC LIMIT 1",
+                                        (proposal_id_str,)
+                                    ) as cur:
+                                        log_row = await cur.fetchone()
+                                    
+                                    snapshot = None
+                                    if log_row and log_row["feature_snapshot"]:
+                                        try:
+                                            feat_dict = json.loads(log_row["feature_snapshot"])
+                                            snapshot = FeatureSnapshot(
+                                                price_features=feat_dict.get("price_features", {}),
+                                                liquidity_features=feat_dict.get("liquidity_features", {}),
+                                                regime_features=feat_dict.get("regime_features", {}),
+                                                schema_version=feat_dict.get("schema_version", "1.0"),
+                                                feature_hash=feat_dict.get("feature_hash", ""),
+                                                generated_at=feat_dict.get("generated_at", time.time())
+                                            )
+                                        except Exception as e:
+                                            logger.error(f"[StrategyService] FeatureSnapshot 파싱 실패: {e}")
+                                    
+                                    if not snapshot:
+                                        snapshot = FeatureSnapshot(
+                                            price_features={"close": 50000.0, "returns": 0.0, "volatility": 0.1},
+                                            liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 1000.0},
+                                            regime_features={"regime_index": 1.0}
+                                        )
+                                    
+                                    # 3. GIRSScorer 계산 수행
+                                    model_risk_score = self.girs_scorer.model.predict(snapshot)
+                                    
+                                    volatility = snapshot.price_features.get("volatility", 0.1)
+                                    spread = snapshot.liquidity_features.get("spread", 0.001)
+                                    volume = snapshot.liquidity_features.get("volume", 1000.0)
+                                    depth = snapshot.liquidity_features.get("depth", 1000.0)
+                                    regime_risk = snapshot.regime_features.get("regime_index", 1.0)
+                                    
+                                    limits = {
+                                        "max_spread": 0.05,
+                                        "max_volume": 1000000.0,
+                                        "max_depth": 1000000.0,
+                                        "max_volatility": 1.0,
+                                        "max_drawdown": 0.5
+                                    }
+                                    
+                                    fallback_risk_score = self.girs_scorer.calculate_fallback_risk(
+                                        volatility=volatility,
+                                        drawdown=0.0,
+                                        regime_risk=regime_risk,
+                                        spread=spread,
+                                        volume=volume,
+                                        depth=depth,
+                                        limits=limits
+                                    )
+                                    
+                                    rank_stab = self.girs_scorer.calculate_rank_stability(proposal_id_str, current_confirmed_rank=1, N=10)
+                                    market_stab = self.girs_scorer.calculate_market_stability(proposal_id_str, volatility)
+                                    system_stab = self.girs_scorer.calculate_system_stability(0.01)
+                                    
+                                    stability_score = self.girs_scorer.calculate_stability_score(rank_stab, market_stab, system_stab)
+                                    
+                                    girs_p, fallback_p, final_promotion_score, meta_score = self.girs_scorer.calculate_final_score(
+                                        model_risk_score=model_risk_score,
+                                        fallback_risk_score=fallback_risk_score,
+                                        stability_score=stability_score,
+                                        snapshot=snapshot
+                                    )
+                                    
+                                    shadow_risk_score = meta_score.get("shadow_risk_score")
+                                    
+                                    # 4. strategy_versions에서 현재 버전 획득
+                                    async with db.execute("SELECT current_version_id FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cur:
+                                        ver_row = await cur.fetchone()
+                                        strategy_version_id = ver_row["current_version_id"] if ver_row else 1
+                                    
+                                    # 5. DB 적재
+                                    metric_data = {
+                                        "timestamp": time.time(),
+                                        "proposal_id": proposal_id_str,
+                                        "strategy_id": strategy_id,
+                                        "model_risk_score": model_risk_score,
+                                        "fallback_risk_score": fallback_risk_score,
+                                        "final_promotion_score": final_promotion_score,
+                                        "shadow_risk_score": shadow_risk_score,
+                                        "replay_drift": 0.0,
+                                        "correction_active": False,
+                                        "operation_mode": op_mode,
+                                        "model_version": model_ver,
+                                        "scaler_version": scaler_ver,
+                                        "strategy_version_id": strategy_version_id,
+                                        "simulation_session_id": sim_session_id,
+                                        "decision_type": "SHADOW",
+                                        "blocked_reason": blocked_reason
+                                    }
+                                    await self.portfolio_manager.repository.insert_girs_shadow_metric(metric_data)
+                                    logger.info(f"[StrategyService] 섀도 메트릭 적재 완료: proposal_id={proposal_id_str}, score={final_promotion_score:.4f}")
+                        except Exception as e:
+                            logger.error(f"[StrategyService] 섀도 메트릭 DB 처리 에러: {e}")
+                
+                # 30초 대기
+                await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"[StrategyService] _girs_shadow_metrics_collector_loop 치명적 에러: {e}")
+
+    async def _periodic_shadow_report_loop(self):
+        """24시간 주기로 GIRS Shadow Operation 검증 리포트를 자동 생성합니다."""
+        logger.info("[StrategyService] GIRS Shadow Report 생성 루프 기동")
+        try:
+            # 첫 기동 후 30분 뒤에 첫 리포트 생성 (그 뒤 24시간 간격)
+            await asyncio.sleep(1800)
+            while True:
+                try:
+                    from scratch.generate_shadow_report import generate_report
+                    generate_report(self.db_path, "logs/girs_shadow_report.md")
+                    logger.info("[StrategyService] GIRS Shadow Operation 검증 리포트 생성 완료 (logs/girs_shadow_report.md)")
+                except Exception as e:
+                    logger.error(f"[StrategyService] GIRS 검증 리포트 생성 실패: {e}")
+                # 24시간 주기
+                await asyncio.sleep(86400)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"[StrategyService] _periodic_shadow_report_loop 치명적 에러: {e}")

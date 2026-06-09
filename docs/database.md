@@ -366,6 +366,31 @@
 
 ---
 
+### 1.19. girs_shadow_metrics [NEW]
+GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 실시간 섀도 리스크 지표 및 승격 차단 판정 로그를 기록합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 기록 일련번호 |
+| **timestamp** | REAL | NOT NULL | 기록 시점 타임스탬프 (Unix epoch, 초 단위) |
+| **proposal_id** | TEXT | - | 대상 승격 제안 ID (없을 시 NULL) |
+| **strategy_id** | TEXT | - | 대상 전략 ID |
+| **model_risk_score** | REAL | - | GIRS GNN 모델 리스크 점수 |
+| **fallback_risk_score** | REAL | - | 룰 기반 폴백 리스크 점수 |
+| **final_promotion_score** | REAL | - | 최종 승격 심사 점수 (1 - final_risk_score) |
+| **shadow_risk_score** | REAL | - | 섀도 운용 리스크 점수 |
+| **replay_drift** | REAL | - | 리플레이 시뮬레이션 편차 (drift) 값 |
+| **correction_active** | INTEGER | NOT NULL | 드리프트 보정 활성화 여부 (0: 비활성, 1: 활성) |
+| **operation_mode** | TEXT | - | 시스템 운영 모드 (`shadow`, `live` 등) |
+| **model_version** | TEXT | - | 판정 시점의 GIRS 모델 버전 정보 |
+| **scaler_version** | TEXT | - | 판정 시점의 GIRS 스케일러 버전 정보 |
+| **strategy_version_id** | INTEGER | - | 판정 시점의 활성 전략 버전 번호 |
+| **simulation_session_id** | TEXT | - | 모의투자 세션 ID |
+| **decision_type** | TEXT | - | 판정 의사결정 타입 (예: `SHADOW`, `LIVE`) |
+| **blocked_reason** | TEXT | - | 섀도 모드로 인한 승격 차단 사유 설명 |
+
+---
+
 ## 2. 데이터베이스 인덱스 (Database Indexes)
 
 데이터 로딩 성능 및 백테스트 조회 최적화를 위해 다음과 같은 복합/단일 인덱스를 운용합니다.
@@ -410,3 +435,7 @@
     - 대상 테이블: `proposal_evaluations`
     - 인덱스 구성 컬럼: `(proposal_id)`
     - 목적: 특정 제안에 대한 사후 성과 평가 정보 대조 조회를 가속화하기 위함.
+11. **`idx_girs_shadow_metrics_time`**
+    - 대상 테이블: `girs_shadow_metrics`
+    - 인덱스 구성 컬럼: `(timestamp DESC)`
+    - 목적: 실시간 섀도 지표 분석 및 리포트 작성을 위한 최근 판정 데이터의 조회 성능을 향상시키기 위함.

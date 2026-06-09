@@ -9,6 +9,7 @@ import asyncio
 from src.database.retry import with_db_retry
 from src.engine.matching import OrderbookMatchingEngine
 from src.database.repository import BaseTradingRepository, SqliteTradingRepository
+from src.config.manager import ConfigManager
 
 @dataclass
 class Position:
@@ -161,6 +162,7 @@ class PortfolioManager:
     def __init__(self, db_path: Optional[str] = None, repository: Optional[BaseTradingRepository] = None):
         self.db_path = db_path
         self.repository = repository or SqliteTradingRepository(db_path=db_path)
+        self.config_manager = ConfigManager("config/settings.yaml")
         self.portfolios: Dict[str, Portfolio] = {}
         self.exchange_configs: Dict[str, Dict] = {} # [NEW] 거래소별 수수료 등 설정 캐시
         self.executors: Dict[str, OrderExecutor] = {
@@ -204,11 +206,55 @@ class PortfolioManager:
             "avg_price": pos.avg_price if pos else 0.0
         }
 
+    async def check_live_trading_blocked(self, portfolio: Portfolio, signal: Any = None) -> Optional[Dict[str, Any]]:
+        """
+        실거래가 차단되었는지 검사하는 공통 가드입니다.
+        portfolio_type == 'live'이거나, live_trading_enabled 설정이 False인 경우 실거래 주문을 차단합니다.
+        """
+        live_trading_enabled = self.config_manager.get("system.live_trading_enabled", False)
+        
+        if portfolio.portfolio_type == 'live' and not live_trading_enabled:
+            symbol = getattr(signal, 'symbol', 'UNKNOWN') if signal else 'UNKNOWN'
+            side = getattr(signal, 'action', 'UNKNOWN') if signal else 'UNKNOWN'
+            
+            logger.warning(f"[PortfolioManager] 실거래 주문 차단: live_trading_enabled가 false입니다. ({portfolio.id} - {side} {symbol})")
+            
+            # 시스템 이벤트 기록
+            msg = f"Live order blocked: live_trading_enabled is False. (Portfolio: {portfolio.id}, Symbol: {symbol}, Side: {side})"
+            await self.repository.insert_system_event(
+                event_type='BLOCKED_LIVE_ORDER',
+                target=portfolio.id,
+                message=msg,
+                timestamp=int(time.time())
+            )
+            
+            # 브로드캐스트 알림
+            if self.broadcast_callback:
+                try:
+                    await self.broadcast_callback({
+                        "type": "order_blocked",
+                        "portfolio_id": portfolio.id,
+                        "exchange": getattr(signal, 'exchange', portfolio.exchange_id),
+                        "symbol": symbol,
+                        "side": side,
+                        "reason": "실계좌 거래 비활성화 (live_trading_enabled: false)"
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to broadcast order blocked alert: {e}")
+                    
+            return {"status": "BLOCKED", "reason": "LIVE_TRADING_DISABLED"}
+        return None
+
     async def liquidate_all(self, portfolio_id: str) -> List[Dict]:
         """포트폴리오의 모든 포지션을 즉시 시장가로 청산합니다."""
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return []
+            
+        # 실거래 차단 가드 적용
+        blocked_result = await self.check_live_trading_blocked(portfolio)
+        if blocked_result:
+            return [blocked_result]
             
         results = []
         executor = self.executors.get('simulation')
@@ -242,6 +288,22 @@ class PortfolioManager:
     async def cancel_all_orders(self, exchange: str):
         """거래소 정지 상태 진입 시, 해당 거래소의 모든 미체결 주문을 일괄 취소합니다."""
         logger.warning(f"[PortfolioManager] 거래소 {exchange} 정지 상태 감지: 미체결 주문 일괄 취소를 요청합니다.")
+        
+        live_trading_enabled = self.config_manager.get("system.live_trading_enabled", False)
+        if not live_trading_enabled:
+            live_portfolios = [p for p in self.portfolios.values() if p.portfolio_type == 'live' and p.exchange_id.lower() == exchange.lower()]
+            if live_portfolios:
+                for lp in live_portfolios:
+                    logger.warning(f"[PortfolioManager] 실거래 주문 취소 차단: live_trading_enabled가 false입니다. (Portfolio: {lp.id})")
+                    msg = f"Live order cancel blocked: live_trading_enabled is False. (Portfolio: {lp.id}, Exchange: {exchange})"
+                    await self.repository.insert_system_event(
+                        event_type='BLOCKED_LIVE_ORDER',
+                        target=lp.id,
+                        message=msg,
+                        timestamp=int(time.time())
+                    )
+                return {"status": "BLOCKED", "reason": "LIVE_TRADING_DISABLED"}
+        
         # 가상 매칭 엔진의 경우 즉시 전량 체결되므로 미체결 주문 관리가 없으나,
         # 실거래 API 확장 및 시스템 방어 인터페이스 제공을 위해 로그 및 빈 구조 구현.
         pass
@@ -255,6 +317,11 @@ class PortfolioManager:
         if not portfolio:
             logger.error(f"Portfolio {portfolio_id} not found for executing pipeline order.")
             return None
+
+        # 실거래 주문 차단 가드 체크
+        blocked_result = await self.check_live_trading_blocked(portfolio, signal)
+        if blocked_result:
+            return blocked_result
 
         # 거래소 수수료율 적용 (다중 종목 대응을 위해 signal.exchange 우선 고려)
         exchange_key = getattr(signal, 'exchange', portfolio.exchange_id)
