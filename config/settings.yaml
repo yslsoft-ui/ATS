@@ -8,6 +8,72 @@ system:
   live_trading_enabled: false
   simulation_trading_enabled: true
   auto_strategy_promotion_enabled: false
+  report_min_samples_per_slice: 30
+  evaluation_lock_timeout_seconds: 300
+  evaluation_max_retry_count: 3
+  enable_orderbook_features: false
+  candidate_proxy_window_seconds: 60
+  candidate_proxy_min_tps: 0.1
+  shadow_min_trades_limit: 3
+  girs_risk_cutoff:
+    default: 0.5
+    crypto: 0.4
+    stock: 0.6
+    horizons:
+      10m: 0.45
+      2h: 0.55
+    market_horizons:
+      crypto.10m: 0.42
+  freshness_ttl:
+    crypto:
+      trade: 10
+      indicator: 60
+    stock:
+      trade: 30
+      indicator: 120
+  horizons:
+    crypto:
+    - name: 10m
+      type: elapsed
+      value: 600
+    - name: 30m
+      type: elapsed
+      value: 1800
+    - name: 2h
+      type: elapsed
+      value: 7200
+    - name: 6h
+      type: elapsed
+      value: 21600
+    - name: 24h
+      type: elapsed
+      value: 86400
+    - name: 7d
+      type: elapsed
+      value: 604800
+    stock:
+    - name: 1h
+      type: elapsed_in_session
+      value: 3600
+    - name: market_close
+      type: calendar_session
+      value: close
+    - name: next_open
+      type: calendar_session
+      value: next_open
+    - name: 3_trading_days
+      type: calendar_session
+      value: 3_days
+    - name: 7_trading_days
+      type: calendar_session
+      value: 7_days
+  resource_guards:
+    exchange_quota:
+      upbit: 30
+      kis: 20
+      bithumb: 15
+    symbol_cooldown_seconds: 3600
+    daily_proposal_limit: 100
 collector:
   warmup_enabled: true
   worker_count: 2

@@ -350,24 +350,38 @@
 ---
 
 ### 1.18. proposal_evaluations (제안 사후 성과 평가)
-적용된 제안에 대한 7일 사후 실제 성과와 제안 시점의 백테스트 예측 성과 간의 괴리율을 추적합니다.
+승인/제안된 전략 또는 Shadow 후보 전략에 대한 다양한 가상/실제 Horizon(시간 기준 10m, 30m, 2h / 주식 세션 기준 등)별 사후 누적 성과와 Virtual Rollback 여부를 추적하고 예측 리스크 점수의 오차를 분석합니다. 1:N Horizon 관계를 위해 `(proposal_id, horizon_name)` 복합 유니크 제약을 적용합니다.
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 평가 번호 |
-| **proposal_id** | INTEGER | UNIQUE REFERENCES strategy_proposals(id) | 평가 대상 제안 ID |
-| **predicted_roi_7d** | REAL | - | 백테스트 예측 7일 ROI (%) |
-| **actual_roi_7d** | REAL | - | 실전 적용 실제 7일 ROI (%) |
-| **roi_divergence** | REAL | - | ROI 괴리율 (실제 - 예측) |
-| **predicted_trade_count_7d**| INTEGER | - | 백테스트 예측 7일 거래 수 |
-| **actual_trade_count_7d** | INTEGER | - | 실전 적용 실제 7일 거래 수 |
-| **trade_count_divergence** | INTEGER | - | 거래 수 괴리율 (실제 - 예측) |
+| **proposal_id** | INTEGER | REFERENCES strategy_proposals(id) | 평가 대상 제안 ID |
+| **horizon_name** | TEXT | NOT NULL | Horizon 식별 이름 (예: `10m`, `30m`, `market_close` 등) |
+| **candidate_roi** | REAL | - | 가상/실제 후보 전략 누적 ROI (소수점 ratio) |
+| **champion_roi** | REAL | - | 가상/실제 챔피언 전략 누적 ROI (소수점 ratio) |
+| **roi_gap** | REAL | - | ROI 편차 (`candidate_roi - champion_roi`) |
+| **candidate_mdd** | REAL | - | 가상/실제 후보 전략 누적 MDD (소수점 ratio) |
+| **champion_mdd** | REAL | - | 가상/실제 챔피언 전략 누적 MDD (소수점 ratio) |
+| **virtual_rollback**| INTEGER | DEFAULT 0 | 가상 롤백 트리거 여부 (0: 유지, 1: 가상롤백발생) |
+| **actual_label** | TEXT | - | 가상 롤백 기반 이진 분류 정답 레이블 (`GOOD`, `BAD`) |
+| **actual_label_source**| TEXT | - | 레이블 결정 상세 원인 및 임계치 정보 |
+| **due_at** | INTEGER | NOT NULL | 평가 만기 타임스탬프 (Unix epoch, 초 단위) |
+| **evaluated_at** | INTEGER | - | 실제 평가가 완료된 타임스탬프 |
+| **evaluation_status**| TEXT | DEFAULT 'PENDING' | 평가 FSM 진행 상태 (`PENDING`, `EVALUATING`, `COMPLETED`, `SKIPPED`, `ERROR`) |
+| **horizon_type** | TEXT | - | Horizon 유형 구분 (`elapsed`, `elapsed_in_session`, `calendar_session`) |
+| **horizon_value** | INTEGER | - | Horizon 세부 파라미터 값 (초 단위 등) |
+| **policy_version** | TEXT | - | 평가 당시 적용된 EvaluationPolicyRouter 버전 |
+| **scorer_version** | TEXT | - | 평가 당시 적용된 GIRSScorer 모델 버전 |
+| **predicted_risk_score**| REAL | - | 제안 생성 당시 예측된 Shadow Risk Score |
+| **locked_at** | INTEGER | DEFAULT NULL | 분산 평가 루프 원자적 선점용 락 타임스탬프 |
+| **retry_count** | INTEGER | DEFAULT 0 | 실패 및 락 타임아웃 복구 재시도 횟수 |
+| **last_error** | TEXT | - | 마지막 평가 실패 예외 및 스택트레이스 기록 |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 평가 생성 일시 |
 
 ---
 
 ### 1.19. girs_shadow_metrics [NEW]
-GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 실시간 섀도 리스크 지표 및 승격 차단 판정 로그를 기록합니다.
+GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 실시간 피처 스냅샷, 리스크 점수, 데이터 신선도, 거래소 시장 특성을 취합 기록합니다.
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
@@ -380,7 +394,7 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 | **final_promotion_score** | REAL | - | 최종 승격 심사 점수 (1 - final_risk_score) |
 | **shadow_risk_score** | REAL | - | 섀도 운용 리스크 점수 |
 | **replay_drift** | REAL | - | 리플레이 시뮬레이션 편차 (drift) 값 |
-| **correction_active** | INTEGER | NOT NULL | 드리프트 보정 활성화 여부 (0: 비활성, 1: 활성) |
+| **correction_active** | INTEGER | DEFAULT 0 | 드리프트 보정 활성화 여부 (0: 비활성, 1: 활성) |
 | **operation_mode** | TEXT | - | 시스템 운영 모드 (`shadow`, `live` 등) |
 | **model_version** | TEXT | - | 판정 시점의 GIRS 모델 버전 정보 |
 | **scaler_version** | TEXT | - | 판정 시점의 GIRS 스케일러 버전 정보 |
@@ -388,6 +402,34 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 | **simulation_session_id** | TEXT | - | 모의투자 세션 ID |
 | **decision_type** | TEXT | - | 판정 의사결정 타입 (예: `SHADOW`, `LIVE`) |
 | **blocked_reason** | TEXT | - | 섀도 모드로 인한 승격 차단 사유 설명 |
+| **trade_age_ms** | INTEGER | - | 시세 수신 시연 연령 (ms) |
+| **orderbook_age_ms**| INTEGER | - | 호가 수신 시연 연령 (ms) |
+| **indicator_age_ms**| INTEGER | - | 지표 계산 시연 연령 (ms) |
+| **is_fresh** | INTEGER | DEFAULT 1 | 데이터 신선도 충족 여부 (0: 만료/stale, 1: 신선) |
+| **stale_reason** | TEXT | - | 데이터 만료 상세 원인 설명 |
+| **snapshot_version**| TEXT | - | 피처 스냅샷 DTO 스키마 버전 |
+| **snapshot_hash** | TEXT | - | 피처 구조체 직렬화 SHA-256 해시값 (이중 해싱 1) |
+| **feature_vector_hash**| TEXT | - | 실 수치 벡터 직렬화 SHA-256 해시값 (이중 해싱 2) |
+| **orderbook_available**| INTEGER | DEFAULT 0 | 호가 데이터 수집 및 가용 상태 여부 |
+| **market_type** | TEXT | - | 자산군 분류 (`crypto`, `stock`) |
+| **session_state** | TEXT | - | 세션 운영 레짐 (`regular_trading`, `24h` 등) |
+| **volatility_regime**| TEXT | - | 변동성 상태 분류 (`low`, `high` 등) |
+| **liquidity_regime**| TEXT | - | 유동성 상태 분류 (`low`, `high` 등) |
+| **exchange** | TEXT | - | 거래소 코드 (`upbit`, `kis` 등) |
+
+---
+
+### 1.20. universe_guard_state [NEW]
+종목별 실시간 유니버스 가드(Cooldown, Quota, Limit 등)의 현재 차단 상태 및 누적 차단 카운트를 관리하는 상태 저장소입니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **symbol** (PK) | TEXT | PRIMARY KEY | 대상 종목 심볼 (예: `BTC`) |
+| **status** | TEXT | - | 현재 가드 감시 상태 (`WATCHED`, `CANDIDATE` 등) |
+| **blocked_reason** | TEXT | - | 현재 차단 사유 (`COOLDOWN`, `LIMIT`, `QUOTA` 등) |
+| **blocked_count** | INTEGER | DEFAULT 0 | 동일 차단 사유 발생 횟수 누적 카운트 |
+| **last_blocked_at** | REAL | - | 마지막 차단 발생 타임스탬프 (Unix epoch, 초 단위) |
+| **last_event_logged_reason** | TEXT | - | `system_events` 감사 로그에 마지막으로 기록된 차단 사유 |
 
 ---
 
@@ -431,11 +473,19 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
    - 대상 테이블: `strategy_proposals`
    - 인덱스 구성 컬럼: `(proposal_group_id)`
    - 목적: 하나의 제안 묶음 그룹 단위로 제안 데이터를 조회하고 표시하기 위함.
-10. **`idx_prop_eval_id`**
+10. **`idx_prop_eval_status_due`**
     - 대상 테이블: `proposal_evaluations`
-    - 인덱스 구성 컬럼: `(proposal_id)`
-    - 목적: 특정 제안에 대한 사후 성과 평가 정보 대조 조회를 가속화하기 위함.
-11. **`idx_girs_shadow_metrics_time`**
+    - 인덱스 구성 컬럼: `(evaluation_status, due_at)`
+    - 목적: 사후 성과 평가 루프에서 만기 경과 대상(PENDING 상태 및 due_at 만료)을 빠르게 스캔하여 평가하기 위함.
+11. **`idx_prop_eval_id_horizon`**
+    - 대상 테이블: `proposal_evaluations`
+    - 인덱스 구성 컬럼: `(proposal_id, horizon_name)`
+    - 목적: 특정 제안에 대한 다중 Horizon 평가 결과 대조 조회 및 리포팅 성능을 가속화하기 위함.
+12. **`idx_girs_shadow_metrics_time`**
     - 대상 테이블: `girs_shadow_metrics`
     - 인덱스 구성 컬럼: `(timestamp DESC)`
     - 목적: 실시간 섀도 지표 분석 및 리포트 작성을 위한 최근 판정 데이터의 조회 성능을 향상시키기 위함.
+13. **`idx_universe_guard_state_status`**
+    - 대상 테이블: `universe_guard_state`
+    - 인덱스 구성 컬럼: `(status)`
+    - 목적: 특정 가드 감시 상태에 해당하는 종목들의 차단 현황을 빠르게 스캔하기 위함.

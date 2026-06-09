@@ -1,7 +1,7 @@
 import time
 import uuid
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.database.connection import get_db_conn
 from src.engine.backtest import BacktestEngine
 from src.engine.utils.telemetry import get_logger
@@ -74,7 +74,7 @@ class ShadowBacktestEngine:
             logger.warning(f"[ShadowBacktest] λ boost 계산 실패, 기본값 사용: {e}")
             return 1.0, 0.0
 
-    async def run_shadow_backtest(self, candidate_proposals: List[Dict[str, Any]]) -> List[int]:
+    async def run_shadow_backtest(self, candidate_proposals: List[Dict[str, Any]], capture_snapshot_fn: Optional[Any] = None) -> List[int]:
         """
         후보 파라미터 셋들을 받아 백테스트 검증을 실행하고, 
         적격 후보에 대한 제안(Proposal)을 DB에 저장한 후 삽입된 ID 리스트를 반환합니다.
@@ -150,9 +150,12 @@ class ShadowBacktestEngine:
             trade_count_7d = summary_7d["trade_count"]
             roi_7d = summary_7d["roi"]
             
-            # [안전장치] 최근 7일 최소 거래 30건 이상 기준 체크
-            if trade_count_7d < 30:
-                logger.info(f"[ShadowBacktest] 7일 거래 수 {trade_count_7d}건이 최저 기준(30건)에 미달하여 제안 대상에서 탈락합니다.")
+            # [안전장치] 최근 7일 최소 거래 기준 체크
+            from src.config.manager import ConfigManager
+            config_manager = ConfigManager("config/settings.yaml")
+            min_trades = config_manager.get("system.shadow_min_trades_limit", 30)
+            if trade_count_7d < min_trades:
+                logger.info(f"[ShadowBacktest] 7일 거래 수 {trade_count_7d}건이 최저 기준({min_trades}건)에 미달하여 제안 대상에서 탈락합니다.")
                 continue
 
             # 3. 최근 1일 백테스트 수행
@@ -354,13 +357,66 @@ class ShadowBacktestEngine:
             inserted_ids.append(inserted_id)
             logger.info(f"[ShadowBacktest] 제안 등록 성공! ID={inserted_id}, Status={'PRUNED' if confidence_score < 60 else 'PENDING'}, Confidence={confidence_score}점")
             
+            # 3. proposal_evaluations에 1:N Horizon PENDING 레코드 일괄 생성 및 실시간 스냅샷 캡처
             try:
-                # FeatureSnapshot 생성
-                snap = FeatureSnapshot(
-                    price_features={"close": 50000.0, "returns": roi_1d / 100.0, "volatility": atr_ratio},
-                    liquidity_features={"spread": 0.002, "volume": float(summary_7d.get("volume", 5000.0)), "depth": 10000.0},
-                    regime_features={"regime_index": float(adx > 25.0)}
-                )
+                # settings.yaml 에서 horizons 설정 로드
+                with open("config/settings.yaml", "r", encoding="utf-8") as f:
+                    import yaml
+                    full_cfg = yaml.safe_load(f) or {}
+                system_cfg = full_cfg.get("system", {})
+                horizons_cfg = system_cfg.get("horizons", {})
+                
+                market_type = "stock" if exchange.lower() in ("kis", "shinhan") else "crypto"
+                horizons_list = horizons_cfg.get(market_type, [])
+                
+                from src.engine.evaluation_policy import calculate_due_at
+                
+                # 실시간 스냅샷 캡처 시도 (없으면 Fallback)
+                snap = None
+                if capture_snapshot_fn:
+                    try:
+                        snap = await capture_snapshot_fn(exchange, symbol, strategy_id)
+                        if snap:
+                            # proposal_id를 캡처된 스냅샷에 갱신해줌 (혹은 DB에 기록 시 연계용)
+                            logger.info(f"[ShadowBacktest] 실시간 피처 캡처 성공! Hash={snap.feature_hash}")
+                    except Exception as ex:
+                        logger.error(f"[ShadowBacktest] 실시간 피처 캡처 중 오류, Fallback 적용: {ex}")
+                
+                if not snap:
+                    snap = FeatureSnapshot(
+                        price_features={"close": 50000.0, "returns": roi_1d / 100.0, "volatility": atr_ratio},
+                        liquidity_features={"spread": 0.002, "volume": float(summary_7d.get("volume", 5000.0)), "depth": 10000.0},
+                        regime_features={"regime_index": float(adx > 25.0)},
+                        exchange=exchange,
+                        symbol=symbol,
+                        market_type=market_type
+                    )
+                
+                async with get_db_conn(self.db_path) as db:
+                    for hz in horizons_list:
+                        due_at = calculate_due_at(market_type, hz, int(time.time()))
+                        await db.execute(
+                            """
+                            INSERT INTO proposal_evaluations (
+                                proposal_id, horizon_name, due_at, evaluation_status,
+                                horizon_type, horizon_value, policy_version, scorer_version,
+                                predicted_risk_score
+                            )
+                            VALUES (?, ?, ?, 'PENDING', ?, ?, 'v4', ?, ?)
+                            """,
+                            (
+                                inserted_id,
+                                hz.get("name"),
+                                due_at,
+                                hz.get("type"),
+                                hz.get("value") if isinstance(hz.get("value"), int) else None,
+                                "mock_v1",  # scorer_version
+                                float(confidence_score) / 100.0 if confidence_score is not None else 0.5  # predicted_risk_score
+                            )
+                        )
+                    await db.commit()
+                logger.info(f"[ShadowBacktest] Proposal {inserted_id}에 대한 {len(horizons_list)}개 Horizon PENDING 평가 레코드 생성 완료")
+                
                 cand_proposal = CandidateProposal(
                     proposal_id=str(inserted_id),
                     source_strategy_id=strategy_id,

@@ -598,6 +598,26 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def clean_old_system_events(self, retention_days: int = 7):
+        pass
+
+    @abc.abstractmethod
+    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+        pass
+
+    @abc.abstractmethod
+    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_all_universe_guard_states(self) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_proposal_evaluations(self, proposal_id: int) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
     async def check_and_report_previous_crash(self, target: str):
         pass
 
@@ -831,6 +851,56 @@ class SqliteTradingRepository(BaseTradingRepository):
                 "SELECT * FROM system_events ORDER BY timestamp DESC LIMIT ?",
                 (limit,)
             ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def clean_old_system_events(self, retention_days: int = 7):
+        async with get_db_conn(self.db_path) as db:
+            # 1. 반복 차단 및 요약 이벤트 7일 TTL
+            cutoff_ts_short = int((time.time() - retention_days * 24 * 3600) * 1000)
+            await db.execute('''
+                DELETE FROM system_events 
+                WHERE event_type IN (
+                    'PROMOTION_COOLDOWN_BLOCKED', 'PROMOTION_QUOTA_BLOCKED', 
+                    'PROMOTION_LIMIT_BLOCKED', 'UNIVERSE_GUARD_SUMMARY'
+                ) AND timestamp < ?
+            ''', (cutoff_ts_short,))
+            
+            # 2. 상태 전환 이벤트 90일 TTL
+            cutoff_ts_long = int((time.time() - 90 * 24 * 3600) * 1000)
+            await db.execute('''
+                DELETE FROM system_events 
+                WHERE event_type IN ('UNIVERSE_PROMOTION', 'UNIVERSE_DEMOTION') 
+                  AND timestamp < ?
+            ''', (cutoff_ts_long,))
+            
+            await db.commit()
+            logger.info(f"[Repository] 시스템 감사 로그를 정리하였습니다. (차단/요약 7일 기준: {cutoff_ts_short}, 전환 90일 기준: {cutoff_ts_long})")
+
+    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+        async with get_db_conn(self.db_path) as db:
+            await db.execute('''
+                INSERT INTO universe_guard_state 
+                (symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(symbol) DO UPDATE SET
+                    status = excluded.status,
+                    blocked_reason = excluded.blocked_reason,
+                    blocked_count = excluded.blocked_count,
+                    last_blocked_at = excluded.last_blocked_at,
+                    last_event_logged_reason = excluded.last_event_logged_reason
+            ''', (symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason))
+            await db.commit()
+
+    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute("SELECT * FROM universe_guard_state WHERE symbol = ?", (symbol,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
+
+    async def get_all_universe_guard_states(self) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute("SELECT * FROM universe_guard_state") as cursor:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
@@ -1148,13 +1218,15 @@ class SqliteTradingRepository(BaseTradingRepository):
 
     async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
         async with get_db_conn(self.db_path) as db:
+            horizon_name = eval_data.get("horizon_name") or "7d"
             cursor = await db.execute('''
                 INSERT INTO proposal_evaluations 
-                (proposal_id, predicted_roi_7d, actual_roi_7d, roi_divergence, 
+                (proposal_id, horizon_name, predicted_roi_7d, actual_roi_7d, roi_divergence, 
                  predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ''', (
                 eval_data["proposal_id"],
+                horizon_name,
                 eval_data["predicted_roi_7d"],
                 eval_data["actual_roi_7d"],
                 eval_data["roi_divergence"],
@@ -1176,6 +1248,15 @@ class SqliteTradingRepository(BaseTradingRepository):
                 if row:
                     return dict(row)
         return None
+
+    async def get_proposal_evaluations(self, proposal_id: int) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM proposal_evaluations WHERE proposal_id = ?",
+                (proposal_id,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
@@ -1451,8 +1532,12 @@ class SqliteTradingRepository(BaseTradingRepository):
                 (timestamp, proposal_id, strategy_id, model_risk_score, fallback_risk_score, 
                  final_promotion_score, shadow_risk_score, replay_drift, correction_active,
                  operation_mode, model_version, scaler_version, strategy_version_id,
-                 simulation_session_id, decision_type, blocked_reason)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 simulation_session_id, decision_type, blocked_reason,
+                 trade_age_ms, orderbook_age_ms, indicator_age_ms, is_fresh, stale_reason,
+                 snapshot_version, snapshot_hash, feature_vector_hash, orderbook_available,
+                 market_type, session_state, volatility_regime, liquidity_regime, exchange,
+                 tps, trade_count, volume, idle_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 metric_data["timestamp"],
                 metric_data.get("proposal_id"),
@@ -1469,7 +1554,25 @@ class SqliteTradingRepository(BaseTradingRepository):
                 metric_data.get("strategy_version_id"),
                 metric_data.get("simulation_session_id"),
                 metric_data.get("decision_type"),
-                metric_data.get("blocked_reason")
+                metric_data.get("blocked_reason"),
+                metric_data.get("trade_age_ms"),
+                metric_data.get("orderbook_age_ms"),
+                metric_data.get("indicator_age_ms"),
+                metric_data.get("is_fresh", 1),
+                metric_data.get("stale_reason"),
+                metric_data.get("snapshot_version"),
+                metric_data.get("snapshot_hash"),
+                metric_data.get("feature_vector_hash"),
+                metric_data.get("orderbook_available", 0),
+                metric_data.get("market_type"),
+                metric_data.get("session_state"),
+                metric_data.get("volatility_regime"),
+                metric_data.get("liquidity_regime"),
+                metric_data.get("exchange"),
+                metric_data.get("tps"),
+                metric_data.get("trade_count"),
+                metric_data.get("volume"),
+                metric_data.get("idle_time")
             ))
             inserted_id = cursor.lastrowid
             await db.commit()
@@ -1502,6 +1605,7 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.strategy_performance_snapshots: Dict[str, List[Dict[str, Any]]] = {}
         self.strategy_proposals: Dict[int, Dict[str, Any]] = {}
         self.proposal_evaluations: Dict[int, Dict[str, Any]] = {}
+        self.universe_guard_states: Dict[str, Dict[str, Any]] = {}
         self.next_proposal_id = 1
         self.next_history_id = 1
 
@@ -1539,6 +1643,40 @@ class InMemoryTradingRepository(BaseTradingRepository):
     async def get_system_events(self, limit: int = 20) -> List[Dict[str, Any]]:
         sorted_events = sorted(self.system_events, key=lambda x: x['timestamp'], reverse=True)
         return sorted_events[:limit]
+
+    async def clean_old_system_events(self, retention_days: int = 7):
+        cutoff_ts_short = int((time.time() - retention_days * 24 * 3600) * 1000)
+        cutoff_ts_long = int((time.time() - 90 * 24 * 3600) * 1000)
+        
+        filtered = []
+        for e in self.system_events:
+            evt_type = e.get("event_type")
+            ts = e.get("timestamp")
+            if evt_type in ('PROMOTION_COOLDOWN_BLOCKED', 'PROMOTION_QUOTA_BLOCKED', 'PROMOTION_LIMIT_BLOCKED', 'UNIVERSE_GUARD_SUMMARY'):
+                if ts >= cutoff_ts_short:
+                    filtered.append(e)
+            elif evt_type in ('UNIVERSE_PROMOTION', 'UNIVERSE_DEMOTION'):
+                if ts >= cutoff_ts_long:
+                    filtered.append(e)
+            else:
+                filtered.append(e)
+        self.system_events = filtered
+
+    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+        self.universe_guard_states[symbol] = {
+            "symbol": symbol,
+            "status": status,
+            "blocked_reason": blocked_reason,
+            "blocked_count": blocked_count,
+            "last_blocked_at": last_blocked_at,
+            "last_event_logged_reason": last_event_logged_reason
+        }
+
+    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+        return self.universe_guard_states.get(symbol)
+
+    async def get_all_universe_guard_states(self) -> List[Dict[str, Any]]:
+        return list(self.universe_guard_states.values())
 
     async def check_and_report_previous_crash(self, target: str):
         daemon_events = [e for e in self.system_events if e['target'] == target and e['event_type'] in ('DAEMON_START', 'DAEMON_STOP', 'DAEMON_CRASHED')]
@@ -1678,11 +1816,21 @@ class InMemoryTradingRepository(BaseTradingRepository):
         return sorted(props, key=lambda x: x.get("created_at", 0), reverse=True)
 
     async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
-        self.proposal_evaluations[eval_data["proposal_id"]] = dict(eval_data)
-        return eval_data["proposal_id"]
+        eval_copy = dict(eval_data)
+        if "horizon_name" not in eval_copy or not eval_copy["horizon_name"]:
+            eval_copy["horizon_name"] = "7d"
+        self.proposal_evaluations[eval_copy["proposal_id"]] = eval_copy
+        return eval_copy["proposal_id"]
 
     async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
         return self.proposal_evaluations.get(proposal_id)
+
+    async def get_proposal_evaluations(self, proposal_id: int) -> List[Dict[str, Any]]:
+        res = []
+        for v in self.proposal_evaluations.values():
+            if v.get("proposal_id") == proposal_id:
+                res.append(dict(v))
+        return res
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         props = list(self.strategy_proposals.values())

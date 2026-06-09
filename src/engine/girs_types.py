@@ -16,6 +16,30 @@ class FeatureSnapshot:
     schema_version: str = "1.0"
     feature_hash: str = ""
     generated_at: float = field(default_factory=time.time)
+    
+    # 확장 시장 메타데이터
+    exchange: str = ""
+    symbol: str = ""
+    market_type: str = ""
+    session_state: str = ""
+    volatility_regime: str = ""
+    liquidity_regime: str = ""
+    tick_size: float = 0.0
+    price_limit: float = 0.0
+    fee_model: str = ""
+    slippage_model: str = ""
+
+    # 데이터 보증 및 Freshness
+    trade_age_ms: int = 0
+    orderbook_age_ms: int = 0
+    indicator_age_ms: int = 0
+    is_fresh: bool = True
+    stale_reason: str = ""
+    snapshot_version: str = "1.0"
+    snapshot_hash: str = ""
+    feature_vector_hash: str = ""
+    orderbook_available: bool = False
+
 
 @dataclass
 class CandidateProposal:

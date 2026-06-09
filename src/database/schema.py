@@ -487,19 +487,40 @@ async def init_db(db_path: str = None):
             )
         ''')
 
-        # 18. proposal_evaluations [NEW - V3]
+        # 18. proposal_evaluations [NEW - V3.5 1:N Horizon 구조]
         await db.execute('''
             CREATE TABLE IF NOT EXISTS proposal_evaluations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                proposal_id INTEGER UNIQUE NOT NULL,
+                proposal_id INTEGER NOT NULL,
+                horizon_name TEXT NOT NULL,
                 predicted_roi_7d REAL,
                 actual_roi_7d REAL,
                 roi_divergence REAL,
                 predicted_trade_count_7d INTEGER,
                 actual_trade_count_7d INTEGER,
                 trade_count_divergence INTEGER,
+                candidate_roi REAL,
+                champion_roi REAL,
+                roi_gap REAL,
+                candidate_mdd REAL,
+                champion_mdd REAL,
+                virtual_rollback INTEGER DEFAULT 0,
+                actual_label TEXT,
+                actual_label_source TEXT,
+                due_at INTEGER NOT NULL DEFAULT 0,
+                evaluated_at INTEGER,
+                locked_at INTEGER,
+                retry_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                evaluation_status TEXT NOT NULL DEFAULT 'PENDING',
+                horizon_type TEXT,
+                horizon_value INTEGER,
+                policy_version TEXT,
+                scorer_version TEXT,
+                predicted_risk_score REAL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE
+                FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                UNIQUE (proposal_id, horizon_name)
             )
         ''')
 
@@ -515,16 +536,132 @@ async def init_db(db_path: str = None):
                 final_promotion_score REAL,
                 shadow_risk_score REAL,
                 replay_drift REAL,
-                correction_active INTEGER NOT NULL,
+                correction_active INTEGER DEFAULT 0,
                 operation_mode TEXT,
                 model_version TEXT,
                 scaler_version TEXT,
                 strategy_version_id INTEGER,
                 simulation_session_id TEXT,
                 decision_type TEXT,
-                blocked_reason TEXT
+                blocked_reason TEXT,
+                trade_age_ms INTEGER,
+                orderbook_age_ms INTEGER,
+                indicator_age_ms INTEGER,
+                is_fresh INTEGER DEFAULT 1,
+                stale_reason TEXT,
+                snapshot_version TEXT,
+                snapshot_hash TEXT,
+                feature_vector_hash TEXT,
+                orderbook_available INTEGER DEFAULT 0,
+                market_type TEXT,
+                session_state TEXT,
+                volatility_regime TEXT,
+                liquidity_regime TEXT,
+                exchange TEXT,
+                tps REAL,
+                trade_count INTEGER,
+                volume REAL,
+                idle_time REAL
             )
         ''')
+
+        # 20. promotion_event_log [NEW]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS promotion_event_log (
+                global_sequence_no INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_id TEXT UNIQUE NOT NULL,
+                proposal_id TEXT NOT NULL,
+                sequence_no INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                payload TEXT,
+                timestamp REAL NOT NULL,
+                feature_snapshot TEXT,
+                graph_embedding TEXT,
+                model_version TEXT,
+                scaler_version TEXT,
+                UNIQUE(proposal_id, sequence_no)
+            )
+        ''')
+
+        # 21. universe_guard_state [NEW]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS universe_guard_state (
+                symbol TEXT PRIMARY KEY,
+                status TEXT,
+                blocked_reason TEXT,
+                blocked_count INTEGER DEFAULT 0,
+                last_blocked_at REAL,
+                last_event_logged_reason TEXT
+            )
+        ''')
+
+        # [Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 감지 및 실행
+        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='proposal_evaluations'")
+        row = await cursor.fetchone()
+        if row:
+            sql = row[0]
+            if "UNIQUE (proposal_id)" in sql or "proposal_id INTEGER UNIQUE" in sql or "horizon_name" not in sql:
+                logger.info("[Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 시작")
+                
+                await db.execute("DROP TABLE IF EXISTS proposal_evaluations_backup")
+                await db.execute("CREATE TABLE proposal_evaluations_backup AS SELECT * FROM proposal_evaluations")
+                await db.execute("DROP TABLE proposal_evaluations")
+                
+                await db.execute('''
+                    CREATE TABLE proposal_evaluations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        proposal_id INTEGER NOT NULL,
+                        horizon_name TEXT NOT NULL,
+                        predicted_roi_7d REAL,
+                        actual_roi_7d REAL,
+                        roi_divergence REAL,
+                        predicted_trade_count_7d INTEGER,
+                        actual_trade_count_7d INTEGER,
+                        trade_count_divergence INTEGER,
+                        candidate_roi REAL,
+                        champion_roi REAL,
+                        roi_gap REAL,
+                        candidate_mdd REAL,
+                        champion_mdd REAL,
+                        virtual_rollback INTEGER DEFAULT 0,
+                        actual_label TEXT,
+                        actual_label_source TEXT,
+                        due_at INTEGER NOT NULL DEFAULT 0,
+                        evaluated_at INTEGER,
+                        locked_at INTEGER,
+                        retry_count INTEGER DEFAULT 0,
+                        last_error TEXT,
+                        evaluation_status TEXT NOT NULL DEFAULT 'PENDING',
+                        horizon_type TEXT,
+                        horizon_value INTEGER,
+                        policy_version TEXT,
+                        scorer_version TEXT,
+                        predicted_risk_score REAL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                        UNIQUE (proposal_id, horizon_name)
+                    )
+                ''')
+                
+                try:
+                    await db.execute('''
+                        INSERT OR IGNORE INTO proposal_evaluations (
+                            proposal_id, horizon_name, predicted_roi_7d, actual_roi_7d, roi_divergence,
+                            predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence,
+                            due_at, evaluation_status, horizon_type, horizon_value, policy_version, scorer_version
+                        )
+                        SELECT 
+                            proposal_id, '7d', predicted_roi_7d, actual_roi_7d, roi_divergence,
+                            predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence,
+                            0, 'COMPLETED', 'elapsed', 604800, 'v1', 'mock_v1'
+                        FROM proposal_evaluations_backup
+                    ''')
+                    logger.info("[Migration] proposal_evaluations 기존 데이터 이관 완료")
+                except Exception as e:
+                    logger.error(f"[Migration] proposal_evaluations 복원 중 예외: {e}")
+                    
+                await db.execute("DROP TABLE IF EXISTS proposal_evaluations_backup")
+                logger.info("[Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 완수")
 
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
@@ -541,8 +678,11 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_perf_snap ON strategy_performance_snapshots (strategy_id, version_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_market_regime_sum ON market_regime_summaries (symbol, timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_prop_group ON strategy_proposals (proposal_group_id)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id ON proposal_evaluations (proposal_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_status_due ON proposal_evaluations (evaluation_status, due_at)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id_horizon ON proposal_evaluations (proposal_id, horizon_name)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_girs_shadow_metrics_time ON girs_shadow_metrics (timestamp DESC)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_promotion_event_log_prop ON promotion_event_log (proposal_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
 
         
         await db.commit()
@@ -553,6 +693,17 @@ async def init_db(db_path: str = None):
 
 async def migrate_data(db_path: str = None):
     async with get_db_conn(db_path) as db:
+        # universe_guard_state 테이블 생성 보장
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS universe_guard_state (
+                symbol TEXT PRIMARY KEY,
+                status TEXT,
+                blocked_reason TEXT,
+                blocked_count INTEGER DEFAULT 0,
+                last_blocked_at REAL,
+                last_event_logged_reason TEXT
+            )
+        ''')
         # exchange_assets 테이블에 is_delisted 컬럼이 없으면 마이그레이션 수행
         await ensure_column(db, 'exchange_assets', 'is_delisted', 'INTEGER DEFAULT 0')
 
@@ -562,6 +713,26 @@ async def migrate_data(db_path: str = None):
         await ensure_column(db, 'strategy_proposals', 'counterfactual_roi', 'REAL DEFAULT 0.0')
         await ensure_column(db, 'strategy_proposals', 'counterfactual_mdd', 'REAL DEFAULT 0.0')
         await ensure_column(db, 'strategy_proposals', 'is_counterfactual_tracked', 'INTEGER DEFAULT 0')
+
+        # girs_shadow_metrics 신규 필드 마이그레이션
+        await ensure_column(db, 'girs_shadow_metrics', 'trade_age_ms', 'INTEGER')
+        await ensure_column(db, 'girs_shadow_metrics', 'orderbook_age_ms', 'INTEGER')
+        await ensure_column(db, 'girs_shadow_metrics', 'indicator_age_ms', 'INTEGER')
+        await ensure_column(db, 'girs_shadow_metrics', 'is_fresh', 'INTEGER DEFAULT 1')
+        await ensure_column(db, 'girs_shadow_metrics', 'stale_reason', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'snapshot_version', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'snapshot_hash', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'feature_vector_hash', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'orderbook_available', 'INTEGER DEFAULT 0')
+        await ensure_column(db, 'girs_shadow_metrics', 'market_type', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'session_state', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'volatility_regime', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'liquidity_regime', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'exchange', 'TEXT')
+        await ensure_column(db, 'girs_shadow_metrics', 'tps', 'REAL')
+        await ensure_column(db, 'girs_shadow_metrics', 'trade_count', 'INTEGER')
+        await ensure_column(db, 'girs_shadow_metrics', 'volume', 'REAL')
+        await ensure_column(db, 'girs_shadow_metrics', 'idle_time', 'REAL')
 
         tables = ['trades', 'candles', 'positions', 'orders_history']
         for table in tables:

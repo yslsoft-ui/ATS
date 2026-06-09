@@ -160,29 +160,78 @@ def test_report_generation_definitions(temp_db_path):
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS strategy_proposals (
-            id INTEGER PRIMARY KEY, status TEXT, rolled_back_at INTEGER
+            id INTEGER PRIMARY KEY,
+            strategy_id TEXT,
+            portfolio_id INTEGER,
+            status TEXT,
+            outcome TEXT,
+            original_params TEXT,
+            proposed_params TEXT,
+            confidence_score REAL
         )
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS proposal_evaluations (
-            proposal_id INTEGER PRIMARY KEY, roi_divergence REAL
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            proposal_id INTEGER,
+            horizon_name TEXT,
+            candidate_roi REAL,
+            champion_roi REAL,
+            roi_gap REAL,
+            candidate_mdd REAL,
+            champion_mdd REAL,
+            virtual_rollback INTEGER,
+            actual_label TEXT,
+            actual_label_source TEXT,
+            predicted_risk_score REAL,
+            horizon_type TEXT,
+            horizon_value INTEGER,
+            evaluation_status TEXT
         )
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
-            timestamp REAL, proposal_id TEXT, final_promotion_score REAL, decision_type TEXT
+            timestamp REAL, proposal_id TEXT, strategy_id TEXT, blocked_reason TEXT,
+            market_type TEXT, session_state TEXT, volatility_regime TEXT, liquidity_regime TEXT, exchange TEXT,
+            correction_active INTEGER
         )
     """)
     
-    # 1. False Positive: GIRS 차단(score < 0.8), 실제 성과 좋음 (roi_div >= -2.0, no rollback)
-    c.execute("INSERT INTO strategy_proposals VALUES (1, 'PENDING', NULL)")
-    c.execute("INSERT INTO proposal_evaluations VALUES (1, 1.5)")
-    c.execute("INSERT INTO girs_shadow_metrics VALUES (1000.0, '1', 0.6, 'SHADOW')")
+    # 1. False Positive: GIRS 차단(score=0.6 >= cutoff=0.45), 실제 GOOD (actual_label='GOOD')
+    c.execute("""
+        INSERT INTO strategy_proposals (id, status, outcome, original_params, proposed_params, confidence_score)
+        VALUES (1, 'PENDING', 'RUNNING', '{}', '{}', 80)
+    """)
+    c.execute("""
+        INSERT INTO proposal_evaluations (
+            proposal_id, horizon_name, candidate_roi, champion_roi, roi_gap,
+            candidate_mdd, champion_mdd, virtual_rollback, actual_label, actual_label_source,
+            predicted_risk_score, horizon_type, horizon_value, evaluation_status
+        )
+        VALUES (1, '10m', 0.05, 0.02, 0.03, 0.01, 0.02, 0, 'GOOD', 'NORMAL', 0.6, 'elapsed', 600, 'COMPLETED')
+    """)
+    c.execute("""
+        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange)
+        VALUES (1000.0, '1', 'rsi', 'crypto', 'upbit')
+    """)
     
-    # 2. False Negative: GIRS 승격(score >= 0.8), 실제 롤백됨
-    c.execute("INSERT INTO strategy_proposals VALUES (2, 'APPLIED', 123456789)")
-    c.execute("INSERT INTO proposal_evaluations VALUES (2, 0.5)")
-    c.execute("INSERT INTO girs_shadow_metrics VALUES (1000.0, '2', 0.9, 'SHADOW')")
+    # 2. False Negative: GIRS 통과(score=0.3 < cutoff=0.45), 실제 BAD (actual_label='BAD')
+    c.execute("""
+        INSERT INTO strategy_proposals (id, status, outcome, original_params, proposed_params, confidence_score)
+        VALUES (2, 'APPLIED', 'RUNNING', '{}', '{}', 85)
+    """)
+    c.execute("""
+        INSERT INTO proposal_evaluations (
+            proposal_id, horizon_name, candidate_roi, champion_roi, roi_gap,
+            candidate_mdd, champion_mdd, virtual_rollback, actual_label, actual_label_source,
+            predicted_risk_score, horizon_type, horizon_value, evaluation_status
+        )
+        VALUES (2, '10m', 0.01, 0.04, -0.03, 0.05, 0.02, 1, 'BAD', 'NORMAL', 0.3, 'elapsed', 600, 'COMPLETED')
+    """)
+    c.execute("""
+        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange)
+        VALUES (1000.0, '2', 'rsi', 'crypto', 'upbit')
+    """)
     
     conn.commit()
     conn.close()
@@ -194,7 +243,10 @@ def test_report_generation_definitions(temp_db_path):
     with open(report_file, "r", encoding="utf-8") as f:
         content = f.read()
         
-    assert "False Positive Rate (GIRS 과잉 차단)" in content
-    assert "False Negative Rate (GIRS 위험 노출)" in content
-    assert "False Positive: 1" in content
-    assert "False Negative: 1" in content
+    # 새로운 리포트 형식 검증 (FP 1개, FN 1개 발생 확인)
+    assert "TP:0 / TN:0 / FP:1 / FN:1" in content
+    assert "Expected Calibration Error" in content
+    assert "임계값(Threshold)별 참고 분석" in content
+    assert "0.3 | 1 | 0 | 1 | 0 |" in content # threshold 0.3일 때
+    assert "0.5 | 0 | 0 | 1 | 1 |" in content # threshold 0.5일 때
+    assert "0.7 | 0 | 1 | 0 | 1 |" in content # threshold 0.7일 때

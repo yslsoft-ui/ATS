@@ -413,6 +413,7 @@ async def test_proposal_evaluation():
     # 3. 사후 평가 데이터 적재 검증
     eval_data = {
         "proposal_id": proposal_id,
+        "horizon_name": "7d",
         "predicted_roi_7d": 5.0,
         "actual_roi_7d": 6.2,
         "roi_divergence": 1.2,
@@ -444,6 +445,87 @@ async def test_proposal_evaluation():
     # 이제 완료되었으므로 평가 대상에서 제외되는지 확인
     targets_after = await repo.get_unevaluated_applied_proposals()
     assert len(targets_after) == 0
+
+@pytest.mark.asyncio
+async def test_proposal_evaluation_legacy_without_horizon_name():
+    from src.database.connection import get_db_conn
+    repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+    strategy_id = "rsi_strategy_legacy"
+    portfolio_id = "sim_port_legacy"
+    
+    # 1. 제안 모사
+    proposal_data = {
+        "insight_id": None,
+        "proposal_group_id": "group_legacy",
+        "version": 1,
+        "portfolio_id": portfolio_id,
+        "strategy_id": strategy_id,
+        "status": "APPLIED",
+        "outcome": "RUNNING",
+        "original_params": {"rsi_window": 14},
+        "proposed_params": {"rsi_window": 16},
+        "metrics": {"roi_7d": 5.0, "trade_count_7d": 2},
+        "mutation_trace": {},
+        "confidence_score": 70,
+        "applied_at": int(time.time() * 1000),
+        "rolled_back_at": None
+    }
+    
+    proposal_id = await repo.insert_strategy_proposal(proposal_data)
+    assert proposal_id > 0
+    
+    # 2. horizon_name이 없는 레거시 eval_data 적재 검증
+    eval_data = {
+        "proposal_id": proposal_id,
+        "predicted_roi_7d": 5.0,
+        "actual_roi_7d": 6.2,
+        "roi_divergence": 1.2,
+        "predicted_trade_count_7d": 2,
+        "actual_trade_count_7d": 3,
+        "trade_count_divergence": 1
+    }
+    
+    eval_id = await repo.insert_proposal_evaluation(eval_data)
+    assert eval_id > 0
+    
+    # 기본값인 "7d"로 저장되어 있는지 조회 검증
+    async with get_db_conn(TEST_DB_PATH) as db:
+        async with db.execute("SELECT horizon_name FROM proposal_evaluations WHERE id = ?", (eval_id,)) as cur:
+            row = await cur.fetchone()
+            assert row is not None
+            assert row["horizon_name"] == "7d"
+            
+    # 3. 다중 Horizon 저장 검증 ("1d", "3d", "7d"가 동일 proposal_id에 충돌 없이 1:N으로 추가되는지 검증)
+    # 7d는 이미 삽입되었으므로 1d, 3d를 삽입
+    eval_data_1d = dict(eval_data)
+    eval_data_1d["horizon_name"] = "1d"
+    eval_data_1d["actual_roi_7d"] = 1.1
+    
+    eval_data_3d = dict(eval_data)
+    eval_data_3d["horizon_name"] = "3d"
+    eval_data_3d["actual_roi_7d"] = 3.3
+    
+    eval_id_1d = await repo.insert_proposal_evaluation(eval_data_1d)
+    eval_id_3d = await repo.insert_proposal_evaluation(eval_data_3d)
+    
+    assert eval_id_1d > 0
+    assert eval_id_3d > 0
+    
+    # DB에 총 3개의 horizon_name 레코드가 정상 적재되었는지 확인
+    async with get_db_conn(TEST_DB_PATH) as db:
+        async with db.execute(
+            "SELECT horizon_name, actual_roi_7d FROM proposal_evaluations WHERE proposal_id = ? ORDER BY horizon_name",
+            (proposal_id,)
+        ) as cur:
+            rows = await cur.fetchall()
+            assert len(rows) == 3
+            # 정렬 순서대로 1d, 3d, 7d
+            assert rows[0]["horizon_name"] == "1d"
+            assert rows[0]["actual_roi_7d"] == 1.1
+            assert rows[1]["horizon_name"] == "3d"
+            assert rows[1]["actual_roi_7d"] == 3.3
+            assert rows[2]["horizon_name"] == "7d"
+            assert rows[2]["actual_roi_7d"] == 6.2
 
 @pytest.mark.asyncio
 async def test_strategy_execution_full_loop():

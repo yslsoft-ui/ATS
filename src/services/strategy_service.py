@@ -42,6 +42,19 @@ class StrategyService(DaemonService):
         self.girs_scorer: Optional[GIRSScorer] = None
         self.current_model_version: Optional[str] = None
 
+        self.universe_status: Dict[str, str] = {}  # symbol -> status (WATCHED, CANDIDATE)
+        self.symbol_last_candidate_time: Dict[str, float] = {}  # symbol -> timestamp
+        self.daily_proposal_count = 0
+        self.last_proposal_reset_date = ""
+        
+        # 차단 및 요약 통계 관련 필드
+        self.cooldown_blocked_count = 0
+        self.quota_blocked_count = 0
+        self.limit_blocked_count = 0
+        self.promotion_count = 0
+        self.demotion_count = 0
+        self.last_universe_summary_time = time.time()
+
     async def fetch_exchange_symbols(self, exchange_id: str, config: Dict[str, Any]) -> List[str]:
         symbols = config.get('exchanges', {}).get(exchange_id, {}).get('symbols', [])
         if symbols:
@@ -214,6 +227,15 @@ class StrategyService(DaemonService):
         self._tasks.append(asyncio.create_task(self._periodic_proposal_evaluation_loop()))
         self._tasks.append(asyncio.create_task(self._girs_shadow_metrics_collector_loop()))
         self._tasks.append(asyncio.create_task(self._periodic_shadow_report_loop()))
+        
+        # 초기 감사 로그 청소 비동기 기동 (7일 보존 설정)
+        if self.portfolio_manager and self.portfolio_manager.repository:
+            async def run_clean():
+                try:
+                    await self.portfolio_manager.repository.clean_old_system_events(retention_days=7)
+                except Exception as e:
+                    logger.error(f"[StrategyService] 초기 감사 로그 청소 중 오류: {e}")
+            self._tasks.append(asyncio.create_task(run_clean()))
 
     async def stop(self):
         # 1. 리스너 중단
@@ -702,10 +724,11 @@ class StrategyService(DaemonService):
             self.current_model_version = model_ver
 
     async def _girs_shadow_metrics_collector_loop(self):
-        """30초 주기로 GIRS 섀도 메트릭 및 추적 필드들을 수집하여 DB에 적재합니다."""
-        logger.info("[StrategyService] GIRS Shadow Metrics Collector 루프 기동")
+        """30초 주기로 GIRS 섀도 메트릭 및 추적 필드들을 수집하여 DB에 적재하고, 유니버스 FSM 상태를 제어합니다."""
+        logger.info("[StrategyService] GIRS Shadow Metrics & Universe Control 루프 기동")
         from src.database.connection import get_db_conn
         from src.engine.girs_types import FeatureSnapshot
+        from datetime import datetime
         
         try:
             while True:
@@ -734,6 +757,19 @@ class StrategyService(DaemonService):
                         
                         blocked_reason = "SHADOW_MODE_ACTIVE" if girs_shadow_mode else None
                         
+                        # GIRS 가드 제어 설정 로드
+                        exchange_quota = self.config_manager.get("system.exchange_quota", {"upbit": 20, "kis": 20})
+                        symbol_cooldown_seconds = self.config_manager.get("system.symbol_cooldown_seconds", 3600)
+                        daily_proposal_limit = self.config_manager.get("system.daily_proposal_limit", 100)
+
+                        # 일일 제안 한도 리셋 체크
+                        today_date = datetime.now().strftime("%Y-%m-%d")
+                        if self.last_proposal_reset_date != today_date:
+                            self.daily_proposal_count = 0
+                            self.last_proposal_reset_date = today_date
+
+                        passed_symbols_dict = {}
+
                         try:
                             async with get_db_conn(self.db_path) as db:
                                 for prop in pending_proposals:
@@ -758,7 +794,10 @@ class StrategyService(DaemonService):
                                                 regime_features=feat_dict.get("regime_features", {}),
                                                 schema_version=feat_dict.get("schema_version", "1.0"),
                                                 feature_hash=feat_dict.get("feature_hash", ""),
-                                                generated_at=feat_dict.get("generated_at", time.time())
+                                                generated_at=feat_dict.get("generated_at", time.time()),
+                                                exchange=feat_dict.get("exchange", "upbit"),
+                                                symbol=feat_dict.get("symbol", "BTC"),
+                                                market_type=feat_dict.get("market_type", "crypto")
                                             )
                                         except Exception as e:
                                             logger.error(f"[StrategyService] FeatureSnapshot 파싱 실패: {e}")
@@ -767,7 +806,10 @@ class StrategyService(DaemonService):
                                         snapshot = FeatureSnapshot(
                                             price_features={"close": 50000.0, "returns": 0.0, "volatility": 0.1},
                                             liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 1000.0},
-                                            regime_features={"regime_index": 1.0}
+                                            regime_features={"regime_index": 1.0},
+                                            exchange="upbit",
+                                            symbol="BTC",
+                                            market_type="crypto"
                                         )
                                     
                                     # 3. GIRSScorer 계산 수행
@@ -812,6 +854,10 @@ class StrategyService(DaemonService):
                                     
                                     shadow_risk_score = meta_score.get("shadow_risk_score")
                                     
+                                    # Tps, idle_time 등 로직 예시
+                                    tps = snapshot.tps if hasattr(snapshot, 'tps') else 1.0
+                                    idle_time = snapshot.idle_time if hasattr(snapshot, 'idle_time') else 0.0
+                                    
                                     # 4. strategy_versions에서 현재 버전 획득
                                     async with db.execute("SELECT current_version_id FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cur:
                                         ver_row = await cur.fetchone()
@@ -834,12 +880,221 @@ class StrategyService(DaemonService):
                                         "strategy_version_id": strategy_version_id,
                                         "simulation_session_id": sim_session_id,
                                         "decision_type": "SHADOW",
-                                        "blocked_reason": blocked_reason
+                                        "blocked_reason": blocked_reason,
+                                        "trade_age_ms": snapshot.trade_age_ms,
+                                        "orderbook_age_ms": snapshot.orderbook_age_ms,
+                                        "indicator_age_ms": snapshot.indicator_age_ms,
+                                        "is_fresh": 1 if snapshot.is_fresh else 0,
+                                        "stale_reason": snapshot.stale_reason,
+                                        "snapshot_version": snapshot.snapshot_version,
+                                        "snapshot_hash": snapshot.snapshot_hash,
+                                        "feature_vector_hash": snapshot.feature_vector_hash,
+                                        "orderbook_available": 1 if snapshot.orderbook_available else 0,
+                                        "market_type": snapshot.market_type,
+                                        "session_state": snapshot.session_state,
+                                        "volatility_regime": snapshot.volatility_regime,
+                                        "liquidity_regime": snapshot.liquidity_regime,
+                                        "exchange": snapshot.exchange,
+                                        "tps": tps,
+                                        "trade_count": int(volume),
+                                        "volume": volume,
+                                        "idle_time": idle_time
                                     }
                                     await self.portfolio_manager.repository.insert_girs_shadow_metric(metric_data)
                                     logger.info(f"[StrategyService] 섀도 메트릭 적재 완료: proposal_id={proposal_id_str}, score={final_promotion_score:.4f}")
+
+                                    # 6. 승격 후보 판별 및 강등 처리
+                                    price = snapshot.price_features.get("close", 0.0)
+                                    value = volume * price  # 거래대금
+                                    
+                                    if snapshot.is_fresh and tps >= 0.2 and idle_time < 30.0 and volume > 10.0 and value > 100000.0:
+                                        existing = passed_symbols_dict.get(snapshot.symbol)
+                                        if not existing or value > existing[0]:
+                                            passed_symbols_dict[snapshot.symbol] = (value, snapshot)
+                                    else:
+                                        current_status = self.universe_status.get(snapshot.symbol, "WATCHED")
+                                        if current_status == "CANDIDATE":
+                                            self.universe_status[snapshot.symbol] = "WATCHED"
+                                            self.demotion_count += 1
+                                            msg = f"기준 미달 강등 (fresh={snapshot.is_fresh}, tps={tps:.2f}, idle={idle_time:.1f}s, volume={volume:.1f}, value={value:,.0f}원)"
+                                            
+                                            await self.portfolio_manager.repository.insert_system_event(
+                                                "UNIVERSE_DEMOTION", snapshot.symbol, msg
+                                            )
+                                            await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                symbol=snapshot.symbol,
+                                                status="WATCHED",
+                                                blocked_reason=None,
+                                                blocked_count=0,
+                                                last_blocked_at=None,
+                                                last_event_logged_reason=msg
+                                            )
+                                            logger.info(f"[StrategyService] [Universe] {snapshot.symbol} CANDIDATE -> WATCHED 강등 ({msg})")
+
+                            # 7. 거래소별 Quota & Cooldown 랭킹 기반 승격/유지 관리
+                            by_exchange = {}
+                            for sym, (val, snap) in passed_symbols_dict.items():
+                                ex = snap.exchange.lower()
+                                by_exchange.setdefault(ex, []).append((sym, val, snap))
+
+                            for ex, items in by_exchange.items():
+                                quota = exchange_quota.get(ex, 20)
+                                items.sort(key=lambda x: x[1], reverse=True)
+                                
+                                candidate_candidates = items[:quota]
+                                downgraded_candidates = items[quota:]
+                                
+                                # 7.1. Quota 밖으로 밀려난 후보들 강등/차단
+                                for sym, val, snap in downgraded_candidates:
+                                    current_status = self.universe_status.get(sym, "WATCHED")
+                                    if current_status == "CANDIDATE":
+                                        self.universe_status[sym] = "WATCHED"
+                                        self.demotion_count += 1
+                                        msg = "Quota 초과 및 순위 밀림 강등"
+                                        await self.portfolio_manager.repository.insert_system_event("UNIVERSE_DEMOTION", sym, msg)
+                                        await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                            symbol=sym,
+                                            status="WATCHED",
+                                            blocked_reason=None,
+                                            blocked_count=0,
+                                            last_blocked_at=None,
+                                            last_event_logged_reason=msg
+                                        )
+                                        logger.info(f"[StrategyService] [Universe] {sym} CANDIDATE -> WATCHED 강등 ({msg})")
+                                    else:
+                                        self.quota_blocked_count += 1
+                                        prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                        prev_reason = prev_state.get("blocked_reason") if prev_state else None
+                                        prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
+                                        
+                                        current_time_s = time.time()
+                                        if prev_reason != "QUOTA":
+                                            await self.portfolio_manager.repository.insert_system_event(
+                                                "PROMOTION_QUOTA_BLOCKED", sym, "Quota 초과 및 순위 밀림으로 승격 차단"
+                                            )
+                                            new_count = 1
+                                        else:
+                                            new_count = prev_count + 1
+                                            
+                                        await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                            symbol=sym,
+                                            status="WATCHED",
+                                            blocked_reason="QUOTA",
+                                            blocked_count=new_count,
+                                            last_blocked_at=current_time_s,
+                                            last_event_logged_reason="QUOTA"
+                                        )
+
+                                # 7.2. Quota 내 후보들 승격/유지
+                                for sym, val, snap in candidate_candidates:
+                                    current_status = self.universe_status.get(sym, "WATCHED")
+                                    
+                                    if current_status == "WATCHED":
+                                        last_cand_time = self.symbol_last_candidate_time.get(sym, 0.0)
+                                        current_time_s = time.time()
+                                        
+                                        # 7.2.1. 쿨다운 체크
+                                        if current_time_s - last_cand_time < symbol_cooldown_seconds:
+                                            self.cooldown_blocked_count += 1
+                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                            prev_reason = prev_state.get("blocked_reason") if prev_state else None
+                                            prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
+                                            
+                                            if prev_reason != "COOLDOWN":
+                                                await self.portfolio_manager.repository.insert_system_event(
+                                                    "PROMOTION_COOLDOWN_BLOCKED", sym, 
+                                                    f"재승격 쿨다운 미경과 (남은시간: {symbol_cooldown_seconds - (current_time_s - last_cand_time):.1f}초)"
+                                                )
+                                                new_count = 1
+                                            else:
+                                                new_count = prev_count + 1
+                                                
+                                            await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                symbol=sym,
+                                                status="WATCHED",
+                                                blocked_reason="COOLDOWN",
+                                                blocked_count=new_count,
+                                                last_blocked_at=current_time_s,
+                                                last_event_logged_reason="COOLDOWN"
+                                            )
+                                            
+                                        # 7.2.2. 일일 제안 한도 체크
+                                        elif self.daily_proposal_count >= daily_proposal_limit:
+                                            self.limit_blocked_count += 1
+                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                            prev_reason = prev_state.get("blocked_reason") if prev_state else None
+                                            prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
+                                            
+                                            if prev_reason != "LIMIT":
+                                                await self.portfolio_manager.repository.insert_system_event(
+                                                    "PROMOTION_LIMIT_BLOCKED", sym, f"일일 제안 한도({daily_proposal_limit}) 초과로 승격 보류"
+                                                )
+                                                new_count = 1
+                                            else:
+                                                new_count = prev_count + 1
+                                                
+                                            await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                symbol=sym,
+                                                status="WATCHED",
+                                                blocked_reason="LIMIT",
+                                                blocked_count=new_count,
+                                                last_blocked_at=current_time_s,
+                                                last_event_logged_reason="LIMIT"
+                                            )
+                                            logger.warning(f"[StrategyService] [Universe] 일일 제안 한도({daily_proposal_limit}) 초과로 {sym} 승격 보류")
+                                            
+                                        # 7.2.3. 승격 성공
+                                        else:
+                                            self.universe_status[sym] = "CANDIDATE"
+                                            self.symbol_last_candidate_time[sym] = current_time_s
+                                            self.daily_proposal_count += 1
+                                            self.promotion_count += 1
+                                            
+                                            msg = f"WATCHED -> CANDIDATE 승격 (거래대금={val:,.0f}원)"
+                                            await self.portfolio_manager.repository.insert_system_event("UNIVERSE_PROMOTION", sym, msg)
+                                            await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                symbol=sym,
+                                                status="CANDIDATE",
+                                                blocked_reason=None,
+                                                blocked_count=0,
+                                                last_blocked_at=None,
+                                                last_event_logged_reason=msg
+                                            )
+                                            logger.info(f"[StrategyService] [Universe] {sym} WATCHED -> CANDIDATE 승격 (거래대금={val:,.0f}원, daily_proposal={self.daily_proposal_count}/{daily_proposal_limit})")
+                                    else:
+                                        # 이미 CANDIDATE인 경우 상태 유지
+                                        pass
+
+                            # 1시간 주기 UNIVERSE_GUARD_SUMMARY 적재 및 카운터 리셋
+                            current_time_s = time.time()
+                            if current_time_s - self.last_universe_summary_time >= 3600:
+                                summary_msg = json.dumps({
+                                    "cooldown_blocked_count": self.cooldown_blocked_count,
+                                    "quota_blocked_count": self.quota_blocked_count,
+                                    "limit_blocked_count": self.limit_blocked_count,
+                                    "promotion_count": self.promotion_count,
+                                    "demotion_count": self.demotion_count
+                                })
+                                await self.portfolio_manager.repository.insert_system_event(
+                                    "UNIVERSE_GUARD_SUMMARY", "universe_control", summary_msg
+                                )
+                                logger.info(f"[StrategyService] [Universe] 1시간 주기 요약 적재 완료: {summary_msg}")
+                                
+                                # 카운터 및 시간 리셋
+                                self.cooldown_blocked_count = 0
+                                self.quota_blocked_count = 0
+                                self.limit_blocked_count = 0
+                                self.promotion_count = 0
+                                self.demotion_count = 0
+                                self.last_universe_summary_time = current_time_s
+                                
+                                # 비동기 감사 로그 정리
+                                try:
+                                    await self.portfolio_manager.repository.clean_old_system_events(retention_days=7)
+                                except Exception as ex:
+                                    logger.error(f"[StrategyService] 주기적 감사 로그 청소 중 오류: {ex}")
                         except Exception as e:
-                            logger.error(f"[StrategyService] 섀도 메트릭 DB 처리 에러: {e}")
+                            logger.error(f"[StrategyService] 섀도 메트릭 DB 및 FSM 처리 에러: {e}")
                 
                 # 30초 대기
                 await asyncio.sleep(30)
