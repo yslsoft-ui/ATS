@@ -6,6 +6,7 @@
     <title>Upbit Real-time Terminal</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
 </head>
 <body>
     <div id="global-emergency-banner" class="emergency-banner" style="display: none;">
@@ -237,12 +238,184 @@
             <!-- 전략 뷰 (초기엔 숨김) -->
             <section id="strategy-view" style="display: none;">
                 <header class="main-header">
-                    <h1>🎯 보유 전략 관리</h1>
+                    <h1>🎯 보유 전략 및 의사결정 콘솔</h1>
                 </header>
-                <div class="strategy-container">
-                    <div id="strategy-list" class="strategy-list-grid">
-                        <!-- 에이전트가 동적으로 전략 카드를 생성합니다 -->
-                        <p class="status-text">전략 목록을 불러오는 중...</p>
+                <div class="strategy-layout" style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; width: 100%;">
+                    <!-- 좌측: 전략 목록 카드 그리드 -->
+                    <div style="flex: 0 0 300px; width: 300px; display: flex; flex-direction: column; gap: 15px;">
+                        <div class="card" style="padding: 15px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
+                            <h3 style="margin: 0 0 5px 0; color: #F8FAFC; font-size: 0.95rem;">🎯 전략 목록</h3>
+                            <div id="strategy-list" class="strategy-list-grid" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                                <p class="status-text">전략 목록을 불러오는 중...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 우측: 선택된 전략의 상세 운영 대시보드 -->
+                    <div id="strategy-detail-panel" style="flex: 1; min-width: 0; display: none; flex-direction: column; gap: 20px;">
+                        <!-- 전략 상태 패널 및 ROI 차트 -->
+                        <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
+                            <!-- 전략 요약 및 활성 버전 정보 -->
+                            <div class="card" style="flex: 1; min-width: 300px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 12px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">
+                                    <h2 id="detail-strategy-name" style="margin: 0; font-size: 1.2rem; color: #F8FAFC;">전략명</h2>
+                                    <span id="detail-strategy-status" class="ctx-badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; font-size: 0.75rem; padding: 2px 8px;">가동중</span>
+                                </div>
+                                <div class="detail-metrics-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.85rem;">
+                                    <div><span style="color: #94A3B8;">현재 버전 ID:</span> <strong id="detail-current-version" style="color: #F8FAFC; margin-left: 5px;">-</strong></div>
+                                    <div><span style="color: #94A3B8;">마지막 적용:</span> <strong id="detail-applied-at" style="color: #F8FAFC; margin-left: 5px;">-</strong></div>
+                                    <div style="grid-column: span 2;"><span style="color: #94A3B8;">롤백 원인 버전:</span> <strong id="detail-rollback-source" style="color: #F8FAFC; margin-left: 5px;">None</strong></div>
+                                </div>
+                                <div style="margin-top: 5px; display: flex; flex-direction: column; gap: 4px;">
+                                    <span style="color: #94A3B8; font-size: 0.85rem;">⚙️ 현재 활성 파라미터:</span>
+                                    <pre id="detail-current-params" style="background: #0F172A; border: 1px solid #334155; border-radius: 4px; padding: 10px; font-family: 'Roboto Mono', monospace; font-size: 0.8rem; color: #38BDF8; margin: 0; overflow-x: auto; max-height: 120px;"></pre>
+                                </div>
+                            </div>
+                            
+                            <!-- Plotly 누적 ROI 차트 -->
+                            <div class="card" style="flex: 2; min-width: 400px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
+                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">📈 버전별 누적 ROI 추이 (시계열)</h3>
+                                <div id="strategy-roi-chart" style="width: 100%; height: 220px; background: #0F172A; border-radius: 4px; border: 1px solid #334155;"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- AI 제안 카드 영역 -->
+                        <div class="card" style="padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 15px; width: 100%;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">
+                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">🤖 AI 제안 및 의사결정 카드</h3>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <label style="color: #94A3B8; font-size: 0.75rem;">상태 필터:</label>
+                                    <select id="proposal-status-filter" onchange="filterProposals()" class="dark-input" style="font-size: 0.75rem; padding: 2px 6px; background: #0F172A; color: #F8FAFC; border: 1px solid #334155; border-radius: 4px; outline: none; cursor: pointer;">
+                                        <option value="PENDING">대기중 (Pending)</option>
+                                        <option value="APPLIED">적용됨 (Applied)</option>
+                                        <option value="PRUNED_DEFERRED">보류/폐기 (Deferred/Pruned)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="proposal-cards-container" style="display: flex; gap: 15px; flex-wrap: wrap; width: 100%;">
+                                <!-- PENDING 제안 카드들이 여기에 동적으로 채워짐 -->
+                                <p style="color: #64748B; font-size: 0.85rem;">현재 대기 중인 제안이 없습니다.</p>
+                            </div>
+                        </div>
+                        
+                        <!-- ───────────────────────────────── -->
+                        <!-- Step 4: AI 건강 지표 (접이식 패널) -->
+                        <!-- ───────────────────────────────── -->
+                        <details id="ai-health-panel" style="width: 100%;" open>
+                            <summary style="cursor: pointer; user-select: none; padding: 14px 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; list-style: none; color: #F8FAFC; font-size: 0.95rem; font-weight: 600;">
+                                <span style="font-size: 1rem;">🧠</span>
+                                AI 건강 지표 (Diversity Intelligence)
+                                <span id="ai-health-alert-badge" style="display: none; margin-left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; background: rgba(239, 68, 68, 0.2); color: #EF4444;">⚠ 수렴 경고</span>
+                                <span style="margin-left: auto; font-size: 0.75rem; color: #64748B;">▼</span>
+                            </summary>
+
+                            <div style="margin-top: 2px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-top: none; border-radius: 0 0 8px 8px; display: flex; flex-direction: column; gap: 16px;">
+
+                                <!-- 상단: Entropy 게이지 + λ 신호 + Pruning Accuracy -->
+                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+
+                                    <!-- Entropy 게이지 카드 -->
+                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">파라미터 공간 다양성</div>
+                                        <div id="ai-entropy-value" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #10B981;">—</div>
+                                        <div style="height: 6px; background: #1E293B; border-radius: 3px; overflow: hidden;">
+                                            <div id="ai-entropy-bar" style="height: 100%; width: 0%; border-radius: 3px; background: #10B981; transition: width 0.6s ease, background 0.4s;"></div>
+                                        </div>
+                                        <div id="ai-entropy-label" style="font-size: 0.72rem; color: #64748B;">측정 중...</div>
+                                    </div>
+
+                                    <!-- λ 보정 신호 카드 -->
+                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">λ 자동 보정 신호</div>
+                                        <div id="ai-lambda-boost" style="font-size: 1.8rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #F59E0B;">×—</div>
+                                        <div id="ai-alert-level" style="font-size: 0.8rem; padding: 3px 8px; border-radius: 4px; width: fit-content; background: rgba(100,116,139,0.2); color: #64748B;">NONE</div>
+                                        <div id="ai-threshold-delta" style="font-size: 0.72rem; color: #64748B;">다양성 임계치 조정: +0.00</div>
+                                    </div>
+
+                                    <!-- Pruning Accuracy 카드 -->
+                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">채점 오판율 (Pruning Bias)</div>
+                                        <div id="ai-outperform-rate" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #D946EF;">—%</div>
+                                        <div id="ai-pruning-counts" style="font-size: 0.72rem; color: #64748B;">추적 완료: 0건 / 오판: 0건</div>
+                                        <div id="ai-bias-alert" style="font-size: 0.72rem; display: none; color: #EF4444;">⚠ 편향 경고: 오판율 30% 초과</div>
+                                    </div>
+
+                                </div>
+
+                                <!-- Entropy 시계열 미니차트 -->
+                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px;">
+                                    <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; margin-bottom: 10px;">📉 Entropy 시계열 (최근 7일)</div>
+                                    <div id="ai-entropy-chart" style="width: 100%; height: 140px;"></div>
+                                </div>
+
+                                <!-- Mutation Trace Graph (파라미터 변이 계보) -->
+                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600;">🌿 파라미터 변이 계보 (Mutation Trace Graph)</div>
+                                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <label style="color: #64748B; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" id="ai-mutation-collapse-pruned" onchange="renderMutationGraph()" style="cursor: pointer; accent-color: #6366F1;">
+                                                    폐기 노드 숨기기
+                                                </label>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <label style="color: #64748B; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                                                    <input type="checkbox" id="ai-mutation-highlight-best" onchange="renderMutationGraph()" checked style="cursor: pointer; accent-color: #10B981;">
+                                                    최적 ROI 경로 강조
+                                                </label>
+                                            </div>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <label style="color: #64748B; font-size: 0.7rem;">기준 파라미터:</label>
+                                                <select id="mutation-graph-param-select" onchange="renderMutationGraph()" class="dark-input" style="font-size: 0.7rem; padding: 1px 4px; background: #1E293B; color: #F8FAFC; border: 1px solid #334155; border-radius: 3px; outline: none; cursor: pointer;"></select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="ai-mutation-chart" style="width: 100%; height: 320px; background: #0F172A; border-radius: 4px;"></div>
+                                    <div id="ai-mutation-meta-info" style="font-family: monospace; font-size: 0.7rem; color: #64748B; border-top: 1px solid rgba(148,163,184,0.05); padding-top: 6px; display: flex; justify-content: space-between;">
+                                        <span>노드: - | 에지: - | 최대깊이: -</span>
+                                        <span>분기수: - | 밀도: -</span>
+                                    </div>
+                                </div>
+
+                                <!-- Counterfactual 상세 목록 -->
+                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600;">🔍 반사실적 추적 목록 (Counterfactual)</div>
+                                        <button onclick="refreshAIHealth()" style="background: #1E293B; border: 1px solid #334155; color: #94A3B8; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; cursor: pointer;">↻ 새로고침</button>
+                                    </div>
+                                    <div id="ai-counterfactual-list" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+                                        <p style="color: #64748B; font-size: 0.8rem;">데이터를 불러오는 중...</p>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </details>
+
+                        <!-- 버전 히스토리 및 롤백 영역 -->
+
+                        <div class="card" style="padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; width: 100%;">
+                            <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.95rem; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">📜 파라미터 버전 이력 및 원클릭 롤백</h3>
+                            <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
+                                <table id="version-history-table">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 60px;">버전</th>
+                                            <th style="width: 80px;">부모 버전</th>
+                                            <th style="width: 80px;">변경인</th>
+                                            <th style="width: 130px;">변경 사유</th>
+                                            <th>신규 설정값</th>
+                                            <th>이전 설정값</th>
+                                            <th style="width: 150px;">변경 시각</th>
+                                            <th style="text-align: center; width: 110px;">복구</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="version-history-tbody">
+                                        <!-- JS에서 동적 렌더링 -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>

@@ -96,7 +96,43 @@ class StrategyService(DaemonService):
             for symbol in symbols:
                 instances = []
                 for s_id, s_params in enabled_strategies:
-                    strat = StrategyRegistry.create_strategy(s_id, s_params)
+                    # [V1] DB에 저장된 활성 버전 파라미터가 있는지 조회
+                    version_info = await self.portfolio_manager.repository.get_strategy_version(s_id)
+                    if version_info and version_info.get("current_params"):
+                        logger.info(f"[StrategyService] DB에서 전략 {s_id}의 최신 파라미터 복원 적용 (버전: {version_info['current_version_id']})")
+                        params = version_info["current_params"]
+                    else:
+                        params = s_params
+                        # 최초 기동이므로 DB에 버전 1로 초기 등록
+                        await self.portfolio_manager.repository.save_strategy_version(
+                            strategy_id=s_id,
+                            version_id=1,
+                            params=params,
+                            applied_at=int(time.time() * 1000)
+                        )
+                        await self.portfolio_manager.repository.insert_strategy_parameter_history(
+                            strategy_id=s_id,
+                            version_id=1,
+                            parent_version_id=None,
+                            old_params=None,
+                            new_params=json.dumps(params),
+                            proposal_id=None,
+                            is_current=1,
+                            changed_by='AUTO',
+                            change_reason='STARTUP_RESTORE'
+                        )
+                        logger.info(f"[StrategyService] 전략 {s_id} 최초 기동 파라미터를 버전 1로 등록 완료")
+
+                    # [V1] 기동 시점 STARTUP 스냅샷 기록
+                    latest_version = version_info['current_version_id'] if version_info else 1
+                    await self.record_performance_snapshot(
+                        strategy_id=s_id,
+                        version_id=latest_version,
+                        snapshot_type='STARTUP',
+                        params=params
+                    )
+
+                    strat = StrategyRegistry.create_strategy(s_id, params)
                     if strat:
                         instances.append(strat)
                 
@@ -160,6 +196,9 @@ class StrategyService(DaemonService):
         
         self._tasks.append(asyncio.create_task(self._market_data_loop()))
         self._tasks.append(asyncio.create_task(self._signal_data_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_performance_snapshot_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_proposal_generation_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_proposal_evaluation_loop()))
 
     async def stop(self):
         # 1. 리스너 중단
@@ -197,6 +236,38 @@ class StrategyService(DaemonService):
                 else:
                     logger.info("[StrategyService] 활성 세션이 없어 대기 상태로 진입합니다.")
             return True
+        elif data.get('type') == 'apply_params':
+            strategy_id = data.get('strategy_id')
+            version_id = data.get('version_id')
+            params = data.get('params')
+            reason = data.get('reason', 'MANUAL_UPDATE')
+            
+            if strategy_id and params and version_id:
+                logger.info(f"[StrategyService] 전략 파라미터 동적 갱신 수신: strategy_id={strategy_id}, version={version_id}, params={params}")
+                # 1. 모든 실행 중인 trade_engine의 해당 전략 파라미터를 즉시 갱신
+                for key, engine in self.trade_engines.items():
+                    engine.update_strategy_params(strategy_id, params)
+                
+                # 2. 성과 스냅샷 생성 및 기록 (PARAMETER_CHANGE 또는 ROLLBACK)
+                snap_type = 'ROLLBACK' if reason == 'ROLLBACK' else 'PARAMETER_CHANGE'
+                await self.record_performance_snapshot(
+                    strategy_id=strategy_id,
+                    version_id=version_id,
+                    snapshot_type=snap_type,
+                    params=params
+                )
+                
+                # 3. ZMQ로도 전략 갱신 알림 전송 (UI 전파용)
+                await self.event_bus.publish("strategy_signal", {
+                    "type": "strategy_param_updated",
+                    "strategy_id": strategy_id,
+                    "version_id": version_id,
+                    "params": params,
+                    "reason": reason,
+                    "timestamp": int(time.time() * 1000)
+                })
+                return True
+            return False
         return False
 
     def get_status_payloads(self) -> List[tuple[str, dict]]:
@@ -298,3 +369,307 @@ class StrategyService(DaemonService):
             })
         except Exception as e:
             logger.error(f"[StrategyService] 이벤트 버스 발행 실패: {e}")
+
+    async def record_performance_snapshot(self, strategy_id: str, version_id: int, snapshot_type: str, params: dict):
+        if not self.current_portfolio_id:
+            return
+
+        import hashlib
+        from src.database.connection import get_db_conn
+        from src.engine.portfolio import Position
+        from src.engine.utils.performance import calculate_performance_metrics
+
+        try:
+            # 1. 파라미터 해시 생성
+            param_str = json.dumps(params, sort_keys=True)
+            param_hash = hashlib.sha256(param_str.encode('utf-8')).hexdigest()
+            
+            # 2. 포트폴리오 로드
+            await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+            portfolio = self.portfolio_manager.portfolios.get(self.current_portfolio_id)
+            if not portfolio:
+                return
+                
+            # 3. 이 전략이 체결한 거래 내역 조회
+            trades = []
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(
+                    "SELECT * FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? ORDER BY timestamp ASC",
+                    (self.current_portfolio_id, strategy_id)
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    trades = [dict(r) for r in rows]
+                    
+            # 4. 최신 가격 데이터 획득
+            current_prices = {}
+            async with get_db_conn(self.db_path) as db:
+                for t in trades:
+                    sym = t['symbol']
+                    if sym not in current_prices:
+                        async with db.execute(
+                            "SELECT close FROM candles WHERE symbol = ? ORDER BY timestamp DESC LIMIT 1",
+                            (sym,)
+                        ) as cur:
+                            row = await cur.fetchone()
+                            if row:
+                                current_prices[sym] = row[0]
+                                
+            # 5. 가상 잔고 및 포지션 복구
+            temp_positions = {}
+            temp_cash = 10000000.0  # 가상 시작 자금 (1천만원)
+            for tx in trades:
+                ex = tx.get('exchange', '').lower()
+                sym = tx.get('symbol', '')
+                side = tx.get('side', '')
+                price = tx.get('price', 0.0)
+                qty = tx.get('quantity', 0.0)
+                fee = tx.get('fee', 0.0)
+                
+                pos_key = (ex, sym)
+                if pos_key not in temp_positions:
+                    temp_positions[pos_key] = Position(exchange=ex, symbol=sym, quantity=0.0, avg_price=0.0)
+                    
+                pos = temp_positions[pos_key]
+                if side == 'BUY':
+                    total_cost = (pos.avg_price * pos.quantity) + (price * qty)
+                    pos.quantity += qty
+                    if pos.quantity > 0:
+                        pos.avg_price = total_cost / pos.quantity
+                    temp_cash -= (price * qty) + fee
+                else:
+                    pos.quantity -= qty
+                    temp_cash += (price * qty) - fee
+                    if pos.quantity <= 0:
+                        pos.quantity = 0.0
+                        pos.avg_price = 0.0
+            
+            # 6. 성과 지표 계산
+            metrics = calculate_performance_metrics(
+                history=trades,
+                initial_cash=10000000.0,
+                current_cash=temp_cash,
+                positions=temp_positions,
+                current_prices=current_prices
+            )
+            
+            # 7. 스냅샷 DB 저장
+            snapshot_data = {
+                "strategy_id": strategy_id,
+                "version_id": version_id,
+                "parameter_hash": param_hash,
+                "snapshot_type": snapshot_type,
+                "timestamp": int(time.time() * 1000),
+                "roi": metrics["roi"],
+                "mdd": metrics["mdd"],
+                "profit_factor": metrics["profit_factor"],
+                "win_rate": metrics["win_rate"],
+                "trade_count": metrics["trade_count"]
+            }
+            await self.portfolio_manager.repository.insert_strategy_performance_snapshot(snapshot_data)
+            logger.info(f"[StrategyService] 성과 스냅샷 기록 성공: strategy_id={strategy_id}, version={version_id}, type={snapshot_type}, ROI={metrics['roi']}%")
+        except Exception as e:
+            logger.error(f"[StrategyService] 성능 스냅샷 기록 중 예외 발생: {e}")
+
+    async def _periodic_performance_snapshot_loop(self):
+        """1시간마다 활성 전략들의 실시간 성과 스냅샷(PERIODIC)을 기록합니다."""
+        logger.info("[StrategyService] 주기적 성능 스냅샷 기록 루프 기동")
+        try:
+            # 첫 기동 후 10분 뒤에 첫 기록 수행
+            await asyncio.sleep(600) 
+            while True:
+                if self.current_portfolio_id:
+                    active_p = self.portfolio_manager.get_active_simulation_portfolio()
+                    if active_p and active_p.strategy_info:
+                        try:
+                            meta = json.loads(active_p.strategy_info)
+                            strategies_config = meta.get("applied_strategies", {})
+                            for s_id, s_conf in strategies_config.items():
+                                if s_conf.get("enabled", False):
+                                    version_info = await self.portfolio_manager.repository.get_strategy_version(s_id)
+                                    if version_info:
+                                        v_id = version_info["current_version_id"]
+                                        params = version_info["current_params"]
+                                        await self.record_performance_snapshot(
+                                            strategy_id=s_id,
+                                            version_id=v_id,
+                                            snapshot_type='PERIODIC',
+                                            params=params
+                                        )
+                        except Exception as e:
+                            logger.error(f"[StrategyService] 주기적 성능 스냅샷 연산 중 예외: {e}")
+                # 1시간 주기
+                await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            pass
+
+    async def _periodic_proposal_generation_loop(self):
+        """AI 자동 제안 스케줄러 루프 (enable_auto_proposal 스위치 오프로 기본 비활성화)"""
+        logger.info("[StrategyService] AI 자동 제안 스케줄러 루프 기동")
+        try:
+            # 첫 기동 후 15분 뒤에 첫 검사 시작 (그 뒤 24시간 간격)
+            await asyncio.sleep(900)
+            while True:
+                enable_auto = self.config_manager.get("system.enable_auto_proposal", False)
+                if not enable_auto:
+                    logger.info("[StrategyService] system.enable_auto_proposal 스위치가 비활성화(False) 상태입니다. AI 제안 생성을 스킵합니다.")
+                else:
+                    if self.current_portfolio_id:
+                        active_p = self.portfolio_manager.get_active_simulation_portfolio()
+                        if active_p and active_p.strategy_info:
+                            try:
+                                # 1. 가설 분석기 초기화
+                                from src.engine.analyzer import StrategyHypothesisAnalyzer
+                                from src.engine.shadow_backtest import ShadowBacktestEngine
+                                
+                                logger.info("[StrategyService] 활성 전략에 대한 AI 실패 분석 및 Shadow Backtest 구동 개시")
+                                analyzer = StrategyHypothesisAnalyzer(db_path=self.db_path)
+                                backtester = ShadowBacktestEngine(db_path=self.db_path)
+                                
+                                # 2. 적용중인 활성 전략들 실패 통계 분석
+                                meta = json.loads(active_p.strategy_info)
+                                strategies_config = meta.get("applied_strategies", {})
+                                for s_id, s_conf in strategies_config.items():
+                                    if s_conf.get("enabled", False):
+                                        candidates = await analyzer.analyze_failures(self.current_portfolio_id, s_id)
+                                        if candidates:
+                                            # 백테스트 및 적격 조건 필터 후 제안 자동 등록
+                                            inserted_ids = await backtester.run_shadow_backtest(candidates)
+                                            if inserted_ids:
+                                                for pid in inserted_ids:
+                                                    await self.event_bus.publish("strategy_signal", {
+                                                        "type": "proposal_created",
+                                                        "proposal_id": pid
+                                                    })
+                            except Exception as e:
+                                logger.error(f"[StrategyService] AI 자동 제안 생성 중 예외 발생: {e}")
+                # 24시간 주기
+                await asyncio.sleep(86400)
+        except asyncio.CancelledError:
+            pass
+
+    async def _periodic_proposal_evaluation_loop(self):
+        """실전 적용된 제안의 7일 사후 성과(ROI 및 거래량)를 분석해 예측값과의 괴리율을 기록합니다."""
+        logger.info("[StrategyService] 제안 사후 평가 스케줄러 루프 기동")
+        from src.database.connection import get_db_conn
+        from src.engine.utils.performance import calculate_performance_metrics
+        from src.engine.portfolio import Position
+        try:
+            # 첫 기동 후 20분 뒤에 첫 평가 검사 시작 (그 뒤 24시간 간격)
+            await asyncio.sleep(1200)
+            while True:
+                try:
+                    # 1. 사후 평가 대상 제안(적용 7일 경과 및 outcome = RUNNING) 조회
+                    eval_targets = await self.portfolio_manager.repository.get_unevaluated_applied_proposals()
+                    
+                    for prop in eval_targets:
+                        prop_id = prop["id"]
+                        strategy_id = prop["strategy_id"]
+                        portfolio_id = prop["portfolio_id"]
+                        applied_at_ms = prop["applied_at"]
+                        
+                        # 적용 시점부터 7일간의 범위
+                        seven_days_ms = 7 * 24 * 3600 * 1000
+                        applied_ts = int(applied_at_ms / 1000)
+                        end_ts = applied_ts + (7 * 24 * 3600)
+                        
+                        # 2. 해당 기간동안 이 전략이 실제 체결한 거래 내역 조회
+                        trades = []
+                        async with get_db_conn(self.db_path) as db:
+                            async with db.execute(
+                                "SELECT * FROM orders_history "
+                                "WHERE portfolio_id = ? AND strategy_id = ? AND timestamp BETWEEN ? AND ? "
+                                "ORDER BY timestamp ASC",
+                                (portfolio_id, strategy_id, applied_ts, end_ts)
+                            ) as cursor:
+                                rows = await cursor.fetchall()
+                                trades = [dict(r) for r in rows]
+                                
+                        # 3. 실측 성과 계산을 위한 간이 가상 자산 평가
+                        current_prices = {}
+                        async with get_db_conn(self.db_path) as db:
+                            for t in trades:
+                                sym = t['symbol']
+                                if sym not in current_prices:
+                                    async with db.execute(
+                                        "SELECT close FROM candles WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1",
+                                        (sym, end_ts)
+                                    ) as cur:
+                                        row = await cur.fetchone()
+                                        if row:
+                                            current_prices[sym] = row[0]
+                                            
+                        temp_positions = {}
+                        temp_cash = 10000000.0
+                        for tx in trades:
+                            ex = tx.get('exchange', '').lower()
+                            sym = tx.get('symbol', '')
+                            side = tx.get('side', '')
+                            price = tx.get('price', 0.0)
+                            qty = tx.get('quantity', 0.0)
+                            fee = tx.get('fee', 0.0)
+                            
+                            pos_key = (ex, sym)
+                            if pos_key not in temp_positions:
+                                temp_positions[pos_key] = Position(exchange=ex, symbol=sym, quantity=0.0, avg_price=0.0)
+                                
+                            pos = temp_positions[pos_key]
+                            if side == 'BUY':
+                                total_cost = (pos.avg_price * pos.quantity) + (price * qty)
+                                pos.quantity += qty
+                                if pos.quantity > 0:
+                                    pos.avg_price = total_cost / pos.quantity
+                                temp_cash -= (price * qty) + fee
+                            else:
+                                pos.quantity -= qty
+                                temp_cash += (price * qty) - fee
+                                if pos.quantity <= 0:
+                                    pos.quantity = 0.0
+                                    pos.avg_price = 0.0
+                                    
+                        metrics = calculate_performance_metrics(
+                            history=trades,
+                            initial_cash=10000000.0,
+                            current_cash=temp_cash,
+                            positions=temp_positions,
+                            current_prices=current_prices
+                        )
+                        
+                        actual_roi = metrics["roi"]
+                        actual_trades = metrics["trade_count"]
+                        
+                        # 4. 제안 당시 예측값 획득
+                        predicted_roi = prop["metrics"].get("roi_7d", 0.0)
+                        predicted_trades = prop["metrics"].get("trade_count_7d", 0)
+                        
+                        # 5. 괴리율 계산
+                        roi_div = round(actual_roi - predicted_roi, 2)
+                        trade_div = actual_trades - predicted_trades
+                        
+                        eval_data = {
+                            "proposal_id": prop_id,
+                            "predicted_roi_7d": predicted_roi,
+                            "actual_roi_7d": actual_roi,
+                            "roi_divergence": roi_div,
+                            "predicted_trade_count_7d": predicted_trades,
+                            "actual_trade_count_7d": actual_trades,
+                            "trade_count_divergence": trade_div
+                        }
+                        
+                        # 6. DB 적재 및 제안 마감(COMPLETED) 처리
+                        await self.portfolio_manager.repository.insert_proposal_evaluation(eval_data)
+                        await self.portfolio_manager.repository.update_strategy_proposal_status(
+                            proposal_id=prop_id,
+                            status="APPLIED",
+                            outcome="COMPLETED"
+                        )
+                        
+                        logger.info(
+                            f"[StrategyService] 제안 #{prop_id} 사후 평가 완료 및 결과 적재 완료. "
+                            f"(예상 ROI: {predicted_roi}%, 실제 ROI: {actual_roi}%, 괴리율: {roi_div}%)"
+                        )
+                except Exception as e:
+                    logger.error(f"[StrategyService] 제안 사후 평가 연산 중 예외 발생: {e}")
+                # 24시간 주기
+                await asyncio.sleep(86400)
+        except asyncio.CancelledError:
+            pass

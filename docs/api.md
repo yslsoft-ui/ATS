@@ -190,6 +190,12 @@
   - **설명**: 전략 엔진 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다.
   - **응답 (JSON)**: `{"message": "Strategy daemon restart signal published successfully"}`
 
+- **`GET /api/proposals?strategy_id={id}&include_pruned={true/false}`**
+  - **설명**: 시스템이 자동 생성한 전략 파라미터 개선 제안(Proposal) 목록을 조회합니다. `include_pruned` 파라미터를 통해 신뢰도 60점 미만으로 걸러진 폐기(`PRUNED`, `DEFERRED`)된 제안들을 포함할지 여부를 선택합니다. (기본값: `false`)
+
+- **`POST /api/strategies/{strategy_id}/rollback/{version_id}`**
+  - **설명**: 특정 전략을 과거 특정 버전의 파라미터로 복구(Rollback)합니다. 롤백 수행 시 스케줄러 자동 제안 잠금 장치(`ENABLE_AUTO_PROPOSAL = False`)가 즉각 실행되어 시스템 오동작을 미연에 방지합니다.
+
 
 ---
 
@@ -293,3 +299,124 @@
   "total": 4
 }
 ```
+
+---
+
+## 5. AI 인텔리전스 감시 API (Step 4: Diversity Intelligence)
+
+`src/server/routers/intelligence.py` 라우터가 제공하는 AI 자기감시 전용 엔드포인트입니다.
+
+### 5.1. `GET /api/intelligence/diversity`
+
+현재 전략 파라미터 공간의 다양성 상태, 수렴 경고, λ 자동 보정 신호, Entropy 시계열을 반환합니다.
+
+- **Query Params**: `strategy_id` (선택, 특정 전략 필터링)
+- **응답 (JSON)**:
+  ```json
+  {
+    "strategy_id": "rsistrategy",
+    "entropy": 0.42,
+    "convergence_alert": false,
+    "param_distributions": {
+      "rsi_window": {"mean": 15.2, "std": 1.8, "values": [14, 16, 14, 16, 14]}
+    },
+    "pruning_accuracy": {
+      "total_tracked": 12,
+      "outperformed_count": 4,
+      "outperform_rate": 0.33,
+      "bias_alert": true
+    },
+    "combined_boost": {
+      "lambda_boost": 1.2,
+      "diversity_threshold_delta": 0.03,
+      "entropy": 0.42,
+      "outperform_rate": 0.33,
+      "alert_level": "HIGH"
+    },
+    "decision_drift": {
+      "entropy_timeline": [
+        {"ts": 1718020000000, "entropy": 0.82, "proposal_count": 3},
+        {"ts": 1718030000000, "entropy": 0.55, "proposal_count": 2}
+      ]
+    },
+    "mutation_graph": {
+      "nodes": [
+        {
+          "id": 1,
+          "hash": "a5f8...",
+          "parent_hashes": [{"hash": "b2c9...", "weight": 1.0}],
+          "is_root": false,
+          "depth": 1,
+          "score": 80,
+          "status": "APPLIED",
+          "created_at": 1718020000000,
+          "proposed_params": {"rsi_window": 15.0},
+          "original_params": {"rsi_window": 14.0},
+          "expected_roi": 1.5,
+          "counterfactual_roi": 0.0
+        }
+      ],
+      "edges": [
+        {
+          "from": "b2c9...",
+          "to": "a5f8...",
+          "param": "rsi_window",
+          "delta": 1.0
+        }
+      ],
+      "best_path_nodes": [
+        "b2c9...",
+        "a5f8..."
+      ],
+      "param_trend": {
+        "rsi_window": [{"ts": 1718020000000, "value": 15.0}]
+      },
+      "graph_meta": {
+        "node_count": 2,
+        "edge_count": 1,
+        "max_depth": 1,
+        "pruned_count": 0,
+        "avg_depth": 0.5,
+        "branching_factor": 0.5,
+        "density": 0.25
+      }
+    }
+  }
+  ```
+
+### 5.2. `GET /api/intelligence/counterfactual-summary`
+
+Counterfactual 추적 현황을 집계하여 반환합니다. PRUNED/DEFERRED 제안 중 가상 ROI가 실거래보다 높았던 비율(오판율)을 추적합니다.
+
+- **Query Params**: `strategy_id` (선택)
+- **응답 (JSON)**:
+  ```json
+  {
+    "total_tracked": 12,
+    "completed": 5,
+    "in_progress": 7,
+    "outperformed_live": 4,
+    "outperform_rate": 0.33,
+    "avg_counterfactual_roi": 3.2,
+    "items": [
+      {
+        "proposal_id": 103,
+        "strategy_id": "rsistrategy",
+        "confidence_score": 55,
+        "status": "PRUNED",
+        "counterfactual_roi": 4.8,
+        "counterfactual_mdd": 1.2,
+        "is_tracked": 2,
+        "days_observed": 3.0
+      }
+    ]
+  }
+  ```
+
+### Alert Level 의미
+
+| alert_level | 조건 | λ 보정 | 임계치 조정 |
+|---|---|---|---|
+| `NONE` | Entropy ≥ 0.3 AND 오판율 ≤ 30% | ×1.0 | +0.00 |
+| `MEDIUM` | Entropy < 0.3 OR 오판율 > 30% | ×1.1 | +0.01 |
+| `HIGH` | Entropy < 0.3 AND 오판율 > 30% | ×1.2 | +0.03 |

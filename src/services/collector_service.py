@@ -69,6 +69,7 @@ class CollectorService(DaemonService):
         
         self.last_known_statuses: Dict[str, dict] = {}
         self._status_counter = 0
+        self._tasks: List[asyncio.Task] = []
 
     async def start(self):
         # 1. DB Writer 기동
@@ -131,7 +132,18 @@ class CollectorService(DaemonService):
                 logger.info(f"[CollectorService] 수집기 시작됨: {exchange_id}")
                 await self.record_exchange_event('COLLECTOR_START', exchange_id, f"{exchange_id.upper()} 수집기 초기 가동 시작")
 
+        # [V2] 시장 상태 요약 수집 루프 백그라운드 태스크 기동
+        self._tasks.append(asyncio.create_task(self._periodic_market_regime_summarizer_loop()))
+
     async def stop(self):
+        # 0. 백그라운드 태스크 정리
+        for task in self._tasks:
+            if not task.done():
+                task.cancel()
+        if self._tasks:
+            await asyncio.gather(*self._tasks, return_exceptions=True)
+            self._tasks.clear()
+
         # 1. 수집기 중단
         for exchange_id, collector in self.collectors.items():
             if collector.is_running:
@@ -284,3 +296,123 @@ class CollectorService(DaemonService):
             })
         except Exception as e:
             logger.error(f"[CollectorService] EXCHANGE 이벤트 버스 발행 실패: {e}")
+
+    async def _periodic_market_regime_summarizer_loop(self):
+        """1분마다 활성 종목들의 시장 상태 피처를 계산하여 market_regime_summaries에 적재합니다."""
+        logger.info("[CollectorService] 시장 Regime 요약 수집 루프 기동")
+        from src.database.connection import get_db_conn
+        try:
+            # 매 분 5초 시점에 기동되도록 정렬 (캔들이 확정적으로 DB에 저장된 직후)
+            await asyncio.sleep(60 - (time.time() % 60) + 5)
+            while True:
+                start_time = time.time()
+                current_bucket = int((time.time() // 60) * 60 * 1000) # ms 버킷
+                
+                try:
+                    # 1. 활성 종목 리스트 획득
+                    active_symbols = []
+                    async with get_db_conn(self.db_path) as db:
+                        async with db.execute(
+                            "SELECT exchange, symbol FROM exchange_assets WHERE is_active = 1"
+                        ) as cursor:
+                            rows = await cursor.fetchall()
+                            active_symbols = [(r["exchange"], r["symbol"]) for r in rows]
+                            
+                    # 2. 종목별 피처 계산 및 적재
+                    for ex, sym in active_symbols:
+                        # 25개 캔들을 가져와 RSI 14 및 변동성 20 계산에 활용
+                        c_rows = []
+                        async with get_db_conn(self.db_path) as db:
+                            async with db.execute(
+                                "SELECT open, high, low, close, volume, timestamp FROM candles "
+                                "WHERE exchange = ? AND symbol = ? AND interval = 60 "
+                                "ORDER BY timestamp DESC LIMIT 25",
+                                (ex, sym)
+                            ) as cursor:
+                                c_rows = await cursor.fetchall()
+                                
+                        if len(c_rows) < 15:
+                            continue
+                            
+                        # 시간 오름차순 정렬
+                        candles = sorted([dict(r) for r in c_rows], key=lambda x: x['timestamp'])
+                        
+                        # rsi 계산
+                        closes = [c['close'] for c in candles]
+                        rsi_val = 50.0
+                        if len(closes) >= 15:
+                            diffs = [closes[i] - closes[i-1] for i in range(1, len(closes))]
+                            gains = [d if d > 0 else 0.0 for d in diffs[-14:]]
+                            losses = [-d if d < 0 else 0.0 for d in diffs[-14:]]
+                            avg_gain = sum(gains) / 14
+                            avg_loss = sum(losses) / 14
+                            if avg_loss == 0:
+                                rsi_val = 100.0 if avg_gain > 0 else 50.0
+                            else:
+                                rs = avg_gain / avg_loss
+                                rsi_val = 100.0 - (100.0 / (1.0 + rs))
+                                
+                        # volatility 계산 (최근 20개 분봉의 close 표준편차 비율)
+                        vol_val = 0.0
+                        if len(closes) >= 20:
+                            target_closes = closes[-20:]
+                            mean_close = sum(target_closes) / 20.0
+                            variance = sum((x - mean_close) ** 2 for x in target_closes) / 20.0
+                            vol_val = (variance ** 0.5) / mean_close if mean_close > 0 else 0.0
+                            
+                        # volume_ratio (최근 20분 평균 대비 직전 1분 거래량 비율)
+                        vols = [c['volume'] for c in candles]
+                        vol_ratio = 1.0
+                        if len(vols) >= 20:
+                            last_vol = vols[-1]
+                            mean_vol = sum(vols[-20:]) / 20.0
+                            vol_ratio = (last_vol / mean_vol) if mean_vol > 0 else 1.0
+                            
+                        # 최근 1분 틱 데이터를 통한 spread 및 imbalance 계산
+                        bucket_start_ms = current_bucket - 60000
+                        bucket_end_ms = current_bucket
+                        
+                        t_rows = []
+                        async with get_db_conn(self.db_path) as db:
+                            async with db.execute(
+                                "SELECT trade_price, trade_volume, ask_bid FROM trades "
+                                "WHERE exchange = ? AND symbol = ? AND trade_timestamp BETWEEN ? AND ?",
+                                (ex, sym, bucket_start_ms, bucket_end_ms)
+                            ) as cursor:
+                                t_rows = await cursor.fetchall()
+                                
+                        spread_val = 0.0005
+                        imbalance_val = 0.0
+                        
+                        if t_rows:
+                            ask_vol = sum(r['trade_volume'] for r in t_rows if r['ask_bid'] == 'ASK')
+                            bid_vol = sum(r['trade_volume'] for r in t_rows if r['ask_bid'] == 'BID')
+                            tot_vol = ask_vol + bid_vol
+                            if tot_vol > 0:
+                                imbalance_val = (ask_vol - bid_vol) / tot_vol
+                                
+                            prices = [r['trade_price'] for r in t_rows]
+                            max_p = max(prices)
+                            min_p = min(prices)
+                            avg_p = sum(prices) / len(prices)
+                            if avg_p > 0:
+                                spread_val = (max_p - min_p) / avg_p
+                                
+                        # DB 적재
+                        async with get_db_conn(self.db_path) as db:
+                            await db.execute('''
+                                INSERT INTO market_regime_summaries 
+                                (timestamp, symbol, volatility, rsi, volume_ratio, spread, orderbook_imbalance)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ''', (current_bucket, f"{ex}:{sym}", vol_val, rsi_val, vol_ratio, spread_val, imbalance_val))
+                            await db.commit()
+                            
+                    logger.debug(f"[CollectorService] 시장 Regime 피처 적재 완료 (종목 수: {len(active_symbols)})")
+                except Exception as e:
+                    logger.error(f"[CollectorService] 시장 Regime 수집 중 예외 발생: {e}")
+                    
+                elapsed = time.time() - start_time
+                sleep_time = max(0.1, 60.0 - (time.time() % 60.0) + 5.0)
+                await asyncio.sleep(sleep_time)
+        except asyncio.CancelledError:
+            pass

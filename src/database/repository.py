@@ -8,6 +8,38 @@ from src.engine.utils.telemetry import get_logger
 
 logger = get_logger(__name__)
 
+def normalize_timestamp(value) -> Optional[int]:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        from datetime import datetime
+        val_str = str(value).strip()
+        if val_str.isdigit():
+            return int(val_str)
+        try:
+            return int(float(val_str))
+        except ValueError:
+            pass
+        if ' ' in val_str:
+            val_str = val_str.replace(' ', 'T')
+        return int(datetime.fromisoformat(val_str).timestamp() * 1000)
+    except Exception:
+        try:
+            from datetime import datetime
+            for fmt in ('%Y-%m-%d', '%Y/%m/%d'):
+                try:
+                    return int(datetime.strptime(val_str, fmt).timestamp() * 1000)
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+        logger.warning(f"Failed to normalize timestamp value: {value} (type: {type(value)})")
+        return None
+
 class BaseMarketDataRepository(abc.ABC):
     """
     시장 데이터(Candle, Trade)를 조회하기 위한 추상 저장소 인터페이스(Seam)입니다.
@@ -569,6 +601,71 @@ class BaseTradingRepository(abc.ABC):
     async def check_and_report_previous_crash(self, target: str):
         pass
 
+    @abc.abstractmethod
+    async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def save_strategy_version(self, strategy_id: str, version_id: int, params: Dict[str, Any], applied_at: int, rollback_source_version: Optional[int] = None):
+        pass
+
+    @abc.abstractmethod
+    async def insert_strategy_parameter_history(self, strategy_id: str, version_id: int, parent_version_id: Optional[int], old_params: Optional[str], new_params: str, proposal_id: Optional[int], is_current: int, changed_by: str, change_reason: str) -> int:
+        pass
+
+    @abc.abstractmethod
+    async def get_strategy_parameter_history(self, strategy_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_strategy_parameter_version(self, strategy_id: str, version_id: int) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def insert_strategy_performance_snapshot(self, snapshot_data: Dict[str, Any]):
+        pass
+
+    @abc.abstractmethod
+    async def get_strategy_performance_snapshots(self, strategy_id: str, version_id: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def insert_strategy_proposal(self, proposal_data: Dict[str, Any]) -> int:
+        pass
+
+    @abc.abstractmethod
+    async def update_strategy_proposal_status(self, proposal_id: int, status: str, outcome: Optional[str] = None, applied_at: Optional[int] = None, rolled_back_at: Optional[int] = None):
+        pass
+
+    @abc.abstractmethod
+    async def get_strategy_proposal(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_active_proposals(self, strategy_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_counterfactual_targets(self, limit: int = 20) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def update_counterfactual_metrics(self, proposal_id: int, roi: float, mdd: float, track_status: int):
+        pass
+
+    @abc.abstractmethod
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+        pass
+
+    @abc.abstractmethod
+    async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
+        pass
+
+
 
 class SqliteTradingRepository(BaseTradingRepository):
     """
@@ -752,6 +849,581 @@ class SqliteTradingRepository(BaseTradingRepository):
                     await db.commit()
                     logger.warning(f"[{target}] 이전 프로세스의 비정상 종료 감지 및 DAEMON_CRASHED 보완 이력 적재 완료.")
 
+    async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM strategy_versions WHERE strategy_id = ?",
+                (strategy_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    import json
+                    res = dict(row)
+                    res["current_params"] = json.loads(res["current_params"])
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    return res
+        return None
+
+    async def save_strategy_version(self, strategy_id: str, version_id: int, params: Dict[str, Any], applied_at: int, rollback_source_version: Optional[int] = None):
+        async with get_db_conn(self.db_path) as db:
+            import json
+            params_str = json.dumps(params)
+            applied_at_norm = normalize_timestamp(applied_at) or int(time.time() * 1000)
+            await db.execute('''
+                INSERT INTO strategy_versions (strategy_id, current_version_id, current_params, rollback_source_version, applied_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(strategy_id) DO UPDATE SET
+                    current_version_id = excluded.current_version_id,
+                    current_params = excluded.current_params,
+                    rollback_source_version = excluded.rollback_source_version,
+                    applied_at = excluded.applied_at,
+                    updated_at = excluded.updated_at
+            ''', (strategy_id, version_id, params_str, rollback_source_version, applied_at_norm, int(time.time() * 1000)))
+            await db.commit()
+
+    async def insert_strategy_parameter_history(self, strategy_id: str, version_id: int, parent_version_id: Optional[int], old_params: Optional[str], new_params: str, proposal_id: Optional[int], is_current: int, changed_by: str, change_reason: str) -> int:
+        async with get_db_conn(self.db_path) as db:
+            if is_current == 1:
+                await db.execute(
+                    "UPDATE strategy_parameter_history SET is_current = 0 WHERE strategy_id = ?",
+                    (strategy_id,)
+                )
+            
+            cursor = await db.execute('''
+                INSERT INTO strategy_parameter_history 
+                (strategy_id, version_id, parent_version_id, old_params, new_params, proposal_id, is_current, changed_by, change_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (strategy_id, version_id, parent_version_id, old_params, new_params, proposal_id, is_current, changed_by, change_reason, int(time.time() * 1000)))
+            
+            inserted_id = cursor.lastrowid
+            await db.commit()
+            return inserted_id
+
+    async def get_strategy_parameter_history(self, strategy_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM strategy_parameter_history WHERE strategy_id = ? ORDER BY version_id DESC LIMIT ?",
+                (strategy_id, limit)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                history_list = []
+                for r in rows:
+                    h = dict(r)
+                    h["created_at"] = normalize_timestamp(h.get("created_at"))
+                    history_list.append(h)
+                return history_list
+
+    async def get_strategy_parameter_version(self, strategy_id: str, version_id: int) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM strategy_parameter_history WHERE strategy_id = ? AND version_id = ?",
+                (strategy_id, version_id)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    import json
+                    res = dict(row)
+                    if res.get("new_params"):
+                        res["new_params"] = json.loads(res["new_params"])
+                    if res.get("old_params"):
+                        res["old_params"] = json.loads(res["old_params"])
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    return res
+        return None
+
+    async def insert_strategy_performance_snapshot(self, snapshot_data: Dict[str, Any]):
+        async with get_db_conn(self.db_path) as db:
+            ts_norm = normalize_timestamp(snapshot_data["timestamp"]) or int(time.time() * 1000)
+            await db.execute('''
+                INSERT INTO strategy_performance_snapshots 
+                (strategy_id, version_id, parameter_hash, snapshot_type, timestamp, roi, mdd, profit_factor, win_rate, trade_count, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                snapshot_data["strategy_id"],
+                snapshot_data["version_id"],
+                snapshot_data["parameter_hash"],
+                snapshot_data["snapshot_type"],
+                ts_norm,
+                snapshot_data.get("roi"),
+                snapshot_data.get("mdd"),
+                snapshot_data.get("profit_factor"),
+                snapshot_data.get("win_rate"),
+                snapshot_data.get("trade_count"),
+                int(time.time() * 1000)
+            ))
+            await db.commit()
+
+    async def get_strategy_performance_snapshots(self, strategy_id: str, version_id: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            query = "SELECT * FROM strategy_performance_snapshots WHERE strategy_id = ?"
+            params = [strategy_id]
+            if version_id is not None:
+                query += " AND version_id = ?"
+                params.append(version_id)
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            
+            async with db.execute(query, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+                snapshots_list = []
+                for r in rows:
+                    s = dict(r)
+                    s["timestamp"] = normalize_timestamp(s.get("timestamp"))
+                    s["created_at"] = normalize_timestamp(s.get("created_at"))
+                    snapshots_list.append(s)
+                return snapshots_list
+
+    async def insert_strategy_proposal(self, proposal_data: Dict[str, Any]) -> int:
+        status = proposal_data.get("status", "PENDING")
+        confidence_score = proposal_data.get("confidence_score", 50)
+        # Auto-pruning: 60점 미만인 경우 강제 PRUNED 처리
+        if confidence_score < 60:
+            status = "PRUNED"
+
+        async with get_db_conn(self.db_path) as db:
+            import json
+            ts = int(time.time() * 1000)
+            applied_at = normalize_timestamp(proposal_data.get("applied_at"))
+            rolled_back_at = normalize_timestamp(proposal_data.get("rolled_back_at"))
+            
+            decision_path_hash = proposal_data.get("decision_path_hash")
+            audit_log_json = json.dumps(proposal_data.get("audit_log_json", {})) if proposal_data.get("audit_log_json") else None
+            is_counterfactual_tracked = proposal_data.get("is_counterfactual_tracked", 0)
+            
+            if status in ("PRUNED", "DEFERRED"):
+                audit_data = proposal_data.get("audit_log_json", {})
+                diversity_penalty = audit_data.get("diversity_penalty", 0)
+                if (45 <= confidence_score < 60) or (diversity_penalty >= 10):
+                    is_counterfactual_tracked = 1
+
+            cursor = await db.execute('''
+                INSERT OR IGNORE INTO strategy_proposals 
+                (insight_id, proposal_group_id, version, portfolio_id, strategy_id, status, outcome, 
+                 original_params, proposed_params, metrics, mutation_trace, confidence_score, 
+                 applied_at, rolled_back_at, decision_path_hash, audit_log_json, is_counterfactual_tracked, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                proposal_data.get("insight_id"),
+                proposal_data["proposal_group_id"],
+                proposal_data["version"],
+                proposal_data["portfolio_id"],
+                proposal_data["strategy_id"],
+                status,
+                proposal_data.get("outcome", "RUNNING"),
+                json.dumps(proposal_data["original_params"]),
+                json.dumps(proposal_data["proposed_params"]),
+                json.dumps(proposal_data.get("metrics", {})),
+                json.dumps(proposal_data.get("mutation_trace", {})),
+                confidence_score,
+                applied_at,
+                rolled_back_at,
+                decision_path_hash,
+                audit_log_json,
+                is_counterfactual_tracked,
+                ts,
+                ts
+            ))
+            inserted_id = cursor.lastrowid
+            if not inserted_id and decision_path_hash:
+                async with db.execute('SELECT id FROM strategy_proposals WHERE decision_path_hash = ?', (decision_path_hash,)) as sel_cursor:
+                    row = await sel_cursor.fetchone()
+                    if row:
+                        inserted_id = row[0]
+            await db.commit()
+            return inserted_id
+
+    async def update_strategy_proposal_status(self, proposal_id: int, status: str, outcome: Optional[str] = None, applied_at: Optional[int] = None, rolled_back_at: Optional[int] = None):
+        async with get_db_conn(self.db_path) as db:
+            ts = int(time.time() * 1000)
+            query = "UPDATE strategy_proposals SET status = ?, updated_at = ?"
+            params = [status, ts]
+            if outcome is not None:
+                query += ", outcome = ?"
+                params.append(outcome)
+            if applied_at is not None:
+                query += ", applied_at = ?"
+                params.append(normalize_timestamp(applied_at))
+            if rolled_back_at is not None:
+                query += ", rolled_back_at = ?"
+                params.append(normalize_timestamp(rolled_back_at))
+            query += " WHERE id = ?"
+            params.append(proposal_id)
+            
+            await db.execute(query, tuple(params))
+            await db.commit()
+
+    async def get_strategy_proposal(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM strategy_proposals WHERE id = ?",
+                (proposal_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    import json
+                    res = dict(row)
+                    res["original_params"] = json.loads(res["original_params"])
+                    res["proposed_params"] = json.loads(res["proposed_params"])
+                    res["metrics"] = json.loads(res["metrics"]) if res.get("metrics") else {}
+                    res["mutation_trace"] = json.loads(res["mutation_trace"]) if res.get("mutation_trace") else {}
+                    res["audit_log_json"] = json.loads(res["audit_log_json"]) if res.get("audit_log_json") else {}
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    res["updated_at"] = normalize_timestamp(res.get("updated_at"))
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    res["rolled_back_at"] = normalize_timestamp(res.get("rolled_back_at"))
+                    return res
+        return None
+
+    async def get_active_proposals(self, strategy_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            query = "SELECT * FROM strategy_proposals"
+            filters = []
+            params = []
+            if strategy_id is not None:
+                filters.append("strategy_id = ?")
+                params.append(strategy_id)
+            if status is not None:
+                filters.append("status = ?")
+                params.append(status)
+                
+            if filters:
+                query += " WHERE " + " AND ".join(filters)
+            query += " ORDER BY created_at DESC"
+            
+            async with db.execute(query, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+                import json
+                res_list = []
+                for r in rows:
+                    res = dict(r)
+                    res["original_params"] = json.loads(res["original_params"])
+                    res["proposed_params"] = json.loads(res["proposed_params"])
+                    res["metrics"] = json.loads(res["metrics"]) if res.get("metrics") else {}
+                    res["mutation_trace"] = json.loads(res["mutation_trace"]) if res.get("mutation_trace") else {}
+                    res["audit_log_json"] = json.loads(res["audit_log_json"]) if res.get("audit_log_json") else {}
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    res["updated_at"] = normalize_timestamp(res.get("updated_at"))
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    res["rolled_back_at"] = normalize_timestamp(res.get("rolled_back_at"))
+                    res_list.append(res)
+                return res_list
+
+    async def get_counterfactual_targets(self, limit: int = 20) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute('''
+                SELECT * FROM strategy_proposals 
+                WHERE is_counterfactual_tracked = 1 
+                ORDER BY created_at DESC 
+                LIMIT ?
+            ''', (limit,)) as cursor:
+                rows = await cursor.fetchall()
+                import json
+                res_list = []
+                for r in rows:
+                    res = dict(r)
+                    res["original_params"] = json.loads(res["original_params"])
+                    res["proposed_params"] = json.loads(res["proposed_params"])
+                    res["metrics"] = json.loads(res["metrics"]) if res.get("metrics") else {}
+                    res["mutation_trace"] = json.loads(res["mutation_trace"]) if res.get("mutation_trace") else {}
+                    res["audit_log_json"] = json.loads(res["audit_log_json"]) if res.get("audit_log_json") else {}
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    res["updated_at"] = normalize_timestamp(res.get("updated_at"))
+                    res_list.append(res)
+                return res_list
+
+    async def update_counterfactual_metrics(self, proposal_id: int, roi: float, mdd: float, track_status: int):
+        async with get_db_conn(self.db_path) as db:
+            ts = int(time.time() * 1000)
+            await db.execute('''
+                UPDATE strategy_proposals 
+                SET counterfactual_roi = ?, counterfactual_mdd = ?, is_counterfactual_tracked = ?, updated_at = ?
+                WHERE id = ?
+            ''', (roi, mdd, track_status, ts, proposal_id))
+            await db.commit()
+
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+        async with get_db_conn(self.db_path) as db:
+            cursor = await db.execute('''
+                INSERT INTO proposal_evaluations 
+                (proposal_id, predicted_roi_7d, actual_roi_7d, roi_divergence, 
+                 predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ''', (
+                eval_data["proposal_id"],
+                eval_data["predicted_roi_7d"],
+                eval_data["actual_roi_7d"],
+                eval_data["roi_divergence"],
+                eval_data["predicted_trade_count_7d"],
+                eval_data["actual_trade_count_7d"],
+                eval_data["trade_count_divergence"]
+            ))
+            inserted_id = cursor.lastrowid
+            await db.commit()
+            return inserted_id
+
+    async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM proposal_evaluations WHERE proposal_id = ?",
+                (proposal_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    return dict(row)
+        return None
+
+    async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            # 실전 적용(APPLIED)된 지 7일이 경과했고 아직 평가가 안 끝난(outcome = 'RUNNING') 제안 조회
+            seven_days_ago_ms = int((time.time() - 7 * 24 * 3600) * 1000)
+            async with db.execute('''
+                SELECT * FROM strategy_proposals 
+                WHERE status = 'APPLIED' AND outcome = 'RUNNING' AND applied_at <= ?
+            ''', (seven_days_ago_ms,)) as cursor:
+                rows = await cursor.fetchall()
+                import json
+                res_list = []
+                for r in rows:
+                    res = dict(r)
+                    res["original_params"] = json.loads(res["original_params"])
+                    res["proposed_params"] = json.loads(res["proposed_params"])
+                    res["metrics"] = json.loads(res["metrics"]) if res.get("metrics") else {}
+                    res["mutation_trace"] = json.loads(res["mutation_trace"]) if res.get("mutation_trace") else {}
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    res["updated_at"] = normalize_timestamp(res.get("updated_at"))
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    res["rolled_back_at"] = normalize_timestamp(res.get("rolled_back_at"))
+                    res["created_at"] = normalize_timestamp(res.get("created_at"))
+                    res["updated_at"] = normalize_timestamp(res.get("updated_at"))
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    res["rolled_back_at"] = normalize_timestamp(res.get("rolled_back_at"))
+                    res_list.append(res)
+                return res_list
+
+    async def approve_proposal_atomic(self, proposal_id: int, applied_ts: int) -> Dict[str, Any]:
+        """제안 승인 및 적용, 버전 생성, 성과 스냅샷 기본 생성을 단일 DB 트랜잭션으로 처리합니다."""
+        import json
+        import hashlib
+        async with get_db_conn(self.db_path) as db:
+            # 1. 제안 조회
+            async with db.execute("SELECT * FROM strategy_proposals WHERE id = ?", (proposal_id,)) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    raise ValueError("Proposal not found")
+                proposal = dict(row)
+                proposal["proposed_params"] = json.loads(proposal["proposed_params"])
+                proposal["original_params"] = json.loads(proposal["original_params"])
+                
+            if proposal["status"] != "PENDING":
+                raise ValueError(f"Only PENDING proposals can be approved. Current status: {proposal['status']}")
+                
+            strategy_id = proposal["strategy_id"]
+            proposed_params = proposal["proposed_params"]
+            
+            # 2. 현재 적용중인 버전 정보 획득
+            async with db.execute("SELECT * FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cursor:
+                ver_row = await cursor.fetchone()
+                
+            parent_version_id = None
+            old_params_str = None
+            new_version_id = 1
+            if ver_row:
+                ver_dict = dict(ver_row)
+                new_version_id = ver_dict["current_version_id"] + 1
+                parent_version_id = ver_dict["current_version_id"]
+                old_params_str = ver_dict["current_params"]
+
+            # 3. parameter history 기록 (PROPOSAL_APPLY)
+            await db.execute("UPDATE strategy_parameter_history SET is_current = 0 WHERE strategy_id = ?", (strategy_id,))
+            await db.execute('''
+                INSERT INTO strategy_parameter_history 
+                (strategy_id, version_id, parent_version_id, old_params, new_params, proposal_id, is_current, changed_by, change_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (strategy_id, new_version_id, parent_version_id, old_params_str, json.dumps(proposed_params), proposal_id, 1, 'USER', 'PROPOSAL_APPLY', applied_ts))
+            
+            # 4. strategy version 갱신
+            await db.execute('''
+                INSERT INTO strategy_versions (strategy_id, current_version_id, current_params, rollback_source_version, applied_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(strategy_id) DO UPDATE SET
+                    current_version_id = excluded.current_version_id,
+                    current_params = excluded.current_params,
+                    rollback_source_version = excluded.rollback_source_version,
+                    applied_at = excluded.applied_at,
+                    updated_at = excluded.updated_at
+            ''', (strategy_id, new_version_id, json.dumps(proposed_params), None, applied_ts, applied_ts))
+
+            # 5. 제안 상태 업데이트
+            await db.execute('''
+                UPDATE strategy_proposals 
+                SET status = 'APPLIED', outcome = 'RUNNING', applied_at = ?, updated_at = ?
+                WHERE id = ?
+            ''', (applied_ts, applied_ts, proposal_id))
+
+            # 6. 성과 스냅샷 기본 생성 (SYNC)
+            param_hash = hashlib.md5(json.dumps(proposed_params, sort_keys=True).encode('utf-8')).hexdigest()
+            cursor = await db.execute('''
+                INSERT INTO strategy_performance_snapshots 
+                (strategy_id, version_id, parameter_hash, snapshot_type, timestamp, roi, mdd, profit_factor, win_rate, trade_count, created_at)
+                VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, ?)
+            ''', (strategy_id, new_version_id, param_hash, 'PARAMETER_CHANGE', applied_ts, applied_ts))
+            snapshot_id = cursor.lastrowid
+
+            await db.commit()
+            
+            return {
+                "strategy_id": strategy_id,
+                "portfolio_id": proposal["portfolio_id"],
+                "new_version_id": new_version_id,
+                "proposed_params": proposed_params,
+                "snapshot_id": snapshot_id
+            }
+
+    async def rollback_strategy_atomic(self, strategy_id: str, version_id: int, applied_ts: int) -> Dict[str, Any]:
+        """지정 버전 롤백, 버전 갱신, 제안 ROLLED_BACK 처리, 성과 스냅샷 기본 생성을 단일 DB 트랜잭션으로 처리합니다."""
+        import json
+        import hashlib
+        async with get_db_conn(self.db_path) as db:
+            # 1. 대상 버전 설정 조회
+            async with db.execute(
+                "SELECT * FROM strategy_parameter_history WHERE strategy_id = ? AND version_id = ?",
+                (strategy_id, version_id)
+            ) as cursor:
+                hist_row = await cursor.fetchone()
+                if not hist_row:
+                    raise ValueError(f"Target parameter version {version_id} not found for strategy {strategy_id}")
+                target_version = dict(hist_row)
+                target_version["new_params"] = json.loads(target_version["new_params"])
+
+            # 2. 현재 적용중인 버전 정보 획득
+            async with db.execute("SELECT * FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cursor:
+                ver_row = await cursor.fetchone()
+                if not ver_row:
+                    raise ValueError(f"No active strategy version found to rollback for strategy {strategy_id}")
+                current_version = dict(ver_row)
+                current_version["current_params"] = json.loads(current_version["current_params"])
+
+            current_version_id = current_version["current_version_id"]
+            new_version_id = current_version_id + 1
+
+            # 3. parameter history 기록 (ROLLBACK)
+            await db.execute("UPDATE strategy_parameter_history SET is_current = 0 WHERE strategy_id = ?", (strategy_id,))
+            await db.execute('''
+                INSERT INTO strategy_parameter_history 
+                (strategy_id, version_id, parent_version_id, old_params, new_params, proposal_id, is_current, changed_by, change_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (strategy_id, new_version_id, version_id, json.dumps(current_version["current_params"]), json.dumps(target_version["new_params"]), None, 1, 'USER', 'ROLLBACK', applied_ts))
+
+            # 4. strategy version 갱신
+            await db.execute('''
+                INSERT INTO strategy_versions (strategy_id, current_version_id, current_params, rollback_source_version, applied_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(strategy_id) DO UPDATE SET
+                    current_version_id = excluded.current_version_id,
+                    current_params = excluded.current_params,
+                    rollback_source_version = excluded.rollback_source_version,
+                    applied_at = excluded.applied_at,
+                    updated_at = excluded.updated_at
+            ''', (strategy_id, new_version_id, json.dumps(target_version["new_params"]), current_version_id, applied_ts, applied_ts))
+
+            # 5. 롤백 원인이 된 문제 버전(current_version_id)과 연계된 제안 ROLLED_BACK 처리
+            async with db.execute(
+                "SELECT proposal_id FROM strategy_parameter_history WHERE strategy_id = ? AND version_id = ?",
+                (strategy_id, current_version_id)
+            ) as cursor:
+                curr_hist_row = await cursor.fetchone()
+            
+            prop_id = None
+            if curr_hist_row and dict(curr_hist_row).get("proposal_id"):
+                prop_id = dict(curr_hist_row)["proposal_id"]
+                await db.execute('''
+                    UPDATE strategy_proposals 
+                    SET status = 'ROLLED_BACK', outcome = 'ROLLED_BACK', rolled_back_at = ?, updated_at = ?
+                    WHERE id = ?
+                ''', (applied_ts, applied_ts, prop_id))
+
+            # 6. 성과 스냅샷 기본 생성 (SYNC)
+            param_hash = hashlib.md5(json.dumps(target_version["new_params"], sort_keys=True).encode('utf-8')).hexdigest()
+            cursor = await db.execute('''
+                INSERT INTO strategy_performance_snapshots 
+                (strategy_id, version_id, parameter_hash, snapshot_type, timestamp, roi, mdd, profit_factor, win_rate, trade_count, created_at)
+                VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 0, ?)
+            ''', (strategy_id, new_version_id, param_hash, 'ROLLBACK', applied_ts, applied_ts))
+            snapshot_id = cursor.lastrowid
+
+            await db.commit()
+
+            return {
+                "strategy_id": strategy_id,
+                "new_version_id": new_version_id,
+                "rollback_version_id": version_id,
+                "target_params": target_version["new_params"],
+                "associated_proposal_id": prop_id,
+                "snapshot_id": snapshot_id
+            }
+
+    async def enrich_snapshot_metrics_async(self, snapshot_id: int, portfolio_id: str):
+        """비동기 백그라운드 태스크로 성과 스냅샷의 ROI/MDD/PF 등의 지표를 계산하여 업데이트합니다."""
+        try:
+            portfolio = None
+            if self.system and hasattr(self.system, 'portfolio_manager'):
+                portfolio = self.system.portfolio_manager.portfolios.get(portfolio_id)
+            
+            if not portfolio:
+                from src.engine.portfolio import PortfolioManager
+                pm = PortfolioManager(db_path=self.db_path)
+                loaded = await pm.repository.load_portfolios()
+                portfolio = loaded.get(portfolio_id)
+                
+            if not portfolio:
+                logger.warning(f"[Snapshot Enrichment] Portfolio {portfolio_id} not found. Cannot calculate metrics.")
+                return
+
+            current_prices = {}
+            for pos_key, pos in portfolio.positions.items():
+                symbol = pos.symbol
+                if self.system and hasattr(self.system, 'get_latest_price'):
+                    price_info = self.system.get_latest_price(pos.exchange, symbol)
+                    if price_info and price_info.get("trade_price"):
+                        current_prices[symbol] = price_info["trade_price"]
+                if symbol not in current_prices:
+                    current_prices[symbol] = pos.avg_price
+
+            from src.engine.utils.performance import calculate_performance_metrics
+            metrics = calculate_performance_metrics(
+                history=portfolio.history,
+                initial_cash=portfolio.initial_cash,
+                current_cash=portfolio.cash,
+                positions=portfolio.positions,
+                current_prices=current_prices
+            )
+
+            async with get_db_conn(self.db_path) as db:
+                await db.execute('''
+                    UPDATE strategy_performance_snapshots
+                    SET roi = ?, mdd = ?, profit_factor = ?, win_rate = ?, trade_count = ?
+                    WHERE id = ?
+                ''', (
+                    metrics["roi"],
+                    metrics["mdd"],
+                    metrics["profit_factor"],
+                    metrics["win_rate"],
+                    metrics["trade_count"],
+                    snapshot_id
+                ))
+                await db.commit()
+                
+            logger.info(f"[Snapshot Enrichment] Snapshot #{snapshot_id} enriched successfully: ROI={metrics['roi']}%")
+            
+            if self.system and self.system.broadcast_callback:
+                await self.system.broadcast_callback({
+                    "type": "snapshot_enriched",
+                    "snapshot_id": snapshot_id,
+                    "metrics": metrics
+                })
+        except Exception as e:
+            logger.error(f"[Snapshot Enrichment] Failed to enrich snapshot #{snapshot_id}: {e}")
+
 
 class InMemoryTradingRepository(BaseTradingRepository):
     """
@@ -763,6 +1435,13 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.order_histories: List[Dict[str, Any]] = []
         self.alerts: List[Dict[str, Any]] = []
         self.system_events: List[Dict[str, Any]] = []
+        self.strategy_versions: Dict[str, Dict[str, Any]] = {}
+        self.strategy_parameter_histories: Dict[str, List[Dict[str, Any]]] = {}
+        self.strategy_performance_snapshots: Dict[str, List[Dict[str, Any]]] = {}
+        self.strategy_proposals: Dict[int, Dict[str, Any]] = {}
+        self.proposal_evaluations: Dict[int, Dict[str, Any]] = {}
+        self.next_proposal_id = 1
+        self.next_history_id = 1
 
     async def save_portfolio(self, portfolio: Any):
         self.portfolios[portfolio.id] = portfolio
@@ -815,4 +1494,290 @@ class InMemoryTradingRepository(BaseTradingRepository):
                     "message": message,
                     "timestamp": crash_ts
                 })
+
+    async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
+        return self.strategy_versions.get(strategy_id)
+
+    async def save_strategy_version(self, strategy_id: str, version_id: int, params: Dict[str, Any], applied_at: int, rollback_source_version: Optional[int] = None):
+        self.strategy_versions[strategy_id] = {
+            "strategy_id": strategy_id,
+            "current_version_id": version_id,
+            "current_params": params,
+            "rollback_source_version": rollback_source_version,
+            "applied_at": applied_at
+        }
+
+    async def insert_strategy_parameter_history(self, strategy_id: str, version_id: int, parent_version_id: Optional[int], old_params: Optional[str], new_params: str, proposal_id: Optional[int], is_current: int, changed_by: str, change_reason: str) -> int:
+        if is_current == 1:
+            if strategy_id in self.strategy_parameter_histories:
+                for h in self.strategy_parameter_histories[strategy_id]:
+                    h["is_current"] = 0
+                    
+        history_id = self.next_history_id
+        self.next_history_id += 1
+        
+        history_item = {
+            "id": history_id,
+            "strategy_id": strategy_id,
+            "version_id": version_id,
+            "parent_version_id": parent_version_id,
+            "old_params": old_params,
+            "new_params": new_params,
+            "proposal_id": proposal_id,
+            "is_current": is_current,
+            "changed_by": changed_by,
+            "change_reason": change_reason,
+            "created_at": time.time()
+        }
+        
+        if strategy_id not in self.strategy_parameter_histories:
+            self.strategy_parameter_histories[strategy_id] = []
+        self.strategy_parameter_histories[strategy_id].append(history_item)
+        return history_id
+
+    async def get_strategy_parameter_history(self, strategy_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        hist = self.strategy_parameter_histories.get(strategy_id, [])
+        sorted_hist = sorted(hist, key=lambda x: x["version_id"], reverse=True)
+        return sorted_hist[:limit]
+
+    async def get_strategy_parameter_version(self, strategy_id: str, version_id: int) -> Optional[Dict[str, Any]]:
+        hist = self.strategy_parameter_histories.get(strategy_id, [])
+        for h in hist:
+            if h["version_id"] == version_id:
+                import json
+                res = dict(h)
+                if isinstance(res.get("new_params"), str):
+                    res["new_params"] = json.loads(res["new_params"])
+                if isinstance(res.get("old_params"), str):
+                    res["old_params"] = json.loads(res["old_params"])
+                return res
+        return None
+
+    async def insert_strategy_performance_snapshot(self, snapshot_data: Dict[str, Any]):
+        strategy_id = snapshot_data["strategy_id"]
+        if strategy_id not in self.strategy_performance_snapshots:
+            self.strategy_performance_snapshots[strategy_id] = []
+        self.strategy_performance_snapshots[strategy_id].append(dict(snapshot_data))
+
+    async def get_strategy_performance_snapshots(self, strategy_id: str, version_id: Optional[int] = None, limit: int = 100) -> List[Dict[str, Any]]:
+        snapshots = self.strategy_performance_snapshots.get(strategy_id, [])
+        if version_id is not None:
+            snapshots = [s for s in snapshots if s["version_id"] == version_id]
+        sorted_snaps = sorted(snapshots, key=lambda x: x["timestamp"], reverse=True)
+        return sorted_snaps[:limit]
+
+    async def insert_strategy_proposal(self, proposal_data: Dict[str, Any]) -> int:
+        proposal_id = self.next_proposal_id
+        self.next_proposal_id += 1
+        
+        prop_copy = dict(proposal_data)
+        prop_copy["id"] = proposal_id
+        
+        if prop_copy.get("confidence_score", 50) < 60:
+            prop_copy["status"] = "PRUNED"
+            
+        self.strategy_proposals[proposal_id] = prop_copy
+        return proposal_id
+
+    async def get_counterfactual_targets(self, limit: int = 20) -> List[Dict[str, Any]]:
+        props = [p for p in self.strategy_proposals.values() if p.get("is_counterfactual_tracked") == 1]
+        props_sorted = sorted(props, key=lambda x: x.get("created_at", 0), reverse=True)
+        return props_sorted[:limit]
+
+    async def update_counterfactual_metrics(self, proposal_id: int, roi: float, mdd: float, track_status: int):
+        if proposal_id in self.strategy_proposals:
+            p = self.strategy_proposals[proposal_id]
+            p["counterfactual_roi"] = roi
+            p["counterfactual_mdd"] = mdd
+            p["is_counterfactual_tracked"] = track_status
+            p["updated_at"] = time.time()
+
+    async def update_strategy_proposal_status(self, proposal_id: int, status: str, outcome: Optional[str] = None, applied_at: Optional[int] = None, rolled_back_at: Optional[int] = None):
+        if proposal_id in self.strategy_proposals:
+            p = self.strategy_proposals[proposal_id]
+            p["status"] = status
+            p["updated_at"] = time.time()
+            if outcome is not None:
+                p["outcome"] = outcome
+            if applied_at is not None:
+                p["applied_at"] = applied_at
+            if rolled_back_at is not None:
+                p["rolled_back_at"] = rolled_back_at
+
+    async def get_strategy_proposal(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        return self.strategy_proposals.get(proposal_id)
+
+    async def get_active_proposals(self, strategy_id: Optional[str] = None, status: Optional[str] = None) -> List[Dict[str, Any]]:
+        props = list(self.strategy_proposals.values())
+        if strategy_id is not None:
+            props = [p for p in props if p["strategy_id"] == strategy_id]
+        if status is not None:
+            props = [p for p in props if p["status"] == status]
+        return sorted(props, key=lambda x: x.get("created_at", 0), reverse=True)
+
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+        self.proposal_evaluations[eval_data["proposal_id"]] = dict(eval_data)
+        return eval_data["proposal_id"]
+
+    async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        return self.proposal_evaluations.get(proposal_id)
+
+    async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
+        props = list(self.strategy_proposals.values())
+        seven_days_ago_ms = int((time.time() - 7 * 24 * 3600) * 1000)
+        res = []
+        for p in props:
+            applied_at = p.get("applied_at")
+            if p["status"] == "APPLIED" and p.get("outcome") == "RUNNING" and applied_at and applied_at <= seven_days_ago_ms:
+                res.append(p)
+        return res
+
+    async def approve_proposal_atomic(self, proposal_id: int, applied_ts: int) -> Dict[str, Any]:
+        import json
+        import hashlib
+        p = self.strategy_proposals.get(proposal_id)
+        if not p:
+            raise ValueError("Proposal not found")
+        p["status"] = "APPLIED"
+        p["outcome"] = "RUNNING"
+        p["applied_at"] = applied_ts
+        p["updated_at"] = applied_ts
+        
+        strategy_id = p["strategy_id"]
+        new_version_id = 1
+        curr_ver = self.strategy_versions.get(strategy_id)
+        if curr_ver:
+            new_version_id = curr_ver["current_version_id"] + 1
+            
+        self.strategy_versions[strategy_id] = {
+            "strategy_id": strategy_id,
+            "current_version_id": new_version_id,
+            "current_params": p["proposed_params"],
+            "rollback_source_version": None,
+            "applied_at": applied_ts
+        }
+        
+        await self.insert_strategy_parameter_history(
+            strategy_id=strategy_id,
+            version_id=new_version_id,
+            parent_version_id=new_version_id - 1 if new_version_id > 1 else None,
+            old_params=json.dumps(p["original_params"]),
+            new_params=json.dumps(p["proposed_params"]),
+            proposal_id=proposal_id,
+            is_current=1,
+            changed_by="USER",
+            change_reason="PROPOSAL_APPLY"
+        )
+        
+        param_hash = hashlib.md5(json.dumps(p["proposed_params"], sort_keys=True).encode('utf-8')).hexdigest()
+        snapshot_item = {
+            "strategy_id": strategy_id,
+            "version_id": new_version_id,
+            "parameter_hash": param_hash,
+            "snapshot_type": "PARAMETER_CHANGE",
+            "timestamp": applied_ts,
+            "roi": None,
+            "mdd": None,
+            "profit_factor": None,
+            "win_rate": None,
+            "trade_count": 0,
+            "created_at": applied_ts
+        }
+        if strategy_id not in self.strategy_performance_snapshots:
+            self.strategy_performance_snapshots[strategy_id] = []
+        self.strategy_performance_snapshots[strategy_id].append(snapshot_item)
+        
+        return {
+            "strategy_id": strategy_id,
+            "portfolio_id": p["portfolio_id"],
+            "new_version_id": new_version_id,
+            "proposed_params": p["proposed_params"],
+            "snapshot_id": len(self.strategy_performance_snapshots[strategy_id])
+        }
+
+    async def rollback_strategy_atomic(self, strategy_id: str, version_id: int, applied_ts: int) -> Dict[str, Any]:
+        import json
+        import hashlib
+        hist = self.strategy_parameter_histories.get(strategy_id, [])
+        target_hist = None
+        for h in hist:
+            if h["version_id"] == version_id:
+                target_hist = h
+                break
+        if not target_hist:
+            raise ValueError("Target version not found")
+            
+        curr_ver = self.strategy_versions.get(strategy_id)
+        current_version_id = curr_ver["current_version_id"] if curr_ver else 1
+        new_version_id = current_version_id + 1
+        
+        self.strategy_versions[strategy_id] = {
+            "strategy_id": strategy_id,
+            "current_version_id": new_version_id,
+            "current_params": json.loads(target_hist["new_params"]) if isinstance(target_hist["new_params"], str) else target_hist["new_params"],
+            "rollback_source_version": current_version_id,
+            "applied_at": applied_ts
+        }
+        
+        await self.insert_strategy_parameter_history(
+            strategy_id=strategy_id,
+            version_id=new_version_id,
+            parent_version_id=version_id,
+            old_params=json.dumps(curr_ver["current_params"]) if curr_ver else None,
+            new_params=target_hist["new_params"] if isinstance(target_hist["new_params"], str) else json.dumps(target_hist["new_params"]),
+            proposal_id=None,
+            is_current=1,
+            changed_by="USER",
+            change_reason="ROLLBACK"
+        )
+        
+        prop_id = None
+        for p in self.strategy_proposals.values():
+            if p["strategy_id"] == strategy_id and p["status"] == "APPLIED":
+                p["status"] = "ROLLED_BACK"
+                p["outcome"] = "ROLLED_BACK"
+                p["rolled_back_at"] = applied_ts
+                p["updated_at"] = applied_ts
+                prop_id = p["id"]
+                break
+                
+        param_hash = hashlib.md5(json.dumps(self.strategy_versions[strategy_id]["current_params"], sort_keys=True).encode('utf-8')).hexdigest()
+        snapshot_item = {
+            "strategy_id": strategy_id,
+            "version_id": new_version_id,
+            "parameter_hash": param_hash,
+            "snapshot_type": "ROLLBACK",
+            "timestamp": applied_ts,
+            "roi": None,
+            "mdd": None,
+            "profit_factor": None,
+            "win_rate": None,
+            "trade_count": 0,
+            "created_at": applied_ts
+        }
+        if strategy_id not in self.strategy_performance_snapshots:
+            self.strategy_performance_snapshots[strategy_id] = []
+        self.strategy_performance_snapshots[strategy_id].append(snapshot_item)
+        
+        return {
+            "strategy_id": strategy_id,
+            "new_version_id": new_version_id,
+            "rollback_version_id": version_id,
+            "target_params": self.strategy_versions[strategy_id]["current_params"],
+            "associated_proposal_id": prop_id,
+            "snapshot_id": len(self.strategy_performance_snapshots[strategy_id])
+        }
+
+    async def enrich_snapshot_metrics_async(self, snapshot_id: int, portfolio_id: str):
+        if portfolio_id in self.portfolios:
+            # 적당히 모의 ROI 업데이트
+            snaps = self.strategy_performance_snapshots.get("rsistrategy", [])
+            for s in snaps:
+                if s["roi"] is None:
+                    s["roi"] = 3.5
+                    s["mdd"] = 0.8
+                    s["profit_factor"] = 1.3
+                    s["win_rate"] = 62.0
+                    s["trade_count"] = 8
+
 

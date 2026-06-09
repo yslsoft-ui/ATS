@@ -257,7 +257,37 @@ const APIClient = (() => {
          * 실시간 모의투자 세션 종료 (미실현 자산 평가가 박제 마감)
          */
         endPortfolioSession: (portfolioId) => 
-            _fetchAPI(`/api/portfolio/${portfolioId}/end`, { method: 'POST' })
+            _fetchAPI(`/api/portfolio/${portfolioId}/end`, { method: 'POST' }),
+
+        /**
+         * 특정 전략의 상세 상태 조회
+         */
+        fetchStrategyDetail: (strategyId) => _fetchAPI(`/api/strategies/${strategyId}`),
+
+        /**
+         * 특정 전략의 제안 목록 조회
+         */
+        fetchProposals: (strategyId, includePruned = true) => _fetchAPI(strategyId ? `/api/proposals?strategy_id=${strategyId}&include_pruned=${includePruned}` : `/api/proposals?include_pruned=${includePruned}`),
+
+        /**
+         * 제안 승인 및 적용
+         */
+        approveProposal: (proposalId) => _fetchAPI(`/api/proposals/${proposalId}/approve`, { method: 'POST' }),
+
+        /**
+         * 특정 전략 지정 버전 롤백
+         */
+        rollbackStrategy: (strategyId, versionId) => _fetchAPI(`/api/strategies/${strategyId}/rollback/${versionId}`, { method: 'POST' }),
+
+        /**
+         * 특정 전략의 성과 스냅샷 리스트 조회
+         */
+        fetchStrategySnapshots: (strategyId) => _fetchAPI(`/api/strategies/${strategyId}/snapshots`),
+
+        /**
+         * 특정 전략의 파라미터 변경 이력 목록 조회
+         */
+        fetchStrategyHistory: (strategyId) => _fetchAPI(`/api/strategies/${strategyId}/history`)
     };
 })();
 

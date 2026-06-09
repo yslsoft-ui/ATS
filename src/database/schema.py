@@ -383,6 +383,126 @@ async def init_db(db_path: str = None):
         ''')
         await ensure_column(db, 'system_events', 'context', 'TEXT')
 
+        # 12. strategy_versions [NEW - V1]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_versions (
+                strategy_id TEXT PRIMARY KEY,
+                current_version_id INTEGER NOT NULL,
+                current_params TEXT NOT NULL,
+                rollback_source_version INTEGER,
+                applied_at INTEGER NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 13. strategy_parameter_history [NEW - V1]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_parameter_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                strategy_id TEXT NOT NULL,
+                version_id INTEGER NOT NULL,
+                parent_version_id INTEGER,
+                old_params TEXT,
+                new_params TEXT,
+                proposal_id INTEGER,
+                is_current INTEGER DEFAULT 0,
+                changed_by TEXT NOT NULL,
+                change_reason TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 14. strategy_performance_snapshots [NEW - V1]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_performance_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                strategy_id TEXT NOT NULL,
+                version_id INTEGER NOT NULL,
+                parameter_hash TEXT NOT NULL,
+                snapshot_type TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                roi REAL,
+                mdd REAL,
+                profit_factor REAL,
+                win_rate REAL,
+                trade_count INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 15. market_regime_summaries [NEW - V2]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS market_regime_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                volatility REAL,
+                rsi REAL,
+                volume_ratio REAL,
+                spread REAL,
+                orderbook_imbalance REAL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 16. strategy_insights [NEW - V2]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_insights (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id TEXT,
+                strategy_id TEXT,
+                category TEXT NOT NULL,
+                fact_summary TEXT NOT NULL,
+                details_json TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 17. strategy_proposals [NEW - V1.5 / V2 / V3.5]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS strategy_proposals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                insight_id INTEGER,
+                proposal_group_id TEXT,
+                version INTEGER,
+                portfolio_id TEXT,
+                strategy_id TEXT,
+                status TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                original_params TEXT,
+                proposed_params TEXT,
+                metrics TEXT,
+                mutation_trace TEXT,
+                confidence_score INTEGER,
+                applied_at INTEGER,
+                rolled_back_at INTEGER,
+                decision_path_hash TEXT UNIQUE,
+                audit_log_json TEXT,
+                counterfactual_roi REAL DEFAULT 0.0,
+                counterfactual_mdd REAL DEFAULT 0.0,
+                is_counterfactual_tracked INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (insight_id) REFERENCES strategy_insights(id) ON UPDATE CASCADE ON DELETE SET NULL
+            )
+        ''')
+
+        # 18. proposal_evaluations [NEW - V3]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS proposal_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proposal_id INTEGER UNIQUE NOT NULL,
+                predicted_roi_7d REAL,
+                actual_roi_7d REAL,
+                roi_divergence REAL,
+                predicted_trade_count_7d INTEGER,
+                actual_trade_count_7d INTEGER,
+                trade_count_divergence INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+        ''')
+
         # 인덱스
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
@@ -394,6 +514,12 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_timestamp ON candles (timestamp)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_system_events_timestamp ON system_events (timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_system_events_type ON system_events (event_type)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_param_hist ON strategy_parameter_history (strategy_id, version_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_perf_snap ON strategy_performance_snapshots (strategy_id, version_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_market_regime_sum ON market_regime_summaries (symbol, timestamp DESC)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_strategy_prop_group ON strategy_proposals (proposal_group_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id ON proposal_evaluations (proposal_id)')
+
         
         await db.commit()
     
@@ -405,6 +531,13 @@ async def migrate_data(db_path: str = None):
     async with get_db_conn(db_path) as db:
         # exchange_assets 테이블에 is_delisted 컬럼이 없으면 마이그레이션 수행
         await ensure_column(db, 'exchange_assets', 'is_delisted', 'INTEGER DEFAULT 0')
+
+        # strategy_proposals 신규 필드 마이그레이션
+        await ensure_column(db, 'strategy_proposals', 'decision_path_hash', 'TEXT')
+        await ensure_column(db, 'strategy_proposals', 'audit_log_json', 'TEXT')
+        await ensure_column(db, 'strategy_proposals', 'counterfactual_roi', 'REAL DEFAULT 0.0')
+        await ensure_column(db, 'strategy_proposals', 'counterfactual_mdd', 'REAL DEFAULT 0.0')
+        await ensure_column(db, 'strategy_proposals', 'is_counterfactual_tracked', 'INTEGER DEFAULT 0')
 
         tables = ['trades', 'candles', 'positions', 'orders_history']
         for table in tables:

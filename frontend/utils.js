@@ -226,8 +226,31 @@ function formatValueByType(val, colSpec, item) {
  */
 function formatTimestamp(ts) {
     if (!ts) return '-';
-    const ms = ts < 10000000000 ? ts * 1000 : ts;
+    let ms;
+    
+    if (typeof ts === 'string') {
+        const trimmed = ts.trim();
+        if (/^\d+$/.test(trimmed)) {
+            const num = parseInt(trimmed, 10);
+            ms = num < 10000000000 ? num * 1000 : num;
+        } else {
+            const isoStr = trimmed.includes(' ') ? trimmed.replace(' ', 'T') : trimmed;
+            const parsed = Date.parse(isoStr);
+            if (!isNaN(parsed)) {
+                ms = parsed;
+            } else {
+                return ts;
+            }
+        }
+    } else if (typeof ts === 'number') {
+        ms = ts < 10000000000 ? ts * 1000 : ts;
+    } else {
+        return '-';
+    }
+    
     const d = new Date(ms);
+    if (isNaN(d.getTime())) return ts;
+
     const pad = (n) => String(n).padStart(2, '0');
     const padMs = (n) => String(n).padStart(3, '0');
     
@@ -239,7 +262,7 @@ function formatTimestamp(ts) {
     const ss = pad(d.getSeconds());
     const msec = padMs(d.getMilliseconds());
     
-    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${msec}`;
+    return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
 
 // 전역 바인딩

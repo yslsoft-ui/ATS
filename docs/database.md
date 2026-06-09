@@ -231,3 +231,182 @@
    - 대상 테이블: `exchange_assets`
    - 인덱스 구성 컬럼: `(exchange, is_active)`
    - 목적: 데몬 구동 시 활성화된 수집 자산 종목들만 즉시 추출하여 수집 세션에 주입하기 위함.
+
+---
+
+### 1.12. strategy_versions (전략 활성 버전 마스터)
+전략별 실시간으로 활성화되어 동작 중인 파라미터 셋과 롤백 소스 이력을 기록합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **strategy_id** (PK) | TEXT | NOT NULL | 전략 고유 ID |
+| **current_version_id** | INTEGER | NOT NULL | 현재 활성 버전 번호 |
+| **current_params** | TEXT | NOT NULL | 현재 적용 중인 파라미터 JSON 문자열 |
+| **rollback_source_version** | INTEGER | NULL | 롤백 발생 시, 원인이 되었던 문제 버전 ID |
+| **applied_at** | INTEGER | NOT NULL | 파라미터 실제 적용 밀리초 시각 (ms) |
+| **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 변경 일시 |
+
+---
+
+### 1.13. strategy_parameter_history (전략 파라미터 변경 이력)
+전략 파라미터의 변이 이력과 버전 분기 계보(Family Tree)를 역추적하기 위한 기록입니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 이력 번호 |
+| **strategy_id** | TEXT | NOT NULL | 전략 ID |
+| **version_id** | INTEGER | NOT NULL | 순차적으로 증가하는 버전 ID |
+| **parent_version_id** | INTEGER | NULL | 부모 버전 ID (파생 계보 추적용) |
+| **old_params** | TEXT | NULL | 변경 전 파라미터 JSON 문자열 |
+| **new_params** | TEXT | NOT NULL | 변경 후 파라미터 JSON 문자열 |
+| **proposal_id** | INTEGER | NULL | 연관된 승인 제안 ID (수동 변경 시 NULL) |
+| **is_current** | INTEGER | DEFAULT 0 | 현재 활성 버전인지 여부 (0: 과거, 1: 현재) |
+| **changed_by** | TEXT | NOT NULL | 변경 주체 (`USER`, `AUTO`) |
+| **change_reason** | TEXT | NOT NULL | 변경 사유 (`MANUAL_UPDATE`, `PROPOSAL_APPLY`, `ROLLBACK`, `STARTUP_RESTORE`) |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 이력 생성 일시 |
+
+---
+
+### 1.14. strategy_performance_snapshots (전략 성과 스냅샷)
+데몬 기동, 파라미터 변경, 롤백 및 주기적 성과 측정 시점의 실전 ROI 및 리스크 지표 스냅샷입니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 스냅샷 번호 |
+| **strategy_id** | TEXT | NOT NULL | 대상 전략 ID |
+| **version_id** | INTEGER | NOT NULL | 성과 측정 대상 전략 버전 |
+| **parameter_hash** | TEXT | NOT NULL | 파라미터 JSON 해시값 (SHA-256) |
+| **snapshot_type** | TEXT | NOT NULL | 이벤트 유형 (`PERIODIC`, `PARAMETER_CHANGE`, `ROLLBACK`, `STARTUP`) |
+| **timestamp** | INTEGER | NOT NULL | 기록 시점 타임스탬프 (ms) |
+| **roi** | REAL | - | 누적 ROI (%) |
+| **mdd** | REAL | - | 누적 Max Drawdown (%) |
+| **profit_factor** | REAL | - | Profit Factor |
+| **win_rate** | REAL | - | 승률 (%) |
+| **trade_count** | INTEGER | - | 체결 거래 건수 |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
+
+---
+
+### 1.15. market_regime_summaries (시장 상태 요약 피처)
+1분 주기로 가공 수집된 시장 지표 피처로, 거시적 시장 특성을 요약해 AI 가설 분석의 기반 데이터로 사용합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 기록 번호 |
+| **timestamp** | INTEGER | NOT NULL | 1분 주기 버킷 밀리초 타임스탬프 (ms) |
+| **symbol** | TEXT | NOT NULL | 종목 식별 기호 (`exchange:symbol` 형식) |
+| **volatility** | REAL | - | 변동성 표준편차 비율 |
+| **rsi** | REAL | - | 1분봉 기준 14분 RSI |
+| **volume_ratio** | REAL | - | 최근 20분 평균 대비 직전 1분 거래량 비율 |
+| **spread** | REAL | - | 1분간 체결 스프레드 비율 |
+| **orderbook_imbalance**| REAL | - | 1분간 매수-매도 체결량 불균형 비율 |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
+
+---
+
+### 1.16. strategy_insights (분석 통계 인사이트)
+손실 거래 분석을 통해 시장 Regime과 거래 매칭 결과를 종합하여 도출한 AI 인사이트입니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 인사이트 번호 |
+| **portfolio_id** | TEXT | - | 소속 포트폴리오 ID |
+| **strategy_id** | TEXT | - | 대상 전략 ID |
+| **category** | TEXT | NOT NULL | 분류 (`STOP_LOSS`, `TRAILING_STOP`, `TIME_LIMIT`, `ENTRY_FILTER`) |
+| **fact_summary** | TEXT | NOT NULL | 인사이트 텍스트 요약 |
+| **details_json** | TEXT | - | 통계 상세 지표 데이터 (JSON) |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
+
+---
+
+### 1.17. strategy_proposals (전략 파라미터 개선 제안)
+통계 분석 및 Shadow Backtest 검증을 거친 후 사용자 승인을 대기하는 파라미터 개선 제안 목록입니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 제안 번호 |
+| **insight_id** | INTEGER | REFERENCES strategy_insights(id) | 매칭된 원인 인사이트 ID (수동 제안 시 NULL) |
+| **proposal_group_id** | TEXT | - | 제안 그룹 식별자 |
+| **version** | INTEGER | - | 제안 버전 |
+| **portfolio_id** | TEXT | - | 대상 포트폴리오 ID |
+| **strategy_id** | TEXT | - | 대상 전략 ID |
+| **status** | TEXT | NOT NULL | 제안 상태 (`PENDING`, `APPROVED`, `APPLIED`, `ROLLED_BACK`, `REJECTED`, `DEFERRED`, `PRUNED`) |
+| **outcome** | TEXT | NOT NULL | 실전 성패 결과 (`RUNNING`, `ROLLED_BACK`, `COMPLETED`) |
+| **original_params** | TEXT | - | 변경 전 파라미터 JSON 문자열 |
+| **proposed_params** | TEXT | - | 제안 파라미터 JSON 문자열 |
+| **metrics** | TEXT | - | 백테스트 예측 성과 지표 (JSON) |
+| **mutation_trace** | TEXT | - | 파라미터 변형 추적 이력 (JSON) |
+| **confidence_score**| INTEGER | - | 제안 신뢰도 점수 (0~100) |
+| **applied_at** | INTEGER | NULL | 실전 적용 완료 밀리초 시각 (ms) |
+| **rolled_back_at** | INTEGER | NULL | 실전 적용 후 롤백 처리 밀리초 시각 (ms) |
+| **decision_path_hash** | TEXT | - | 의사결정 해시 (SHA-256) |
+| **audit_log_json** | TEXT | - | 채점 상세 정보 및 다양성 규제 로그 (JSON) |
+| **counterfactual_roi** | REAL | DEFAULT 0.0 | 반사실적 가상 ROI (%) |
+| **counterfactual_mdd** | REAL | DEFAULT 0.0 | 반사실적 가상 MDD (%) |
+| **is_counterfactual_tracked** | INTEGER | DEFAULT 0 | 반사실적 가상 성과 추적 상태 (`0: 미대상/안함, 1: 추적중, 2: 만료/완료`) |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 제안 생성 일시 |
+| **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 제안 최종 갱신 일시 |
+
+---
+
+### 1.18. proposal_evaluations (제안 사후 성과 평가)
+적용된 제안에 대한 7일 사후 실제 성과와 제안 시점의 백테스트 예측 성과 간의 괴리율을 추적합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 평가 번호 |
+| **proposal_id** | INTEGER | UNIQUE REFERENCES strategy_proposals(id) | 평가 대상 제안 ID |
+| **predicted_roi_7d** | REAL | - | 백테스트 예측 7일 ROI (%) |
+| **actual_roi_7d** | REAL | - | 실전 적용 실제 7일 ROI (%) |
+| **roi_divergence** | REAL | - | ROI 괴리율 (실제 - 예측) |
+| **predicted_trade_count_7d**| INTEGER | - | 백테스트 예측 7일 거래 수 |
+| **actual_trade_count_7d** | INTEGER | - | 실전 적용 실제 7일 거래 수 |
+| **trade_count_divergence** | INTEGER | - | 거래 수 괴리율 (실제 - 예측) |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 평가 생성 일시 |
+
+---
+
+## 2. 데이터베이스 인덱스 (Database Indexes)
+
+데이터 로딩 성능 및 백테스트 조회 최적화를 위해 다음과 같은 복합/단일 인덱스를 운용합니다.
+
+1. **`idx_trades_exch_sym_time`**
+   - 대상 테이블: `trades`
+   - 인덱스 구성 컬럼: `(exchange, symbol, trade_timestamp DESC)`
+   - 목적: 특정 종목의 최근 체결 틱을 백테스트 엔진이나 캔들 복원기에서 시간 내림차순으로 매우 빠르게 조회하기 위함. 특히 1초봉 등 초 단위 저분봉 데이터를 백엔드에서 실시간 온디맨드 즉석 조립(Aggregation)하여 제공할 때, 대량의 틱 데이터를 30분 단위(13ms 수준)로 초고속 조회 및 가공하는 데 핵심적인 역할을 수행함.
+2. **`idx_candles_exch_sym_time`**
+   - 대상 테이블: `candles`
+   - 인덱스 구성 컬럼: `(exchange, symbol, interval, timestamp DESC)`
+   - 목적: 대시보드 차트 요청 시 최근 N개의 캔들(SMA, RSI 연산용) 데이터를 효율적으로 반환하기 위함.
+3. **`idx_orders_history_portfolio_id`**
+   - 대상 테이블: `orders_history`
+   - 인덱스 구성 컬럼: `(portfolio_id)`
+   - 목적: 특정 백테스트 시뮬레이션의 누적 주문 내역을 조회할 때 병목 현상을 방지하기 위함.
+4. **`idx_positions_portfolio_id`**
+   - 대상 테이블: `positions`
+   - 인덱스 구성 컬럼: `(portfolio_id)`
+   - 목적: 포트폴리오의 실자산 보유 비중 현황을 조회하기 위함.
+5. **`idx_exchange_assets_active`**
+   - 대상 테이블: `exchange_assets`
+   - 인덱스 구성 컬럼: `(exchange, is_active)`
+   - 목적: 데몬 구동 시 활성화된 수집 자산 종목들만 즉시 추출하여 수집 세션에 주입하기 위함.
+6. **`idx_strategy_param_hist`**
+   - 대상 테이블: `strategy_parameter_history`
+   - 인덱스 구성 컬럼: `(strategy_id, version_id)`
+   - 목적: 특정 전략의 버전별 파라미터 변경 내역 및 상세 파라미터를 초고속 검색하기 위함.
+7. **`idx_strategy_perf_snap`**
+   - 대상 테이블: `strategy_performance_snapshots`
+   - 인덱스 구성 컬럼: `(strategy_id, version_id)`
+   - 목적: 특정 전략 및 버전별 이벤트 성과 지표(ROI/MDD) 변화를 효율적으로 조회하기 위함.
+8. **`idx_market_regime_sum`**
+   - 대상 테이블: `market_regime_summaries`
+   - 인덱스 구성 컬럼: `(symbol, timestamp DESC)`
+   - 목적: 가설 분석기 기동 시, 특정 종목의 매칭 시점 인근 시장 상태 요약을 신속히 연동하기 위함.
+9. **`idx_strategy_prop_group`**
+   - 대상 테이블: `strategy_proposals`
+   - 인덱스 구성 컬럼: `(proposal_group_id)`
+   - 목적: 하나의 제안 묶음 그룹 단위로 제안 데이터를 조회하고 표시하기 위함.
+10. **`idx_prop_eval_id`**
+    - 대상 테이블: `proposal_evaluations`
+    - 인덱스 구성 컬럼: `(proposal_id)`
+    - 목적: 특정 제안에 대한 사후 성과 평가 정보 대조 조회를 가속화하기 위함.

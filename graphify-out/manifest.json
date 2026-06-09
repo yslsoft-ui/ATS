@@ -370,8 +370,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/strategy.js": {
-    "mtime": 1779757892.839058,
-    "ast_hash": "01fe2256165a38f238fe51ab4d428877",
+    "mtime": 1780985800.9522727,
+    "ast_hash": "8fed838e654d3d0f5b64782802173897",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/chart.js": {
@@ -390,8 +390,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/utils.js": {
-    "mtime": 1780893840.005177,
-    "ast_hash": "057ca52e252a3f19a38e66f852233e63",
+    "mtime": 1780975212.0487003,
+    "ast_hash": "edbd0f8f398f3b421cf4ad29025a136f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.js": {
@@ -425,8 +425,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/client.js": {
-    "mtime": 1780887249.9012856,
-    "ast_hash": "ba810c78a0a16bb8228f0915a330a14c",
+    "mtime": 1780978746.467335,
+    "ast_hash": "afd15bb2bf006842ae981c66aa0d65ea",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
@@ -500,7 +500,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/backtest.py": {
-    "mtime": 1779980613.2669365,
+    "mtime": 1780980406.9780638,
     "ast_hash": "bdec02b6f18fce7d0cc8747d86d8ef85",
     "semantic_hash": ""
   },
@@ -544,6 +544,11 @@
     "ast_hash": "0fe2b5153642c2fb4f1f0722ef532340",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/src/engine/auto_scheduler.py": {
+    "mtime": 1780978569.3476062,
+    "ast_hash": "549e27f44abad0d7aff5c19809922635",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/src/engine/matching.py": {
     "mtime": 1778241512.0,
     "ast_hash": "3ad9f791bf396b1434e3c98d2141521f",
@@ -579,9 +584,24 @@
     "ast_hash": "81a9d455ba286a2b6a0c557296de235b",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/src/engine/shadow_backtest.py": {
+    "mtime": 1780983863.4210942,
+    "ast_hash": "c3e9988174f589c0c92d1b9d8c930a11",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/counterfactual_tracker.py": {
+    "mtime": 1780979944.6283667,
+    "ast_hash": "8485231908c87ef271903a4b3dc97a30",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/src/engine/collector_kis.py": {
     "mtime": 1780910344.1882,
     "ast_hash": "9e23eb61dcc7fe95f1b70d76b3f4ba93",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/analyzer.py": {
+    "mtime": 1780972106.0602396,
+    "ast_hash": "cdfa488eb993b228a72f1a757078266d",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_portfolio.py": {
@@ -607,6 +627,11 @@
   "/home/simon/ATS/src/engine/collector_bithumb.py": {
     "mtime": 1779954438.3020036,
     "ast_hash": "aa5111a1489799db35bcb077b2334621",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/diversity_analyzer.py": {
+    "mtime": 1780985739.7790215,
+    "ast_hash": "4545c7a3d59282803f013043c9eb26e9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market/base.py": {
@@ -665,9 +690,14 @@
     "semantic_hash": "c9b413b2c701cbe68f6da36731276fb9"
   },
   "/home/simon/ATS/src/engine/strategies/rsi_strategy.py": {
-    "mtime": 1778926049.0,
+    "mtime": 1780980402.4579694,
     "ast_hash": "faacae0e286ef06652657a40ad3262d0",
     "semantic_hash": "faacae0e286ef06652657a40ad3262d0"
+  },
+  "/home/simon/ATS/src/engine/utils/performance.py": {
+    "mtime": 1780972023.0861893,
+    "ast_hash": "7b705f04fdcc6ebdad8e735a40d3b3f0",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/utils/telemetry.py": {
     "mtime": 1778953394.0,
@@ -695,13 +725,13 @@
     "semantic_hash": "3299fbc9b52c78e8a3bbfe6400829709"
   },
   "/home/simon/ATS/src/server/main.py": {
-    "mtime": 1780899541.0177476,
-    "ast_hash": "d2a8f16dd50c5639721b18058a6eeb84",
+    "mtime": 1780983926.2503998,
+    "ast_hash": "45264d01e76d340f7ae63e95f40c938e",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/strategy.py": {
-    "mtime": 1780899562.6181407,
-    "ast_hash": "94cca98543427bc372c160fea1854a1b",
+    "mtime": 1780978668.6657238,
+    "ast_hash": "80447e5f4c08040838416e5334a961f6",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/test_market_router.py": {
@@ -734,6 +764,11 @@
     "ast_hash": "34fc5d1336a8c0411c3d8195e4887f46",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/src/server/routers/intelligence.py": {
+    "mtime": 1780983899.7418377,
+    "ast_hash": "820a404ff0109c530cd3b990f65f6505",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/src/server/routers/market.py": {
     "mtime": 1780300777.6013877,
     "ast_hash": "81dd151508abcaced3036bb03945f9cf",
@@ -750,8 +785,8 @@
     "semantic_hash": "024b498dc5def531db6a048fb6e0d861"
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1780908142.7609704,
-    "ast_hash": "f6c063601dc5abb602fe98bd62b77640",
+    "mtime": 1780979909.243628,
+    "ast_hash": "79e2be7e1cb35531bae1ac15b90767d9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -795,8 +830,8 @@
     "semantic_hash": "255b085c828b3d2ef38945638bb8556f"
   },
   "/home/simon/ATS/src/database/schema.py": {
-    "mtime": 1780899514.613198,
-    "ast_hash": "95c9b6ee3a1075c8e4bf30aecc05d060",
+    "mtime": 1780980511.2482018,
+    "ast_hash": "ba81eb05e09283220fd0881fd6eb2400",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/retry.py": {
@@ -815,13 +850,33 @@
     "semantic_hash": "66a5f477a062814628811bee8a9b9055"
   },
   "/home/simon/ATS/src/services/strategy_service.py": {
-    "mtime": 1780901147.6086087,
-    "ast_hash": "6702789511aea8fe29b22426c9c7740a",
+    "mtime": 1780978684.038046,
+    "ast_hash": "71a173657961ea4c5a9d54e9c8052c18",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
-    "mtime": 1780901134.6203585,
-    "ast_hash": "188560e2f1b8771fe191d8d7963afc50",
+    "mtime": 1780972097.148021,
+    "ast_hash": "207397c5c3c76a4c6779fdef6e3f1e14",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_strategy_versioning.py": {
+    "mtime": 1780975715.3599436,
+    "ast_hash": "b2c46b7497b18285a6011b9f88a79991",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_strategy_intelligence.py": {
+    "mtime": 1780978615.2366178,
+    "ast_hash": "ae83d4cfb71aa2e5de1bdda537cfbe52",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_strategy_safeguards.py": {
+    "mtime": 1780984095.2818227,
+    "ast_hash": "4ec1057a8c3d6f05a0775b2a1de8c6f7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_diversity_analyzer.py": {
+    "mtime": 1780985692.086058,
+    "ast_hash": "e4ed52735beb8b599a52e18c626a4a52",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_command_dispatcher.py": {
@@ -830,8 +885,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_daemon_supervisor.py": {
-    "mtime": 1780901174.6971257,
-    "ast_hash": "069ed08613865129515ee5f41c4ba44c",
+    "mtime": 1780973029.0391018,
+    "ast_hash": "5601ccbef170abb58ad7a25aafcff3b4",
     "semantic_hash": ""
   },
   "/home/simon/ATS/README.md": {
@@ -840,8 +895,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/CONTEXT.md": {
-    "mtime": 1780901097.5556293,
-    "ast_hash": "30daad22c6cf9fcc757bbfedc753c582",
+    "mtime": 1780979309.7670972,
+    "ast_hash": "26c00bddeaa465f35b616e63401cd2c6",
     "semantic_hash": ""
   },
   "/home/simon/ATS/AGENTS.md": {
@@ -895,13 +950,13 @@
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1780909156.51416,
-    "ast_hash": "6ebdc9ddf105f5505e9908a237d60a0a",
+    "mtime": 1780972129.2208154,
+    "ast_hash": "6a9a29048f6d22daba977e87ea6a94d9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1780905920.0329099,
-    "ast_hash": "21b7299c6e6564fbeee0a42325884829",
+    "mtime": 1780985781.8118653,
+    "ast_hash": "4e9938777b1a332094ea7b3ac3feab89",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -925,8 +980,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1780624689.0582576,
-    "ast_hash": "94255386b5d27e7f6301d39b5759582f",
+    "mtime": 1780985812.064477,
+    "ast_hash": "c1048eda491f6ba44e0c353575738a22",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
@@ -940,8 +995,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1780901735.1598723,
-    "ast_hash": "e6a274091a1c577c76dd4143e2703557",
+    "mtime": 1780980533.3446553,
+    "ast_hash": "a0b852918a5616c70cd36eec4f09d718",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {

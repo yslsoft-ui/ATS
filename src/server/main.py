@@ -15,6 +15,7 @@ from src.server.routers.strategy import router as strategy_router
 from src.server.routers.portfolio import router as portfolio_router
 from src.server.routers.telemetry import router as telemetry_router
 from src.server.routers.backtest import router as backtest_router
+from src.server.routers.intelligence import router as intelligence_router
 
 # 로깅 시스템 초기화 (초기 단계)
 setup_logging()
@@ -41,6 +42,7 @@ app.include_router(strategy_router)
 app.include_router(portfolio_router)
 app.include_router(telemetry_router)
 app.include_router(backtest_router)
+app.include_router(intelligence_router)
 
 
 # ZeroMQ IPC 구독 태스크 정의
@@ -117,6 +119,12 @@ async def zmq_listener_loop():
                 if not topic:
                     continue
                 
+                # 실시간 제안 등록 수신 시 AutoScheduler에 알림 전송
+                if data.get('type') == 'proposal_created' and hasattr(app.state, 'scheduler'):
+                    proposal_id = data.get('proposal_id')
+                    if proposal_id:
+                        await app.state.scheduler.notify_proposal_created(proposal_id)
+
                 # 실시간 전략 엔진 상태 패킷 수신 시 캐시 업데이트
                 if data.get('type') == 'strategy_status' and 'strategy_id' not in data:
                     import time
@@ -185,10 +193,29 @@ async def startup_event():
     )
     # ZMQ 구독 비동기 루프 기동
     app.state.zmq_loop_task = asyncio.create_task(zmq_listener_loop())
-    logger.info("시스템 모든 구성 요소가 TradingSystem을 통해 시작되었습니다. (Web-only + ZMQ Listener)")
+    
+    # Hybrid Event-driven Scheduler 초기화 및 등록
+    from src.engine.auto_scheduler import HybridAutoApplyScheduler
+    app.state.scheduler = HybridAutoApplyScheduler(db_path=system.repository.db_path)
+    enable_auto = system.config_manager.config.get("system", {}).get("enable_auto_proposal", False)
+    app.state.scheduler.set_auto_proposal_enabled(enable_auto)
+    
+    # Counterfactual Sampling Tracker 초기화 및 기동
+    from src.engine.counterfactual_tracker import CounterfactualSamplingTracker
+    app.state.counterfactual_tracker = CounterfactualSamplingTracker(db_path=system.repository.db_path)
+    await app.state.counterfactual_tracker.start()
+    
+    logger.info("시스템 모든 구성 요소가 TradingSystem 및 AutoScheduler와 함께 시작되었습니다. (Web-only + ZMQ Listener)")
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    # Counterfactual Tracker 종료
+    if hasattr(app.state, 'counterfactual_tracker'):
+        await app.state.counterfactual_tracker.stop()
+        
+    # AutoScheduler 종료
+    if hasattr(app.state, 'scheduler'):
+        await app.state.scheduler.close()
     # ZMQ 구독 중단
     if hasattr(app.state, 'zmq_loop_task'):
         app.state.zmq_loop_task.cancel()

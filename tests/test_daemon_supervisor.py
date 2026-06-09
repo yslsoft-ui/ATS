@@ -145,9 +145,9 @@ async def test_supervisor_lifecycle_start_stop():
 
     # 기동 이벤트 로깅 검증
     # DB 검증
-    assert len(repository.events) == 1
-    assert repository.events[0]['event_type'] == 'DAEMON_START'
-    assert repository.events[0]['target'] == 'test_daemon'
+    assert len(repository.system_events) == 1
+    assert repository.system_events[0]['event_type'] == 'DAEMON_START'
+    assert repository.system_events[0]['target'] == 'test_daemon'
 
     # ZMQ 퍼블리시 검증 (strategy가 안 들어가있으므로 signal_data 채널)
     assert len(event_bus.published_messages) >= 1
@@ -167,8 +167,8 @@ async def test_supervisor_lifecycle_start_stop():
     assert process_controller.restart_called is False
 
     # 종료 이벤트 검증
-    assert len(repository.events) == 2
-    assert repository.events[1]['event_type'] == 'DAEMON_STOP'
+    assert len(repository.system_events) == 2
+    assert repository.system_events[1]['event_type'] == 'DAEMON_STOP'
 
 
 @pytest.mark.asyncio
@@ -204,7 +204,7 @@ async def test_supervisor_restart_control():
     assert service.stop_called is True
     
     # 종료 이벤트 타입이 DAEMON_STOP_RESTART인지 검증
-    assert repository.events[1]['event_type'] == 'DAEMON_STOP_RESTART'
+    assert repository.system_events[1]['event_type'] == 'DAEMON_STOP_RESTART'
 
 
 @pytest.mark.asyncio

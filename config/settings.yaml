@@ -2,6 +2,7 @@ system:
   db_path: data/backtest.db
   strategies_dir: src/engine/strategies
   log_level: INFO
+  enable_auto_proposal: false
 collector:
   warmup_enabled: true
   worker_count: 2
