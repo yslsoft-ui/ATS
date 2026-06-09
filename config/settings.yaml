@@ -66,6 +66,18 @@ strategies:
     enabled: false
     params:
       period: 15
+  shorttermmomentumstrategy:
+    enabled: false
+    params:
+      fast_window: 5
+      slow_window: 20
+      rsi_window: 14
+      rsi_buy_threshold: 55.0
+      rsi_sell_threshold: 80.0
+      bb_window: 20
+      bb_std: 2.0
+      stop_loss_pct: 2.0
+      trailing_stop_pct: 2.5
 exchanges:
   upbit:
     enabled: true
@@ -85,7 +97,7 @@ exchanges:
     api_url: https://openapi.koreainvestment.com:9443
     websocket_url: ws://ops.koreainvestment.com:21000
     market_hours:
-      start_time: '07:50'
+      start_time: 07:50
       end_time: '20:10'
   bithumb:
     enabled: true

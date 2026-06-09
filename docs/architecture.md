@@ -163,6 +163,7 @@ sequenceDiagram
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
 - **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
+- **단기상승흐름 전략 (Short-Term Trend Momentum)**: 룰 기반 파라미터 변이 및 머신러닝 데이터의 행동 공간(Action Space) 다양성 강화를 위해 기존 평균회귀(Mean-reversion) 계열과 대조되는 추세추종 속성의 전략입니다. 해당 전략은 이평 정배열, RSI 강세 & 기울기(Slope) 상승, 볼린저 밴드 상단(98%) 돌파 시 매수 진입하며, 2.0% 고정 손절선, 2.5% 트레일링 스탑, 이평 데드 크로스, RSI 극단 과매수(80.0) 감지 시 청산하여 단기 추세를 회수합니다.
 
 ### 3.4. 초 단위 온디맨드 캔들(OHLCV) 조립 및 무한 스크롤(지연 로딩) 아키텍처
 - **디스크 I/O 최적화**: 1초봉 등 초 단위 봉 데이터를 매초 디스크 DB에 쓰는 동작은 SQLite 환경에서 심각한 병목을 초래합니다. 따라서 DB에는 틱 데이터(`trades`)만 벌크 저장(50건 배치 커밋)하고, 캔들 데이터는 저장하지 않습니다.
@@ -191,6 +192,11 @@ sequenceDiagram
   - 중복 연산을 제거하기 위해 LRU 캐시를 활용하되, 스냅샷 갱신 시 캐시 무효화(Invalidation)를 보장하기 위해 캐시 키에 `dataset_snapshot_id`를 전역 버전 토큰으로 바인딩하고 `visited` 셋을 활용해 무한 루프(Cycle) 유입을 DFS 가드로 이중 방어합니다.
 * **모델 뷰 분리 (`DatasetLoader`)**:
   - 가공된 파생 피처들을 Tabular(Scikit-learn/XGBoost 등), Sequence(Time-series 모델), Graph(PyG Node/Edge List) 등 다양한 머신러닝 학습 요건에 맞게 즉시 변환해주는 어댑터 역할을 수행합니다.
+
+### 3.7. 전략 의사결정 및 승격 제어 레이어 (GIRS & Promotion Queue)
+- **GIRS 및 2-Tier 피처 계약 해시 가드**: 오프라인 배치 학습용 GNN 백본과 런타임 추론용 GIRS(`onnxruntime` 단독 탑재된 MLP Scorer) 레이어를 분리하고 `risk_score` (높을수록 위험) 단일 출력 헤드만 탑재합니다. `uncertainty_score`는 Entropy 식(`-p log(p) - (1-p) log(1-p)`)으로 파생하고 `stability_score`는 역수 정규화 가중합 식($0.6 * \min + 0.4 * \text{mean}$)으로 유도하여 4중 지표 뷰를 구동합니다. 실시간 지연 및 feature poisoning을 방지하기 위해 **2-Stage Feature Contract Validation**을 구동해 NaN/inf, shape, dtype, range check 뿐만 아니라 price, liquidity, regime 필수 피처군의 연속 N회 정체(Step 1 Cheap Check, stale count >= 5) 시 즉각 Fallback하고, 비동기 $\text{feature\_mean\_shift} > \text{threshold}$ (Step 2 Slow Check) 감지 시 Level 2 Degrade로 처리하여 silent ML collapse를 원천 차단합니다.
+- **점진적 격하 가드 (Staged Progressive Degradation)**: 피처 지터에 의한 거짓 양성(False Positive)을 막기 위해 z-score drift 기반의 **Statistical Drift Detection**을 수행하며, 국면 감지 시 **Rule Engine 권한**을 기본으로 적용하되, `rule_confidence > 0.8`일 때만 absolute override가 동작하고 미달 시에는 두 국면을 가중 결합하여 적용합니다. 신뢰도에 따라 경고(Level 1) -> 신뢰도 비례 스코어 감쇄(Level 2) -> volatility, drawdown, regime, liquidity (spread + volume + depth 로 다요소 분해 적용) 4개 피처를 조합한 강고한 Rule-based Scorer 대체(Level 3, Fallback)로 격하하여 100% 가용성을 보장합니다.
+- **FSM 큐 랭킹 및 배치 정정 (Lazy Replay Correction)**: 큐 디버깅 및 전이 안전성을 위해 Candidate $\rightarrow$ Scored $\rightarrow$ Ranked $\rightarrow$ Promotion(Pending, Locked, Rejected, Executed 4단계 세분화)으로 전이하는 **FSM** 모델로 설계합니다. Rejected 상태에서의 전이 진동(Flapping)을 방지하기 위해 쿨다운 게이트($T_{\text{cooldown}}$)를 적용하고 복귀는 ScoredQueue 하나로만 결정론적으로 고정합니다. 백그라운드에서는 **주기적 배치 윈도우(e.g., 10s)** 단위로 Replay를 가동하되 미세 랭킹 흔들림(Oscillation) 방지를 위해 이중 임계치 기반 **Hysteresis Override Rule** (T_high 초과 시 Hard Overwrite, T_low 미만 시 Soft Merge, 그 중간일 때 Keep Previous 상태 유지)과 후보 수 N에 무관하도록 가중치 합으로 정규화한 **Normalised Weighted Rank Drift** 오차, 그리고 **Single Decision Authority Rule** (Replay 부재 시 Sigmoid 스무딩 가중합 $\alpha = \text{sigmoid}(10 * (\text{stability\_score} - 0.5))$ 기반의 $\text{FINAL\_SCORE} = \alpha * girs\_promotion\_score + (1 - \alpha) * fallback\_promotion\_score$ 충돌 해소 적용, 랭킹 및 의사결정에 사용되는 모든 위험 스코어는 `1 - risk` 변환된 promotion_score로 통일)에 입각하여 오차를 정정합니다.
 
 ---
 

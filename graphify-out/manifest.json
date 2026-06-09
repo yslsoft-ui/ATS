@@ -489,6 +489,11 @@
     "ast_hash": "31ee275d1c1fde35e7e2c553ebb7ed66",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/src/engine/dataset_exporter.py": {
+    "mtime": 1780987744.3385308,
+    "ast_hash": "33303779a65ea70d6aae9714183152be",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/src/engine/daemon_supervisor.py": {
     "mtime": 1780901108.6438572,
     "ast_hash": "e33e5b0782d6a52a3913569f7b6714b0",
@@ -668,6 +673,11 @@
     "mtime": 1778929265.0,
     "ast_hash": "16746d246558f6b6084a90e8f3b8d886",
     "semantic_hash": "16746d246558f6b6084a90e8f3b8d886"
+  },
+  "/home/simon/ATS/src/engine/strategies/short_term_momentum.py": {
+    "mtime": 1780988970.945189,
+    "ast_hash": "4882b8f2e5a2fbbc265c399587272e98",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/strategies/trend_bend.py": {
     "mtime": 1778929244.0,
@@ -884,9 +894,19 @@
     "ast_hash": "b3b408aee39cc47385226ef561e1fa09",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/tests/test_dataset_exporter.py": {
+    "mtime": 1780987647.2526202,
+    "ast_hash": "7d05b60cd2ff5d504edf0a4584c17a6e",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/tests/test_daemon_supervisor.py": {
     "mtime": 1780973029.0391018,
     "ast_hash": "5601ccbef170abb58ad7a25aafcff3b4",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_short_term_momentum.py": {
+    "mtime": 1780989058.5114076,
+    "ast_hash": "571a1dfd197ae1db79dcff52fba8a7e9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/README.md": {
@@ -895,8 +915,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/CONTEXT.md": {
-    "mtime": 1780979309.7670972,
-    "ast_hash": "26c00bddeaa465f35b616e63401cd2c6",
+    "mtime": 1780986898.6298754,
+    "ast_hash": "a8113a2092bd52d57ee3a3180f94e63b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/AGENTS.md": {
@@ -950,8 +970,8 @@
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1780972129.2208154,
-    "ast_hash": "6a9a29048f6d22daba977e87ea6a94d9",
+    "mtime": 1780988906.2155755,
+    "ast_hash": "8aad0aec989dad7951c8dedef80270f2",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
@@ -970,8 +990,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
-    "mtime": 1780899807.0028253,
-    "ast_hash": "9b8540bd26babe4bea5a4ababde7e8a1",
+    "mtime": 1780988042.4178605,
+    "ast_hash": "ad1e371786ab452d9f8f38a7d124d818",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/daemons.md": {
