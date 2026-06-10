@@ -428,3 +428,136 @@ def test_girs_uncertainty_and_confidence():
     assert math.isclose(meta_one["uncertainty_score"], 0.0, abs_tol=1e-9)
     assert math.isclose(meta_one["confidence_score"], 1.0, abs_tol=1e-9)
 
+
+def test_girs_scorer_zero_division_guard():
+    # baseline_volatility=0.0 또는 음수 주입 시 Division by Zero 오류 방어 검증
+    model = MockONNXModel("mock_model_v1")
+    
+    # 1. 0.0 주입 시
+    scorer_zero = GIRSScorer(
+        model=model,
+        baseline_volatility=0.0,
+        baseline_latency=0.0,
+        eps=1e-9
+    )
+    
+    scorer_zero.calculate_market_stability("p_zero", market_volatility=0.1)
+    mstab = scorer_zero.calculate_market_stability("p_zero", market_volatility=0.2)
+    assert math.isfinite(mstab)
+    assert 0.0 <= mstab <= 1.0
+    
+    sstab = scorer_zero.calculate_system_stability(system_latency_jitter=0.05)
+    assert math.isfinite(sstab)
+    assert 0.0 <= sstab <= 1.0
+    
+    # 2. 음수 주입 시
+    scorer_neg = GIRSScorer(
+        model=model,
+        baseline_volatility=-0.05,
+        baseline_latency=-0.01,
+        eps=1e-9
+    )
+    scorer_neg.calculate_market_stability("p_neg", market_volatility=0.1)
+    mstab_neg = scorer_neg.calculate_market_stability("p_neg", market_volatility=0.2)
+    assert math.isfinite(mstab_neg)
+    assert 0.0 <= mstab_neg <= 1.0
+    
+    sstab_neg = scorer_neg.calculate_system_stability(system_latency_jitter=0.05)
+    assert math.isfinite(sstab_neg)
+    assert 0.0 <= sstab_neg <= 1.0
+
+
+def test_verify_score_scales_precision_boundaries():
+    # verify_score_scales의 미세 부동소수점 경계값 판별 검증
+    # 1. 허용 범위 내부 경계값
+    assert verify_score_scales(
+        model_risk_score=-0.999e-7,
+        fallback_risk_score=0.5,
+        girs_promotion_score=1.0 - (-0.999e-7),
+        fallback_promotion_score=0.5,
+        final_promotion_score=0.5
+    )
+    assert verify_score_scales(
+        model_risk_score=1.0 + 0.999e-7,
+        fallback_risk_score=0.5,
+        girs_promotion_score=1.0 - (1.0 + 0.999e-7),
+        fallback_promotion_score=0.5,
+        final_promotion_score=0.5
+    )
+    
+    # 2. 허용 범위 외부 경계값
+    assert not verify_score_scales(
+        model_risk_score=-1.001e-7,
+        fallback_risk_score=0.5,
+        girs_promotion_score=1.0 - (-1.001e-7),
+        fallback_promotion_score=0.5,
+        final_promotion_score=0.5
+    )
+    assert not verify_score_scales(
+        model_risk_score=1.0 + 1.001e-7,
+        fallback_risk_score=0.5,
+        girs_promotion_score=1.0 - (1.0 + 1.001e-7),
+        fallback_promotion_score=0.5,
+        final_promotion_score=0.5
+    )
+
+
+def test_stability_tracker_eviction_and_short_history():
+    from src.engine.girs_scorer import StabilityTracker
+    
+    # 윈도우 크기 = 3, baseline_volatility = 0.1
+    tracker = StabilityTracker(rolling_window_size=3, baseline_volatility=0.1)
+    
+    # 1. 히스토리가 2개 미만일 때 예외 없이 1.0 리턴 확인
+    assert tracker.calculate_market_stability("p_evict", market_volatility=0.1) == 1.0
+    
+    # 2. 데이터가 누적되었을 때 sample stdev(표본표준편차, N-1 자유도) 공식 수치 검증
+    # 값 2개: [0.1, 0.2] -> mean = 0.15
+    # variance = ((0.1-0.15)^2 + (0.2-0.15)^2) / (2-1) = 0.005
+    # sample std = math.sqrt(0.005) = 0.070710678...
+    mstab_2 = tracker.calculate_market_stability("p_evict", market_volatility=0.2)
+    sample_std_2 = math.sqrt(0.005)
+    expected_mstab_2 = 1.0 / (1.0 + sample_std_2 / 0.1)
+    assert math.isclose(mstab_2, expected_mstab_2, rel_tol=1e-9)
+    
+    # 3. 윈도우 크기(3)를 초과하여 데이터 유입 시 오래된 값 방출(Eviction) 및 sample std 검증
+    # 값 3개째 주입: [0.1, 0.2, 0.3] -> mean = 0.2
+    # variance = ((0.1-0.2)^2 + (0.0)^2 + (0.3-0.2)^2) / 2 = 0.01
+    # sample std = math.sqrt(0.01) = 0.1
+    # expected_mstab_3 = 1.0 / (1.0 + 0.1 / 0.1) = 0.5
+    mstab_3 = tracker.calculate_market_stability("p_evict", market_volatility=0.3)
+    assert math.isclose(mstab_3, 0.5, rel_tol=1e-9)
+    
+    # 값 4개째 주입: [0.1, 0.2, 0.3, 0.4] -> 첫 번째 0.1이 방출되어 [0.2, 0.3, 0.4]가 윈도우에 남음
+    # mean = 0.3, variance = 0.01, sample std = 0.1, expected_mstab = 0.5
+    # (만약 0.1이 방출되지 않고 모조리 남아있거나 pop되지 않았다면 std가 다르게 나옴)
+    mstab_4 = tracker.calculate_market_stability("p_evict", market_volatility=0.4)
+    assert math.isclose(mstab_4, 0.5, rel_tol=1e-9)
+
+
+def test_onnx_inference_isolated_safety(monkeypatch):
+    # 1. invalid path 주입 시 predict_onnx() 호출이 크래시 없이 None을 리턴하는지 검증
+    model = MockONNXModel("mock_model_v1")
+    scorer = GIRSScorer(model=model, onnx_model_path="invalid_path_to_model.onnx")
+    
+    snap = FeatureSnapshot(
+        price_features={"close": 50000.0, "returns": 0.01, "volatility": 0.15},
+        liquidity_features={"spread": 0.002, "volume": 5000.0, "depth": 10000.0},
+        regime_features={"regime_index": 2.0}
+    )
+    
+    res = scorer.predict_onnx(snap)
+    assert res is None
+    
+    # 2. monkeypatch를 이용해 onnxruntime 세션 생성 실패 시 예외 격리 검증
+    import sys
+    if "onnxruntime" in sys.modules:
+        import onnxruntime as ort
+        def mock_init(*args, **kwargs):
+            raise RuntimeError("Mocked ONNX Runtime Initialization Failure")
+        monkeypatch.setattr(ort, "InferenceSession", mock_init)
+        
+        scorer_mp = GIRSScorer(model=model, onnx_model_path="any_model_path.onnx")
+        res_mp = scorer_mp.predict_onnx(snap)
+        assert res_mp is None
+

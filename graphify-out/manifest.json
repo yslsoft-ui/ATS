@@ -395,8 +395,8 @@
     "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1780893845.2932787,
-    "ast_hash": "20b52f5e35018dd3652ab4804c5c8aa1",
+    "mtime": 1781102082.8449907,
+    "ast_hash": "2572d388095bec324e602e117ea258a4",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/backtest.js": {
@@ -430,8 +430,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/utils.js": {
-    "mtime": 1780975212.0487003,
-    "ast_hash": "edbd0f8f398f3b421cf4ad29025a136f",
+    "mtime": 1781102076.1888936,
+    "ast_hash": "6c7f952f4a5c768fa50a32ccb1e3c63b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.js": {
@@ -700,8 +700,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_girs_golden.py": {
-    "mtime": 1781093808.0438817,
-    "ast_hash": "e41565a37ea10afafbc8ea680110c2ad",
+    "mtime": 1781101790.4647264,
+    "ast_hash": "99a6a657c126971e667898d5b0f59c91",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/girs_types.py": {
@@ -1085,8 +1085,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_champion_cooldown.py": {
-    "mtime": 1781095880.4528406,
-    "ast_hash": "e6b8f3546c74208022efc4766480b9ea",
+    "mtime": 1781101050.6579227,
+    "ast_hash": "4f3205d677868683730eaa19193614df",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_market_data_processor.py": {
@@ -1185,8 +1185,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_report.md": {
-    "mtime": 1781091498.5580025,
-    "ast_hash": "4a23efd9be08bef26eb3afa64f6d71bf",
+    "mtime": 1781102509.0630066,
+    "ast_hash": "fdae549978e7ff8e776e55190ea441fc",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_soak_report.md": {

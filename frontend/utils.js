@@ -274,5 +274,46 @@ window.formatTooltipVolume = formatTooltipVolume;
 window.formatRate = formatRate;
 window.formatTimestamp = formatTimestamp;
 
+/**
+ * 트레이딩 테마 색상 상수
+ */
+const BULL_COLOR = '#FF4B4B';
+const BEAR_COLOR = '#0072FF';
+const NEUTRAL_COLOR = '#64748B';
+const SUCCESS_COLOR = '#4caf50';
+
+/**
+ * 값의 부호(양수/음수/보합)에 따른 색상을 반환
+ * @param {number} value - 등락률 또는 변화량
+ * @returns {string} 색상 코드
+ */
+function getTrendColor(value) {
+    const num = parseFloat(value) || 0;
+    if (num > 0) return BULL_COLOR;
+    if (num < 0) return BEAR_COLOR;
+    return NEUTRAL_COLOR;
+}
+
+/**
+ * 현재가와 이전가의 비교를 통해 색상을 반환
+ * @param {number} current - 현재 가격
+ * @param {number} prev - 이전 가격
+ * @returns {string} 색상 코드
+ */
+function getPriceColor(current, prev) {
+    const currNum = parseFloat(current) || 0;
+    const prevNum = parseFloat(prev) || 0;
+    if (currNum > prevNum) return BULL_COLOR;
+    if (currNum < prevNum) return BEAR_COLOR;
+    return NEUTRAL_COLOR;
+}
+
+window.BULL_COLOR = BULL_COLOR;
+window.BEAR_COLOR = BEAR_COLOR;
+window.NEUTRAL_COLOR = NEUTRAL_COLOR;
+window.SUCCESS_COLOR = SUCCESS_COLOR;
+window.getTrendColor = getTrendColor;
+window.getPriceColor = getPriceColor;
+
 
 

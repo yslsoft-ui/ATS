@@ -29,9 +29,10 @@ async function loadHistory() {
             const changeEl = document.getElementById('change-metric');
             if (priceEl) priceEl.innerText = formatPrice(lastCandle.close);
             if (changeEl && lastCandle.open) {
-                const changePercent = ((lastCandle.close - lastCandle.open) / lastCandle.open * 100).toFixed(2);
-                changeEl.innerText = `${changePercent >= 0 ? '+' : ''}${changePercent}%`;
-                changeEl.style.color = changePercent >= 0 ? '#FF4B4B' : '#0072FF';
+                const changePercent = ((lastCandle.close - lastCandle.open) / lastCandle.open * 100);
+                const formatted = formatRate(changePercent);
+                changeEl.innerText = formatted.text;
+                changeEl.style.color = getTrendColor(changePercent);
             }
         }
 
@@ -228,14 +229,15 @@ function updatePortfolioRealtime(tick) {
     if (!position) return;
 
     const currentPrice = tick.trade_price;
-    const profitRate = ((currentPrice - position.avg_price) / position.avg_price * 100).toFixed(2);
+    const profitPercent = ((currentPrice - position.avg_price) / position.avg_price * 100);
+    const formatted = formatRate(profitPercent);
     
     const rows = document.querySelectorAll('#positions-tbody tr');
     rows.forEach(row => {
         if (row.cells[0]?.innerText === tick.code) {
             const rateCell = row.cells[3];
-            rateCell.innerText = `${profitRate}%`;
-            rateCell.className = `num ${profitRate >= 0 ? 'bull' : 'bear'}`;
+            rateCell.innerText = formatted.text;
+            rateCell.className = `num ${formatted.className}`;
             rateCell.classList.add('value-updating');
             setTimeout(() => rateCell.classList.remove('value-updating'), 400);
         }
@@ -258,10 +260,11 @@ function updatePortfolioRealtime(tick) {
         setTimeout(() => totalValueEl.classList.remove('value-updating'), 400);
         
         const initialValue = 100000000; // 예시 원금
-        const totalRoi = ((newTotalValue - initialValue) / initialValue * 100).toFixed(2);
+        const totalRoiPercent = ((newTotalValue - initialValue) / initialValue * 100);
+        const formattedRoi = formatRate(totalRoiPercent);
         const roiEl = document.getElementById('port-total-roi');
-        roiEl.innerText = `${totalRoi}%`;
-        roiEl.className = `value ${totalRoi >= 0 ? 'bull' : 'bear'}`;
+        roiEl.innerText = formattedRoi.text;
+        roiEl.className = `value ${formattedRoi.className}`;
     }
 }
 
@@ -275,18 +278,19 @@ function updateMetrics(tick) {
     const prevPrice = parseFloat(priceEl.innerText.replace(/,/g, '')) || currentPrice;
 
     priceEl.innerText = formatPrice(currentPrice);
-    priceEl.style.color = currentPrice >= prevPrice ? '#FF4B4B' : '#0072FF';
+    priceEl.style.color = getPriceColor(currentPrice, prevPrice);
 
     // 거래소 공통 전일 대비율(signed_change_rate) 최우선 적용, 없으면 업비트 방식 폴백 계산
     let changePercent = 0.0;
     if (tick.signed_change_rate !== undefined && tick.signed_change_rate !== null) {
-        changePercent = parseFloat((tick.signed_change_rate * 100).toFixed(2));
+        changePercent = tick.signed_change_rate * 100;
     } else if (tick.change_price && tick.prev_closing_price) {
-        changePercent = parseFloat(((tick.change_price / tick.prev_closing_price) * 100).toFixed(2));
+        changePercent = (tick.change_price / tick.prev_closing_price) * 100;
     }
 
-    changeEl.innerText = `${changePercent >= 0 ? '+' : ''}${changePercent}%`;
-    changeEl.style.color = changePercent >= 0 ? '#FF4B4B' : '#0072FF';
+    const formatted = formatRate(changePercent);
+    changeEl.innerText = formatted.text;
+    changeEl.style.color = getTrendColor(changePercent);
 }
 
 function updateHeaderInfo(exchange, symbol) {
@@ -474,12 +478,12 @@ function initTradingControls() {
         state.isAutoTrading = !state.isAutoTrading;
         if (state.isAutoTrading) {
             tradingStatus.innerText = '실행 중';
-            tradingStatus.style.color = '#4caf50';
+            tradingStatus.style.color = SUCCESS_COLOR;
             btnTrading.innerText = '⏹️ 자동 매매 중단';
             btnTrading.className = 'btn danger';
         } else {
             tradingStatus.innerText = '비활성';
-            tradingStatus.style.color = '#FF4B4B';
+            tradingStatus.style.color = BULL_COLOR;
             btnTrading.innerText = '▶️ 자동 매매 시작';
             btnTrading.className = 'btn primary';
         }
@@ -563,7 +567,7 @@ function initTradingControls() {
             const badge = document.getElementById('status-badge');
             const container = document.getElementById('status-badge-container');
             if (badge) {
-                badge.style.color = val ? '#4caf50' : '#FF4B4B';
+                badge.style.color = val ? SUCCESS_COLOR : BULL_COLOR;
             }
             if (container) {
                 container.title = `WebSocket Link: ${val ? 'CONNECTED' : 'DISCONNECTED'}`;
