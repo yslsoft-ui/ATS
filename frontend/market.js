@@ -248,3 +248,11 @@ window.renderMarketTable = renderMarketTable;
 window.loadMarket = loadMarket;
 window.loadSymbols = loadSymbols;
 window.initMarketTabs = initMarketTabs;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('market-view', () => {
+        if (typeof exitExplorerMode === 'function') exitExplorerMode();
+        loadMarket();
+    });
+}
+

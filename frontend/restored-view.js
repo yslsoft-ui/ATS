@@ -64,3 +64,11 @@ async function loadRestoredCandles() {
 
 // 전역 window 바인딩
 window.loadRestoredCandles = loadRestoredCandles;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('restored-view', () => {
+        if (typeof exitExplorerMode === 'function') exitExplorerMode();
+        loadRestoredCandles();
+    });
+}
+

@@ -256,3 +256,10 @@ window.setAlertFilter = setAlertFilter;
 window.showAlert = showAlert;
 window.toggleAlerts = toggleAlerts;
 window.clearAlertHistory = clearAlertHistory;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('alert-view', () => {
+        loadAlertHistory();
+    });
+}
+

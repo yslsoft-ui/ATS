@@ -228,3 +228,11 @@ window.loadRankingView = loadRankingView;
 window.loadRankingResult = loadRankingResult;
 window.selectRankingCard = selectRankingCard;
 window.initRankingControls = initRankingControls;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('ranking-view', () => {
+        if (typeof exitExplorerMode === 'function') exitExplorerMode();
+        loadRankingView();
+    });
+}
+

@@ -12,8 +12,10 @@ const ViewRouter = (() => {
      * 라우터 초기화
      * @param {Object} config - 라우팅 정보 객체 (예: { routes: { 'view-id': callback } })
      */
-    function initialize(config) {
-        routes = config.routes || {};
+    function initialize(config = {}) {
+        if (config.routes) {
+            routes = { ...routes, ...config.routes };
+        }
         const menuItems = document.querySelectorAll('.menu-item');
 
         // 사이드바 메뉴 클릭 이벤트 리스너 등록
@@ -33,6 +35,15 @@ const ViewRouter = (() => {
                 currentActiveViewId = initialViewId;
             }
         }
+    }
+
+    /**
+     * 특정 뷰에 대한 진입 콜백 등록
+     * @param {string} viewId - 대상 뷰 컨테이너 DOM ID
+     * @param {function} callback - 진입 시 실행할 함수
+     */
+    function registerRoute(viewId, callback) {
+        routes[viewId] = callback;
     }
 
     /**
@@ -79,7 +90,8 @@ const ViewRouter = (() => {
     return {
         initialize,
         navigateTo,
-        getActiveView
+        getActiveView,
+        registerRoute
     };
 })();
 

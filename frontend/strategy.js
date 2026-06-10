@@ -1336,3 +1336,10 @@ function renderMutationGraph() {
     }
 }
 window.renderMutationGraph = renderMutationGraph;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('strategy-view', () => {
+        loadStrategies();
+    });
+}
+

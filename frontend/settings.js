@@ -557,3 +557,10 @@ async function updateSystemEvents() {
 
 window.updateSystemEvents = updateSystemEvents;
 
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('settings-view', () => {
+        updateCollectorStatus();
+    });
+}
+
+

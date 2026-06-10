@@ -451,24 +451,15 @@ async function loadRecentTrades() {
 
 // --- UI 초기화 및 바인딩 컨트롤러 ---
 function initViewNavigation() {
-    ViewRouter.initialize({
-        routes: {
-            'monitoring-view': () => {
-                if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
-                    setTimeout(() => ChartEngine.resize(), 0);
-                }
-            },
-            'market-view': () => { exitExplorerMode(); loadMarket(); },
-            'alert-view': () => loadAlertHistory(),
-            'strategy-view': () => loadStrategies(),
-            'portfolio-view': () => { loadPortfolioHistoryList(); loadPortfolio(); },
-            'real-asset-view': () => loadRealAssets(),
-            'ranking-view': () => { exitExplorerMode(); loadRankingView(); },
-            'settings-view': () => updateCollectorStatus(),
-            'restored-view': () => { exitExplorerMode(); loadRestoredCandles(); }
+    ViewRouter.registerRoute('monitoring-view', () => {
+        if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
+            setTimeout(() => ChartEngine.resize(), 0);
         }
     });
+
+    ViewRouter.initialize();
 }
+
 
 function initTradingControls() {
     const btnTrading = document.getElementById('btn-toggle-trading');

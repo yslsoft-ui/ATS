@@ -1568,3 +1568,14 @@ window.executeRealOrder = executeRealOrder;
 window.openRealAssetHistoryModal = openRealAssetHistoryModal;
 window.closeRealAssetHistoryModal = closeRealAssetHistoryModal;
 window.setOrderPrice = setOrderPrice;
+
+if (typeof ViewRouter !== 'undefined') {
+    ViewRouter.registerRoute('portfolio-view', () => {
+        loadPortfolioHistoryList();
+        loadPortfolio();
+    });
+    ViewRouter.registerRoute('real-asset-view', () => {
+        loadRealAssets();
+    });
+}
+
