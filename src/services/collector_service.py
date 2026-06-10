@@ -65,6 +65,7 @@ class CollectorService(DaemonService):
         self.db_path = self.config_manager.get('system.db_path', 'data/backtest.db')
         self.db_writer: Optional[DatabaseWriter] = None
         self.collectors: Dict[str, Any] = {}
+        self.processors: Dict[str, Any] = {}  # [NEW] 거래소별 프로세서 관리 사전
         self.full_config: Dict[str, Any] = {}
         
         self.last_known_statuses: Dict[str, dict] = {}
@@ -105,29 +106,53 @@ class CollectorService(DaemonService):
                 for s_id, s_conf in self.full_config['strategies'].items()
             }
 
-        # 6. 수집기 인스턴스 등록
-        common_kwargs = {
-            'processing_queue': asyncio.Queue(),
-            'db_queue': tick_queue,
-            'candle_queue': candle_queue,
-            'repository': None,
-            'portfolio_manager': None,
-            'on_data_callback': None,
-            'on_signal_callback': None,
-            'on_status_callback': None
-        }
-
+        # 6. 수집기 및 프로세서 인스턴스 등록
         exchanges_config = self.full_config.get('exchanges', {})
         for exchange_id in exchanges_config.keys():
+            # Drop Oldest 정책이 안전하게 구동되도록 격리된 maxsize 큐 생성
+            proc_queue = asyncio.Queue(maxsize=5000)
+
+            # 가공 프로세서 생성
+            from src.engine.market_data_processor import MarketDataProcessor
+            processor = MarketDataProcessor(
+                exchange=exchange_id,
+                processing_queue=proc_queue,
+                db_queue=tick_queue,
+                candle_queue=candle_queue
+            )
+            self.processors[exchange_id] = processor
+
+            # 수집기 생성
+            common_kwargs = {
+                'processing_queue': proc_queue,
+                'db_queue': tick_queue,
+                'candle_queue': candle_queue,
+                'repository': None,
+                'portfolio_manager': None,
+                'on_data_callback': None,
+                'on_signal_callback': None,
+                'on_status_callback': None
+            }
             collector = CollectorRegistry.create(exchange_id, **common_kwargs)
             if collector:
                 self.collectors[exchange_id] = collector
                 logger.info(f"[CollectorService] 수집기 인스턴스 등록 완료: {exchange_id}")
 
-        # 7. 기동 가능 수집기 시작
+        # 7. 기동 가능 수집기 및 프로세서 시작
         for exchange_id, collector in self.collectors.items():
             exch_config = self.config_manager.get(f"exchanges.{exchange_id}", {})
             if exch_config.get('enabled', False):
+                # 수집 종목 사전 획득 및 프로세서/수집기 공유
+                try:
+                    symbols = await collector._fetch_symbols(self.full_config)
+                    collector.available_symbols = symbols
+                    processor = self.processors.get(exchange_id)
+                    if processor:
+                        processor.available_symbols = symbols
+                        await processor.start(self.full_config)
+                except Exception as e:
+                    logger.error(f"[CollectorService] {exchange_id} 종목 조회 및 프로세서 시작 중 오류: {e}")
+
                 await collector.start(self.full_config)
                 logger.info(f"[CollectorService] 수집기 시작됨: {exchange_id}")
                 await self.record_exchange_event('COLLECTOR_START', exchange_id, f"{exchange_id.upper()} 수집기 초기 가동 시작")
@@ -153,7 +178,15 @@ class CollectorService(DaemonService):
                 except Exception as e:
                     logger.error(f"[CollectorService] 수집기 {exchange_id} 중단 중 예외: {e}")
 
-        # 2. DB Writer 중단
+        # 2. 프로세서 중단
+        for exchange_id, processor in self.processors.items():
+            if processor.is_running:
+                try:
+                    await processor.stop()
+                except Exception as e:
+                    logger.error(f"[CollectorService] 프로세서 {exchange_id} 중단 중 예외: {e}")
+
+        # 3. DB Writer 중단
         if self.db_writer:
             await self.db_writer.stop()
 
@@ -173,7 +206,7 @@ class CollectorService(DaemonService):
 
             # 활성화 상태 변화에 따른 동적 기동/중지 제어
             if is_enabled and not collector.is_running:
-                logger.info(f"[CollectorService] 설정 변경 감지 - {exch_id} 수집기 시작 중...")
+                logger.info(f"[CollectorService] 설정 변경 감지 - {exch_id} 수집기 및 프로세서 시작 중...")
                 run_config = new_config.copy()
                 run_config['db_path'] = self.db_path
                 if 'strategies' in run_config:
@@ -181,13 +214,33 @@ class CollectorService(DaemonService):
                         s_id: {**s_conf, 'enabled': False} 
                         for s_id, s_conf in run_config['strategies'].items()
                     }
-                asyncio.create_task(collector.start(run_config))
+                
+                async def start_pair(eid, col, rconf):
+                    try:
+                        syms = await col._fetch_symbols(rconf)
+                        col.available_symbols = syms
+                        proc = self.processors.get(eid)
+                        if proc:
+                            proc.available_symbols = syms
+                            await proc.start(rconf)
+                    except Exception as e:
+                        logger.error(f"[CollectorService] {eid} 동적 기동 중 오류: {e}")
+                    await col.start(rconf)
+
+                asyncio.create_task(start_pair(exch_id, collector, run_config))
                 asyncio.create_task(asyncio.sleep(0.5)).add_done_callback(
                     lambda _, eid=exch_id: asyncio.create_task(post_start(eid))
                 )
             elif not is_enabled and collector.is_running:
-                logger.info(f"[CollectorService] 설정 변경 감지 - {exch_id} 수집기 중단 중...")
-                asyncio.create_task(collector.stop())
+                logger.info(f"[CollectorService] 설정 변경 감지 - {exch_id} 수집기 및 프로세서 중단 중...")
+                
+                async def stop_pair(eid, col):
+                    await col.stop()
+                    proc = self.processors.get(eid)
+                    if proc:
+                        await proc.stop()
+
+                asyncio.create_task(stop_pair(exch_id, collector))
                 asyncio.create_task(asyncio.sleep(0.5)).add_done_callback(
                     lambda _, eid=exch_id: asyncio.create_task(post_stop(eid))
                 )
@@ -206,6 +259,10 @@ class CollectorService(DaemonService):
                 for col_id, col_obj in self.collectors.items():
                     if hasattr(col_obj, 'reload_symbols'):
                         await col_obj.reload_symbols(self.full_config)
+                        # 프로세서 종목 리로드 호출
+                        processor = self.processors.get(col_id)
+                        if processor:
+                            await processor.reload_symbols(self.full_config, col_obj.available_symbols)
             else:
                 collector = self.collectors.get(exchange)
                 if collector and hasattr(collector, 'update_subscription'):

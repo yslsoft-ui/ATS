@@ -374,6 +374,11 @@
     "ast_hash": "f72078ade04cc8feadfd4ef8bce15343",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/logs/girs_shadow_soak_report.json": {
+    "mtime": 1781059880.7636685,
+    "ast_hash": "4d740b4d306b27b8e68cab9384922994",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/frontend/stream.js": {
     "mtime": 1779196710.0,
     "ast_hash": "fed07d07bae065ec680bcf9811100954",
@@ -700,8 +705,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1780882579.7319703,
-    "ast_hash": "ee45ad52654533c04fd86c61d8e188ea",
+    "mtime": 1781062346.354792,
+    "ast_hash": "8a731eb2f7b8329c8a3ded7e508707c2",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/src/engine/market_data_processor.py": {
+    "mtime": 1781062123.375603,
+    "ast_hash": "68b1c33831bd9178b5af4990eee28547",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/daemon_adapters.py": {
@@ -875,8 +885,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
-    "mtime": 1781050989.4006445,
-    "ast_hash": "60220ba27719e99df54d72a5cb275a4e",
+    "mtime": 1781051808.740289,
+    "ast_hash": "d7768c218c59985bbaf1dd93c029c888",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/utils/visualizer.py": {
@@ -930,8 +940,8 @@
     "semantic_hash": "255b085c828b3d2ef38945638bb8556f"
   },
   "/home/simon/ATS/src/database/schema.py": {
-    "mtime": 1781051119.8979874,
-    "ast_hash": "93d770097794f0c4d51a1449b859d09b",
+    "mtime": 1781051707.3671677,
+    "ast_hash": "227096b6171cb3ffe3b3b45e7d2ba4d3",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/retry.py": {
@@ -955,8 +965,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
-    "mtime": 1780972097.148021,
-    "ast_hash": "207397c5c3c76a4c6779fdef6e3f1e14",
+    "mtime": 1781062084.307038,
+    "ast_hash": "3f2a25a93a8c55f38d06bf47d6099357",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/shadow_eval_service.py": {
@@ -1022,6 +1032,16 @@
   "/home/simon/ATS/tests/test_dataset_exporter.py": {
     "mtime": 1780987647.2526202,
     "ast_hash": "7d05b60cd2ff5d504edf0a4584c17a6e",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_collector_legacy_characterization.py": {
+    "mtime": 1781062355.9069288,
+    "ast_hash": "1b3268002c8c93c9b0bc4c42404bdc43",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_market_data_processor.py": {
+    "mtime": 1781062052.3065813,
+    "ast_hash": "650d2c8c70ec8b092ab7248e694fa1f8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_daemon_supervisor.py": {
@@ -1100,7 +1120,7 @@
     "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781051194.822759,
+    "mtime": 1781062416.7438023,
     "ast_hash": "16c8964cf459f4c0882dd99b56bbba61",
     "semantic_hash": ""
   },
@@ -1110,7 +1130,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings_production.yaml": {
-    "mtime": 1781049717.127368,
+    "mtime": 1781053643.3824143,
     "ast_hash": "026c205b6e6b7246bc4d0ddbbd42604b",
     "semantic_hash": ""
   },
@@ -1120,8 +1140,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_report.md": {
-    "mtime": 1781022434.5489347,
-    "ast_hash": "5a201b8666d84fd01f98dca3971c7ebc",
+    "mtime": 1781055633.9188766,
+    "ast_hash": "e5a9159e2572c119b0ca763789bdf03d",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/logs/girs_shadow_soak_report.md": {
+    "mtime": 1781059880.7636685,
+    "ast_hash": "d05d32a43af27214fd9ae8c302cdfbf8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {

@@ -689,10 +689,6 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id_horizon ON proposal_evaluations (proposal_id, horizon_name)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_girs_shadow_metrics_time ON girs_shadow_metrics (timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_promotion_event_log_prop ON promotion_event_log (proposal_id)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange, market_type, status)')
-
-        
         await db.commit()
     
     await migrate_data(target_path)

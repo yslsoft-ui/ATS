@@ -11,11 +11,20 @@ class ConfigManager:
     """
     YAML 설정을 관리하고, 실시간 변경 감지 및 환경 변수 치환을 수행합니다.
     """
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: Optional[str] = None):
         # .env 파일 로드
         load_dotenv()
         
-        self.config_path = config_path
+        env_config_path = os.getenv("ATS_CONFIG")
+        if env_config_path:
+            # tests나 임시 테스트용 설정 파일이 아닌 경우에만 덮어씀
+            is_legacy_default = config_path in ("config/settings.yaml", "config/settings_production.yaml", None)
+            if is_legacy_default:
+                self.config_path = env_config_path
+            else:
+                self.config_path = config_path
+        else:
+            self.config_path = config_path or "config/settings.yaml"
         self.config: Dict[str, Any] = {}
         self.last_mtime: float = 0
         self.subscribers: List[Callable[[Dict[str, Any]], Any]] = []
