@@ -13,6 +13,25 @@ async def ensure_column(db, table, column, definition):
         await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 async def init_db(db_path: str = None):
+    import sqlite3
+    
+    max_retries = 10
+    retry_delay = 0.5
+    
+    for attempt in range(max_retries):
+        try:
+            await _init_db_core(db_path)
+            return
+        except sqlite3.OperationalError as e:
+            if "locked" in str(e) and attempt < max_retries - 1:
+                logger.warning(f"Database is locked during init_db. Retrying in {retry_delay}s... (Attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(retry_delay)
+                retry_delay = min(retry_delay * 1.5, 5.0)
+            else:
+                logger.error(f"Critical operational error during init_db: {e}")
+                raise e
+
+async def _init_db_core(db_path: str = None):
     target_path = db_path if db_path is not None else DB_PATH
     logger.info(f"Initializing database at {target_path}")
     

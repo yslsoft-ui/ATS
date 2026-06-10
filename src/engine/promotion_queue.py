@@ -74,6 +74,10 @@ class PromotionQueue:
         self.correction_active = False
         self.system_event_seq = 0
         
+        self.rank_drift = 0.0
+        self.last_replay_corrected_at = 0.0
+        self.promotion_block_reason = None
+        
         # 인메모리 Materialized View 캐시
         self.materialized_views: Dict[str, ProposalStateView] = {}
 
@@ -185,6 +189,33 @@ class PromotionQueue:
             logger.error(f"Transition rejected: {from_state} -> {to_state} is not allowed.")
             return False
 
+        # correction_active가 True일 때 실전 승격 전이 차단
+        if self.correction_active and to_state in ["PROMOTION_PENDING", "PROMOTION_LOCKED", "PROMOTION_EXECUTED"]:
+            self.promotion_block_reason = "REPLAY_CORRECTION_ACTIVE"
+            logger.warning(f"Transition to {to_state} blocked for proposal {proposal_id} due to active replay correction (drift: {self.rank_drift:.4f}).")
+            
+            # DB에 차단 이벤트 기록
+            now_time = self.clock.now()
+            try:
+                next_seq = view.sequence_no + 1
+                async with aiosqlite.connect(self.db_path) as db:
+                    await db.execute("""
+                        INSERT INTO promotion_event_log (
+                            event_id, proposal_id, sequence_no, event_type, payload,
+                            timestamp, model_version, scaler_version
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        str(uuid.uuid4()), proposal_id, next_seq, "PROMOTION_BLOCKED_BY_REPLAY_CORRECTION",
+                        json.dumps({"drift": self.rank_drift, "target_state": to_state}),
+                        now_time, view.model_version, view.scaler_version
+                    ))
+                    await db.commit()
+                view.sequence_no = next_seq
+                view.last_updated_at = now_time
+            except Exception as e:
+                logger.error(f"Failed to write PROMOTION_BLOCKED_BY_REPLAY_CORRECTION event: {e}")
+            return False
+
         # 2. Cooldown 및 기타 제약 체크
         now_time = self.clock.now()
         
@@ -282,6 +313,13 @@ class PromotionQueue:
     async def rebuild_materialized_view(self) -> None:
         new_views: Dict[str, ProposalStateView] = {}
         
+        # Reset hysteresis and block reason variables to prevent stale data
+        self.correction_active = False
+        self.system_event_seq = 0
+        self.rank_drift = 0.0
+        self.last_replay_corrected_at = 0.0
+        self.promotion_block_reason = None
+        
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("SELECT * FROM promotion_event_log ORDER BY global_sequence_no ASC")
@@ -300,8 +338,23 @@ class PromotionQueue:
                     self.system_event_seq = seq
                 if event_type == "REPLAY_CORRECTION_ENABLED":
                     self.correction_active = True
+                    self.promotion_block_reason = "REPLAY_CORRECTION_ACTIVE"
+                    if payload and "drift" in payload:
+                        self.rank_drift = payload["drift"]
+                    self.last_replay_corrected_at = ts
                 elif event_type == "REPLAY_CORRECTION_DISABLED":
                     self.correction_active = False
+                    self.promotion_block_reason = None
+                    if payload and "drift" in payload:
+                        self.rank_drift = payload["drift"]
+                    self.last_replay_corrected_at = ts
+                continue
+                
+            if event_type == "PROMOTION_BLOCKED_BY_REPLAY_CORRECTION":
+                if proposal_id in new_views:
+                    view = new_views[proposal_id]
+                    view.sequence_no = seq
+                    view.last_updated_at = ts
                 continue
             
             feat_str = row["feature_snapshot"]
@@ -385,11 +438,16 @@ class PromotionQueue:
         action = "KEEP_STATE"
         prev_active = self.correction_active
         
+        self.rank_drift = drift
+        self.last_replay_corrected_at = self.clock.now()
+        
         if drift >= 0.3:  # T_high
             self.correction_active = True
+            self.promotion_block_reason = "REPLAY_CORRECTION_ACTIVE"
             action = "CORRECTION_ACTIVE"
         elif drift <= 0.1:  # T_low
             self.correction_active = False
+            self.promotion_block_reason = None
             action = "CORRECTION_INACTIVE"
             
         # 상태 전환 이벤트 로깅

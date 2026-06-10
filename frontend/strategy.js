@@ -1028,6 +1028,48 @@ function renderAIHealthPanel(diversityData, cfData) {
     if (countEl) countEl.textContent = `추적 완료: ${pa.total_tracked ?? 0}건 / 오판: ${pa.outperformed_count ?? 0}건`;
     if (biasAlertEl) biasAlertEl.style.display = pa.bias_alert ? 'block' : 'none';
 
+    // 3.5. Replay Correction (비동기 랭킹 보정) 상태 바인딩
+    const rs = diversityData.replay_status ?? {};
+    const driftEl = document.getElementById('ai-replay-drift');
+    const replayStatusEl = document.getElementById('ai-replay-status');
+    const correctedAtEl = document.getElementById('ai-replay-corrected-at');
+    const blockReasonEl = document.getElementById('ai-replay-block-reason');
+
+    if (driftEl) {
+        const driftVal = rs.rank_drift ?? 0.0;
+        driftEl.textContent = driftVal.toFixed(4);
+    }
+    if (replayStatusEl) {
+        const isBlocked = rs.correction_active ?? false;
+        
+        if (isBlocked) {
+            replayStatusEl.textContent = '⚠ 승격 차단 (보정 중)';
+            replayStatusEl.style.color = '#EF4444';
+            replayStatusEl.style.background = 'rgba(239, 68, 68, 0.15)';
+            if (blockReasonEl && rs.promotion_block_reason) {
+                blockReasonEl.textContent = `차단 사유: ${rs.promotion_block_reason}`;
+                blockReasonEl.style.display = 'block';
+            } else if (blockReasonEl) {
+                blockReasonEl.style.display = 'none';
+            }
+        } else {
+            replayStatusEl.textContent = '정상 (대기)';
+            replayStatusEl.style.color = '#10B981';
+            replayStatusEl.style.background = 'rgba(16, 185, 129, 0.15)';
+            if (blockReasonEl) {
+                blockReasonEl.style.display = 'none';
+            }
+        }
+    }
+    if (correctedAtEl) {
+        const ts = rs.last_replay_corrected_at;
+        if (ts && ts > 0) {
+            correctedAtEl.textContent = `최종 보정: ${formatTimestamp(ts * 1000)}`;
+        } else {
+            correctedAtEl.textContent = '최종 보정: 없음';
+        }
+    }
+
     // 4. Entropy 시계열 Plotly 미니차트
     const chartEl = document.getElementById('ai-entropy-chart');
     if (chartEl && diversityData.decision_drift?.entropy_timeline?.length) {

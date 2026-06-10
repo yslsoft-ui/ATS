@@ -340,6 +340,15 @@
                                         <div id="ai-bias-alert" style="font-size: 0.72rem; display: none; color: #EF4444;">⚠ 편향 경고: 오판율 30% 초과</div>
                                     </div>
 
+                                    <!-- Replay Correction 상태 카드 [NEW] -->
+                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">비동기 랭킹 보정 (Replay)</div>
+                                        <div id="ai-replay-drift" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #10B981;">—</div>
+                                        <div id="ai-replay-status" style="font-size: 0.8rem; padding: 3px 8px; border-radius: 4px; width: fit-content; background: rgba(100,116,139,0.2); color: #64748B;">정상 (대기)</div>
+                                        <div id="ai-replay-corrected-at" style="font-size: 0.72rem; color: #64748B;">최종 보정: 없음</div>
+                                        <div id="ai-replay-block-reason" style="font-size: 0.72rem; color: #EF4444; display: none;">차단 사유: 없음</div>
+                                    </div>
+
                                 </div>
 
                                 <!-- Entropy 시계열 미니차트 -->

@@ -319,6 +319,11 @@ class GIRSScorer:
         alpha = 1.0 / (1.0 + math.exp(-10.0 * (stability_score - 0.5)))
         final_promotion_score = alpha * girs_promotion_score + (1.0 - alpha) * fallback_promotion_score
         
+        # model_risk_score를 기반으로 uncertainty_score 및 confidence_score 계산
+        p_clip = min(max(model_risk_score, 1e-15), 1.0 - 1e-15)
+        uncertainty_score = (-p_clip * math.log(p_clip) - (1.0 - p_clip) * math.log(1.0 - p_clip)) / math.log(2.0)
+        confidence_score = 1.0 - uncertainty_score
+
         # Shadow mode ONNX GNN inference 비교 기록
         shadow_risk_score = None
         if snapshot is not None:
@@ -333,7 +338,9 @@ class GIRSScorer:
         meta = {
             "is_calibrated": self.calibration_passed,
             "shadow_risk_score": shadow_risk_score,
-            "score_type": "probability" if self.calibration_passed else "risk_index"
+            "score_type": "probability" if self.calibration_passed else "risk_index",
+            "uncertainty_score": uncertainty_score,
+            "confidence_score": confidence_score
         }
         
         return girs_promotion_score, fallback_promotion_score, final_promotion_score, meta

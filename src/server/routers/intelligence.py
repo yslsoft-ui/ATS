@@ -87,6 +87,7 @@ async def get_diversity_map(request: Request, strategy_id: str = None):
     - combined_boost: 복합 λ 보정 신호 (alert_level, lambda_boost 등)
     - decision_drift: Entropy 시계열 (최근 7일)
     - mutation_graph: 파라미터 변이 계보
+    - replay_status: 비동기 랭킹 정정/승격 차단 상태
     """
     system = request.app.state.system
     try:
@@ -107,6 +108,12 @@ async def get_diversity_map(request: Request, strategy_id: str = None):
         # Mutation Trace Graph
         mutation_graph = build_mutation_trace_graph(proposals)
 
+        # Promotion Queue 상태 뷰 리빌드 및 리플레이 지표 로드
+        from src.engine.promotion_queue import PromotionQueue
+        pq = PromotionQueue(db_path=system.db_path)
+        await pq.init_table()
+        await pq.rebuild_materialized_view()
+
         return {
             "strategy_id": strategy_id,
             "entropy": convergence_result["entropy"],
@@ -118,6 +125,12 @@ async def get_diversity_map(request: Request, strategy_id: str = None):
                 "entropy_timeline": entropy_timeline,
             },
             "mutation_graph": mutation_graph,
+            "replay_status": {
+                "correction_active": pq.correction_active,
+                "rank_drift": pq.rank_drift,
+                "last_replay_corrected_at": pq.last_replay_corrected_at,
+                "promotion_block_reason": pq.promotion_block_reason
+            }
         }
     except Exception as e:
         logger.error(f"[Intelligence] /diversity 오류: {e}")

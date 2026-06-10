@@ -829,7 +829,7 @@ async def test_strategy_execution_full_loop():
 @pytest.mark.asyncio
 async def test_atomic_mutations_and_async_enrichment():
     from src.database.connection import get_db_conn
-    repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+    repo = SqliteTradingRepository(db_path=TEST_DB_PATH, champion_cooldown_days=0.0, champion_cooldown_trades=0)
     strategy_id = "rsistrategy"
     portfolio_id = "sim_port_atomic"
     

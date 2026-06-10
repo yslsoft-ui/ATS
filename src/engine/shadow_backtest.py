@@ -373,7 +373,7 @@ class ShadowBacktestEngine:
             try:
                 # 설정 파일에서 horizons 설정 로드
                 import os
-                config_path = os.getenv("ATS_CONFIG", "config/settings_production.yaml")
+                config_path = os.getenv("ATS_CONFIG", "config/settings.yaml")
                 with open(config_path, "r", encoding="utf-8") as f:
                     import yaml
                     full_cfg = yaml.safe_load(f) or {}

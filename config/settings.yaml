@@ -15,15 +15,18 @@ system:
   candidate_proxy_window_seconds: 60
   candidate_proxy_min_tps: 0.1
   shadow_min_trades_limit: 3
+  champion_cooldown_days: 7.0
+  champion_cooldown_trades: 100
   girs_risk_cutoff:
     default: 0.5
     crypto: 0.4
     stock: 0.6
     horizons:
-      10m: 0.45
-      2h: 0.55
+      1d: 0.45
+      3d: 0.5
+      7d: 0.55
     market_horizons:
-      crypto.10m: 0.42
+      crypto.1d: 0.42
   freshness_ttl:
     crypto:
       trade: 10
@@ -33,38 +36,23 @@ system:
       indicator: 120
   horizons:
     crypto:
-    - name: 10m
-      type: elapsed
-      value: 600
-    - name: 30m
-      type: elapsed
-      value: 1800
-    - name: 2h
-      type: elapsed
-      value: 7200
-    - name: 6h
-      type: elapsed
-      value: 21600
-    - name: 24h
+    - name: 1d
       type: elapsed
       value: 86400
+    - name: 3d
+      type: elapsed
+      value: 259200
     - name: 7d
       type: elapsed
       value: 604800
     stock:
-    - name: 1h
-      type: elapsed_in_session
-      value: 3600
-    - name: market_close
+    - name: 1d
       type: calendar_session
-      value: close
-    - name: next_open
-      type: calendar_session
-      value: next_open
-    - name: 3_trading_days
+      value: 1_day
+    - name: 3d
       type: calendar_session
       value: 3_days
-    - name: 7_trading_days
+    - name: 7d
       type: calendar_session
       value: 7_days
   resource_guards:

@@ -8,6 +8,11 @@ from src.engine.utils.telemetry import get_logger
 
 logger = get_logger(__name__)
 
+class ChampionCooldownBlockedError(ValueError):
+    """Champion Cooldown 미달로 인한 승격 제한 시 발생하는 예외"""
+    pass
+
+
 def normalize_timestamp(value) -> Optional[int]:
     if value is None:
         return None
@@ -731,10 +736,20 @@ class SqliteTradingRepository(BaseTradingRepository):
     """
     실제 SQLite 데이터베이스를 연동하는 실거래용 트레이딩 저장소 어댑터입니다.
     """
-    def __init__(self, system=None, db_path: Optional[str] = None, girs_shadow_mode_override: Optional[bool] = None, auto_strategy_promotion_enabled_override: Optional[bool] = None):
+    def __init__(
+        self,
+        system=None,
+        db_path: Optional[str] = None,
+        girs_shadow_mode_override: Optional[bool] = None,
+        auto_strategy_promotion_enabled_override: Optional[bool] = None,
+        champion_cooldown_days: float = 7.0,
+        champion_cooldown_trades: int = 100
+    ):
         import sys
         self.system = system
         self.db_path = db_path
+        self.champion_cooldown_days = champion_cooldown_days
+        self.champion_cooldown_trades = champion_cooldown_trades
         
         is_pytest = "pytest" in sys.modules
         self.girs_shadow_mode_override = girs_shadow_mode_override if girs_shadow_mode_override is not None else (False if is_pytest else None)
@@ -1507,6 +1522,35 @@ class SqliteTradingRepository(BaseTradingRepository):
             strategy_id = proposal["strategy_id"]
             proposed_params = proposal["proposed_params"]
             
+            # Champion Cooldown 검증 (최소 7일 경과 AND 최소 100건 거래(체결 완료) 완료)
+            async with db.execute("SELECT applied_at FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cursor_ver:
+                ver_row = await cursor_ver.fetchone()
+                
+            if ver_row:
+                ver_dict = dict(ver_row)
+                applied_at_ms = ver_dict["applied_at"]
+                
+                # applied_ts는 승격 요청 시점의 ms epoch 타임스탬프
+                elapsed_seconds = (applied_ts - applied_at_ms) / 1000.0
+                elapsed_days = elapsed_seconds / (24 * 3600.0)
+                
+                # applied_at_ms 이후 체결 완료 주문(orders_history 내 quantity > 0 및 price > 0, portfolio_id 격리) 건수 쿼리
+                portfolio_id = proposal["portfolio_id"]
+                applied_at_sec = applied_at_ms / 1000.0
+                async with db.execute(
+                    "SELECT COUNT(*) FROM orders_history WHERE strategy_id = ? AND portfolio_id = ? AND timestamp >= ? AND quantity > 0 AND price > 0",
+                    (strategy_id, portfolio_id, applied_at_sec)
+                ) as cursor_count:
+                    count_row = await cursor_count.fetchone()
+                    trade_count = count_row[0] if count_row else 0
+                    
+                if elapsed_days < self.champion_cooldown_days or trade_count < self.champion_cooldown_trades:
+                    raise ChampionCooldownBlockedError(
+                        f"Promotion blocked by Champion Cooldown: Strategy {strategy_id} is in cooldown. "
+                        f"Active for {elapsed_days:.2f} days and {trade_count} trades. "
+                        f"Required: >= {self.champion_cooldown_days} days and >= {self.champion_cooldown_trades} trades."
+                    )
+            
             # 2. 현재 적용중인 버전 정보 획득
             async with db.execute("SELECT * FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cursor:
                 ver_row = await cursor.fetchone()
@@ -1775,8 +1819,16 @@ class InMemoryTradingRepository(BaseTradingRepository):
     """
     단위 테스트 및 오프라인 시뮬레이션용 초고속 인메모리 트레이딩 저장소 어댑터입니다.
     """
-    def __init__(self, girs_shadow_mode_override: Optional[bool] = None, auto_strategy_promotion_enabled_override: Optional[bool] = None):
+    def __init__(
+        self,
+        girs_shadow_mode_override: Optional[bool] = None,
+        auto_strategy_promotion_enabled_override: Optional[bool] = None,
+        champion_cooldown_days: float = 7.0,
+        champion_cooldown_trades: int = 100
+    ):
         import sys
+        self.champion_cooldown_days = champion_cooldown_days
+        self.champion_cooldown_trades = champion_cooldown_trades
         is_pytest = "pytest" in sys.modules
         self.girs_shadow_mode_override = girs_shadow_mode_override if girs_shadow_mode_override is not None else (False if is_pytest else None)
         self.auto_strategy_promotion_enabled_override = auto_strategy_promotion_enabled_override if auto_strategy_promotion_enabled_override is not None else (True if is_pytest else None)
@@ -2168,6 +2220,32 @@ class InMemoryTradingRepository(BaseTradingRepository):
         p = self.strategy_proposals.get(proposal_id)
         if not p:
             raise ValueError("Proposal not found")
+            
+        strategy_id = p["strategy_id"]
+        curr_ver = self.strategy_versions.get(strategy_id)
+        if curr_ver:
+            applied_at_ms = curr_ver["applied_at"]
+            elapsed_seconds = (applied_ts - applied_at_ms) / 1000.0
+            elapsed_days = elapsed_seconds / (24 * 3600.0)
+            
+            # orders_history (self.order_histories)에서 체결 완료 건수 계산 (quantity > 0 및 price > 0, portfolio_id 격리)
+            portfolio_id = p.get("portfolio_id")
+            applied_at_sec = applied_at_ms / 1000.0
+            trade_count = sum(
+                1 for o in self.order_histories
+                if o.get("strategy_id") == strategy_id 
+                and o.get("portfolio_id") == portfolio_id
+                and o.get("timestamp", 0) >= applied_at_sec 
+                and o.get("quantity", 0.0) > 0.0
+                and o.get("price", 0.0) > 0.0
+            )
+            
+            if elapsed_days < self.champion_cooldown_days or trade_count < self.champion_cooldown_trades:
+                raise ChampionCooldownBlockedError(
+                    f"Promotion blocked by Champion Cooldown: Strategy {strategy_id} is in cooldown. "
+                    f"Active for {elapsed_days:.2f} days and {trade_count} trades. "
+                    f"Required: >= {self.champion_cooldown_days} days and >= {self.champion_cooldown_trades} trades."
+                )
         p["status"] = "APPLIED"
         p["outcome"] = "RUNNING"
         p["applied_at"] = applied_ts

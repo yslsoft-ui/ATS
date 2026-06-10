@@ -2,6 +2,7 @@
 
 import os
 import uuid
+import json
 import pytest
 import aiosqlite
 from src.engine.girs_types import FeatureSnapshot, CandidateProposal
@@ -329,3 +330,149 @@ async def test_hysteresis_rule_and_event_logging():
     await new_queue.rebuild_materialized_view()
     assert new_queue.correction_active
     assert new_queue.system_event_seq == queue.system_event_seq
+
+@pytest.mark.asyncio
+async def test_promotion_blocked_by_replay_correction():
+    """active replay correction 상황에서 승격 관련 전이가 차단되는지 검증합니다."""
+    clock = Clock(start_time=1000.0)
+    queue = PromotionQueue(db_path=DB_FILE, clock=clock)
+    await queue.init_table()
+
+    snap = FeatureSnapshot(price_features={}, liquidity_features={}, regime_features={})
+    proposal = CandidateProposal(
+        proposal_id="prop_block",
+        source_strategy_id="strat_1",
+        features=snap,
+        backtest_result={"roi": 12.0},
+        model_version="v1",
+        scaler_version="s1"
+    )
+
+    # 제안 인입 및 기본 전이
+    await queue.ingest_proposal(proposal, str(uuid.uuid4()))
+    
+    # 1. correction_active=True 설정
+    queue.correction_active = True
+    queue.rank_drift = 0.4
+    
+    # 2. CANDIDATE -> SCORED 전이 시도: 랭킹 및 채점은 승격 전이가 아니므로 허용되어야 함
+    success = await queue.transition_state("prop_block", "SCORED", str(uuid.uuid4()), {"final_promotion_score": 0.8})
+    assert success
+    assert queue.materialized_views["prop_block"].status == "SCORED"
+
+    # 3. SCORED -> PROMOTION_PENDING 전이 시도 (승격 전이): 차단되어야 함
+    success_promo = await queue.transition_state("prop_block", "PROMOTION_PENDING", str(uuid.uuid4()))
+    assert not success_promo
+    # 상태는 SCORED로 유지되어야 함
+    assert queue.materialized_views["prop_block"].status == "SCORED"
+    assert queue.promotion_block_reason == "REPLAY_CORRECTION_ACTIVE"
+
+    # DB에 PROMOTION_BLOCKED_BY_REPLAY_CORRECTION 이벤트가 쌓였는지 확인
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM promotion_event_log WHERE event_type = 'PROMOTION_BLOCKED_BY_REPLAY_CORRECTION'") as cursor:
+            row = await cursor.fetchone()
+            assert row is not None
+            assert row["proposal_id"] == "prop_block"
+            payload = json.loads(row["payload"])
+            assert payload["drift"] == 0.4
+            assert payload["target_state"] == "PROMOTION_PENDING"
+
+    # 4. correction_active=False 설정 (안정화)
+    queue.correction_active = False
+    queue.promotion_block_reason = None
+    
+    # 5. SCORED -> PROMOTION_PENDING 전이 시도: 이제 통과되어야 함
+    success_promo_2 = await queue.transition_state("prop_block", "PROMOTION_PENDING", str(uuid.uuid4()))
+    assert success_promo_2
+    assert queue.materialized_views["prop_block"].status == "PROMOTION_PENDING"
+
+
+@pytest.mark.asyncio
+async def test_replay_correction_safety_guard_details():
+    clock = Clock(start_time=1000.0)
+    queue = PromotionQueue(db_path=DB_FILE, clock=clock)
+    await queue.init_table()
+
+    snap = FeatureSnapshot(price_features={}, liquidity_features={}, regime_features={})
+    proposal = CandidateProposal(
+        proposal_id="prop_guard_test",
+        source_strategy_id="strat_1",
+        features=snap,
+        backtest_result={"roi": 10.0},
+        model_version="v1",
+        scaler_version="s1"
+    )
+
+    # 제안 인입
+    await queue.ingest_proposal(proposal, str(uuid.uuid4()))
+    # SCORED 상태로 전이
+    await queue.transition_state("prop_guard_test", "SCORED", str(uuid.uuid4()))
+    
+    assert queue.materialized_views["prop_guard_test"].status == "SCORED"
+    initial_seq = queue.materialized_views["prop_guard_test"].sequence_no
+
+    # 1. correction_active=True 일 때 승격 전이(SCORED -> PROMOTION_PENDING) 차단 검증
+    # drift = 0.5 유도 -> correction_active=True
+    await queue.run_replay_correction({"p1": 1, "p2": 2}, {"p1": 2, "p2": 1})
+    assert queue.correction_active
+    assert queue.promotion_block_reason == "REPLAY_CORRECTION_ACTIVE"
+
+    clock.sleep(5.0)  # 시간 경과
+    blocked_time = clock.now()
+    
+    # 승격 시도 -> 차단되어야 함
+    success = await queue.transition_state("prop_guard_test", "PROMOTION_PENDING", str(uuid.uuid4()))
+    assert not success
+    
+    # status는 SCORED 그대로 유지되는지 검증
+    assert queue.materialized_views["prop_guard_test"].status == "SCORED"
+    
+    # sequence_no와 last_updated_at은 갱신되었는지 검증
+    blocked_seq = queue.materialized_views["prop_guard_test"].sequence_no
+    assert blocked_seq == initial_seq + 1
+    assert queue.materialized_views["prop_guard_test"].last_updated_at == blocked_time
+
+    # 2. rebuild_materialized_view() 수행 후 status 유지, sequence_no/last_updated_at 복원 확인
+    new_queue = PromotionQueue(db_path=DB_FILE, clock=clock)
+    await new_queue.rebuild_materialized_view()
+    
+    assert new_queue.correction_active
+    assert new_queue.promotion_block_reason == "REPLAY_CORRECTION_ACTIVE"
+    assert new_queue.materialized_views["prop_guard_test"].status == "SCORED"
+    assert new_queue.materialized_views["prop_guard_test"].sequence_no == blocked_seq
+    assert new_queue.materialized_views["prop_guard_test"].last_updated_at == blocked_time
+
+    # 3. correction_active=false로 해제되면 promotion_block_reason이 stale 상태로 남지 않고 해제되는지 검증
+    # drift = 0.0 유도
+    await queue.run_replay_correction({"p1": 1}, {"p1": 1})
+    assert not queue.correction_active
+    assert queue.promotion_block_reason is None
+
+    # rebuild 후에도 stale 상태 없이 복원되는지 검증
+    rebuild_queue_2 = PromotionQueue(db_path=DB_FILE, clock=clock)
+    await rebuild_queue_2.rebuild_materialized_view()
+    assert not rebuild_queue_2.correction_active
+    assert rebuild_queue_2.promotion_block_reason is None
+
+    # 4. 존재하지 않는 proposal_id에 대한 차단 이벤트는 상태뷰를 새로 만들지 않고 안전하게 무시되는지 검증
+    # 수동으로 DB에 존재하지 않는 proposal_id ("non_existent_prop")에 대한 차단 이벤트를 삽입
+    async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("""
+            INSERT INTO promotion_event_log (
+                event_id, proposal_id, sequence_no, event_type, payload, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            str(uuid.uuid4()), "non_existent_prop", 1, "PROMOTION_BLOCKED_BY_REPLAY_CORRECTION",
+            json.dumps({"drift": 0.5, "target_state": "PROMOTION_PENDING"}), clock.now()
+        ))
+        await db.commit()
+
+    # rebuild 실행
+    rebuild_queue_3 = PromotionQueue(db_path=DB_FILE, clock=clock)
+    await rebuild_queue_3.rebuild_materialized_view()
+    
+    # 존재하지 않는 proposal_id인 "non_existent_prop"이 뷰에 새로 생성되지 않았음을 확인
+    assert "non_existent_prop" not in rebuild_queue_3.materialized_views
+
+

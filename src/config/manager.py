@@ -16,9 +16,22 @@ class ConfigManager:
         load_dotenv()
         
         env_config_path = os.getenv("ATS_CONFIG")
+        
+        obsolete_profiles = ("settings_production.yaml", "settings_rehearsal.yaml")
+        if env_config_path and any(obsolete in env_config_path for obsolete in obsolete_profiles):
+            raise ValueError(
+                f"CRITICAL CONFIGURATION ERROR: The configuration profile '{env_config_path}' has been deleted. "
+                "Only 'config/settings.yaml' is supported."
+            )
+        if config_path and any(obsolete in config_path for obsolete in obsolete_profiles):
+            raise ValueError(
+                f"CRITICAL CONFIGURATION ERROR: The configuration profile '{config_path}' has been deleted. "
+                "Only 'config/settings.yaml' is supported."
+            )
+            
         if env_config_path:
             # tests나 임시 테스트용 설정 파일이 아닌 경우에만 덮어씀
-            is_legacy_default = config_path in ("config/settings.yaml", "config/settings_production.yaml", None)
+            is_legacy_default = config_path in ("config/settings.yaml", None)
             if is_legacy_default:
                 self.config_path = env_config_path
             else:
@@ -79,14 +92,6 @@ class ConfigManager:
             logger.info(f"Config File SHA256: {self.config_sha256}")
             logger.info(f"Config File Modified At: {self.last_mtime}")
             
-            # 4. 운영 프로필 배너 로그 출력
-            if "settings_production.yaml" in self.config_path:
-                logger.info("==================================================================")
-                logger.info("  ATS PROFILE: PRODUCTION (Evaluation Horizon: 1d/3d/7d) ")
-                logger.info("  NOTE: This profile is for production-grade evaluation ONLY. ")
-                logger.info("  Live trading and auto promotion remain disabled for safety. ")
-                logger.info("==================================================================")
-                
             return True
         except Exception as e:
             logger.error(f"Error loading config: {e}")

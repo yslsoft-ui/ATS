@@ -368,3 +368,63 @@ def test_fallback_risk_scorer_isolated():
     
     # 리스크 점수가 정상 범위 [0.0, 1.0] 내에 있는지 확인
     assert 0.0 <= risk <= 1.0
+
+def test_girs_uncertainty_and_confidence():
+    """GIRSScorer의 uncertainty_score 및 confidence_score 계산의 정합성과 예외 안전성을 검증합니다."""
+    model = MockONNXModel("mock_model_v1")
+    scorer = GIRSScorer(model=model)
+
+    # 1. model_risk_score = 0.5 일 때 uncertainty_score 거의 1.0, confidence_score 거의 0.0 검증
+    gp, fp, final, meta = scorer.calculate_final_score(
+        model_risk_score=0.5,
+        fallback_risk_score=0.2,
+        stability_score=0.8
+    )
+    assert "uncertainty_score" in meta
+    assert "confidence_score" in meta
+    assert math.isclose(meta["uncertainty_score"], 1.0, abs_tol=1e-5)
+    assert math.isclose(meta["confidence_score"], 0.0, abs_tol=1e-5)
+
+    # 2. model_risk_score가 0 또는 1에 가까울 때 uncertainty_score 거의 0.0, confidence_score 거의 1.0 검증
+    # 0에 가까운 값 (1e-5)
+    _, _, _, meta_near_zero = scorer.calculate_final_score(
+        model_risk_score=1e-5,
+        fallback_risk_score=0.2,
+        stability_score=0.8
+    )
+    assert meta_near_zero["uncertainty_score"] < 0.01
+    assert meta_near_zero["confidence_score"] > 0.99
+
+    # 1에 가까운 값 (1 - 1e-5)
+    _, _, _, meta_near_one = scorer.calculate_final_score(
+        model_risk_score=1.0 - 1e-5,
+        fallback_risk_score=0.2,
+        stability_score=0.8
+    )
+    assert meta_near_one["uncertainty_score"] < 0.01
+    assert meta_near_one["confidence_score"] > 0.99
+
+    # 3. model_risk_score가 극단적인 0 또는 1일 때 log(0) 예외 발생 없이 정상 계산되는지 검증
+    # 0일 때
+    _, _, _, meta_zero = scorer.calculate_final_score(
+        model_risk_score=0.0,
+        fallback_risk_score=0.2,
+        stability_score=0.8
+    )
+    assert "uncertainty_score" in meta_zero
+    assert "confidence_score" in meta_zero
+    # 1e-15 클램핑으로 인해 예외 없이 연산되며 거의 0에 수렴해야 함
+    assert math.isclose(meta_zero["uncertainty_score"], 0.0, abs_tol=1e-9)
+    assert math.isclose(meta_zero["confidence_score"], 1.0, abs_tol=1e-9)
+
+    # 1일 때
+    _, _, _, meta_one = scorer.calculate_final_score(
+        model_risk_score=1.0,
+        fallback_risk_score=0.2,
+        stability_score=0.8
+    )
+    assert "uncertainty_score" in meta_one
+    assert "confidence_score" in meta_one
+    assert math.isclose(meta_one["uncertainty_score"], 0.0, abs_tol=1e-9)
+    assert math.isclose(meta_one["confidence_score"], 1.0, abs_tol=1e-9)
+

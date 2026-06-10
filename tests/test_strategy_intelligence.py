@@ -136,7 +136,12 @@ async def test_hybrid_auto_apply_scheduler():
         strategy_id, 1, None, None, json.dumps({"rsi_window": 14}), None, 1, "AUTO", "STARTUP_RESTORE"
     )
     
-    scheduler = HybridAutoApplyScheduler(db_path=TEST_DB_PATH, debounce_seconds=0.5) # 테스트를 위해 debounce 시간을 0.5초로 세팅
+    scheduler = HybridAutoApplyScheduler(
+        db_path=TEST_DB_PATH,
+        debounce_seconds=0.5,
+        champion_cooldown_days_override=0.0,
+        champion_cooldown_trades_override=0
+    ) # 테스트를 위해 debounce 시간을 0.5초 및 쿨다운 무력화 세팅
     
     # 2. 80점 이상 제안 추가 (자동 승인 대상)
     proposal_id = await repo.insert_strategy_proposal({

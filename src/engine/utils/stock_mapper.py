@@ -125,7 +125,7 @@ class StockMapper:
         import aiohttp
 
         # 1. 설정 획득
-        config_path = os.getenv("ATS_CONFIG", "config/settings_production.yaml")
+        config_path = os.getenv("ATS_CONFIG", "config/settings.yaml")
         config_manager = ConfigManager(config_path)
         kis_config = config_manager.get('exchanges.kis', {})
         

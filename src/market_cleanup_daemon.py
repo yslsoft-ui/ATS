@@ -17,7 +17,7 @@ from src.engine.utils.telemetry import setup_logging
 async def main():
     setup_logging(log_file="ats.log")
     
-    config_path = os.getenv("ATS_CONFIG", "config/settings_production.yaml")
+    config_path = os.getenv("ATS_CONFIG", "config/settings.yaml")
     config_manager = ConfigManager(config_path)
     db_path = config_manager.get('system.db_path', 'data/backtest.db')
 

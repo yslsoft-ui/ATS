@@ -1,7 +1,7 @@
 import time
 import asyncio
 from typing import Dict, Any, List, Set, Optional
-from src.database.repository import SqliteTradingRepository
+from src.database.repository import SqliteTradingRepository, ChampionCooldownBlockedError
 from src.engine.utils.telemetry import get_logger
 from src.config.manager import ConfigManager
 
@@ -14,21 +14,34 @@ class HybridAutoApplyScheduler:
     - 신뢰도 80점 이상인 제안을 approve_proposal_atomic API를 통해 원자적으로 자동 반영합니다.
     - 분당 최대 3회 제한(Rate Limit), 전략별 10분 Cooldown, 수동 롤백 감지 시 자동화 전역 차단 장치를 내장합니다.
     """
-    def __init__(self, db_path: str, debounce_seconds: float = 20.0, girs_shadow_mode_override: Optional[bool] = None, auto_strategy_promotion_enabled_override: Optional[bool] = None):
+    def __init__(
+        self,
+        db_path: str,
+        debounce_seconds: float = 20.0,
+        girs_shadow_mode_override: Optional[bool] = None,
+        auto_strategy_promotion_enabled_override: Optional[bool] = None,
+        champion_cooldown_days_override: Optional[float] = None,
+        champion_cooldown_trades_override: Optional[int] = None
+    ):
         import sys
         from typing import Optional
         self.db_path = db_path
+        self.config_manager = ConfigManager("config/settings.yaml")
         
         is_pytest = "pytest" in sys.modules
         self.girs_shadow_mode_override = girs_shadow_mode_override if girs_shadow_mode_override is not None else (False if is_pytest else None)
         self.auto_strategy_promotion_enabled_override = auto_strategy_promotion_enabled_override if auto_strategy_promotion_enabled_override is not None else (True if is_pytest else None)
         
+        cooldown_days = champion_cooldown_days_override if champion_cooldown_days_override is not None else self.config_manager.get("system.champion_cooldown_days", 7.0)
+        cooldown_trades = champion_cooldown_trades_override if champion_cooldown_trades_override is not None else self.config_manager.get("system.champion_cooldown_trades", 100)
+        
         self.repository = SqliteTradingRepository(
             db_path=self.db_path,
             girs_shadow_mode_override=self.girs_shadow_mode_override,
-            auto_strategy_promotion_enabled_override=self.auto_strategy_promotion_enabled_override
+            auto_strategy_promotion_enabled_override=self.auto_strategy_promotion_enabled_override,
+            champion_cooldown_days=cooldown_days,
+            champion_cooldown_trades=cooldown_trades
         )
-        self.config_manager = ConfigManager("config/settings.yaml")
         self.debounce_seconds = debounce_seconds
         
         self._auto_proposal_enabled = True
@@ -148,7 +161,19 @@ class HybridAutoApplyScheduler:
                 
                 logger.info(f"[AutoScheduler] 제안 #{pid} 자동 승인 트리거 실행 (신뢰도: {confidence}점)")
                 
-                res = await self.repository.approve_proposal_atomic(pid, applied_ts)
+                try:
+                    res = await self.repository.approve_proposal_atomic(pid, applied_ts)
+                except ChampionCooldownBlockedError as cd_err:
+                    err_msg = str(cd_err)
+                    msg = f"Champion Cooldown 미경과로 제안 #{pid} 자동 승격 보류: {err_msg}"
+                    logger.warning(f"[AutoScheduler] {msg}")
+                    await self.repository.insert_system_event(
+                        event_type='PROMOTION_COOLDOWN_BLOCKED',
+                        target=strategy_id,
+                        message=msg,
+                        timestamp=int(now_epoch)
+                    )
+                    continue
                 
                 # 5. 안전장치 상태 갱신
                 self._strategy_last_applied[strategy_id] = now_epoch

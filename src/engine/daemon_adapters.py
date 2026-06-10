@@ -75,10 +75,14 @@ class SysSignalHandler(SignalHandler):
     """asyncio 루프의 add_signal_handler를 활용하는 시그널 제어 어댑터"""
     def register_shutdown_handler(self, callback: Callable[[], None]):
         loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
+        signals = [signal.SIGINT, signal.SIGTERM]
+        if hasattr(signal, "SIGHUP"):
+            signals.append(signal.SIGHUP)
+            
+        for sig in signals:
             try:
                 loop.add_signal_handler(sig, callback)
                 logger.info(f"[SysSignalHandler] 시그널 핸들러 등록 완료: {sig}")
-            except NotImplementedError:
-                # Windows 등 시그널 핸들러 등록 미지원 환경 대응
-                pass
+            except (NotImplementedError, AttributeError, ValueError) as e:
+                # Windows 등 시그널 핸들러 등록 미지원 환경 및 기타 예외 대응
+                logger.warning(f"[SysSignalHandler] 시그널 핸들러 등록 실패 ({sig}): {e}")

@@ -34,7 +34,14 @@ class TradingSystem:
         self.strategies_dir = self.config_manager.get('system.strategies_dir', 'src/engine/strategies')
         
         # 전역 리소스를 통합 래핑하는 레포지토리 초기화
-        self.repository = SqliteTradingRepository(system=self)
+        cooldown_days = self.config_manager.get('system.champion_cooldown_days', 7.0)
+        cooldown_trades = self.config_manager.get('system.champion_cooldown_trades', 100)
+        self.repository = SqliteTradingRepository(
+            system=self,
+            db_path=self.db_path,
+            champion_cooldown_days=cooldown_days,
+            champion_cooldown_trades=cooldown_trades
+        )
         
         # 전역 큐 관리 (레거시 호환 및 내부 버퍼용)
         self.processing_queue = asyncio.Queue()

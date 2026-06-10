@@ -139,12 +139,23 @@ sequenceDiagram
 
 ## 5. Graceful Shutdown (안전 종료 처리)
 
-두 데몬 프로세스는 운영체제 종료 시그널(`SIGINT`, `SIGTERM`) 감지 시 다음과 같은 자원 정리 절차를 순차 진행하여 메모리 누수 및 데이터 정합성 깨짐을 방지합니다.
+두 데몬 프로세스는 운영체제 종료 시그널(`SIGINT`, `SIGTERM`, `SIGHUP`) 감지 시 다음과 같은 자원 정리 절차를 순차 진행하여 메모리 누수 및 데이터 정합성 깨짐을 방지합니다.
 
 1. **설정 감시 중단**: Config 파일 감시 및 ZMQ 제어 채널 리스너 태스크를 즉시 취소합니다.
 2. **WebSocket 연결 해제**: 구동 중인 수집기 인스턴스의 WebSocket 세션을 안전하게 `close`하고 종료 상태를 방출합니다.
 3. **DB 큐 플러시**: `DatabaseWriter`의 데이터 인큐 루프를 종료하고, 내부 큐에 남아 있던 마지막 틱/캔들 데이터를 완전하게 DB 파일에 벌크 커밋 처리한 후 파일 핸들을 닫습니다.
 4. **ZMQ 소켓 클로즈**: ZeroMQ 컨텍스트 및 Publisher/Subscriber 소켓을 완전히 닫아 stale 파일 핸들(.ipc 소켓 파일)을 제거합니다.
+
+### 5.1. 공식 시스템 종료 절차
+시스템을 안전하게 종료하기 위한 공식 명령은 다음과 같습니다:
+```bash
+./run.sh stop
+```
+이 명령은 tmux 세션 내 모든 프로세스에 종료 시그널(Ctrl+C / SIGINT)을 순차적으로 전달하여 위의 정리 절차가 정상 완수되도록 유도합니다. 그 후 모든 파이썬 백그라운드 프로세스가 안정적으로 꺼졌는지 검사한 뒤 최종적으로 남은 tmux 세션 껍데기를 정리합니다.
+
+> [!WARNING]
+> **`tmux kill-session -t ats` 단독 실행 비권장**
+> 이 명령을 단독으로 즉시 수행하면 프로세스들이 자원을 정리할 틈 없이 급사하게 되어 DB 데이터 정합성 깨짐, 메모리/소켓 찌꺼기 파일 잔존 등의 문제를 유발할 수 있으므로, 비상 상황이 아닌 한 **절대 단독으로 사용하지 않는 것을 권장**합니다. 항상 `./run.sh stop`을 사용해 안전 종료를 유도하세요.
 
 ---
 
@@ -235,24 +246,23 @@ sequenceDiagram
 
 ---
 
-## 10. 설정 프로필 분리 명세 (Configuration Profiles)
+## 10. 단일 설정 파일 명세 (Configuration Specification)
 
-안정적인 리허설 검증과 실제 운영 환경의 분리를 위해 설정 파일을 프로필(Profile) 단위로 분리하여 관리합니다.
+시스템은 `config/settings.yaml` 파일 하나를 단일 진실 공급원(SSOT)으로 삼아 동작합니다.
 
-### 10.1. 프로필 종류 및 상세
-- **[settings_production.yaml](file:///home/simon/ATS/config/settings_production.yaml) (운영 프로필)**:
+### 10.1. 주요 정책 및 안전 조건
+- **[settings.yaml](file:///home/simon/ATS/config/settings.yaml)**:
   - 다중 Horizon 사후 평가의 실제 운영 환경 스펙인 **1d/3d/7d Horizon**을 기본적으로 구성합니다.
-  - **주의 및 안전 조건**: `live_trading_enabled = false` 및 `auto_strategy_promotion_enabled = false`는 항상 `false`로 유지됩니다. 즉, **운영(production) 프로필은 실거래를 활성화하는 것이 아니며**, 오직 운영 스펙인 `1d/3d/7d` Horizon 평가 기준을 적용하기 위한 설정 파일입니다.
-- **[settings_rehearsal.yaml](file:///home/simon/ATS/config/settings_rehearsal.yaml) (리허설/테스트 프로필)**:
-  - 데몬 가동 및 2시간 Soak Test 등 가상 시간 검증을 위해 단기 검증용 **10m/30m/2h Horizon**을 기본 설정합니다.
-- **[settings.yaml](file:///home/simon/ATS/config/settings.yaml) (Deprecated 호환 프로필)**:
-  - 1차 이전 단계의 설정 하위 호환성을 위해 유지되는 임시 deprecated 파일입니다. 신규 가동 시에는 더 이상 참조하지 않을 것을 권장합니다.
+  - **주의 및 안전 조건**: `operation_mode = shadow`, `live_trading_enabled = false` 및 `auto_strategy_promotion_enabled = false`는 항상 `false`로 유지됩니다.
+- **Fail-Fast 정책**: 
+  - 과거에 사용하던 설정 프로필(`settings_production.yaml`, `settings_rehearsal.yaml`)을 환경변수 `ATS_CONFIG` 또는 기동 인자로 로드하려 시도할 경우, 시스템은 조용히 대체하지 않고 즉시 `ValueError` 예외를 발생시켜 프로세스를 기동 중단(Fail-Fast)시킵니다.
 
-### 10.2. 기동 및 전환 흐름
-- 모든 데몬(`collector_daemon.py`, `strategy_daemon.py`, `shadow_eval_daemon.py`, `market_cleanup_daemon.py`) 및 헬퍼 유틸들은 실행 시 시스템 환경변수 `ATS_CONFIG`를 동적으로 참조합니다.
-- **`run.sh` (운영 기동)**:
-  - 기동 시 환경변수 `ATS_CONFIG`가 선언되어 있지 않다면 기본값으로 `config/settings_production.yaml`을 적용해 기동합니다.
-- **`scratch/run_rehearsal.sh` (리허설 기동)**:
-  - 기동 시 `export ATS_CONFIG="config/settings_rehearsal.yaml"`을 강제 선언 및 주입하여 리허설 전용 설정에 맞춰 안전 기동하도록 제어합니다.
+### 10.2. 기동 및 제어 흐름
+- 모든 데몬(`collector_daemon.py`, `strategy_daemon.py`, `shadow_eval_daemon.py`, `market_cleanup_daemon.py`) 및 헬퍼 유틸들은 실행 시 시스템 환경변수 `ATS_CONFIG`를 동적으로 참조하며, 기본값은 `config/settings.yaml`입니다.
+- **`run.sh` 공식 스크립트 제어**:
+  - **기동 (`./run.sh start` 또는 `./run.sh`)**: `ats` tmux 세션을 생성하여 5개 데몬을 기동시킵니다. 중복 기동 시도 시 에러를 뿜으며 즉시 종료됩니다.
+  - **종료 (`./run.sh stop`)**: 세션 내의 모든 데몬들에게 SIGINT(Ctrl+C) 신호를 보내 안전한 Graceful Shutdown이 유도되도록 정리 후 최종적으로 tmux 세션을 정리합니다.
+  - **재시작 (`./run.sh restart`)**: 안전 종료(`stop`) 프로세스를 먼저 끝낸 뒤, 재기동(`start`)을 시작합니다.
+  - 옵션으로 웹 서버 핫 리로딩을 켜고 싶을 경우 `start`나 `restart` 커맨드 뒤에 `--reload`를 덧붙여 실행합니다 (예: `./run.sh start --reload`).
 
 
