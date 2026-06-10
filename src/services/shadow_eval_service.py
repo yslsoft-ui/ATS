@@ -309,7 +309,7 @@ class ShadowEvaluationService(DaemonService):
 
     def get_status_payloads(self) -> List[tuple[str, dict]]:
         return [
-            ("strategy_signal", {
+            ("evaluation_signal", {
                 "type": "shadow_eval_status",
                 "is_running": self._is_running,
                 "poll_interval": self.poll_interval

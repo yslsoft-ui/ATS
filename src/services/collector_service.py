@@ -281,7 +281,7 @@ class CollectorService(DaemonService):
             "candle": self.db_writer.candle_queue.qsize() if self.db_writer and hasattr(self.db_writer, 'candle_queue') else 0,
             "total": sum(getattr(c, 'total_processed_count', 0) for c in self.collectors.values())
         }
-        payloads.append(("signal_data", queue_status_payload))
+        payloads.append(("collector_signal", queue_status_payload))
 
         # 2. 5초 주기 거래소 상태 알림
         self._status_counter += 1
@@ -319,7 +319,7 @@ class CollectorService(DaemonService):
                     "status_reason": getattr(collector, 'status_reason', None),
                     "error": err
                 }
-                payloads.append(("signal_data", status_payload))
+                payloads.append(("collector_signal", status_payload))
 
         return payloads
 
@@ -344,7 +344,7 @@ class CollectorService(DaemonService):
         except Exception as e:
             logger.error(f"[CollectorService] EXCHANGE 이벤트 DB 적재 실패: {e}")
         try:
-            await self.event_bus.publish("signal_data", {
+            await self.event_bus.publish("collector_signal", {
                 "type": "system_event",
                 "event_type": event_type,
                 "target": exch_id,

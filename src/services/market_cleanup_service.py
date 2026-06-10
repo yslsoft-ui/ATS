@@ -241,7 +241,7 @@ class MarketDataCleanupService(DaemonService):
 
     def get_status_payloads(self) -> List[tuple[str, dict]]:
         return [
-            ("signal_data", {
+            ("cleanup_signal", {
                 "type": "market_cleanup_status",
                 "is_running": self._is_running,
                 "cleanup_interval": self.cleanup_interval,

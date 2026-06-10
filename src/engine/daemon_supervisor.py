@@ -123,7 +123,16 @@ class DaemonSupervisor:
         try:
             # signal_data 또는 strategy_signal 같은 공통 버스로 시스템 이벤트를 브로드캐스트
             # 기존 규칙에 따라 collector_daemon은 signal_data, strategy_daemon은 strategy_signal 사용
-            event_topic = "strategy_signal" if "strategy" in self.daemon_name else "signal_data"
+            if "strategy" in self.daemon_name:
+                event_topic = "strategy_signal"
+            elif "collector" in self.daemon_name:
+                event_topic = "collector_signal"
+            elif "cleanup" in self.daemon_name:
+                event_topic = "cleanup_signal"
+            elif "eval" in self.daemon_name:
+                event_topic = "evaluation_signal"
+            else:
+                event_topic = "signal_data"
             await self.event_bus.publish(event_topic, {
                 "type": "system_event",
                 "event_type": event_type,

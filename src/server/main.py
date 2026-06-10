@@ -49,7 +49,9 @@ app.include_router(intelligence_router)
 async def zmq_listener_loop():
     logger.info("[Web ZMQ Listener] Starting ZMQ listener loops...")
     market_sub = EventBusSubscriber("market_data")
-    signal_sub = EventBusSubscriber("signal_data")
+    collector_sub = EventBusSubscriber("collector_signal")
+    cleanup_sub = EventBusSubscriber("cleanup_signal")
+    evaluation_sub = EventBusSubscriber("evaluation_signal")
     strategy_sub = EventBusSubscriber("strategy_signal")
     
     async def listen_market():
@@ -66,10 +68,10 @@ async def zmq_listener_loop():
                 logger.error(f"[Web ZMQ Market Listener] Error: {e}")
                 await asyncio.sleep(0.1)
 
-    async def listen_signal():
+    async def listen_collector():
         while True:
             try:
-                topic, data = await signal_sub.receive()
+                topic, data = await collector_sub.receive()
                 if not topic:
                     continue
                 
@@ -109,7 +111,41 @@ async def zmq_listener_loop():
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[Web ZMQ Signal Listener] Error: {e}")
+                logger.error(f"[Web ZMQ Collector Listener] Error: {e}")
+                await asyncio.sleep(0.1)
+
+    async def listen_cleanup():
+        while True:
+            try:
+                topic, data = await cleanup_sub.receive()
+                if not topic:
+                    continue
+                if data.get('type') in ['market_cleanup_status', 'system_event']:
+                    from src.server.websocket import manager
+                    await manager.broadcast_alert(data)
+                elif system.broadcast_callback:
+                    await system.broadcast_callback(data)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[Web ZMQ Cleanup Listener] Error: {e}")
+                await asyncio.sleep(0.1)
+
+    async def listen_evaluation():
+        while True:
+            try:
+                topic, data = await evaluation_sub.receive()
+                if not topic:
+                    continue
+                if data.get('type') in ['shadow_eval_status', 'system_event']:
+                    from src.server.websocket import manager
+                    await manager.broadcast_alert(data)
+                elif system.broadcast_callback:
+                    await system.broadcast_callback(data)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"[Web ZMQ Evaluation Listener] Error: {e}")
                 await asyncio.sleep(0.1)
 
     async def listen_strategy_signal():
@@ -158,19 +194,25 @@ async def zmq_listener_loop():
                 await asyncio.sleep(0.1)
 
     t1 = asyncio.create_task(listen_market())
-    t2 = asyncio.create_task(listen_signal())
-    t3 = asyncio.create_task(listen_strategy_signal())
+    t2 = asyncio.create_task(listen_collector())
+    t3 = asyncio.create_task(listen_cleanup())
+    t4 = asyncio.create_task(listen_evaluation())
+    t5 = asyncio.create_task(listen_strategy_signal())
     
     try:
-        await asyncio.gather(t1, t2, t3)
+        await asyncio.gather(t1, t2, t3, t4, t5)
     except asyncio.CancelledError:
         pass
     finally:
         t1.cancel()
         t2.cancel()
         t3.cancel()
+        t4.cancel()
+        t5.cancel()
         market_sub.close()
-        signal_sub.close()
+        collector_sub.close()
+        cleanup_sub.close()
+        evaluation_sub.close()
         strategy_sub.close()
         logger.info("[Web ZMQ Listener] ZMQ listener loops stopped and sockets closed.")
 

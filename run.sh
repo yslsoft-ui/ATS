@@ -96,8 +96,12 @@ start_ats() {
     # 첫 번째 윈도우(web)로 포커스 지정
     tmux select-window -t "$TMUX_SESSION":0
 
-    # 세션 연결
-    tmux attach-session -t "$TMUX_SESSION"
+    # 세션 연결 (대화형 TTY 환경인 경우에만 세션 부착 진행)
+    if [ -t 0 ]; then
+        tmux attach-session -t "$TMUX_SESSION"
+    else
+        echo "비대화형(Non-interactive) 환경이므로 tmux 세션 부착을 건너뜁니다."
+    fi
 }
 
 # 4. stop 서브커맨드 구현 (Graceful Shutdown)

@@ -132,6 +132,8 @@ function processTick(tick) {
         const current = { ...Store.get('collectorStatuses') };
         current[tick.exchange] = {
             is_running: tick.is_running,
+            status: tick.status,
+            status_reason: tick.status_reason,
             error: tick.error
         };
         Store.set('collectorStatuses', current);
