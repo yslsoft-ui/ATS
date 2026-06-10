@@ -37,7 +37,7 @@ class TestStrategyLoaderTDD(unittest.TestCase):
             f.write("from src.engine.strategy import BaseStrategy, StrategyRegistry\n")
             f.write("@StrategyRegistry.register\n")
             f.write("class DeleteMe(BaseStrategy):\n")
-            f.write("    def on_candle(self, c): pass\n")
+            f.write("    def on_update(self, c): pass\n")
         
         # 1. 로드
         load_dynamic_strategies(self.test_dir)
@@ -61,7 +61,7 @@ class TestStrategyLoaderTDD(unittest.TestCase):
             "from src.engine.strategy import BaseStrategy, StrategyRegistry\n"
             "@StrategyRegistry.register\n"
             "class DuplicateStrat(BaseStrategy):\n"
-            "    def on_candle(self, c): pass\n"
+            "    def on_update(self, c): pass\n"
         )
         
         with open(file1, 'w') as f: f.write(content)

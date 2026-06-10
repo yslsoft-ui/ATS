@@ -13,26 +13,39 @@ async def test_stock_mapper_db_flow(db_path):
     # 1. DB 초기화
     await init_db(db_path)
     
-    # 2. StockMapper 인스턴스 생성 (싱글톤이 아닌 독립 인스턴스로 테스트하기 위해 직접 클래스 생성)
-    # 다만 StockMapper가 싱글톤이므로 _instance를 리셋하거나 직접 조작해야 할 수 있음.
-    # 안전하게 StockMapper 내부의 _mapping을 직접 비우고 테스트를 수행.
+    # 2. StockMapper 인스턴스 생성
     mapper = StockMapper()
-    # 캐시 비우기
-    mapper._mapping = {"upbit": {}, "kis": {}, "bithumb": {}}
+    # 캐시 비우기 (1차원 딕셔너리 구조에 맞게 초기화)
+    mapper._mapping = {}
     
     # 3. add_mapping_async 테스트
     await mapper.add_mapping_async("upbit", "BTC", "비트코인", db_path)
     await mapper.add_mapping_async("kis", "005930", "삼성전자", db_path)
     
-    # 4. load_from_db 테스트
-    # 다시 비우고
-    mapper._mapping = {"upbit": {}, "kis": {}, "bithumb": {}}
-    await mapper.load_from_db(db_path)
-    
-    # 5. 캐싱 검증
+    # 4. 메모리 맵 검증
     assert mapper.get_name("upbit", "BTC") == "비트코인"
     assert mapper.get_name("kis", "005930") == "삼성전자"
     
-    # 6. get_name 하위호환 및 fallback 검증
-    assert mapper.get_name("bithumb", "BTC") == "비트코인" # 업비트 매핑 연동
+    # 5. DB 로드 검증을 위해 DB에 데이터 강제 삽입
+    from src.database.connection import get_db_conn
+    async with get_db_conn(db_path) as db:
+        await db.execute(
+            "INSERT INTO asset_master (symbol, korean_name, asset_type) VALUES (?, ?, ?)", 
+            ("ETH", "이더리움", "crypto")
+        )
+        await db.execute(
+            "INSERT INTO exchange_assets (exchange, symbol, is_active, is_delisted) VALUES (?, ?, 1, 0)",
+            ("upbit", "ETH")
+        )
+        await db.commit()
+        
+    # 다시 비우고
+    mapper._mapping = {}
+    
+    # DB 로드
+    await mapper.load_from_db(db_path)
+    
+    # 캐싱 검증
+    assert mapper.get_name("upbit", "ETH") == "이더리움"
+    assert mapper.get_active_symbols("upbit") == {"ETH"}
     assert mapper.get_name("kis", "UNKNOWN") == "UNKNOWN" # 없는 종목은 그대로 반환

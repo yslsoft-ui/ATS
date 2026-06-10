@@ -721,6 +721,10 @@ class BaseTradingRepository(abc.ABC):
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         pass
 
+    @abc.abstractmethod
+    async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        pass
+
 
 
 class SqliteTradingRepository(BaseTradingRepository):
@@ -855,6 +859,40 @@ class SqliteTradingRepository(BaseTradingRepository):
                 json.dumps(order.get('context', {}) or {})
             ))
             await db.commit()
+
+    async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            import json
+            if limit is not None and limit > 0:
+                query = """
+                    SELECT * FROM (
+                        SELECT * FROM orders_history 
+                        WHERE portfolio_id = ? 
+                        ORDER BY timestamp DESC 
+                        LIMIT ?
+                    ) ORDER BY timestamp ASC
+                """
+                params = (portfolio_id, limit)
+            else:
+                query = """
+                    SELECT * FROM orders_history 
+                    WHERE portfolio_id = ? 
+                    ORDER BY timestamp ASC
+                """
+                params = (portfolio_id,)
+                
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                orders = []
+                for r in rows:
+                    order = dict(r)
+                    if 'context' in order and isinstance(order['context'], str) and order['context']:
+                        try:
+                            order['context'] = json.loads(order['context'])
+                        except Exception:
+                            pass
+                    orders.append(order)
+                return orders
 
     async def insert_alert(self, alert: Dict[str, Any]):
         async with get_db_conn(self.db_path) as db:
@@ -1773,6 +1811,15 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.order_histories.append(order_copy)
         if portfolio_id in self.portfolios:
             self.portfolios[portfolio_id].history.append(order_copy)
+
+    async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        filtered = [t for t in self.order_histories if t.get('portfolio_id') == portfolio_id]
+        sorted_desc = sorted(filtered, key=lambda x: x.get('timestamp', 0), reverse=True)
+        if limit is not None and limit > 0:
+            sliced = sorted_desc[:limit]
+        else:
+            sliced = sorted_desc
+        return sorted(sliced, key=lambda x: x.get('timestamp', 0))
 
     async def insert_alert(self, alert: Dict[str, Any]):
         self.alerts.append(alert)

@@ -1,7 +1,6 @@
 from typing import Dict, Optional, Any
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyRegistry
-from src.engine.candles import Candle
-from src.engine.indicators import IndicatorCalculator
+from src.engine.strategy_host import StrategyContext
 
 @StrategyRegistry.register
 class MACDStrategy(BaseStrategy):
@@ -10,7 +9,6 @@ class MACDStrategy(BaseStrategy):
     """
     def __init__(self, strategy_id: str, params: Dict = None):
         super().__init__(strategy_id, params)
-        self.required_indicators = ["macd"]
         self.in_position = False
         self.prev_hist = 0
 
@@ -25,14 +23,17 @@ class MACDStrategy(BaseStrategy):
         }
         return metadata
 
-    def on_candle(self, candle: Candle) -> Optional[StrategyResult]:
-        return None
+    def on_update(self, context: StrategyContext) -> Optional[StrategyResult]:
+        fast = self.params.get('fast_period', 12)
+        slow = self.params.get('slow_period', 26)
+        signal = self.params.get('signal_period', 9)
 
-    def on_update(self, context: Any) -> Optional[StrategyResult]:
-        macd = context.indicators.get('macd')
-
-        if macd is None or 'hist' not in macd:
-            return None
+        macd = context.get_indicator(
+            'macd',
+            fast_period=fast,
+            slow_period=slow,
+            signal_period=signal
+        )
 
         curr_hist = macd['hist']
         action = "HOLD"

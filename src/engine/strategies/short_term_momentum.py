@@ -1,8 +1,7 @@
 from typing import Dict, Optional, Any
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyType, StrategyRegistry
 from src.engine.strategy_host import StrategyContext
-from src.engine.candles import Candle
-from src.engine.indicators import calculate_sma, calculate_rsi, calculate_bollinger_bands
+from src.engine.exceptions import IndicatorNotReady
 
 @StrategyRegistry.register
 class ShortTermMomentumStrategy(BaseStrategy):
@@ -44,12 +43,6 @@ class ShortTermMomentumStrategy(BaseStrategy):
         self.peak_price: Optional[float] = None
         self.entry_time: Optional[int] = None
 
-        self.required_indicators = [] # dynamic context 호출로 호스트 계산 배제
-
-    def on_candle(self, candle: Candle) -> Optional[str]:
-        # 하위 호환성 유지용 (on_update가 우선 호출됨)
-        return None
-
     def on_update(self, context: StrategyContext) -> Optional[StrategyResult]:
         """
         StrategyHost로부터 주기적 갱신 신호를 받아 의사결정을 내립니다.
@@ -57,24 +50,20 @@ class ShortTermMomentumStrategy(BaseStrategy):
         candles = context.candles
         warmup_len = max(self.slow_window, self.bb_window, self.rsi_window) + 1
         if len(candles) < warmup_len:
-            return StrategyResult("HOLD", reason="Warming up candle history")
+            raise IndicatorNotReady(f"Insufficient candles for ShortTermMomentumStrategy. Required: {warmup_len}, Got: {len(candles)}")
 
-        # 1. 지표 연산을 위한 가격 정보 획득
-        prices = context.market_data_context.prices
         current_price = context.current_price
         last_candle = context.last_candle
 
-        # 2. 실시간 지표 계산
-        fast_sma = calculate_sma(prices, self.fast_window)
-        slow_sma = calculate_sma(prices, self.slow_window)
-        rsi = calculate_rsi(prices, self.rsi_window)
-        rsi_prev = calculate_rsi(prices[:-1], self.rsi_window)
-        bb = calculate_bollinger_bands(prices, self.bb_window, self.bb_std)
-
-        # 지표가 미완성인 경우 대기
-        if (fast_sma is None or slow_sma is None or rsi is None or 
-            rsi_prev is None or bb['upper'] is None):
-            return StrategyResult("HOLD", reason="Indicators are not fully computed")
+        # 2. 실시간 지표 계산 (context.get_indicator 단일 경로로 통일)
+        fast_sma = context.get_indicator("sma", window=self.fast_window)
+        slow_sma = context.get_indicator("sma", window=self.slow_window)
+        rsi = context.get_indicator("rsi", window=self.rsi_window)
+        rsi_prev = context.get_indicator("rsi", window=self.rsi_window, offset=1)
+        
+        bb_upper = context.get_indicator("bb_upper", window=self.bb_window, num_std=self.bb_std)
+        bb_middle = context.get_indicator("bb_middle", window=self.bb_window, num_std=self.bb_std)
+        bb_lower = context.get_indicator("bb_lower", window=self.bb_window, num_std=self.bb_std)
 
         # 지표 스냅샷 생성 (감사용)
         trade_context = {
@@ -82,9 +71,9 @@ class ShortTermMomentumStrategy(BaseStrategy):
             "slow_sma": round(slow_sma, 2),
             "rsi": round(rsi, 2),
             "rsi_prev": round(rsi_prev, 2),
-            "bb_upper": round(bb['upper'], 2),
-            "bb_middle": round(bb['middle'], 2),
-            "bb_lower": round(bb['lower'], 2)
+            "bb_upper": round(bb_upper, 2),
+            "bb_middle": round(bb_middle, 2),
+            "bb_lower": round(bb_lower, 2)
         }
 
         # ─────────────────────────────────────────────────────────────────────
@@ -135,7 +124,7 @@ class ShortTermMomentumStrategy(BaseStrategy):
             # 2. RSI 강세 및 상승 추세 (Slope > 0) 확인
             rsi_trend_ok = rsi >= self.rsi_buy_threshold and rsi > rsi_prev
             # 3. 볼린저 밴드 상단 98% 근처 돌파 여부 확인
-            bb_ok = current_price >= (bb['upper'] * 0.98)
+            bb_ok = current_price >= (bb_upper * 0.98)
             # 4. 직전 봉 종가 대비 현재가 보합 혹은 상승 확인
             candle_trend_ok = len(candles) >= 2 and candles[-1].close >= candles[-2].close
 
@@ -148,7 +137,7 @@ class ShortTermMomentumStrategy(BaseStrategy):
                 reason = (
                     f"Momentum Breakout: Fast SMA {fast_sma:.2f} > Slow SMA {slow_sma:.2f} | "
                     f"RSI {rsi:.2f} (prev: {rsi_prev:.2f}) | "
-                    f"Price {current_price:,.0f} >= BB Upper 98% {bb['upper']*0.98:,.0f}"
+                    f"Price {current_price:,.0f} >= BB Upper 98% {bb_upper*0.98:,.0f}"
                 )
                 return StrategyResult("BUY", price=current_price, reason=reason, context=trade_context)
 

@@ -1,6 +1,7 @@
 from typing import Dict, Optional
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyRegistry
-from src.engine.candles import Candle
+from src.engine.strategy_host import StrategyContext
+from src.engine.exceptions import IndicatorNotReady
 
 @StrategyRegistry.register
 class VolumePowerStrategy(BaseStrategy):
@@ -22,12 +23,16 @@ class VolumePowerStrategy(BaseStrategy):
         }
         return metadata
 
-    def on_candle(self, candle: Candle) -> StrategyResult:
+    def on_update(self, context: StrategyContext) -> StrategyResult:
+        last_candle = context.last_candle
+        if last_candle is None:
+            raise IndicatorNotReady("No candles available for VolumePowerStrategy.")
+
         # 매도 거래량이 0인 경우에 대한 예외 처리
-        if candle.sell_volume == 0:
-            vol_power = 1000.0 if candle.buy_volume > 0 else 100.0 
+        if last_candle.sell_volume == 0:
+            vol_power = 1000.0 if last_candle.buy_volume > 0 else 100.0 
         else:
-            vol_power = (candle.buy_volume / candle.sell_volume) * 100.0
+            vol_power = (last_candle.buy_volume / last_candle.sell_volume) * 100.0
 
         action = "HOLD"
         reason = ""
@@ -42,4 +47,4 @@ class VolumePowerStrategy(BaseStrategy):
             action = "SELL"
             reason = f"Volume Power {vol_power:.1f}% < {self.sell_threshold}%"
 
-        return StrategyResult(action, price=candle.close, reason=reason)
+        return StrategyResult(action, price=last_candle.close, reason=reason)

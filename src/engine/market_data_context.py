@@ -1,6 +1,7 @@
 import numpy as np
 from typing import List, Dict, Any
 from src.engine.candles import Candle
+from src.engine.exceptions import IndicatorNotReady, UnsupportedIndicatorError
 from src.engine.indicators import (
     calculate_sma,
     calculate_rsi,
@@ -39,7 +40,9 @@ class MarketDataContext:
         요청한 지표를 동적으로 계산하여 반환합니다. 
         동일 캔들 상태(현재 타임스탬프)에서는 한 번 계산된 값을 캐시에서 꺼내 고속 반환합니다.
         """
-        # 캐시 키 생성 (예: "sma_window=20", "rsi_window=14")
+        offset = kwargs.get('offset', 0)
+
+        # 캐시 키 생성 (예: "sma_window=20_offset=0", "rsi_window=14_offset=1")
         kwargs_str = "_".join(f"{k}={v}" for k, v in sorted(kwargs.items()))
         cache_key = f"{name}_{kwargs_str}" if kwargs_str else name
 
@@ -47,17 +50,27 @@ class MarketDataContext:
             return self.indicator_cache[cache_key]
 
         prices = self.prices
+        if offset > 0:
+            prices = prices[:-offset]
+
         result = None
 
         if name == 'sma':
             window = kwargs.get('window', kwargs.get('window_size', 20))
+            if len(prices) < window:
+                raise IndicatorNotReady(f"Insufficient candles for SMA. Required: {window}, Got: {len(prices)}")
             result = calculate_sma(prices, window)
         elif name == 'rsi':
             window = kwargs.get('window', kwargs.get('window_size', 14))
+            required = window + 1
+            if len(prices) < required:
+                raise IndicatorNotReady(f"Insufficient candles for RSI. Required: {required}, Got: {len(prices)}")
             result = calculate_rsi(prices, window)
         elif name in ['bb', 'bb_upper', 'bb_lower', 'bb_middle']:
             window = kwargs.get('window', kwargs.get('window_size', 20))
             num_std = kwargs.get('num_std', 2.0)
+            if len(prices) < window:
+                raise IndicatorNotReady(f"Insufficient candles for Bollinger Bands. Required: {window}, Got: {len(prices)}")
             bb_res = calculate_bollinger_bands(prices, window, num_std)
             # 볼린저 밴드 개별 키 캐싱
             for k, v in bb_res.items():
@@ -72,6 +85,9 @@ class MarketDataContext:
             fast = kwargs.get('fast_period', 12)
             slow = kwargs.get('slow_period', 26)
             signal = kwargs.get('signal_period', 9)
+            required = max(fast, slow)
+            if len(prices) < required:
+                raise IndicatorNotReady(f"Insufficient candles for MACD. Required: {required}, Got: {len(prices)}")
             macd_res = calculate_macd(prices, fast, slow, signal)
             # MACD 개별 키 캐싱
             for k, v in macd_res.items():
@@ -82,6 +98,8 @@ class MarketDataContext:
             
             suffix = name.split('_')[1] if '_' in name else None
             result = macd_res[suffix] if suffix else macd_res
+        else:
+            raise UnsupportedIndicatorError(f"Unsupported indicator: {name}")
 
         self.indicator_cache[cache_key] = result
         return result

@@ -38,6 +38,7 @@ async def setup_test_db(db_path: str):
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 exchange TEXT,
+                market TEXT,
                 symbol TEXT,
                 trade_price REAL,
                 trade_volume REAL,

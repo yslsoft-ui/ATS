@@ -46,7 +46,8 @@ class BaseCollector(ABC):
         **kwargs  # 시스템 부트스트래퍼가 주입하는 추가 의존성(예: repository)을 유연하게 흡수
     ):
         # 공유 큐 가로채기(Message Stealing) 버그 원천 해결을 위해 인스턴스 전용 격리 큐를 할당합니다.
-        self.processing_queue = asyncio.Queue()
+        # 외부에서 주입된 큐가 있으면 이를 활용하고, 없으면 신규 큐를 생성합니다.
+        self.processing_queue = processing_queue if processing_queue is not None else asyncio.Queue()
         self.db_queue = db_queue
         self.candle_queue = candle_queue
         self.portfolio_manager = portfolio_manager

@@ -3,6 +3,7 @@ import time
 from typing import Optional, Callable, Dict, Any, Tuple
 from src.engine.portfolio import PortfolioManager
 from src.database.repository import BaseTradingRepository
+from src.engine.execution_scorer import ExecutionScorer
 
 logger = get_logger(__name__)
 
@@ -15,105 +16,32 @@ class ExecutionPipeline:
         self.portfolio_manager = portfolio_manager
         self.repository = repository or portfolio_manager.repository
         self.broadcast_callback: Optional[Callable] = None
+        self.scorer = ExecutionScorer()
 
     def set_broadcast_callback(self, callback: Callable):
         self.broadcast_callback = callback
 
     def calculate_position_size(self, portfolio, signal, price: float, size_ratio: Optional[float] = None) -> Tuple[float, float]:
-        """포지션의 수량과 예정 진입 가치를 정밀 계산합니다."""
-        action = signal.action
-        
-        if action == 'BUY':
-            # size_ratio가 직접 지정되었으면 이를 우선 사용
-            if size_ratio is not None:
-                ratio = size_ratio
-            else:
-                context = getattr(signal, 'context', {}) or {}
-                ratio = context.get('weight', context.get('ratio', 0.1))
-            
-            # 비율 범위 제한 (0.0 < ratio <= 1.0)
-            if not (0.0 < ratio <= 1.0):
-                ratio = 0.1
-                
-            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-            available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
-            
-            target_value = available_cash * ratio
-            quantity = target_value / price
-            return quantity, target_value
-            
-        elif action == 'SELL':
-            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-            pos = portfolio.positions.get((ex_key, signal.symbol))
-            if not pos or pos.quantity <= 0:
-                return 0.0, 0.0
-            
-            # 보유 수량 전량 매도
-            quantity = pos.quantity
-            target_value = quantity * price
-            return quantity, target_value
-            
-        return 0.0, 0.0
+        """포지션의 수량과 예정 진입 가치를 정밀 계산합니다. (ExecutionScorer로 위임)"""
+        return self.scorer.calculate_position_size(portfolio, signal, price, size_ratio=size_ratio)
 
     def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float, risk_limits_enabled: bool = True) -> Tuple[bool, str]:
-        """포지션 진입 전에 리스크 한도 필터를 실행합니다."""
-        if not risk_limits_enabled:
-            return True, ""
-
-        action = signal.action
-        if action != 'BUY':
-            return True, ""
-
-        if qty <= 0 or target_value <= 0:
-            return False, "유효하지 않은 주문 수량"
-
-        ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-        available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
-
-        # 1. 사용 가능 현금 검사
+        """포지션 진입 전에 리스크 한도 필터를 실행합니다. (ExecutionScorer로 위임)"""
         exchange_config = self.portfolio_manager.exchange_configs.get(portfolio.exchange_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
-        total_cost = target_value * (1 + fee_rate)
-
-        if total_cost > available_cash:
-            return False, f"잔고 부족 (소요 현금: {total_cost:,.0f} > 보유 현금: {available_cash:,.0f})"
-
-        # 2. 단일 종목 투자 한도 검사 (최대 30%)
-        # 자산 평가를 위한 종목별 현재가 사전 구성 (기존 포지션 평균 단가 기반)
-        current_prices = {pos.symbol: pos.avg_price for pos in portfolio.positions.values()}
-        current_prices[signal.symbol] = price  # 진입할 종목 현재가 주입
-        
-        total_portfolio_value = portfolio.get_total_value(current_prices)
-        if total_portfolio_value <= 0:
-            total_portfolio_value = portfolio.initial_cash
-
-        ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-        pos_key = (ex_key, signal.symbol)
-        existing_qty = portfolio.positions[pos_key].quantity if pos_key in portfolio.positions else 0
-        predicted_asset_value = (existing_qty * price) + target_value
-        
-        weight = predicted_asset_value / total_portfolio_value
-        max_weight_limit = 0.30  # 단일 종목 최대 한도 30%
-
-        if weight > max_weight_limit:
-            return False, f"단일 종목 투자 한도(30%) 초과 (예정 비중: {weight * 100:.1f}%)"
-
-        return True, ""
+        return self.scorer.check_risk_limits(
+            portfolio=portfolio,
+            signal=signal,
+            price=price,
+            qty=qty,
+            target_value=target_value,
+            fee_rate=fee_rate,
+            risk_limits_enabled=risk_limits_enabled
+        )
 
     def apply_slippage(self, signal, price: float, slippage_rate: float = 0.001) -> float:
-        """가상 체결 시 시뮬레이션 현실성을 위한 슬리피지를 적용합니다."""
-        action = signal.action
-        if slippage_rate <= 0:
-            return price
-            
-        if action == 'BUY':
-            # 매수 시에는 시세보다 비싸게 체결
-            return price * (1 + slippage_rate)
-        elif action == 'SELL':
-            # 매도 시에는 시세보다 저렴하게 체결
-            return price * (1 - slippage_rate)
-            
-        return price
+        """가상 체결 시 시뮬레이션 현실성을 위한 슬리피지를 적용합니다. (ExecutionScorer로 위임)"""
+        return self.scorer.apply_slippage(signal, price, slippage_rate=slippage_rate)
 
     async def process_signal(self, signal: Any, price: float, orderbook: Optional[Dict] = None, portfolio_id: Optional[str] = None, risk_limits_enabled: bool = True, slippage_rate: float = 0.001, size_ratio: Optional[float] = None) -> Optional[Dict]:
         """

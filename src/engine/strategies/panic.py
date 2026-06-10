@@ -1,5 +1,6 @@
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyType, StrategyRegistry
-from src.engine.candles import Candle
+from src.engine.strategy_host import StrategyContext
+from src.engine.exceptions import IndicatorNotReady
 from typing import Dict, Optional
 
 @StrategyRegistry.register
@@ -12,24 +13,24 @@ class PanicStrategy(BaseStrategy):
 
     def __init__(self, strategy_id: str, params: Dict = None):
         super().__init__(strategy_id, params)
-        self.volumes = []
 
-    def on_candle(self, candle: Candle) -> StrategyResult:
-        self.volumes.append(candle.volume)
-        if len(self.volumes) > 20:
-            self.volumes.pop(0)
+    def on_update(self, context: StrategyContext) -> StrategyResult:
+        candles = context.candles
+        if len(candles) < 10:
+            raise IndicatorNotReady(f"Insufficient candles for PanicStrategy. Required: 10, Got: {len(candles)}")
 
-        if len(self.volumes) < 10:
-            return StrategyResult("HOLD")
+        recent_candles = candles[-20:]
+        volumes = [c.volume for c in recent_candles]
+        current_candle = candles[-1]
 
-        avg_vol = sum(self.volumes[:-1]) / (len(self.volumes) - 1)
+        avg_vol = sum(volumes[:-1]) / (len(volumes) - 1)
         
         # 1. 거래량이 평균보다 월등히 높고
         # 2. 가격이 시가 대비 임계치 이상 하락했을 때
-        price_drop = (candle.close - candle.open) / candle.open
+        price_drop = (current_candle.close - current_candle.open) / current_candle.open
         
-        if candle.volume > avg_vol * self.vol_multiplier and price_drop < -self.drop_threshold:
-            return StrategyResult("SELL", candle.close, f"Panic Detected: Vol x{candle.volume/avg_vol:.1f}, Drop {price_drop*100:.1f}%")
+        if current_candle.volume > avg_vol * self.vol_multiplier and price_drop < -self.drop_threshold:
+            return StrategyResult("SELL", current_candle.close, f"Panic Detected: Vol x{current_candle.volume/avg_vol:.1f}, Drop {price_drop*100:.1f}%")
 
         return StrategyResult("HOLD")
 

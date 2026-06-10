@@ -11,8 +11,6 @@ class MockProcessorTestStrategy(BaseStrategy):
     type = StrategyType.ENTRY
     default_params = {"interval": 60}
 
-    def on_candle(self, candle: Candle) -> Optional[str]:
-        return "HOLD"
 
     def on_update(self, context: Any) -> Optional[StrategyResult]:
         latest_candle = context.candles[-1]
@@ -23,6 +21,9 @@ class MockProcessorTestStrategy(BaseStrategy):
 
 @pytest.mark.asyncio
 async def test_processor_tick_processing_and_candle_generation():
+    # 타 테스트에 의해 StrategyRegistry가 리셋되었을 가능성에 대응
+    StrategyRegistry.register(MockProcessorTestStrategy)
+    
     processing_queue = asyncio.Queue()
     db_queue = asyncio.Queue()
     candle_queue = asyncio.Queue()
@@ -127,6 +128,9 @@ async def test_processor_queue_overload_drop_oldest():
 
 @pytest.mark.asyncio
 async def test_processor_trade_engine_integration_both_enabled_and_disabled():
+    # 타 테스트에 의해 StrategyRegistry가 리셋되었을 가능성에 대응
+    StrategyRegistry.register(MockProcessorTestStrategy)
+    
     # ------------------
     # 시나리오 1: 전략 활성화 (enabled: True)
     # ------------------
@@ -177,7 +181,12 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
         'ask_bid': 'ASK',
         'trade_timestamp': 1718020860000
     })
-    await asyncio.sleep(0.1)
+        
+    # 비동기 처리 완료 및 신호 수신을 최대 1.0초 동안 대기 (폴링 가드)
+    for _ in range(20):
+        if len(signals_received) >= 1:
+            break
+        await asyncio.sleep(0.05)
 
     # 1060 캔들이 마감되어 on_update가 호출되고 BUY 신호가 콜백으로 발생했는지 확인
     assert len(signals_received) == 1

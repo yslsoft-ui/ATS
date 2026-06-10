@@ -159,10 +159,14 @@ sequenceDiagram
 ### 3.2. 포트폴리오 관리자 및 체결 엔진 (PortfolioManager & Executor)
 - **포트폴리오 격리**: 각 트레이딩 세션이나 백테스트 실행은 독립된 `portfolio_id`를 가져 충돌을 원천 차단합니다.
 - **주문 체결 분리**: `OrderExecutor` 인터페이스를 통해 실제 API 주문(`KISExecutor`)과 모의 시뮬레이션 주문(`VirtualOrderExecutorAdapter`)을 완벽하게 교체할 수 있습니다. 어댑터는 생성 시 `fee_rate` 를 주입받아 수수료를 자동 적용합니다.
+- **성과 분석기 분리 (PerformanceAnalyzer Seam)**: 포트폴리오의 실시간/정적 성과 통계 보고서 데이터 계산 로직을 `PortfolioManager`로부터 완전히 격리해내고, 외부 I/O가 배제된 무상태(Stateless) 성과 분석 모듈 `PerformanceAnalyzer`로 위임하여 아키텍처 깊이(Depth)와 결합도를 개선하고 단위 테스트의 용이성을 확보했습니다.
+- **주문 실행 스코어러 분리 (ExecutionScorer Seam)**: 주문 처리 파이프라인(`ExecutionPipeline`)에서 포지션 수량 산정, 리스크 한도 검증, 슬리피지 가격 보정 등의 순수 비즈니스 연산 로직을 무상태(Stateless) 계산 모듈인 `ExecutionScorer`로 격리했습니다. 이를 통해 DB나 외부 상태 의존성을 완벽히 제거하여 순수 연산의 단위 테스트 용이성을 개선하였고, 파이프라인은 오케스트레이션 역할에만 집중하게 되었습니다.
+- **저장소 레이어를 통한 거래 조회 격리 (Repository Seam)**: 포트폴리오 매니저 내부에서 DB 직접 연결 및 SQLite 원시 쿼리 처리를 완전히 배제하고, `BaseTradingRepository` 인터페이스 및 `SqliteTradingRepository.get_orders_history()` 래퍼를 통해 DB 조작을 캡슐화했습니다.
 
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
 - **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
+- **파라미터 평가 및 스코어링 모듈 분리 (ParameterEvaluator Seam)**: 제안된 파라미터 후보군 평가 시 사용되던 파라미터 가중 거리 계산, 시장 국면별 적합도 가중치 산정, 다요소 신뢰도 점수(Confidence Score) 연산 등의 수학적 연산 정책들을 `ShadowBacktestEngine`으로부터 분리하여 무상태(Stateless) 전용 연산기인 `ParameterEvaluator`로 이관했습니다. 이를 통해 DB나 백테스트 엔진 구동 없이 계산 정책만을 독립적으로 단위 테스트하고 재사용할 수 있는 기반을 구축했습니다.
 - **단기상승흐름 전략 (Short-Term Trend Momentum)**: 룰 기반 파라미터 변이 및 머신러닝 데이터의 행동 공간(Action Space) 다양성 강화를 위해 기존 평균회귀(Mean-reversion) 계열과 대조되는 추세추종 속성의 전략입니다. 해당 전략은 이평 정배열, RSI 강세 & 기울기(Slope) 상승, 볼린저 밴드 상단(98%) 돌파 시 매수 진입하며, 2.0% 고정 손절선, 2.5% 트레일링 스탑, 이평 데드 크로스, RSI 극단 과매수(80.0) 감지 시 청산하여 단기 추세를 회수합니다.
 
 ### 3.4. 초 단위 온디맨드 캔들(OHLCV) 조립 및 무한 스크롤(지연 로딩) 아키텍처

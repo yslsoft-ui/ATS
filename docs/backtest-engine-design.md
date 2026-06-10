@@ -55,7 +55,7 @@
 
 ### 3.1. 전략 인터페이스
 
-- `BaseStrategy` (ABC): `on_candle(candle) → StrategyResult` 추상 메서드 정의.
+- `BaseStrategy` (ABC): `on_update(context: StrategyContext) -> Optional[StrategyResult]` 추상 메서드 정의.
 - `StrategyResult`: `action` ("BUY", "SELL", "HOLD"), `price`, `reason` 포함.
 
 ### 3.2. 구현된 전략
@@ -103,12 +103,13 @@ for tick in tick_data_source:
     
     # 2. 완성된 캔들이 있으면 전략 실행
     for candle in closed_candles:
-        result = strategy.on_candle(candle)
+        market_data_context.add_candle(candle)
+        result = await host.execute(market_data_context, portfolio_manager)
         
-        if result.action == "BUY" and cash > 0:
+        if result and result.action == "BUY" and cash > 0:
             position = cash / price  # TODO: matching_engine 연동
             cash = 0
-        elif result.action == "SELL" and position > 0:
+        elif result and result.action == "SELL" and position > 0:
             cash = position * price  # TODO: matching_engine 연동
             position = 0
 ```

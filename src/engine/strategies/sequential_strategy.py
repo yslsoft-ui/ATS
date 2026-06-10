@@ -1,6 +1,7 @@
 from typing import Dict, Optional
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyRegistry
-from src.engine.candles import Candle
+from src.engine.strategy_host import StrategyContext
+from src.engine.exceptions import IndicatorNotReady
 
 @StrategyRegistry.register
 class SequentialStrategy(BaseStrategy):
@@ -44,13 +45,13 @@ class SequentialStrategy(BaseStrategy):
             self.waiting_for_second = False
             self.expected_action = None
 
-    def on_candle(self, candle: Candle) -> StrategyResult:
+    def on_update(self, context: StrategyContext) -> StrategyResult:
         if not self.first_strategy or not self.second_strategy:
             return StrategyResult("HOLD", reason="하위 전략이 제대로 로드되지 않았습니다.")
 
-        # 두 하위 전략 모두에게 실시간 캔들을 전달하여 내부 지표(RSI, MACD 등)를 업데이트하도록 합니다.
-        res1 = self.first_strategy.on_candle(candle)
-        res2 = self.second_strategy.on_candle(candle)
+        # 두 하위 전략 모두에게 컨텍스트를 전달하여 내부 지표를 업데이트하도록 합니다.
+        res1 = self.first_strategy.on_update(context)
+        res2 = self.second_strategy.on_update(context)
 
         # --- 상태 머신 평가 로직 ---
         if not self.waiting_for_second:
@@ -72,7 +73,7 @@ class SequentialStrategy(BaseStrategy):
                 self.waiting_for_second = False
                 self.countdown = 0
                 self.expected_action = None
-                return StrategyResult(final_action, price=candle.close, reason=f"{self.first_strategy_id} ➔ {self.second_strategy_id} 콤보 달성!")
+                return StrategyResult(final_action, price=context.current_price, reason=f"{self.first_strategy_id} ➔ {self.second_strategy_id} 콤보 달성!")
             
             # 기다렸지만 아무 일도 일어나지 않고 카운트다운이 끝났을 경우
             if self.countdown <= 0:

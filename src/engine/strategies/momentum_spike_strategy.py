@@ -1,7 +1,7 @@
 from typing import Dict, Optional, List
-from collections import deque
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyRegistry
-from src.engine.candles import Candle
+from src.engine.strategy_host import StrategyContext
+from src.engine.exceptions import IndicatorNotReady
 
 @StrategyRegistry.register
 class MomentumSpikeStrategy(BaseStrategy):
@@ -11,7 +11,6 @@ class MomentumSpikeStrategy(BaseStrategy):
     """
     def __init__(self, strategy_id: str, params: Dict = None):
         super().__init__(strategy_id, params)
-        self.history_queue = deque(maxlen=getattr(self, 'lookback_periods', 20))
         self.in_position = False
         self.peak_price = 0.0
         self.buy_price = 0.0
@@ -30,52 +29,56 @@ class MomentumSpikeStrategy(BaseStrategy):
         }
         return metadata
 
-    def on_candle(self, candle: Candle) -> StrategyResult:
+    def on_update(self, context: StrategyContext) -> StrategyResult:
+        candles = context.candles
+        last_candle = context.last_candle
+        if last_candle is None:
+            raise IndicatorNotReady("No candles available for MomentumSpikeStrategy.")
+
         # 이 전략은 10초 봉에서만 작동하도록 제한 (필요 시 수정 가능)
-        if candle.interval != 10:
+        if last_candle.interval != 10:
             return StrategyResult("HOLD")
 
         # 1. 매도 로직 (이미 포지션이 있는 경우)
         if self.in_position:
-            self.peak_price = max(self.peak_price, candle.high)
-            drop_from_peak = (self.peak_price - candle.close) / self.peak_price * 100
+            self.peak_price = max(self.peak_price, last_candle.high)
+            drop_from_peak = (self.peak_price - last_candle.close) / self.peak_price * 100
             
             if drop_from_peak >= self.trailing_stop_pct:
                 self.in_position = False
-                profit = (candle.close - self.buy_price) / self.buy_price * 100
-                reason = f"Trailing Stop: Peak {self.peak_price:,.0f} -> Current {candle.close:,.0f} (-{drop_from_peak:.2f}%) | Profit: {profit:.2f}%"
+                profit = (last_candle.close - self.buy_price) / self.buy_price * 100
+                reason = f"Trailing Stop: Peak {self.peak_price:,.0f} -> Current {last_candle.close:,.0f} (-{drop_from_peak:.2f}%) | Profit: {profit:.2f}%"
                 self.buy_price = 0.0
                 self.peak_price = 0.0
-                return StrategyResult("SELL", price=candle.close, reason=reason)
+                return StrategyResult("SELL", price=last_candle.close, reason=reason)
             
             return StrategyResult("HOLD")
 
         # 2. 매수 로직 (포지션이 없는 경우)
-        if len(self.history_queue) < self.lookback_periods:
-            self.history_queue.append(candle)
-            return StrategyResult("HOLD", reason="Warming up history")
+        lookback = int(self.params.get('lookback_periods', 20))
+        if len(candles) < lookback:
+            raise IndicatorNotReady(f"Insufficient candles for MomentumSpikeStrategy. Required: {lookback}, Got: {len(candles)}")
 
         # 과거 평균 계산
-        avg_vol = sum(c.volume for c in self.history_queue) / len(self.history_queue)
-        avg_freq = sum(c.count for c in self.history_queue) / len(self.history_queue)
+        hist = candles[-lookback:]
+        avg_vol = sum(c.volume for c in hist) / len(hist)
+        avg_freq = sum(c.count for c in hist) / len(hist)
         
         # 현재 상태 계산
-        buy_ratio = candle.buy_volume / candle.volume if candle.volume > 0 else 0
-        price_change = (candle.close - candle.open) / candle.open * 100
+        buy_ratio = last_candle.buy_volume / last_candle.volume if last_candle.volume > 0 else 0
+        price_change = (last_candle.close - last_candle.open) / last_candle.open * 100
         
         # 조건 체크
-        vol_spike = candle.volume >= (avg_vol * self.vol_multiplier)
-        freq_spike = candle.count >= (avg_freq * self.freq_multiplier)
+        vol_spike = last_candle.volume >= (avg_vol * self.vol_multiplier)
+        freq_spike = last_candle.count >= (avg_freq * self.freq_multiplier)
         strong_buy = buy_ratio >= self.buy_ratio_threshold
         price_up = price_change >= self.price_change_threshold
         
         if vol_spike and freq_spike and strong_buy and price_up:
             self.in_position = True
-            self.buy_price = candle.close
-            self.peak_price = candle.high
-            reason = f"Spike Detected: Vol x{candle.volume/avg_vol:.1f}, Freq x{candle.count/avg_freq:.1f}, Buy {buy_ratio*100:.1f}%, Price +{price_change:.2f}%"
-            return StrategyResult("BUY", price=candle.close, reason=reason)
+            self.buy_price = last_candle.close
+            self.peak_price = last_candle.high
+            reason = f"Spike Detected: Vol x{last_candle.volume/avg_vol:.1f}, Freq x{last_candle.count/avg_freq:.1f}, Buy {buy_ratio*100:.1f}%, Price +{price_change:.2f}%"
+            return StrategyResult("BUY", price=last_candle.close, reason=reason)
 
-        # 히스토리 업데이트
-        self.history_queue.append(candle)
         return StrategyResult("HOLD")

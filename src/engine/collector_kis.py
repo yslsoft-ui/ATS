@@ -89,7 +89,7 @@ class KisCollector(BaseCollector):
             # 실제 포맷: {"header":{"tr_id":"PINGPONG","datetime":"YYYYMMDDHHMMSS"}}
             # 응답하지 않으면 서버가 연결을 끊으므로, 수신한 JSON을 그대로 echo 해야 한다.
             if '"PINGPONG"' in raw_data:
-                logger.info(f"[KIS] PINGPONG 수신 → echo 응답")
+                logger.debug(f"[KIS] PINGPONG 수신 → echo 응답")
                 if self.ws and not self.ws.closed:
                     asyncio.ensure_future(self.ws.send_str(raw_data))
                 return None

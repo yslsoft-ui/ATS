@@ -307,7 +307,6 @@ def test_score_scales_golden_verification():
     # 3. 비정상 케이스 2: promotion_score 단조성 불일치
     # girs_promotion_score가 1 - model_risk_score와 다름
     assert not verify_score_scales(0.3, 0.2, 0.5, 0.8, 0.6)
-
     # 4. 다양한 극단값에 대해 최종 스무딩 및 범위가 [0.0, 1.0]으로 안정적으로 들어오는지 확인
     for model_r in [0.0, 0.01, 0.5, 0.99, 1.0]:
         for fallback_r in [0.0, 0.05, 0.5, 0.95, 1.0]:
@@ -317,3 +316,55 @@ def test_score_scales_golden_verification():
                 assert 0.0 <= gp <= 1.0
                 assert 0.0 <= fp <= 1.0
                 assert 0.0 <= final <= 1.0
+
+def test_stability_tracker_isolated():
+    """StabilityTracker만을 단독 격리하여 안정성 점수를 검증합니다."""
+    from src.engine.girs_scorer import StabilityTracker
+    
+    tracker = StabilityTracker(
+        ema_alpha=0.5,
+        rolling_window_size=5,
+        baseline_volatility=0.1,
+        baseline_latency=0.05
+    )
+    
+    # 1. rank_stability 격리 검증
+    s1 = tracker.calculate_rank_stability("p_test", current_confirmed_rank=1, N=10)
+    assert s1 == 1.0  # 첫 호출은 항상 1.0
+    
+    # 2. market_stability 격리 검증
+    # 1개 호출 시 1.0 반환 확인
+    m1 = tracker.calculate_market_stability("p_test", market_volatility=0.1)
+    assert m1 == 1.0
+    
+    # 3. system_stability 격리 검증
+    sys_s = tracker.calculate_system_stability(0.0)
+    assert sys_s == 1.0  # 지터가 0이면 최대 안정(1.0)
+
+def test_fallback_risk_scorer_isolated():
+    """FallbackRiskScorer만을 단독 격리하여 limits 설정 주입 및 단순화된 계산 인터페이스를 검증합니다."""
+    from src.engine.girs_scorer import FallbackRiskScorer
+    
+    limits = {
+        "max_spread": 0.02,
+        "max_volume": 5000.0,
+        "max_depth": 5000.0,
+        "max_volatility": 0.4,
+        "max_drawdown": 0.2
+    }
+    
+    # 생성 시 limits 설정 주입
+    scorer = FallbackRiskScorer(limits=limits, baseline_volatility=0.1)
+    
+    # limits 인자 없이 호출하여 내부 주입된 설정으로 계산 검증
+    risk = scorer.calculate_fallback_risk(
+        volatility=0.1,
+        drawdown=0.05,
+        regime_risk=0.2,
+        spread=0.001,
+        volume=4000.0,
+        depth=4500.0
+    )
+    
+    # 리스크 점수가 정상 범위 [0.0, 1.0] 내에 있는지 확인
+    assert 0.0 <= risk <= 1.0

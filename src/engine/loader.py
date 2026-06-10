@@ -3,7 +3,7 @@ import importlib.util
 import sys
 from src.engine.utils.telemetry import get_logger
 from typing import List, Dict
-from .strategy import StrategyRegistry
+from .strategy import StrategyRegistry, BaseStrategy
 
 logger = get_logger(__name__)
 
@@ -45,7 +45,7 @@ def load_dynamic_strategies(strategies_dir: str):
                 registered_ids = []
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if isinstance(attr, type) and hasattr(attr, 'on_candle'):
+                    if isinstance(attr, type) and hasattr(attr, 'on_update') and attr != BaseStrategy:
                         s_id = attr.__name__.lower()
                         if s_id in StrategyRegistry._strategies:
                             _strategy_files[s_id] = file_path

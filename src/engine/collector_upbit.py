@@ -108,30 +108,39 @@ class UpbitCollector(BaseCollector):
                     min_ts = to_time
 
                     for item in data:
-                        # candle_date_time_utc 파싱하여 시작 타임스탬프(초) 계산
-                        dt_str = item.get('candle_date_time_utc')
-                        dt = datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%S')
-                        ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
-                        
-                        min_ts = min(min_ts, ts)
-                        
-                        # 요청한 시작 시간보다 이전 캔들이 유입된 경우 수집 중단 대상
-                        if ts < start_time:
+                        if not item or not isinstance(item, dict):
                             continue
                             
-                        candle = Candle(
-                            exchange=self.exchange,
-                            symbol=symbol,
-                            interval=60,
-                            timestamp=ts,
-                            open=float(item['opening_price']),
-                            high=float(item['high_price']),
-                            low=float(item['low_price']),
-                            close=float(item['trade_price']),
-                            volume=float(item['candle_acc_trade_volume']),
-                            is_closed=True
-                        )
-                        batch_candles.append(candle)
+                        dt_str = item.get('candle_date_time_utc')
+                        if not dt_str:
+                            continue
+                            
+                        try:
+                            dt = datetime.strptime(dt_str, '%Y-%m-%dT%H:%M:%S')
+                            ts = int(dt.replace(tzinfo=timezone.utc).timestamp())
+                            
+                            min_ts = min(min_ts, ts)
+                            
+                            # 요청한 시작 시간보다 이전 캔들이 유입된 경우 수집 중단 대상
+                            if ts < start_time:
+                                continue
+                                
+                            candle = Candle(
+                                exchange=self.exchange,
+                                symbol=symbol,
+                                interval=60,
+                                timestamp=ts,
+                                open=float(item.get('opening_price', 0.0)),
+                                high=float(item.get('high_price', 0.0)),
+                                low=float(item.get('low_price', 0.0)),
+                                close=float(item.get('trade_price', 0.0)),
+                                volume=float(item.get('candle_acc_trade_volume', 0.0)),
+                                is_closed=True
+                            )
+                            batch_candles.append(candle)
+                        except (ValueError, KeyError, TypeError) as val_err:
+                            logger.warning(f"[{self.exchange.upper()}] {symbol} 캔들 데이터 파싱 예외 스킵: {val_err}")
+                            continue
                     
                     candles.extend(batch_candles)
                     

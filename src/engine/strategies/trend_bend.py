@@ -1,5 +1,6 @@
 from src.engine.strategy import BaseStrategy, StrategyResult, StrategyType, StrategyRegistry
-from src.engine.candles import Candle
+from src.engine.strategy_host import StrategyContext
+from src.engine.exceptions import IndicatorNotReady
 from typing import Dict, Optional
 
 @StrategyRegistry.register
@@ -12,27 +13,27 @@ class TrendBendStrategy(BaseStrategy):
 
     def __init__(self, strategy_id: str, params: Dict = None):
         super().__init__(strategy_id, params)
-        self.history_candles = []
 
-    def on_candle(self, candle: Candle) -> StrategyResult:
-        self.history_candles.append(candle)
-        if len(self.history_candles) > self.lookback + 1:
-            self.history_candles.pop(0)
+    def on_update(self, context: StrategyContext) -> StrategyResult:
+        candles = context.candles
+        required = self.lookback + 1
+        if len(candles) < required:
+            raise IndicatorNotReady(f"Insufficient candles for TrendBendStrategy. Required: {required}, Got: {len(candles)}")
 
-        if len(self.history_candles) < self.lookback + 1:
-            return StrategyResult("HOLD")
+        hist = candles[-required:]
+        current_candle = hist[-1]
 
         # 거래량 감소 추세 확인 (Volume Divergence)
-        vol_decreasing = all(self.history_candles[i].volume > self.history_candles[i+1].volume for i in range(len(self.history_candles)-2))
+        vol_decreasing = all(hist[i].volume > hist[i+1].volume for i in range(len(hist)-2))
         
         # 가격 상승 혹은 횡보 확인
-        price_rising = self.history_candles[-2].close >= self.history_candles[0].open
+        price_rising = hist[-2].close >= hist[0].open
         
         # 현재 캔들이 음봉인지 확인 (Trend Bend)
-        is_bearish = candle.close < candle.open
+        is_bearish = current_candle.close < current_candle.open
 
         if vol_decreasing and price_rising and is_bearish:
-            return StrategyResult("SELL", candle.close, "Trend Bend: Volume Divergence with Bearish Candle")
+            return StrategyResult("SELL", current_candle.close, "Trend Bend: Volume Divergence with Bearish Candle")
 
         return StrategyResult("HOLD")
 

@@ -55,14 +55,15 @@ def setup_context_with_candles(candles: list, strategy_params: dict) -> tuple[Ma
 # ─────────────────────────────────────────────────────────────────────
 def test_short_term_momentum_warmup():
     from src.engine.strategies.short_term_momentum import ShortTermMomentumStrategy
+    from src.engine.exceptions import IndicatorNotReady
     strat = ShortTermMomentumStrategy(strategy_id="short_term_momentum", params={})
     
     # 캔들 10개만 주입 (slow_window=20보다 작음)
     candles = [make_candle(100.0 + i, 1000 + i * 60) for i in range(10)]
     mdc, context = setup_context_with_candles(candles, strat.params)
     
-    res = strat.on_update(context)
-    assert res is None or res.action == "HOLD"
+    with pytest.raises(IndicatorNotReady):
+        strat.on_update(context)
 
 # ─────────────────────────────────────────────────────────────────────
 # 2. 매수 진입(BUY) 신호 검증

@@ -15,23 +15,16 @@ class RSIStrategy(BaseStrategy):
 
     def __init__(self, strategy_id: str, params: Dict = None):
         super().__init__(strategy_id, params)
-        # 필요한 지표 선언 (호스트가 계산 대행)
-        self.required_indicators = ["rsi"]
         self.in_position = False
         self.buy_threshold = self.params.get('buy_threshold', 30.0)
         self.sell_threshold = self.params.get('sell_threshold', 70.0)
-
-    def on_candle(self, candle) -> Optional[str]:
-        # 하위 호환성을 위해 남겨두지만 사용되지 않음
-        return None
 
     def on_update(self, context: StrategyContext) -> Optional[StrategyResult]:
         """
         StrategyHost로부터 전달받은 컨텍스트를 사용하여 판단을 내립니다.
         """
-        rsi = context.indicators.get("rsi")
-        if rsi is None:
-            return None
+        rsi_window = self.params.get('rsi_window', 14)
+        rsi = context.get_indicator("rsi", window=rsi_window)
 
         # 지표 스냅샷 생성
         trade_context = {"rsi": round(rsi, 2)}

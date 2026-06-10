@@ -9,6 +9,12 @@ from src.database.repository import SqliteTradingRepository
 from src.engine.diversity_analyzer import get_combined_lambda_boost
 from src.engine.girs_types import CandidateProposal, FeatureSnapshot
 from src.engine.promotion_queue import PromotionQueue
+from src.engine.parameter_evaluator import (
+    ParameterEvaluator,
+    calculate_parameter_distance,
+    calculate_multifactor_score,
+    get_regime_weighting
+)
 
 logger = get_logger("shadow_backtest")
 
@@ -21,6 +27,7 @@ class ShadowBacktestEngine:
         self.db_path = db_path
         self.backtest_engine = BacktestEngine(db_path=self.db_path)
         self.repository = SqliteTradingRepository(db_path=self.db_path)
+        self.evaluator = ParameterEvaluator()
 
     async def _get_lambda_boost(self, strategy_id: str) -> float:
         """
@@ -207,7 +214,7 @@ class ShadowBacktestEngine:
                         if r["old_params"]:
                             try:
                                 old_p = json.loads(r["old_params"])
-                                dist = calculate_parameter_distance(old_p, proposed_params)
+                                dist = self.evaluator.calculate_parameter_distance(old_p, proposed_params)
                                 if dist < 0.1:
                                     rollback_penalty = 15
                                     break
@@ -242,7 +249,7 @@ class ShadowBacktestEngine:
 
             min_distance = 999.0
             for act_p in active_params_list:
-                d = calculate_parameter_distance(act_p, proposed_params)
+                d = self.evaluator.calculate_parameter_distance(act_p, proposed_params)
                 if d < min_distance:
                     min_distance = d
 
@@ -270,17 +277,18 @@ class ShadowBacktestEngine:
             if adx > 25.0:
                 effective_threshold = max(0.07, 0.10 - threshold_delta)  # 강한 추세장도 수렴 허용
 
-            diversity_penalty = 0.0
-            if min_distance < effective_threshold:
-                diversity_penalty = lambda_dynamic * (1.0 - (min_distance / effective_threshold))
-            diversity_penalty = min(diversity_penalty, lambda_dynamic)
+            diversity_penalty = self.evaluator.calculate_diversity_penalty(
+                min_distance=min_distance,
+                effective_threshold=effective_threshold,
+                lambda_dynamic=lambda_dynamic
+            )
 
             # 6. Multi-factor Scoring 점수 산출
             win_rate = summary_7d.get("win_rate", 50.0)
             profit_factor = summary_7d.get("profit_factor", 1.2)
             mdd = summary_7d.get("mdd", 2.0)
             
-            base_score = calculate_multifactor_score(
+            base_score = self.evaluator.calculate_multifactor_score(
                 roi_7d=roi_7d,
                 roi_1d=roi_1d,
                 win_rate=win_rate,
@@ -289,7 +297,7 @@ class ShadowBacktestEngine:
             )
             
             # 국면별 가중치 연산
-            regime_weight = get_regime_weighting(
+            regime_weight = self.evaluator.get_regime_weighting(
                 atr_ratio=atr_ratio,
                 adx=adx,
                 original_params=original_params,
@@ -297,8 +305,12 @@ class ShadowBacktestEngine:
             )
             
             # 최종 신뢰도 점수 산출
-            confidence_score = base_score + regime_weight - rollback_penalty - diversity_penalty
-            confidence_score = int(min(max(confidence_score, 0), 100))
+            confidence_score = self.evaluator.calculate_confidence_score(
+                base_score=base_score,
+                regime_weight=regime_weight,
+                rollback_penalty=rollback_penalty,
+                diversity_penalty=diversity_penalty
+            )
 
             # 의사결정 해시 생성 (재현성 및 Mutation Graph 연계)
             import hashlib
@@ -452,67 +464,4 @@ class ShadowBacktestEngine:
         return inserted_ids
 
 
-def calculate_multifactor_score(roi_7d: float, roi_1d: float, win_rate: float, profit_factor: float, mdd: float) -> int:
-    if profit_factor < 1.0 or win_rate < 40.0:
-        return 50
-        
-    roi_7d_score = min(max(roi_7d * 2.0, 0.0), 25.0)
-    roi_1d_score = min(max(roi_1d * 3.0, 0.0), 15.0)
-    win_rate_contribution = min(max((win_rate - 40.0) * 0.6, 0.0), 30.0)
-    pf_contribution = min(max((profit_factor - 1.0) * 10.0, 0.0), 20.0)
-    mdd_penalty = mdd * 2.0
-    
-    score = 50 + roi_7d_score + roi_1d_score + win_rate_contribution + pf_contribution - mdd_penalty
-    return int(min(max(score, 50.0), 100.0))
-
-
-def get_regime_weighting(atr_ratio: float, adx: float, original_params: dict, proposed_params: dict) -> int:
-    weight = 0
-    orig_buy = original_params.get("buy_threshold")
-    prop_buy = proposed_params.get("buy_threshold")
-    orig_sell = original_params.get("sell_threshold")
-    prop_sell = proposed_params.get("sell_threshold")
-    
-    is_conservative = False
-    if orig_buy is not None and prop_buy is not None and prop_buy < orig_buy:
-        is_conservative = True
-    if orig_sell is not None and prop_sell is not None and prop_sell > orig_sell:
-        is_conservative = True
-        
-    if atr_ratio > 1.2 and is_conservative:
-        weight += 5
-        
-    orig_rsi = original_params.get("rsi_window")
-    prop_rsi = proposed_params.get("rsi_window")
-    
-    if adx > 25.0 and orig_rsi is not None and prop_rsi is not None and (orig_rsi - prop_rsi) >= 4:
-        weight -= 10
-        
-    return weight
-
-
-def calculate_parameter_distance(p1: dict, p2: dict) -> float:
-    weights = {
-        "rsi_window": 0.2,
-        "buy_threshold": 0.8,
-        "sell_threshold": 0.8
-    }
-    
-    distance = 0.0
-    for p, w in weights.items():
-        v1 = p1.get(p)
-        v2 = p2.get(p)
-        if v1 is not None and v2 is not None:
-            baseline = float(v1)
-            if baseline != 0.0:
-                distance += w * (abs(float(v2) - baseline) / baseline)
-                
-    for k in p1.keys():
-        if k not in weights and k != "insight_id" and k != "proposal_group_id":
-            v1 = p1[k]
-            v2 = p2.get(k)
-            if isinstance(v1, str) or isinstance(v2, str):
-                if v1 != v2:
-                    distance += 1.0
-                    
-    return distance
+# re-export functions for backward compatibility are already imported above

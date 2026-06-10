@@ -31,32 +31,26 @@ class MockONNXModel:
         p = 1.0 / (1.0 + math.exp(-raw_val))
         return p
 
-class GIRSScorer:
+class StabilityTracker:
+    """
+    순위, 시장 및 시스템 안정성 지표와 이력을 관리하는 전담 상태 관리기.
+    """
     def __init__(
         self,
-        model: MockONNXModel,
-        baseline_volatility: float = 0.1,
-        baseline_latency: float = 0.05,
         ema_alpha: float = 0.2,
         rolling_window_size: int = 20,
-        eps: float = 1e-9,
-        onnx_model_path: Optional[str] = None,
-        calibration_passed: bool = True
+        baseline_volatility: float = 0.1,
+        baseline_latency: float = 0.05,
+        eps: float = 1e-9
     ):
-        self.model = model
-        self.baseline_volatility = baseline_volatility
-        self.baseline_latency = baseline_latency
         self.ema_alpha = ema_alpha
         self.rolling_window_size = rolling_window_size
+        self.baseline_volatility = baseline_volatility
+        self.baseline_latency = baseline_latency
         self.eps = eps
-        self.onnx_model_path = onnx_model_path
-        self.calibration_passed = calibration_passed
-        self.onnx_session = None
 
-        # 상태 관리
-        # rank_stability 상태: proposal_id -> (last_rank, ema_normalized_change)
+        # 상태 관리 필드 전담 소유
         self.rank_states: Dict[str, Tuple[int, float]] = {}
-        # market_volatility 히스토리: proposal_id -> deque
         self.market_volatility_hist: Dict[str, deque] = {}
 
     def calculate_rank_stability(
@@ -125,11 +119,25 @@ class GIRSScorer:
         stability_score = 0.6 * min_stab + 0.4 * mean_stab
         return min(max(stability_score, 0.0), 1.0)
 
-    def calculate_uncertainty(self, model_risk_score: float) -> Tuple[float, float]:
-        p = min(max(model_risk_score, 1e-6), 1.0 - 1e-6)
-        uncertainty = (-p * math.log(p) - (1.0 - p) * math.log(1.0 - p)) / math.log(2.0)
-        confidence = 1.0 - uncertainty
-        return uncertainty, confidence
+class FallbackRiskScorer:
+    """
+    설정을 주입받아 룰 기반 대체 리스크(Fallback Risk)를 산출하는 계산기.
+    """
+    def __init__(
+        self,
+        limits: Optional[Dict[str, float]] = None,
+        baseline_volatility: float = 0.1,
+        eps: float = 1e-9
+    ):
+        self.limits = limits or {
+            "max_spread": 0.05,
+            "max_volume": 1000000.0,
+            "max_depth": 1000000.0,
+            "max_volatility": 1.0,
+            "max_drawdown": 0.5
+        }
+        self.baseline_volatility = baseline_volatility
+        self.eps = eps
 
     def resolve_regime(
         self,
@@ -154,13 +162,16 @@ class GIRSScorer:
         spread: float,
         volume: float,
         depth: float,
-        limits: Dict[str, float]
+        limits: Optional[Dict[str, float]] = None
     ) -> float:
-        max_spread = limits.get("max_spread", 0.05)
-        max_volume = limits.get("max_volume", 1000000.0)
-        max_depth = limits.get("max_depth", 1000000.0)
-        max_volatility = limits.get("max_volatility", 1.0)
-        max_drawdown = limits.get("max_drawdown", 0.5)
+        # GIRSScorer facade 호환을 위해 limits를 옵션 인자로 허용하며, 전달된 것이 있으면 우선해 사용합니다.
+        active_limits = limits if limits is not None else self.limits
+
+        max_spread = active_limits.get("max_spread", 0.05)
+        max_volume = active_limits.get("max_volume", 1000000.0)
+        max_depth = active_limits.get("max_depth", 1000000.0)
+        max_volatility = active_limits.get("max_volatility", 1.0)
+        max_drawdown = active_limits.get("max_drawdown", 0.5)
 
         # 1. Liquidity risk 계산 (높을수록 위험)
         normalized_spread = min(max(spread / max_spread, 0.0), 1.0)
@@ -184,6 +195,115 @@ class GIRSScorer:
             0.2 * liquidity_risk
         )
         return min(max(fallback_risk, 0.0), 1.0)
+
+class GIRSScorer:
+    """
+    GIRS Scorer Facade & Orchestrator.
+    외부 인터페이스 및 테스트 호환성을 완전히 유지하면서 연산을 전문 클래스로 위임(Delegation)합니다.
+    """
+    def __init__(
+        self,
+        model: MockONNXModel,
+        baseline_volatility: float = 0.1,
+        baseline_latency: float = 0.05,
+        ema_alpha: float = 0.2,
+        rolling_window_size: int = 20,
+        eps: float = 1e-9,
+        onnx_model_path: Optional[str] = None,
+        calibration_passed: bool = True,
+        limits: Optional[Dict[str, float]] = None
+    ):
+        self.model = model
+        self.baseline_volatility = baseline_volatility
+        self.baseline_latency = baseline_latency
+        self.ema_alpha = ema_alpha
+        self.rolling_window_size = rolling_window_size
+        self.eps = eps
+        self.onnx_model_path = onnx_model_path
+        self.calibration_passed = calibration_passed
+        self.onnx_session = None
+
+        # Composition 구성
+        self.tracker = StabilityTracker(
+            ema_alpha=ema_alpha,
+            rolling_window_size=rolling_window_size,
+            baseline_volatility=baseline_volatility,
+            baseline_latency=baseline_latency,
+            eps=eps
+        )
+        self.fallback_scorer = FallbackRiskScorer(
+            limits=limits,
+            baseline_volatility=baseline_volatility,
+            eps=eps
+        )
+
+    # 기존 인메모리 상태 직접 접근 코드를 위한 호환 프로퍼티 데코레이터
+    @property
+    def rank_states(self) -> Dict[str, Tuple[int, float]]:
+        return self.tracker.rank_states
+
+    @property
+    def market_volatility_hist(self) -> Dict[str, deque]:
+        return self.tracker.market_volatility_hist
+
+    # --- 위임 메서드 (Facade) ---
+
+    def calculate_rank_stability(
+        self,
+        proposal_id: str,
+        current_confirmed_rank: int,
+        N: int
+    ) -> float:
+        return self.tracker.calculate_rank_stability(proposal_id, current_confirmed_rank, N)
+
+    def calculate_market_stability(
+        self,
+        proposal_id: str,
+        market_volatility: float
+    ) -> float:
+        return self.tracker.calculate_market_stability(proposal_id, market_volatility)
+
+    def calculate_system_stability(
+        self,
+        system_latency_jitter: float
+    ) -> float:
+        return self.tracker.calculate_system_stability(system_latency_jitter)
+
+    def calculate_stability_score(
+        self,
+        rank_stability: float,
+        stability_market: float,
+        stability_system: float
+    ) -> float:
+        return self.tracker.calculate_stability_score(rank_stability, stability_market, stability_system)
+
+    def resolve_regime(
+        self,
+        p_rule: List[float],
+        p_ml: List[float],
+        rule_confidence: float
+    ) -> List[float]:
+        return self.fallback_scorer.resolve_regime(p_rule, p_ml, rule_confidence)
+
+    def calculate_fallback_risk(
+        self,
+        volatility: float,
+        drawdown: float,
+        regime_risk: float,
+        spread: float,
+        volume: float,
+        depth: float,
+        limits: Optional[Dict[str, float]] = None
+    ) -> float:
+        return self.fallback_scorer.calculate_fallback_risk(
+            volatility=volatility,
+            drawdown=drawdown,
+            regime_risk=regime_risk,
+            spread=spread,
+            volume=volume,
+            depth=depth,
+            limits=limits
+        )
 
     def calculate_final_score(
         self,

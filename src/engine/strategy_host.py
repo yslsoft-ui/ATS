@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from src.engine.candles import Candle
-from src.engine.strategy import BaseStrategy
+from src.engine.strategy import BaseStrategy, StrategyResult
+from src.engine.exceptions import IndicatorNotReady
 
 class StrategyContext:
     """전략 실행 시점에 전달되는 풍부한 데이터 컨텍스트입니다."""
@@ -12,9 +13,6 @@ class StrategyContext:
         self.market_data_context = market_data_context
         self.params = params
         self.portfolio = portfolio
-        
-        # 하위 호환성을 위해 기존 required_indicators 사전 연산값을 채워둘 딕셔너리
-        self._indicators_dict = {}
 
     @property
     def candles(self) -> List[Candle]:
@@ -33,11 +31,6 @@ class StrategyContext:
         """동적으로 지표를 계산하거나 캐시에서 즉시 반환합니다."""
         return self.market_data_context.get_indicator(name, **kwargs)
 
-    @property
-    def indicators(self) -> Dict[str, Any]:
-        """하위 호환성 지원용 indicators 딕셔너리 프로퍼티"""
-        return self._indicators_dict
-
 class StrategyHost:
     """
     각 전략(Strategy)을 래핑하여 실행하는 얇은 추상화 Runner 모듈입니다.
@@ -54,7 +47,7 @@ class StrategyHost:
 
     async def execute(self, market_data_context: Any, portfolio_manager: Any = None) -> Optional[Any]:
         """
-        주입된 MarketDataContext 기반으로 전략을 실행하고 원시 실행 결과(StrategyResult 또는 str)를 반환합니다.
+        주입된 MarketDataContext 기반으로 전략을 실행하고 원시 실행 결과(StrategyResult)를 반환합니다.
         """
         # 1. 포트폴리오 상태 구성
         portfolio_status = {}
@@ -71,20 +64,14 @@ class StrategyHost:
             portfolio=portfolio_status
         )
 
-        # 3. 하위 호환성: 전략에 등록된 required_indicators 사전 계산
-        required = getattr(self.strategy, 'required_indicators', [])
-        for ind in required:
-            window = self.params.get('rsi_window', self.params.get('sma_window', 20))
-            val = context.get_indicator(ind, window=window)
-            context._indicators_dict[ind] = val
-
-        # 4. 전략 실행
-        action_result = None
-        if hasattr(self.strategy, 'on_update'):
+        # 3. 전략 실행 및 정상 준비 부족 상태(IndicatorNotReady) 핸들링
+        try:
             action_result = self.strategy.on_update(context)
-        else:
-            # 하위 호환성
-            action_result = self.strategy.on_candle(context.last_candle)
+        except IndicatorNotReady as e:
+            action_result = StrategyResult(
+                action="HOLD",
+                reason=f"IndicatorNotReady: {str(e)}"
+            )
 
         return action_result
 

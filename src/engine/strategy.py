@@ -38,16 +38,11 @@ class BaseStrategy(ABC):
         for key, val in self.params.items():
             setattr(self, key, val)
         self.candles = []
-        self.required_indicators = []  # 호스트가 미리 계산해야 할 지표 목록
 
     @abstractmethod
-    def on_candle(self, candle: Candle) -> Optional[str]:
-        """기존 인터페이스 (하위 호환용)"""
-        pass
-
     def on_update(self, context: Any) -> Optional[StrategyResult]:
-        """새로운 인터페이스: StrategyContext를 받아 결정을 내립니다."""
-        return None
+        """StrategyContext를 받아 결정을 내립니다."""
+        pass
 
     @classmethod
     def get_metadata(cls) -> Dict:
