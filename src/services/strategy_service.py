@@ -922,6 +922,8 @@ class StrategyService(DaemonService):
                                                 "UNIVERSE_DEMOTION", snapshot.symbol, msg
                                             )
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                exchange=snapshot.exchange,
+                                                market_type=snapshot.market_type,
                                                 symbol=snapshot.symbol,
                                                 status="WATCHED",
                                                 blocked_reason=None,
@@ -953,6 +955,8 @@ class StrategyService(DaemonService):
                                         msg = "Quota 초과 및 순위 밀림 강등"
                                         await self.portfolio_manager.repository.insert_system_event("UNIVERSE_DEMOTION", sym, msg)
                                         await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                            exchange=snap.exchange,
+                                            market_type=snap.market_type,
                                             symbol=sym,
                                             status="WATCHED",
                                             blocked_reason=None,
@@ -963,7 +967,11 @@ class StrategyService(DaemonService):
                                         logger.info(f"[StrategyService] [Universe] {sym} CANDIDATE -> WATCHED 강등 ({msg})")
                                     else:
                                         self.quota_blocked_count += 1
-                                        prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                        prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
+                                            exchange=snap.exchange,
+                                            market_type=snap.market_type,
+                                            symbol=sym
+                                        )
                                         prev_reason = prev_state.get("blocked_reason") if prev_state else None
                                         prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
                                         
@@ -972,15 +980,14 @@ class StrategyService(DaemonService):
                                             await self.portfolio_manager.repository.insert_system_event(
                                                 "PROMOTION_QUOTA_BLOCKED", sym, "Quota 초과 및 순위 밀림으로 승격 차단"
                                             )
-                                            new_count = 1
-                                        else:
-                                            new_count = prev_count + 1
                                             
                                         await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                            exchange=snap.exchange,
+                                            market_type=snap.market_type,
                                             symbol=sym,
                                             status="WATCHED",
                                             blocked_reason="QUOTA",
-                                            blocked_count=new_count,
+                                            blocked_count=1,
                                             last_blocked_at=current_time_s,
                                             last_event_logged_reason="QUOTA"
                                         )
@@ -996,24 +1003,26 @@ class StrategyService(DaemonService):
                                         # 7.2.1. 쿨다운 체크
                                         if current_time_s - last_cand_time < symbol_cooldown_seconds:
                                             self.cooldown_blocked_count += 1
-                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
+                                                exchange=snap.exchange,
+                                                market_type=snap.market_type,
+                                                symbol=sym
+                                            )
                                             prev_reason = prev_state.get("blocked_reason") if prev_state else None
-                                            prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
                                             
                                             if prev_reason != "COOLDOWN":
                                                 await self.portfolio_manager.repository.insert_system_event(
                                                     "PROMOTION_COOLDOWN_BLOCKED", sym, 
                                                     f"재승격 쿨다운 미경과 (남은시간: {symbol_cooldown_seconds - (current_time_s - last_cand_time):.1f}초)"
                                                 )
-                                                new_count = 1
-                                            else:
-                                                new_count = prev_count + 1
                                                 
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                exchange=snap.exchange,
+                                                market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="WATCHED",
                                                 blocked_reason="COOLDOWN",
-                                                blocked_count=new_count,
+                                                blocked_count=1,
                                                 last_blocked_at=current_time_s,
                                                 last_event_logged_reason="COOLDOWN"
                                             )
@@ -1021,23 +1030,25 @@ class StrategyService(DaemonService):
                                         # 7.2.2. 일일 제안 한도 체크
                                         elif self.daily_proposal_count >= daily_proposal_limit:
                                             self.limit_blocked_count += 1
-                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(sym)
+                                            prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
+                                                exchange=snap.exchange,
+                                                market_type=snap.market_type,
+                                                symbol=sym
+                                            )
                                             prev_reason = prev_state.get("blocked_reason") if prev_state else None
-                                            prev_count = prev_state.get("blocked_count", 0) if prev_state else 0
                                             
                                             if prev_reason != "LIMIT":
                                                 await self.portfolio_manager.repository.insert_system_event(
                                                     "PROMOTION_LIMIT_BLOCKED", sym, f"일일 제안 한도({daily_proposal_limit}) 초과로 승격 보류"
                                                 )
-                                                new_count = 1
-                                            else:
-                                                new_count = prev_count + 1
                                                 
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                exchange=snap.exchange,
+                                                market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="WATCHED",
                                                 blocked_reason="LIMIT",
-                                                blocked_count=new_count,
+                                                blocked_count=1,
                                                 last_blocked_at=current_time_s,
                                                 last_event_logged_reason="LIMIT"
                                             )
@@ -1053,6 +1064,8 @@ class StrategyService(DaemonService):
                                             msg = f"WATCHED -> CANDIDATE 승격 (거래대금={val:,.0f}원)"
                                             await self.portfolio_manager.repository.insert_system_event("UNIVERSE_PROMOTION", sym, msg)
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
+                                                exchange=snap.exchange,
+                                                market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="CANDIDATE",
                                                 blocked_reason=None,

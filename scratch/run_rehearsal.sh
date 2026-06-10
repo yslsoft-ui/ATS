@@ -4,6 +4,7 @@
 TMUX_SESSION="ats_rehearsal"
 VENV_PATH="./venv"
 export PYTHONPATH=.
+export ATS_CONFIG="config/settings_rehearsal.yaml"
 
 # 가상환경 활성화
 if [ -d "$VENV_PATH" ]; then
@@ -19,8 +20,10 @@ check_safety() {
     
     $PYTHON_EXEC -c "
 import yaml
+import os
+config_path = os.getenv('ATS_CONFIG', 'config/settings_rehearsal.yaml')
 try:
-    with open('config/settings.yaml', 'r', encoding='utf-8') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         cfg = yaml.safe_load(f).get('system', {})
 except Exception as e:
     print(f'[FAIL] 설정 파일을 읽을 수 없습니다: {e}')
@@ -73,8 +76,11 @@ start_demons() {
     # 3. Strategy 데몬 기동
     tmux new-window -t "$TMUX_SESSION":2 -n "strategy" "PYTHONPATH=. $PYTHON_EXEC src/strategy_daemon.py"
     
-    # 4. Evaluation 헬퍼 워커 기동
-    tmux new-window -t "$TMUX_SESSION":3 -n "evaluation" "PYTHONPATH=. $PYTHON_EXEC scratch/evaluation_worker.py"
+    # 4. Evaluation 데몬 기동
+    tmux new-window -t "$TMUX_SESSION":3 -n "evaluation" "PYTHONPATH=. $PYTHON_EXEC src/shadow_eval_daemon.py"
+    
+    # 5. Cleanup 데몬 기동
+    tmux new-window -t "$TMUX_SESSION":4 -n "cleanup" "PYTHONPATH=. $PYTHON_EXEC src/market_cleanup_daemon.py"
     
     echo "데몬 기동 완료. tmux session: $TMUX_SESSION"
     echo "모니터링을 하려면: tmux attach-session -t $TMUX_SESSION"

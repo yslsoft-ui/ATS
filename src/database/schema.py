@@ -523,6 +523,10 @@ async def init_db(db_path: str = None):
                 UNIQUE (proposal_id, horizon_name)
             )
         ''')
+        await ensure_column(db, 'proposal_evaluations', 'baseline_value', 'REAL')
+        await ensure_column(db, 'proposal_evaluations', 'baseline_timestamp', 'INTEGER')
+        await ensure_column(db, 'proposal_evaluations', 'baseline_volume', 'INTEGER')
+
 
         # 19. girs_shadow_metrics [NEW]
         await db.execute('''
@@ -586,12 +590,15 @@ async def init_db(db_path: str = None):
         # 21. universe_guard_state [NEW]
         await db.execute('''
             CREATE TABLE IF NOT EXISTS universe_guard_state (
-                symbol TEXT PRIMARY KEY,
+                exchange TEXT NOT NULL,
+                market_type TEXT NOT NULL,
+                symbol TEXT NOT NULL,
                 status TEXT,
                 blocked_reason TEXT,
                 blocked_count INTEGER DEFAULT 0,
                 last_blocked_at REAL,
-                last_event_logged_reason TEXT
+                last_event_logged_reason TEXT,
+                PRIMARY KEY (exchange, market_type, symbol)
             )
         ''')
 
@@ -683,6 +690,7 @@ async def init_db(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_girs_shadow_metrics_time ON girs_shadow_metrics (timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_promotion_event_log_prop ON promotion_event_log (proposal_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange, market_type, status)')
 
         
         await db.commit()
@@ -693,17 +701,86 @@ async def init_db(db_path: str = None):
 
 async def migrate_data(db_path: str = None):
     async with get_db_conn(db_path) as db:
-        # universe_guard_state 테이블 생성 보장
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS universe_guard_state (
-                symbol TEXT PRIMARY KEY,
-                status TEXT,
-                blocked_reason TEXT,
-                blocked_count INTEGER DEFAULT 0,
-                last_blocked_at REAL,
-                last_event_logged_reason TEXT
-            )
-        ''')
+        # universe_guard_state 테이블 생성 및 마이그레이션 보장
+        cursor = await db.execute("PRAGMA table_info(universe_guard_state)")
+        columns = await cursor.fetchall()
+        if columns:
+            has_exchange = any(col['name'] == 'exchange' for col in columns)
+            if not has_exchange:
+                logger.info("[Migration] universe_guard_state 테이블 복합 기본키 구조 마이그레이션 감지")
+                
+                # 1. 기존 데이터가 Upbit crypto 전용인지 검증
+                cursor_old = await db.execute("SELECT symbol FROM universe_guard_state")
+                old_rows = await cursor_old.fetchall()
+                
+                upbit_symbols = set()
+                try:
+                    async with db.execute("SELECT symbol FROM exchange_assets WHERE exchange = 'upbit'") as cur_ea:
+                        ea_rows = await cur_ea.fetchall()
+                        for r in ea_rows:
+                            upbit_symbols.add(r['symbol'])
+                except Exception:
+                    pass
+                
+                crypto_symbols = {"BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "DOT", "TRX", "LINK"}
+                
+                for row in old_rows:
+                    sym = row['symbol']
+                    if sym.isdigit() and len(sym) == 6:
+                        raise ValueError(f"CRITICAL Migration Failure: Existing universe_guard_state symbol '{sym}' looks like a stock code. Migration halted for safety.")
+                    
+                    is_valid_crypto = sym in crypto_symbols or sym in upbit_symbols
+                    if not is_valid_crypto:
+                        import re
+                        if not re.match(r"^[A-Z0-9]+$", sym):
+                            raise ValueError(f"CRITICAL Migration Failure: Existing universe_guard_state symbol '{sym}' is not a valid crypto symbol. Migration halted.")
+                
+                logger.info("[Migration] Existing universe_guard_state data validation passed (Upbit crypto confirmed).")
+                
+                # 2. RENAME 및 신규 생성 후 백필
+                await db.execute("DROP TABLE IF EXISTS universe_guard_state_old")
+                await db.execute("ALTER TABLE universe_guard_state RENAME TO universe_guard_state_old")
+                
+                await db.execute('''
+                    CREATE TABLE universe_guard_state (
+                        exchange TEXT NOT NULL,
+                        market_type TEXT NOT NULL,
+                        symbol TEXT NOT NULL,
+                        status TEXT,
+                        blocked_reason TEXT,
+                        blocked_count INTEGER DEFAULT 0,
+                        last_blocked_at REAL,
+                        last_event_logged_reason TEXT,
+                        PRIMARY KEY (exchange, market_type, symbol)
+                    )
+                ''')
+                
+                await db.execute('''
+                    INSERT INTO universe_guard_state (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
+                    SELECT 'upbit', 'crypto', symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason
+                    FROM universe_guard_state_old
+                ''')
+                
+                await db.execute("DROP TABLE IF EXISTS universe_guard_state_old")
+                logger.info("[Migration] universe_guard_state 복합 기본키 마이그레이션 및 backfill 완료")
+        else:
+            # 테이블이 아예 없는 경우 신규 생성
+            await db.execute('''
+                CREATE TABLE IF NOT EXISTS universe_guard_state (
+                    exchange TEXT NOT NULL,
+                    market_type TEXT NOT NULL,
+                    symbol TEXT NOT NULL,
+                    status TEXT,
+                    blocked_reason TEXT,
+                    blocked_count INTEGER DEFAULT 0,
+                    last_blocked_at REAL,
+                    last_event_logged_reason TEXT,
+                    PRIMARY KEY (exchange, market_type, symbol)
+                )
+            ''')
+        # 인덱스 추가 보장 (lookup 및 status 인덱스)
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange, market_type, status)')
         # exchange_assets 테이블에 is_delisted 컬럼이 없으면 마이그레이션 수행
         await ensure_column(db, 'exchange_assets', 'is_delisted', 'INTEGER DEFAULT 0')
 

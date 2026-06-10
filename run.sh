@@ -4,6 +4,7 @@
 TMUX_SESSION="ats"
 VENV_PATH="./venv"
 export PYTHONPATH=.
+export ATS_CONFIG="${ATS_CONFIG:-config/settings_production.yaml}"
 
 # 1. 종료 처리용 trap 설정 (일반 실행 모드 시)
 PIDS=()
@@ -81,6 +82,12 @@ if [ "$USE_TMUX" = true ]; then
     # 3. 세 번째 윈도우(Strategy) 생성 및 실행
     tmux new-window -t "$TMUX_SESSION":2 -n "strategy" "PYTHONPATH=. $PYTHON_EXEC src/strategy_daemon.py; exec bash"
     
+    # 4. 네 번째 윈도우(Evaluation) 생성 및 실행
+    tmux new-window -t "$TMUX_SESSION":3 -n "evaluation" "PYTHONPATH=. $PYTHON_EXEC src/shadow_eval_daemon.py; exec bash"
+    
+    # 5. 다섯 번째 윈도우(Cleanup) 생성 및 실행
+    tmux new-window -t "$TMUX_SESSION":4 -n "cleanup" "PYTHONPATH=. $PYTHON_EXEC src/market_cleanup_daemon.py; exec bash"
+    
     # 첫 번째 윈도우로 포커스
     tmux select-window -t "$TMUX_SESSION":0
     
@@ -101,7 +108,17 @@ else
     PIDS+=($!)
     sleep 1
     
-    echo "3. 웹/API 서버 기동..."
+    echo "3. Shadow 평가 데몬(Shadow Eval Daemon) 기동..."
+    $PYTHON_EXEC src/shadow_eval_daemon.py &
+    PIDS+=($!)
+    sleep 1
+
+    echo "4. 데이터 정리 데몬(Market Cleanup Daemon) 기동..."
+    $PYTHON_EXEC src/market_cleanup_daemon.py &
+    PIDS+=($!)
+    sleep 1
+    
+    echo "5. 웹/API 서버 기동..."
     if [ "$USE_RELOAD" = true ]; then
         PYTHONPATH=. $PYTHON_EXEC -m uvicorn src.server.main:app --host 0.0.0.0 --port 8000 --reload &
     else

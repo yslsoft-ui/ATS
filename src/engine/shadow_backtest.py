@@ -359,8 +359,10 @@ class ShadowBacktestEngine:
             
             # 3. proposal_evaluations에 1:N Horizon PENDING 레코드 일괄 생성 및 실시간 스냅샷 캡처
             try:
-                # settings.yaml 에서 horizons 설정 로드
-                with open("config/settings.yaml", "r", encoding="utf-8") as f:
+                # 설정 파일에서 horizons 설정 로드
+                import os
+                config_path = os.getenv("ATS_CONFIG", "config/settings_production.yaml")
+                with open(config_path, "r", encoding="utf-8") as f:
                     import yaml
                     full_cfg = yaml.safe_load(f) or {}
                 system_cfg = full_cfg.get("system", {})

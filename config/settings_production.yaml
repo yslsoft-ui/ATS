@@ -1,0 +1,170 @@
+# WARNING: This is the production profile.
+# It uses the production-grade horizons (1d/3d/7d).
+# live_trading_enabled and auto_strategy_promotion_enabled must remain false for GIRS Shadow Operation safety.
+# This profile DOES NOT enable real trading, it only defines production-level evaluation horizons.
+
+system:
+  db_path: data/backtest.db
+  strategies_dir: src/engine/strategies
+  log_level: INFO
+  enable_auto_proposal: false
+  operation_mode: shadow
+  girs_shadow_mode: true
+  live_trading_enabled: false
+  simulation_trading_enabled: true
+  auto_strategy_promotion_enabled: false
+  report_min_samples_per_slice: 30
+  evaluation_lock_timeout_seconds: 300
+  evaluation_max_retry_count: 3
+  enable_orderbook_features: false
+  candidate_proxy_window_seconds: 60
+  candidate_proxy_min_tps: 0.1
+  shadow_min_trades_limit: 3
+  girs_risk_cutoff:
+    default: 0.5
+    crypto: 0.4
+    stock: 0.6
+    horizons:
+      1d: 0.45
+      3d: 0.50
+      7d: 0.55
+    market_horizons:
+      crypto.1d: 0.42
+  freshness_ttl:
+    crypto:
+      trade: 10
+      indicator: 60
+    stock:
+      trade: 30
+      indicator: 120
+  horizons:
+    crypto:
+    - name: 1d
+      type: elapsed
+      value: 86400
+    - name: 3d
+      type: elapsed
+      value: 259200
+    - name: 7d
+      type: elapsed
+      value: 604800
+    stock:
+    - name: 1d
+      type: calendar_session
+      value: 1_day
+    - name: 3d
+      type: calendar_session
+      value: 3_days
+    - name: 7d
+      type: calendar_session
+      value: 7_days
+  resource_guards:
+    exchange_quota:
+      upbit: 30
+      kis: 20
+      bithumb: 15
+    symbol_cooldown_seconds: 3600
+    daily_proposal_limit: 100
+collector:
+  warmup_enabled: true
+  worker_count: 2
+  db_path: data/backtest.db
+  backfill:
+    enabled: true
+    max_hours: 24
+    delays:
+      upbit: 0.2
+      bithumb: 0.2
+      kis: 0.2
+strategies:
+  rsistrategy:
+    enabled: true
+    params:
+      rsi_window: 14
+      buy_threshold: 30
+      sell_threshold: 70
+    overrides:
+      kis:
+        params:
+          rsi_window: 20
+          buy_threshold: 35
+          sell_threshold: 65
+  macdstrategy:
+    enabled: false
+    params:
+      fast_period: 12
+      slow_period: 26
+      signal_period: 9
+  volumepowerstrategy:
+    enabled: false
+    params:
+      buy_threshold: 120.0
+      sell_threshold: 80.0
+  sequentialstrategy:
+    enabled: false
+    params:
+      first_strategy_id: rsi_strategy
+      second_strategy_id: macd_strategy
+      wait_candles: 3
+  momentumspikestrategy:
+    enabled: false
+    params:
+      lookback_periods: 20
+      vol_multiplier: 3.0
+      freq_multiplier: 2.0
+      buy_ratio_threshold: 0.7
+      price_change_threshold: 0.3
+      trailing_stop_pct: 1.5
+  panicstrategy:
+    enabled: false
+    params:
+      vol_multiplier: 3.0
+      drop_threshold: 0.02
+  trendbendstrategy:
+    enabled: false
+    params:
+      lookback: 5
+  momentumstrategy:
+    enabled: false
+    params:
+      period: 15
+  shorttermmomentumstrategy:
+    enabled: false
+    params:
+      fast_window: 5
+      slow_window: 20
+      rsi_window: 14
+      rsi_buy_threshold: 55.0
+      rsi_sell_threshold: 80.0
+      bb_window: 20
+      bb_std: 2.0
+      stop_loss_pct: 2.0
+      trailing_stop_pct: 2.5
+exchanges:
+  upbit:
+    enabled: true
+    api_key: 4xex9xdcG4Ce6gCKs0Y8KSzXgI0Lmu5cGrZMwzNS
+    api_secret: g0mEQPLKYhxtxXkxhcvxovKTt0IuYI3VHecUeHqF
+    fee_rate: 0.0005
+    websocket_url: wss://api.upbit.com/websocket/v1
+    api_url: https://api.upbit.com/v1
+    order_history_limit: 50
+  kis:
+    enabled: true
+    app_key: PSpNCUs5O8snmpX0pcY1QZDiPz58JINHTu3X
+    app_secret: WdaB3Uy+xrEhM2Pgt5o7rtPcNEmdKp4ZdYjH9po+yLjeFnqWgPnMkLK7vNjcl99K1Rb5Ktzlys9uuWXyGgyQFGYklt/ZHzV9JDj4ZOtr4bBBFwzQFSKfud1SGJulJ4yXVv8vRDSb0BzgahtRk18nGB5vYoaFLLM+dg/v90qV8vdMMczMurA=
+    account_no: 73804972
+    user_id: 905858
+    fee_rate: 0.00015
+    api_url: https://openapi.koreainvestment.com:9443
+    websocket_url: ws://ops.koreainvestment.com:21000
+    market_hours:
+      start_time: 07:50
+      end_time: '20:10'
+  bithumb:
+    enabled: true
+    api_key: your_bithumb_api_key
+    api_secret: your_bithumb_secret_key
+    fee_rate: 0.0025
+    websocket_url: wss://ws-api.bithumb.com/websocket/v1
+    api_url: https://api.bithumb.com/v1

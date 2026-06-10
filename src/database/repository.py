@@ -602,11 +602,11 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
         pass
 
     @abc.abstractmethod
-    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
         pass
 
     @abc.abstractmethod
@@ -674,11 +674,47 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any], legacy_compat: bool = False) -> int:
         pass
 
     @abc.abstractmethod
     async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_proposal_evaluations(self, proposal_id: int) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_expired_pending_evaluations(self, now: int) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def get_pending_evaluations_without_baseline(self, now: int) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def update_baseline_snapshot(self, pe_id: int, value: float, ts: int, vol: int = 0):
+        pass
+
+    @abc.abstractmethod
+    async def claim_evaluation(self, pe_id: int, locked_at: int) -> bool:
+        pass
+
+    @abc.abstractmethod
+    async def complete_evaluation(self, pe_id: int, actual_roi: float, roi_div: float, actual_trades: int, trade_div: int, evaluated_at: int):
+        pass
+
+    @abc.abstractmethod
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+        pass
+
+    @abc.abstractmethod
+    async def get_stale_evaluating_evaluations(self, cutoff: int) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
         pass
 
     @abc.abstractmethod
@@ -877,24 +913,26 @@ class SqliteTradingRepository(BaseTradingRepository):
             await db.commit()
             logger.info(f"[Repository] 시스템 감사 로그를 정리하였습니다. (차단/요약 7일 기준: {cutoff_ts_short}, 전환 90일 기준: {cutoff_ts_long})")
 
-    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
         async with get_db_conn(self.db_path) as db:
             await db.execute('''
                 INSERT INTO universe_guard_state 
-                (symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(symbol) DO UPDATE SET
+                (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(exchange, market_type, symbol) DO UPDATE SET
                     status = excluded.status,
                     blocked_reason = excluded.blocked_reason,
-                    blocked_count = excluded.blocked_count,
+                    blocked_count = CASE WHEN COALESCE(universe_guard_state.blocked_reason, '') = COALESCE(excluded.blocked_reason, '') 
+                                         THEN universe_guard_state.blocked_count + excluded.blocked_count 
+                                         ELSE excluded.blocked_count END,
                     last_blocked_at = excluded.last_blocked_at,
                     last_event_logged_reason = excluded.last_event_logged_reason
-            ''', (symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason))
+            ''', (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason))
             await db.commit()
 
-    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
+    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
-            async with db.execute("SELECT * FROM universe_guard_state WHERE symbol = ?", (symbol,)) as cursor:
+            async with db.execute("SELECT * FROM universe_guard_state WHERE exchange = ? AND market_type = ? AND symbol = ?", (exchange, market_type, symbol)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
 
@@ -1216,9 +1254,26 @@ class SqliteTradingRepository(BaseTradingRepository):
             ''', (roi, mdd, track_status, ts, proposal_id))
             await db.commit()
 
-    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any], legacy_compat: bool = False) -> int:
+        horizon_name = eval_data.get("horizon_name")
+        if not horizon_name or str(horizon_name).strip() == "":
+            if not legacy_compat:
+                raise ValueError("horizon_name is required for proposal evaluation")
+            else:
+                horizon_name = "7d"
+                logger.warning(
+                    f"[SqliteTradingRepository] LEGACY_HORIZON_DEFAULT_APPLIED: "
+                    f"Proposal ID {eval_data.get('proposal_id')} has missing or empty horizon_name. "
+                    f"Automatically defaulted to '7d'."
+                )
+                await self.insert_system_event(
+                    event_type="LEGACY_HORIZON_DEFAULT_APPLIED",
+                    target="proposal_evaluations",
+                    message=f"Proposal ID {eval_data.get('proposal_id')} has missing or empty horizon_name. Defaulted to 7d.",
+                    context=f"proposal_id={eval_data.get('proposal_id')}"
+                )
+
         async with get_db_conn(self.db_path) as db:
-            horizon_name = eval_data.get("horizon_name") or "7d"
             cursor = await db.execute('''
                 INSERT INTO proposal_evaluations 
                 (proposal_id, horizon_name, predicted_roi_7d, actual_roi_7d, roi_divergence, 
@@ -1257,6 +1312,99 @@ class SqliteTradingRepository(BaseTradingRepository):
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
+
+    async def get_expired_pending_evaluations(self, now: int) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM proposal_evaluations WHERE evaluation_status = 'PENDING' AND due_at <= ?",
+                (now,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def get_pending_evaluations_without_baseline(self, now: int) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM proposal_evaluations "
+                "WHERE evaluation_status = 'PENDING' AND baseline_value IS NULL AND (due_at - horizon_value) <= ?",
+                (now,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def update_baseline_snapshot(self, pe_id: int, value: float, ts: int, vol: int = 0):
+        async with get_db_conn(self.db_path) as db:
+            await db.execute(
+                "UPDATE proposal_evaluations SET "
+                "baseline_value = ?, "
+                "baseline_timestamp = ?, "
+                "baseline_volume = ? "
+                "WHERE id = ?",
+                (value, ts, vol, pe_id)
+            )
+            await db.commit()
+
+    async def claim_evaluation(self, pe_id: int, locked_at: int) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            cursor = await db.execute(
+                "UPDATE proposal_evaluations "
+                "SET evaluation_status = 'EVALUATING', locked_at = ? "
+                "WHERE id = ? AND evaluation_status = 'PENDING'",
+                (locked_at, pe_id)
+            )
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def complete_evaluation(self, pe_id: int, actual_roi: float, roi_div: float, actual_trades: int, trade_div: int, evaluated_at: int):
+        async with get_db_conn(self.db_path) as db:
+            await db.execute(
+                "UPDATE proposal_evaluations SET "
+                "evaluation_status = 'COMPLETED', "
+                "evaluated_at = ?, "
+                "actual_roi_7d = ?, " # Generic/Legacy 겸용 필드
+                "roi_divergence = ?, "
+                "actual_trade_count_7d = ?, "
+                "trade_count_divergence = ?, "
+                "locked_at = NULL "
+                "WHERE id = ?",
+                (evaluated_at, actual_roi, roi_div, actual_trades, trade_div, pe_id)
+            )
+            await db.commit()
+
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+        async with get_db_conn(self.db_path) as db:
+            if retry_count < max_retries:
+                await db.execute(
+                    "UPDATE proposal_evaluations SET "
+                    "evaluation_status = 'PENDING', "
+                    "retry_count = ?, "
+                    "locked_at = NULL, "
+                    "last_error = ? "
+                    "WHERE id = ?",
+                    (retry_count + 1, error_msg, pe_id)
+                )
+            else:
+                await db.execute(
+                    "UPDATE proposal_evaluations SET "
+                    "evaluation_status = 'ERROR', "
+                    "locked_at = NULL, "
+                    "last_error = ? "
+                    "WHERE id = ?",
+                    (error_msg, pe_id)
+                )
+            await db.commit()
+
+    async def get_stale_evaluating_evaluations(self, cutoff: int) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT * FROM proposal_evaluations WHERE evaluation_status = 'EVALUATING' AND locked_at < ?",
+                (cutoff,)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
+        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries)
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
@@ -1605,8 +1753,10 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.strategy_performance_snapshots: Dict[str, List[Dict[str, Any]]] = {}
         self.strategy_proposals: Dict[int, Dict[str, Any]] = {}
         self.proposal_evaluations: Dict[int, Dict[str, Any]] = {}
+        self.proposal_evaluations_v2: Dict[int, Dict[str, Any]] = {}
         self.universe_guard_states: Dict[str, Dict[str, Any]] = {}
         self.next_proposal_id = 1
+        self.next_eval_id = 1
         self.next_history_id = 1
 
     async def save_portfolio(self, portfolio: Any):
@@ -1662,18 +1812,30 @@ class InMemoryTradingRepository(BaseTradingRepository):
                 filtered.append(e)
         self.system_events = filtered
 
-    async def upsert_universe_guard_state(self, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
-        self.universe_guard_states[symbol] = {
+    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+        key = (exchange, market_type, symbol)
+        existing = self.universe_guard_states.get(key, {})
+        prev_reason = existing.get("blocked_reason")
+        
+        if prev_reason == blocked_reason:
+            new_count = existing.get("blocked_count", 0) + blocked_count
+        else:
+            new_count = blocked_count
+            
+        self.universe_guard_states[key] = {
+            "exchange": exchange,
+            "market_type": market_type,
             "symbol": symbol,
             "status": status,
             "blocked_reason": blocked_reason,
-            "blocked_count": blocked_count,
+            "blocked_count": new_count,
             "last_blocked_at": last_blocked_at,
             "last_event_logged_reason": last_event_logged_reason
         }
 
-    async def get_universe_guard_state(self, symbol: str) -> Optional[Dict[str, Any]]:
-        return self.universe_guard_states.get(symbol)
+    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
+        key = (exchange, market_type, symbol)
+        return self.universe_guard_states.get(key)
 
     async def get_all_universe_guard_states(self) -> List[Dict[str, Any]]:
         return list(self.universe_guard_states.values())
@@ -1815,22 +1977,118 @@ class InMemoryTradingRepository(BaseTradingRepository):
             props = [p for p in props if p["status"] == status]
         return sorted(props, key=lambda x: x.get("created_at", 0), reverse=True)
 
-    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any]) -> int:
+    async def insert_proposal_evaluation(self, eval_data: Dict[str, Any], legacy_compat: bool = False) -> int:
+        horizon_name = eval_data.get("horizon_name")
+        if not horizon_name or str(horizon_name).strip() == "":
+            if not legacy_compat:
+                raise ValueError("horizon_name is required for proposal evaluation")
+            else:
+                horizon_name = "7d"
+                logger.warning(
+                    f"[InMemoryTradingRepository] LEGACY_HORIZON_DEFAULT_APPLIED: "
+                    f"Proposal ID {eval_data.get('proposal_id')} has missing or empty horizon_name. "
+                    f"Automatically defaulted to '7d'."
+                )
+                await self.insert_system_event(
+                    event_type="LEGACY_HORIZON_DEFAULT_APPLIED",
+                    target="proposal_evaluations",
+                    message=f"Proposal ID {eval_data.get('proposal_id')} has missing or empty horizon_name. Defaulted to 7d.",
+                    context=f"proposal_id={eval_data.get('proposal_id')}"
+                )
+
         eval_copy = dict(eval_data)
-        if "horizon_name" not in eval_copy or not eval_copy["horizon_name"]:
-            eval_copy["horizon_name"] = "7d"
+        eval_copy["horizon_name"] = horizon_name
         self.proposal_evaluations[eval_copy["proposal_id"]] = eval_copy
-        return eval_copy["proposal_id"]
+        
+        eval_copy["id"] = self.next_eval_id
+        if "evaluation_status" not in eval_copy:
+            eval_copy["evaluation_status"] = "PENDING"
+        if "retry_count" not in eval_copy:
+            eval_copy["retry_count"] = 0
+        self.proposal_evaluations_v2[self.next_eval_id] = eval_copy
+        self.next_eval_id += 1
+        return eval_copy["id"]
 
     async def get_proposal_evaluation(self, proposal_id: int) -> Optional[Dict[str, Any]]:
         return self.proposal_evaluations.get(proposal_id)
 
     async def get_proposal_evaluations(self, proposal_id: int) -> List[Dict[str, Any]]:
         res = []
-        for v in self.proposal_evaluations.values():
+        for v in self.proposal_evaluations_v2.values():
             if v.get("proposal_id") == proposal_id:
                 res.append(dict(v))
+        if not res:
+            for v in self.proposal_evaluations.values():
+                if v.get("proposal_id") == proposal_id:
+                    res.append(dict(v))
         return res
+
+    async def get_expired_pending_evaluations(self, now: int) -> List[Dict[str, Any]]:
+        res = []
+        for v in self.proposal_evaluations_v2.values():
+            due_at = v.get("due_at", 0)
+            if v.get("evaluation_status") == "PENDING" and due_at <= now:
+                res.append(dict(v))
+        return res
+
+    async def get_pending_evaluations_without_baseline(self, now: int) -> List[Dict[str, Any]]:
+        res = []
+        for v in self.proposal_evaluations_v2.values():
+            due_at = v.get("due_at", 0)
+            hz_val = v.get("horizon_value", 0)
+            if v.get("evaluation_status") == "PENDING" and v.get("baseline_value") is None and (due_at - hz_val) <= now:
+                res.append(dict(v))
+        return res
+
+    async def update_baseline_snapshot(self, pe_id: int, value: float, ts: int, vol: int = 0):
+        v = self.proposal_evaluations_v2.get(pe_id)
+        if v:
+            v["baseline_value"] = value
+            v["baseline_timestamp"] = ts
+            v["baseline_volume"] = vol
+
+    async def claim_evaluation(self, pe_id: int, locked_at: int) -> bool:
+        v = self.proposal_evaluations_v2.get(pe_id)
+        if v and v.get("evaluation_status") == "PENDING":
+            v["evaluation_status"] = "EVALUATING"
+            v["locked_at"] = locked_at
+            return True
+        return False
+
+    async def complete_evaluation(self, pe_id: int, actual_roi: float, roi_div: float, actual_trades: int, trade_div: int, evaluated_at: int):
+        v = self.proposal_evaluations_v2.get(pe_id)
+        if v:
+            v["evaluation_status"] = "COMPLETED"
+            v["evaluated_at"] = evaluated_at
+            v["actual_roi_7d"] = actual_roi
+            v["roi_divergence"] = roi_div
+            v["actual_trade_count_7d"] = actual_trades
+            v["trade_count_divergence"] = trade_div
+            v["locked_at"] = None
+
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+        v = self.proposal_evaluations_v2.get(pe_id)
+        if v:
+            if retry_count < max_retries:
+                v["evaluation_status"] = "PENDING"
+                v["retry_count"] = retry_count + 1
+                v["locked_at"] = None
+                v["last_error"] = error_msg
+            else:
+                v["evaluation_status"] = "ERROR"
+                v["locked_at"] = None
+                v["last_error"] = error_msg
+
+    async def get_stale_evaluating_evaluations(self, cutoff: int) -> List[Dict[str, Any]]:
+        res = []
+        for v in self.proposal_evaluations_v2.values():
+            locked = v.get("locked_at")
+            if v.get("evaluation_status") == "EVALUATING" and locked is not None and locked < cutoff:
+                res.append(dict(v))
+        return res
+
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
+        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries)
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         props = list(self.strategy_proposals.values())

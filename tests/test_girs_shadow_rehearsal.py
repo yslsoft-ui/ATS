@@ -291,11 +291,13 @@ async def test_universe_resource_guards_and_logging_rules():
     service.cooldown_blocked_count += 1
     
     # universe_guard_state & system_events 1회차 기록
-    prev_state = await repo.get_universe_guard_state("BTC")
+    prev_state = await repo.get_universe_guard_state("upbit", "crypto", "BTC")
     assert prev_state is None
     
     await repo.insert_system_event("PROMOTION_COOLDOWN_BLOCKED", "BTC", "재승격 쿨다운 미경과")
     await repo.upsert_universe_guard_state(
+        exchange="upbit",
+        market_type="crypto",
         symbol="BTC",
         status="WATCHED",
         blocked_reason="COOLDOWN",
@@ -308,13 +310,15 @@ async def test_universe_resource_guards_and_logging_rules():
     current_time_s_2 = time.time() + 30
     service.cooldown_blocked_count += 1
     
-    prev_state = await repo.get_universe_guard_state("BTC")
+    prev_state = await repo.get_universe_guard_state("upbit", "crypto", "BTC")
     assert prev_state["blocked_reason"] == "COOLDOWN"
     assert prev_state["blocked_count"] == 1
     
     # 동일 사유이므로 system_events 추가 없음, count 누적만 수행
     new_count = prev_state["blocked_count"] + 1
     await repo.upsert_universe_guard_state(
+        exchange="upbit",
+        market_type="crypto",
         symbol="BTC",
         status="WATCHED",
         blocked_reason="COOLDOWN",
@@ -335,13 +339,15 @@ async def test_universe_resource_guards_and_logging_rules():
     
     current_time_s_3 = time.time() + 60
     
-    prev_state = await repo.get_universe_guard_state("BTC")
+    prev_state = await repo.get_universe_guard_state("upbit", "crypto", "BTC")
     assert prev_state["blocked_reason"] == "COOLDOWN"
     
     # 사유 변경 발생: COOLDOWN -> LIMIT
     service.limit_blocked_count += 1
     await repo.insert_system_event("PROMOTION_LIMIT_BLOCKED", "BTC", "일일 한도 초과")
     await repo.upsert_universe_guard_state(
+        exchange="upbit",
+        market_type="crypto",
         symbol="BTC",
         status="WATCHED",
         blocked_reason="LIMIT",
@@ -355,7 +361,7 @@ async def test_universe_resource_guards_and_logging_rules():
     limit_events = [e for e in events_after if e["event_type"] == "PROMOTION_LIMIT_BLOCKED" and e["target"] == "BTC"]
     assert len(limit_events) == 1, "차단 사유 변경 시 system_events에 로그가 1건 추가되어야 합니다."
     
-    final_state = await repo.get_universe_guard_state("BTC")
+    final_state = await repo.get_universe_guard_state("upbit", "crypto", "BTC")
     assert final_state["blocked_reason"] == "LIMIT"
     assert final_state["blocked_count"] == 1
     

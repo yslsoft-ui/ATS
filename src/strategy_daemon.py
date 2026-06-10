@@ -15,7 +15,7 @@ from src.engine.utils.telemetry import setup_logging
 async def main():
     setup_logging(log_file="ats.log")
     
-    config_path = "config/settings.yaml"
+    config_path = os.getenv("ATS_CONFIG", "config/settings_production.yaml")
     config_manager = ConfigManager(config_path)
     db_path = config_manager.get('system.db_path', 'data/backtest.db')
 
@@ -25,6 +25,33 @@ async def main():
 
     # 리포지토리 생성
     repository = SqliteTradingRepository(db_path=db_path)
+
+    # 설정 로드 이벤트 기록
+    import subprocess
+    import json
+    git_commit = "unknown"
+    try:
+        git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
+    except Exception:
+        pass
+    payload = {
+        "daemon": "strategy_daemon",
+        "pid": os.getpid(),
+        "config_path": config_path,
+        "config_sha256": getattr(config_manager, "config_sha256", "unknown"),
+        "config_modified_at": getattr(config_manager, "last_mtime", 0.0),
+        "git_commit": git_commit,
+        "operation_mode": config_manager.get("system.operation_mode"),
+        "girs_shadow_mode": config_manager.get("system.girs_shadow_mode"),
+        "live_trading_enabled": config_manager.get("system.live_trading_enabled"),
+        "auto_strategy_promotion_enabled": config_manager.get("system.auto_strategy_promotion_enabled")
+    }
+    await repository.insert_system_event(
+        event_type="CONFIG_LOADED",
+        target="strategy_daemon",
+        message=f"Loaded configuration from {config_path}",
+        context=json.dumps(payload)
+    )
 
     # 어댑터들 생성
     event_bus = ZmqEventBus()

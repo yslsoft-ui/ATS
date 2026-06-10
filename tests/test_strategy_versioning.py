@@ -485,7 +485,7 @@ async def test_proposal_evaluation_legacy_without_horizon_name():
         "trade_count_divergence": 1
     }
     
-    eval_id = await repo.insert_proposal_evaluation(eval_data)
+    eval_id = await repo.insert_proposal_evaluation(eval_data, legacy_compat=True)
     assert eval_id > 0
     
     # 기본값인 "7d"로 저장되어 있는지 조회 검증
@@ -944,6 +944,97 @@ async def test_atomic_mutations_and_async_enrichment():
     prop_after_rb = await repo.get_strategy_proposal(proposal_id)
     assert prop_after_rb["status"] == "ROLLED_BACK"
     assert prop_after_rb["rolled_back_at"] == rollback_ts
+
+
+@pytest.mark.asyncio
+async def test_proposal_evaluation_horizon_name_policy():
+    from src.database.connection import get_db_conn
+    repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+    
+    # 1. 테스트용 proposal 등록
+    proposal_data = {
+        "insight_id": None,
+        "proposal_group_id": "group_policy_test",
+        "version": 1,
+        "portfolio_id": "port_policy_test",
+        "strategy_id": "strat_policy_test",
+        "status": "APPLIED",
+        "outcome": "RUNNING",
+        "original_params": {"rsi_window": 14},
+        "proposed_params": {"rsi_window": 16},
+        "metrics": {"roi_7d": 5.0, "trade_count_7d": 2},
+        "mutation_trace": {},
+        "confidence_score": 70,
+        "applied_at": int(time.time() * 1000),
+        "rolled_back_at": None
+    }
+    proposal_id = await repo.insert_strategy_proposal(proposal_data)
+    assert proposal_id > 0
+
+    base_eval_data = {
+        "proposal_id": proposal_id,
+        "predicted_roi_7d": 5.0,
+        "actual_roi_7d": 6.2,
+        "roi_divergence": 1.2,
+        "predicted_trade_count_7d": 2,
+        "actual_trade_count_7d": 3,
+        "trade_count_divergence": 1
+    }
+
+    # ① horizon_name 누락 시 ValueError 발생 (legacy_compat=False)
+    eval_data_missing = dict(base_eval_data)
+    with pytest.raises(ValueError) as excinfo:
+        await repo.insert_proposal_evaluation(eval_data_missing, legacy_compat=False)
+    assert "horizon_name is required" in str(excinfo.value)
+
+    # ② horizon_name 빈 문자열 시 ValueError 발생 (legacy_compat=False)
+    eval_data_empty = dict(base_eval_data)
+    eval_data_empty["horizon_name"] = ""
+    with pytest.raises(ValueError) as excinfo:
+        await repo.insert_proposal_evaluation(eval_data_empty, legacy_compat=False)
+    assert "horizon_name is required" in str(excinfo.value)
+
+    # ③ legacy_compat=True일 때만 7d 보정
+    eval_data_legacy = dict(base_eval_data)
+    # horizon_name 누락
+    eval_id_legacy = await repo.insert_proposal_evaluation(eval_data_legacy, legacy_compat=True)
+    assert eval_id_legacy > 0
+
+    # 보정 확인
+    async with get_db_conn(TEST_DB_PATH) as db:
+        async with db.execute("SELECT horizon_name FROM proposal_evaluations WHERE id = ?", (eval_id_legacy,)) as cur:
+            row = await cur.fetchone()
+            assert row is not None
+            assert row["horizon_name"] == "7d"
+
+    # ④ 보정 시 LEGACY_HORIZON_DEFAULT_APPLIED 이벤트 기록
+    events = await repo.get_system_events(limit=5)
+    matched_event = None
+    for ev in events:
+        if ev["event_type"] == "LEGACY_HORIZON_DEFAULT_APPLIED":
+            matched_event = ev
+            break
+    assert matched_event is not None
+    assert f"Proposal ID {proposal_id}" in matched_event["message"]
+
+    # ⑤ 1d/3d/7d 명시 다중 Horizon 저장 성공
+    eval_data_1d = dict(base_eval_data)
+    eval_data_1d["horizon_name"] = "1d"
+    eval_id_1d = await repo.insert_proposal_evaluation(eval_data_1d, legacy_compat=False)
+    assert eval_id_1d > 0
+
+    eval_data_3d = dict(base_eval_data)
+    eval_data_3d["horizon_name"] = "3d"
+    eval_id_3d = await repo.insert_proposal_evaluation(eval_data_3d, legacy_compat=False)
+    assert eval_id_3d > 0
+
+    eval_data_7d = dict(base_eval_data)
+    eval_data_7d["horizon_name"] = "7d"
+    # unique 제약조건 충돌 방지를 위해, 7d 저장을 위해 proposal을 하나 더 생성
+    proposal_id_2 = await repo.insert_strategy_proposal(proposal_data)
+    eval_data_7d["proposal_id"] = proposal_id_2
+    eval_id_7d = await repo.insert_proposal_evaluation(eval_data_7d, legacy_compat=False)
+    assert eval_id_7d > 0
 
 
 

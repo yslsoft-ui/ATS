@@ -33,6 +33,11 @@ class ConfigManager:
             return False
 
         try:
+            import hashlib
+            with open(self.config_path, 'rb') as f:
+                content_bytes = f.read()
+                sha256_val = hashlib.sha256(content_bytes).hexdigest()
+                
             with open(self.config_path, 'r', encoding='utf-8') as f:
                 new_config = yaml.safe_load(f) or {}
                 
@@ -42,13 +47,41 @@ class ConfigManager:
             # 2. 외부 환경 변수 강제 병합 (기존 SECTION__KEY 방식 유지)
             self._merge_env_vars(new_config)
             
+            # 3. 비상 Fail-Fast 안전 가드 검증
+            sys_cfg = new_config.get('system', {})
+            live_trading = sys_cfg.get('live_trading_enabled')
+            auto_promo = sys_cfg.get('auto_strategy_promotion_enabled')
+            
+            if live_trading is True and auto_promo is True:
+                override = os.getenv("ATS_EXPLICIT_REAL_TRADING_OVERRIDE")
+                if override != "true":
+                    raise ValueError(
+                        "CRITICAL SAFETY GATE VIOLATION: Both live_trading_enabled and "
+                        "auto_strategy_promotion_enabled are enabled in configuration, "
+                        "but the safety override environment variable ATS_EXPLICIT_REAL_TRADING_OVERRIDE='true' is missing! "
+                        "Emergency halt to prevent accidental live trade execution."
+                    )
+            
             self.config = new_config
             self.last_mtime = os.path.getmtime(self.config_path)
+            self.config_sha256 = sha256_val
+            
             logger.info(f"Configuration loaded from {self.config_path}")
+            logger.info(f"Config File SHA256: {self.config_sha256}")
+            logger.info(f"Config File Modified At: {self.last_mtime}")
+            
+            # 4. 운영 프로필 배너 로그 출력
+            if "settings_production.yaml" in self.config_path:
+                logger.info("==================================================================")
+                logger.info("  ATS PROFILE: PRODUCTION (Evaluation Horizon: 1d/3d/7d) ")
+                logger.info("  NOTE: This profile is for production-grade evaluation ONLY. ")
+                logger.info("  Live trading and auto promotion remain disabled for safety. ")
+                logger.info("==================================================================")
+                
             return True
         except Exception as e:
             logger.error(f"Error loading config: {e}")
-            return False
+            raise e
 
     def _substitute_env_vars(self, config: Any):
         """설정 내의 ${VAR_NAME} 형식을 실제 환경 변수 값으로 치환합니다."""

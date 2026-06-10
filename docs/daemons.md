@@ -1,6 +1,6 @@
 # 데몬 시스템 구성 및 구동 흐름 명세 (Daemon Architecture)
 
-이 문서는 실시간 수집 및 트레이딩 시뮬레이션을 담당하는 두 개의 핵심 데몬 프로세스인 `collector_daemon.py`와 `strategy_daemon.py`의 구조, 동작 매커니즘, 라이프사이클 및 프로세스 간 제어 흐름을 명세합니다.
+이 문서는 실시간 수집, 트레이딩 시뮬레이션, 제안 사후 평가 및 데이터 관리를 담당하는 네 개의 핵심 데몬 프로세스인 `collector_daemon.py`, `strategy_daemon.py`, `shadow_eval_daemon.py`, `market_cleanup_daemon.py`의 구조, 동작 매커니즘, 라이프사이클 및 프로세스 간 제어 흐름을 명세합니다.
 
 ---
 
@@ -194,4 +194,65 @@ sequenceDiagram
 - **시스템 정책**:
   - `BaseCollector`는 해당 종목을 구독 목록(`available_symbols`)에는 올리지만, 데이터가 유입되지 않을 때 임의로 더미 가격을 생성하지 않고 실제 체결 틱이 최초 유입될 때까지 영속화 처리를 대기합니다.
   - 프론트엔드 UI는 최신 캐시의 가격 정보가 `None` 또는 `0`일 경우, 차트 영역에 '준비중(Waiting for Data)' 상태를 출력하거나 차트 렌더링을 보류하여 비정상적인 지표 연산(나누기 0 오류 등)으로 인한 스크립트 크래시를 미연에 방지합니다.
+
+---
+
+## 8. 제안 사후 평가 데몬 (Shadow Evaluation Daemon)
+
+`shadow_eval_daemon.py`는 GIRS Shadow Operation의 다중 Horizon 평가 FSM을 비동기로 안전하게 완결시키는 데몬 프로세스입니다.
+
+- **기동 메커니즘**: `DaemonSupervisor`를 상속하여 독립적으로 기동하며, 락 경합 방지용 원자적 분산 선점 기법을 통해 다중 워커 환경에서도 평가의 중복 처리를 완벽히 방어합니다.
+- **동작 루프**:
+  1. **평가 대상 선제적 웜업 및 Baseline 스냅샷 캡처 (`_capture_baselines`)**:
+     - `PENDING` 상태의 평가 항목 중, 평가 개시 시점(`due_at - horizon_value <= now`)에 진입한 대상에 대해 당시의 시작 캔들 종가(`baseline_value`)를 획득하여 선제적으로 데이터베이스에 백업 스냅샷을 구성합니다.
+     - 이를 통해 향후 TTL 정책에 의해 과거 틱/단기 분봉 데이터가 정리(Purge)되더라도, 평가 마기 시점에 시작 가격의 소실 없이 평가를 성공적으로 완수할 수 있는 이중 보호 장치를 달성합니다.
+  2. **만기 평가 마감 처리 루틴 (`_evaluation_loop`)**:
+     - 10초 주기로 만기 시각(`due_at`)을 지난 `PENDING` 상태의 평가들을 조회합니다.
+     - 원자적 UPDATE(`claim_evaluation`) 쿼리를 실행해 먼저 락을 획득(선점)한 워커만 실제 가격 및 거래량 산출 연산을 수행합니다.
+     - 앞서 저장된 `baseline_value`(없을 시 `candles` 조회 fallback)와 현재 마기 종가 간의 가격 변화율을 구하여 실측 ROI를 산출하고, `COMPLETED`로 상태를 마감합니다.
+  3. **Stale Lock 복구 루틴 (`_stale_lock_recovery_loop`)**:
+     - 60초 주기로 `EVALUATING` 상태로 오랜 시간(300초 초과) 머물러 락이 고정된 stale 레코드를 감지합니다.
+     - 재시도 횟수 내에서는 `PENDING` 상태로 원복하여 재시도하게 하며, 재시도 한도를 초과하면 `ERROR` 상태로 최종 복구 격리 처리합니다.
+
+---
+
+## 9. 시장 데이터 관리 데몬 (Market Data Cleanup Daemon)
+
+`market_cleanup_daemon.py`는 데이터베이스의 누적 디스크 용량을 제어하고 런타임 성능을 유지하는 데몬 프로세스입니다.
+
+- **주요 기능**:
+  1. **틱 데이터 청소 (`clean_old_trades`)**:
+     - 72시간(3일)을 초과한 오래된 `trades` 데이터를 청소합니다.
+     - 한 번에 대량의 행을 `DELETE`할 시 발생하는 SQLite 데이터베이스의 Exclusive Lock 독점을 막기 위해, 최대 50,000건씩 분할 청크로 삭제하며 삭제 주기 사이에 `asyncio.sleep(0.1)`의 CPU 양보 시간을 갖습니다.
+  2. **오래된 캔들 다운샘플링 (`_downsample_old_candles`)**:
+     - 30일을 초과한 1분봉 등의 세밀한 단기 분봉 `candles` 데이터를 지우기 전에, 1시간봉(`interval = 3600`) 단위로 다운샘플링 취합을 수행하여 영구적인 aggregate 분석용으로 합산 보존합니다.
+     - 다운샘플링 시에는 그룹 내 최초의 시가(open), 최후의 종가(close), 기간 내 최고가(high) 및 최저가(low)와 총 누적 거래량(volume)을 정확히 산출하여 덮어씁니다.
+  3. **단기 분봉 청소 (`clean_old_candles`)**:
+     - 30일을 초과한 데이터 중 `interval < 3600`(1분봉 등)에 해당하는 세밀한 캔들 데이터만을 50,000건 청크 단위로 안전하게 삭제합니다. 1시간봉 이상의 상위 주기는 그대로 보존되어 장기 시세 분석에 사용됩니다.
+- **안전 가드 (Safety Guard)**:
+  - 아직 평가되지 않은 `PENDING` 상태의 제안들의 평가 데이터(틱 및 캔들)가 지워지는 것을 방지하기 위해, 데이터 정리의 임계 시각을 계산할 때 현재 활성 `PENDING` 제안 중 가장 과거의 시점(`due_at - horizon_value` 최소치)을 계산하여 삭제 임계 시각이 이를 절대 초과할 수 없도록 자동 보정 및 보호합니다.
+  - 정리 작업이 한 루프 돌 때마다 `system_events`에 `MARKET_DATA_CLEANUP_SUMMARY` 요약 감사 로그를 JSON 형식으로 1건 적재하여 용량 관리 현황을 투명하게 보고합니다.
+
+---
+
+## 10. 설정 프로필 분리 명세 (Configuration Profiles)
+
+안정적인 리허설 검증과 실제 운영 환경의 분리를 위해 설정 파일을 프로필(Profile) 단위로 분리하여 관리합니다.
+
+### 10.1. 프로필 종류 및 상세
+- **[settings_production.yaml](file:///home/simon/ATS/config/settings_production.yaml) (운영 프로필)**:
+  - 다중 Horizon 사후 평가의 실제 운영 환경 스펙인 **1d/3d/7d Horizon**을 기본적으로 구성합니다.
+  - **주의 및 안전 조건**: `live_trading_enabled = false` 및 `auto_strategy_promotion_enabled = false`는 항상 `false`로 유지됩니다. 즉, **운영(production) 프로필은 실거래를 활성화하는 것이 아니며**, 오직 운영 스펙인 `1d/3d/7d` Horizon 평가 기준을 적용하기 위한 설정 파일입니다.
+- **[settings_rehearsal.yaml](file:///home/simon/ATS/config/settings_rehearsal.yaml) (리허설/테스트 프로필)**:
+  - 데몬 가동 및 2시간 Soak Test 등 가상 시간 검증을 위해 단기 검증용 **10m/30m/2h Horizon**을 기본 설정합니다.
+- **[settings.yaml](file:///home/simon/ATS/config/settings.yaml) (Deprecated 호환 프로필)**:
+  - 1차 이전 단계의 설정 하위 호환성을 위해 유지되는 임시 deprecated 파일입니다. 신규 가동 시에는 더 이상 참조하지 않을 것을 권장합니다.
+
+### 10.2. 기동 및 전환 흐름
+- 모든 데몬(`collector_daemon.py`, `strategy_daemon.py`, `shadow_eval_daemon.py`, `market_cleanup_daemon.py`) 및 헬퍼 유틸들은 실행 시 시스템 환경변수 `ATS_CONFIG`를 동적으로 참조합니다.
+- **`run.sh` (운영 기동)**:
+  - 기동 시 환경변수 `ATS_CONFIG`가 선언되어 있지 않다면 기본값으로 `config/settings_production.yaml`을 적용해 기동합니다.
+- **`scratch/run_rehearsal.sh` (리허설 기동)**:
+  - 기동 시 `export ATS_CONFIG="config/settings_rehearsal.yaml"`을 강제 선언 및 주입하여 리허설 전용 설정에 맞춰 안전 기동하도록 제어합니다.
+
 

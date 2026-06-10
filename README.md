@@ -47,7 +47,7 @@ pip install -r requirements.txt
 | :--- | :--- | :--- |
 | **도메인 용어집 (Domain Glossary)** | [CONTEXT.md](file:///home/simon/ATS/CONTEXT.md) | 프로젝트 내 주요 용어 정의 및 핵심 비즈니스 개념 관계도 |
 | **시스템 아키텍처 명세** | [docs/architecture.md](file:///home/simon/ATS/docs/architecture.md) | ZMQ IPC, 웹소켓 브로드캐스트 거시적(Macro)/미시적(Micro) 다이어그램 |
-| **데이터베이스 명세** | [docs/database.md](file:///home/simon/ATS/docs/database.md) | SQLite 3 테이블 스키마, 기본값, 외래키 제약조건 및 복합 인덱스 구성 |
+| **데이터베이스 명세** | [docs/database.md](file:///home/simon/ATS/docs/database.md) | SQLite 3 테이블 스키마, 기본값, 외래키 제약조건, 복합 인덱스 및 Compact 정책 |
 | **API 및 웹소켓 프로토콜 명세** | [docs/api.md](file:///home/simon/ATS/docs/api.md) | 백엔드 FastAPI REST API 엔드포인트 및 실시간 구독 웹소켓 JSON 포맷 |
 | **데몬 시스템 구성 명세** | [docs/daemons.md](file:///home/simon/ATS/docs/daemons.md) | 수집기 및 전략 엔진 데몬의 구동 흐름, ZMQ IPC 제어 프로토콜 및 Graceful Shutdown |
 | **프론트엔드 아키텍처 명세** | [docs/frontend.md](file:///home/simon/ATS/docs/frontend.md) | Vanilla JS 기반 라우팅(router), 상태(store), 실시간 Lightweight Charts 차트 구조 |
