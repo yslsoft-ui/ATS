@@ -236,3 +236,8 @@ if (typeof ViewRouter !== 'undefined') {
     });
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initRankingControls === 'function') initRankingControls();
+});
+
+

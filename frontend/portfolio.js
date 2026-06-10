@@ -2,12 +2,20 @@
  * Upbit Terminal 포트폴리오(Portfolio) 및 실자산 관리 모듈 (Controller)
  */
 
+let lastPortfolioFetchedAt = null;
+let lastPortfolioListFetchedAt = null;
+
 /**
  * 실시간 모의투자 및 과거 백테스트 목록 전체를 불러와 좌측 통합 이력 리스트 패널에 바인딩합니다.
  */
-async function loadPortfolioHistoryList() {
+async function loadPortfolioHistoryList(force = false) {
     const tbody = document.getElementById('portfolio-history-list-tbody');
     if (!tbody) return;
+
+    if (!force && lastPortfolioListFetchedAt && (Date.now() - lastPortfolioListFetchedAt.getTime() < 3000)) {
+        return;
+    }
+
 
     try {
         const [portfolios, backtestHistory] = await Promise.all([
@@ -114,7 +122,7 @@ async function loadPortfolioHistoryList() {
                 document.querySelectorAll('#portfolio-history-list-tbody tr').forEach(r => r.style.background = '');
                 tr.style.background = 'rgba(99, 102, 241, 0.1)';
                 
-                loadPortfolio();
+                loadPortfolio(true);
             };
 
             // 삭제 버튼: 진행중(simulation)이 아닐 때만 노출
@@ -141,7 +149,7 @@ async function loadPortfolioHistoryList() {
         });
 
         updateSessionControlUI();
-
+        lastPortfolioListFetchedAt = new Date();
     } catch (e) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:15px; color:#EF4444;">이력을 불러오지 못했습니다.</td></tr>';
         console.error("Failed to load portfolio history list", e);
@@ -169,8 +177,8 @@ async function deletePortfolioHistory(portfolioId) {
             if (state.currentPortfolioId === portfolioId) {
                 state.currentPortfolioId = null;
             }
-            await loadPortfolioHistoryList();
-            await loadPortfolio();
+            await loadPortfolioHistoryList(true);
+            await loadPortfolio(true);
         } else {
             showAlert(res.message || "삭제 실패", "error");
         }
@@ -199,8 +207,8 @@ async function clearAllPortfolioHistory() {
             }
 
             state.currentPortfolioId = null;
-            await loadPortfolioHistoryList();
-            await loadPortfolio();
+            await loadPortfolioHistoryList(true);
+            await loadPortfolio(true);
         } else {
             showAlert(res.message || "삭제 실패", "error");
         }
@@ -213,7 +221,10 @@ async function clearAllPortfolioHistory() {
 /**
  * 특정 포트폴리오(실시간 모의투자 또는 과거 백테스트 이력)의 상태를 불러와 화면에 업데이트합니다.
  */
-async function loadPortfolio() {
+async function loadPortfolio(force = false) {
+    if (!force && lastPortfolioFetchedAt && (Date.now() - lastPortfolioFetchedAt.getTime() < 3000)) {
+        return;
+    }
     try {
         let portfolioId = state.currentPortfolioId;
         if (!portfolioId) {
@@ -445,7 +456,7 @@ async function loadPortfolio() {
         }
 
         updateSessionControlUI();
-
+        lastPortfolioFetchedAt = new Date();
     } catch (e) {
         console.error("Portfolio load failed", e);
     }
@@ -485,7 +496,7 @@ async function executePanicSell() {
                     btnTrading.className = 'btn primary';
                 }
             }
-            await loadPortfolio();
+            await loadPortfolio(true);
         } else {
             showAlert(result.message || "청산 실패", "error");
         }
@@ -1457,8 +1468,8 @@ async function submitStrategyRun() {
                 showAlert(`백테스트 완료: ROI ${res.summary.roi}%`, "success");
                 state.currentPortfolioId = res.portfolio_id;
                 closeStrategyRunModal();
-                await loadPortfolioHistoryList();
-                await loadPortfolio();
+                await loadPortfolioHistoryList(true);
+                await loadPortfolio(true);
             } else {
                 showAlert(res.message || "백테스트 실패", "error");
             }
@@ -1468,8 +1479,8 @@ async function submitStrategyRun() {
                 showAlert(`실시간 모의투자가 가동되었습니다.`, "success");
                 state.currentPortfolioId = res.portfolio_id;
                 closeStrategyRunModal();
-                await loadPortfolioHistoryList();
-                await loadPortfolio();
+                await loadPortfolioHistoryList(true);
+                await loadPortfolio(true);
             } else {
                 showAlert(res.message || "모의투자 기동 실패", "error");
             }
@@ -1527,8 +1538,8 @@ async function endSimulationSession(portfolioId) {
         const res = await APIClient.endPortfolioSession(portfolioId);
         if (res.status === 'success') {
             showAlert("모의투자 세션이 성공적으로 마감되었습니다.", "success");
-            await loadPortfolioHistoryList();
-            await loadPortfolio();
+            await loadPortfolioHistoryList(true);
+            await loadPortfolio(true);
         } else {
             showAlert(res.message || "종료 실패", "error");
         }

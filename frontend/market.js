@@ -123,9 +123,16 @@ function renderMarketTable(data) {
 /**
  * 서버에서 전체 마켓 데이터를 비동기로 로드하고 테이블에 렌더링합니다.
  */
-async function loadMarket() {
+async function loadMarket(force = false) {
     const tbody = document.getElementById('market-tbody');
     if (!tbody) return;
+
+    // 5초 캐시 가드 (새로고침 버튼 클릭이나 강제 갱신이 아니면 캐시 재사용)
+    if (!force && lastMarketFetchedAt && (Date.now() - lastMarketFetchedAt.getTime() < 5000)) {
+        renderMarketTable(marketData);
+        return;
+    }
+
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;">&#x23F3; 데이터 로딩 중...</td></tr>';
     try {
         const res = await APIClient.fetchMarketData();
@@ -164,6 +171,7 @@ async function loadMarket() {
         tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">&#x26A0;&#xFE0F; 데이터 로드 실패</td></tr>';
     }
 }
+
 
 
 /**
@@ -219,6 +227,7 @@ function initMarketTabs() {
 
 // 마켓 검색 및 수동 새로고침 실시간 이벤트 리스너 정의
 document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initMarketTabs === 'function') initMarketTabs();
     const searchInput = document.getElementById('market-search');
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
@@ -237,8 +246,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const refreshBtn = document.getElementById('btn-market-refresh');
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadMarket);
+        refreshBtn.addEventListener('click', () => loadMarket(true));
     }
+
 });
 
 

@@ -563,4 +563,11 @@ if (typeof ViewRouter !== 'undefined') {
     });
 }
 
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initCollectorControls === 'function') initCollectorControls();
+    if (typeof initDatabaseControls === 'function') initDatabaseControls();
+    if (typeof initAssetSyncControls === 'function') initAssetSyncControls();
+});
+
+
 

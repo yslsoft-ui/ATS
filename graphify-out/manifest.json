@@ -1,7 +1,7 @@
 {
   "/home/simon/ATS/run.sh": {
-    "mtime": 1781100546.0145466,
-    "ast_hash": "aa7af38150bec733a93b12d5ac93c769",
+    "mtime": 1781129434.535673,
+    "ast_hash": "9011a630fbb273e26bbffe713e5f114c",
     "semantic_hash": ""
   },
   "/home/simon/ATS/run_backtest_sample.py": {
@@ -395,8 +395,8 @@
     "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1781102082.8449907,
-    "ast_hash": "2572d388095bec324e602e117ea258a4",
+    "mtime": 1781103690.002871,
+    "ast_hash": "ec67effa1309f7b22a409da168a4414b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/backtest.js": {
@@ -405,13 +405,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/settings.js": {
-    "mtime": 1780887294.5181062,
-    "ast_hash": "b6a7496e688fa7eabdc116b68c97e68b",
+    "mtime": 1781103663.1816006,
+    "ast_hash": "d6543080b2cef05121622379e833106f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/strategy.js": {
-    "mtime": 1781094635.157405,
-    "ast_hash": "706c4fc1fa415c5a08e3af7a3c9b91f2",
+    "mtime": 1781102997.8301263,
+    "ast_hash": "887696de259b3e25d49f4b5a315cc0e1",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/chart.js": {
@@ -425,8 +425,8 @@
     "semantic_hash": "829486a891927a0de4bb398e21b9e921"
   },
   "/home/simon/ATS/frontend/restored-view.js": {
-    "mtime": 1780905927.1731129,
-    "ast_hash": "f9ae35ab90f2e714c7aa6d46f0315514",
+    "mtime": 1781103006.9345567,
+    "ast_hash": "774d5283b62fa59937343cbccf7bbbde",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/utils.js": {
@@ -445,18 +445,18 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/market.js": {
-    "mtime": 1779954468.5861444,
-    "ast_hash": "ac60857874bbf6744756c0d095f8ef08",
+    "mtime": 1781103657.2533195,
+    "ast_hash": "ca5d25607cd6856ba8fcce6d760f61f0",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/ranking.js": {
-    "mtime": 1780059531.713119,
-    "ast_hash": "60066f624081282c70de6b2d11c7667b",
+    "mtime": 1781103669.1218824,
+    "ast_hash": "35bb44cc3bb6fbe640871950c57fff70",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1780320862.648437,
-    "ast_hash": "95e7114f34e4ac58a382dee77d33cbe9",
+    "mtime": 1781103650.396995,
+    "ast_hash": "efd8b5b662ce99b149cefcb0fb7bbd5b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
@@ -470,14 +470,14 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
-    "mtime": 1779183996.0,
-    "ast_hash": "3a8160f8e09bf858e0e7837419f9bcdf",
-    "semantic_hash": "3a8160f8e09bf858e0e7837419f9bcdf"
+    "mtime": 1781102951.511937,
+    "ast_hash": "c1afa7878247d31d93cc13243feed76c",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/alerts.js": {
-    "mtime": 1779192798.0,
-    "ast_hash": "f831e01c67a83053f057ded95ad8aef2",
-    "semantic_hash": "f831e01c67a83053f057ded95ad8aef2"
+    "mtime": 1781102959.1963,
+    "ast_hash": "94a32ff443d53945df2dc376a9335687",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/src/__init__.py": {
     "mtime": 1778241512.0,
@@ -1170,9 +1170,9 @@
     "semantic_hash": "729d8b22a58878df1f03ae603ae9a38f"
   },
   "/home/simon/ATS/scratch/code-stabilization/issue.md": {
-    "mtime": 1778815382.0,
-    "ast_hash": "0265ed25f5700f774a0b9a1e752ae08f",
-    "semantic_hash": "0265ed25f5700f774a0b9a1e752ae08f"
+    "mtime": 1781104227.0762722,
+    "ast_hash": "c96f9508d7bbc21c563ee45f80412746",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
     "mtime": 1781099386.6894262,
@@ -1185,8 +1185,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_report.md": {
-    "mtime": 1781102509.0630066,
-    "ast_hash": "fdae549978e7ff8e776e55190ea441fc",
+    "mtime": 1781127900.6796768,
+    "ast_hash": "9ef65845cb3ba089ea76870fefe99add",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_soak_report.md": {

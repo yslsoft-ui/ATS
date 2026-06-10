@@ -426,18 +426,6 @@ function exitExplorerMode() {
 }
 
 
-
-// (DOM 요소 참조 및 뷰 관리는 router.js의 ViewRouter가 전담합니다)
-
-
-
-// --- 수집기 및 데이터베이스 관리 로직은 settings.js로 이관되었습니다 ---
-
-
-
-// --- 전략 관리 로직 ---
-// --- 전략 관리 로직은 strategy.js로 이관되었습니다 ---
-
 // --- 공통 상태 리로더 ---
 async function loadRecentTrades() {
     try {
@@ -576,7 +564,6 @@ function initTradingControls() {
     });
 }
 
-// --- 수집기, 데이터베이스, 복원캔들 제어 로직은 각 모듈로 이관되었습니다 ---
 
 async function init() {
     state.currentExchange = Store.get('currentExchange') || 'upbit';
@@ -587,22 +574,15 @@ async function init() {
     await loadSymbols();
     await loadHistory();
     await loadRecentTrades();
-    loadMarket();
-    loadPortfolioList();
-    loadPortfolio();
 
     DataStream.initialize(processTick);
     updateCollectorStatus();
-    initMarketTabs();
 
-    // 뷰 네비게이션 및 컨트롤 바인딩 초기화
+    // 뷰 네비게이션 및 메인 트레이딩 바인딩 초기화
     initViewNavigation();
     initTradingControls();
-    initCollectorControls();
-    initDatabaseControls();
-    initAssetSyncControls();
-    initRankingControls();
 }
+
 
 // --- 앱 전체 초기화 진입점 ---
 document.addEventListener('DOMContentLoaded', () => {
