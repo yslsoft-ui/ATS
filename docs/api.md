@@ -107,7 +107,36 @@
   - **설명**: 현재 구동되고 있는 활성 시뮬레이션 포트폴리오 정보 목록을 조회합니다.
 
 - **`GET /api/portfolio?portfolio_id={id}`**
-  - **설명**: 특정 포트폴리오의 상세 상태, 거래소별 잔고(`portfolio_exchanges`) 및 보유 종목(`positions`) 목록을 반환합니다.
+  - **설명**: 특정 포트폴리오의 상세 상태, 거래소별 잔고(`portfolio_exchanges`), 분리 격리된 거래소별 현금(`exchange_cash`) 및 보유 종목(`positions`) 목록을 반환합니다. 실거래(`live`) 포트폴리오의 경우 실제 거래소 API(Upbit 및 KIS)와 실시간 연동하여 지갑 잔고와 평가금액을 동기화하여 가져옵니다.
+  - **응답 (JSON)**:
+    ```json
+    {
+      "status": "success",
+      "id": "live",
+      "portfolio_id": "live",
+      "name": "실계좌 자동매매",
+      "initial_cash": 0.0,
+      "cash": 2063.0,
+      "total_value": 18883.0,
+      "roi": 0.0,
+      "type": "live",
+      "exchange_cash": {
+        "upbit": 0,
+        "kis": 2063
+      },
+      "positions": [
+        {
+          "exchange": "kis",
+          "symbol": "138930",
+          "quantity": 1.0,
+          "avg_price": 6430.0,
+          "current_price": 16820.0,
+          "korean_name": "BNK금융지주",
+          "updated_at": 1718020000.0
+        }
+      ]
+    }
+    ```
 
 - **`POST /api/portfolio/start`**
   - **설명**: 새로운 실시간 모의투자 시뮬레이션을 생성하고 동작을 시작합니다.

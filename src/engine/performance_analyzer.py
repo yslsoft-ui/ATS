@@ -220,6 +220,7 @@ class PerformanceAnalyzer:
             "applied_strategies": applied_strategies,
             "exchanges": exchanges_summary,
             "exchange_initial_cash": ex_initial_cash_map,
+            "exchange_cash": exchange_cash_map,
             "summary": {
                 "initial_cash": total_initial,
                 "final_value": total_value,

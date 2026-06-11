@@ -370,6 +370,8 @@ class PortfolioManager:
         except Exception as e:
             logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real orders: {e}")
             
+        new_positions = {}
+
         try:
             token = _create_upbit_jwt(access_key, secret_key)
             headers = {
@@ -379,10 +381,10 @@ class PortfolioManager:
             
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{upbit_v1_url}/accounts", headers=headers) as resp:
-                    if resp.status != 200:
-                        logger.error(f"sync_live_portfolio_from_exchange: API error {resp.status}")
-                        return
-                    accounts = await resp.json()
+                     if resp.status != 200:
+                         logger.error(f"sync_live_portfolio_from_exchange: API error {resp.status}")
+                         return
+                     accounts = await resp.json()
 
                 # 업비트 전체 마켓 리스트 및 BTC 원화 가격 조회
                 all_markets = []
@@ -400,7 +402,6 @@ class PortfolioManager:
                         if tickers:
                             btc_krw_price = float(tickers[0]['trade_price'])
                     
-            new_positions = {}
             for a in accounts:
                 currency = a['currency']
                 balance = float(a['balance']) + float(a['locked'])
@@ -425,7 +426,6 @@ class PortfolioManager:
                         avg_price=avg_buy_price,
                         updated_at=time.time()
                     )
-            portfolio.positions = new_positions
             
             # 최초 동기화 시 현재의 총자산 가치로 초기 자본을 계산하되, 상장폐지/거래불가 종목은 제외합니다.
             if portfolio.initial_cash <= 0.0:
@@ -444,10 +444,114 @@ class PortfolioManager:
             # 실거래(live) 포트폴리오의 초기 투자금을 0원으로 강제 고정합니다.
             portfolio.initial_cash = 0.0
             
-            await self.save_to_db('live')
-            
         except Exception as e:
-            logger.error(f"sync_live_portfolio_from_exchange: Exception occurred: {e}")
+            logger.error(f"sync_live_portfolio_from_exchange (Upbit): Exception occurred: {e}")
+
+        # KIS 실거래 잔고 동기화
+        kis_config = self.config_manager.get('exchanges.kis', {})
+        kis_enabled = kis_config.get('enabled', False)
+        
+        kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+        kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+        kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+        
+        if kis_enabled and kis_app_key and kis_app_secret and kis_account_no:
+            try:
+                from src.engine.credentials import CredentialProvider
+                cred_provider = CredentialProvider(self.config_manager.config)
+                kis_token = await cred_provider.get_kis_access_token()
+                
+                if kis_token:
+                    kis_account_no = str(kis_account_no).strip()
+                    if '-' in kis_account_no:
+                        cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+                    else:
+                        cano = kis_account_no[:8]
+                        acnt_prdt_cd = kis_account_no[8:]
+                        
+                    if not acnt_prdt_cd:
+                        acnt_prdt_cd = "01"
+                        
+                    kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+                    
+                    headers = {
+                        "content-type": "application/json",
+                        "authorization": f"Bearer {kis_token}",
+                        "appkey": kis_app_key,
+                        "appsecret": kis_app_secret,
+                        "tr_id": "TTTC8434R"
+                    }
+                    
+                    params = {
+                        "CANO": cano,
+                        "ACNT_PRDT_CD": acnt_prdt_cd,
+                        "AFHR_FLPR_YN": "N",
+                        "OFL_YN": "",
+                        "INQR_DVSN": "02",
+                        "UNPR_DVSN": "01",
+                        "FUND_STTL_ICLD_YN": "N",
+                        "FNCG_AMT_AUTO_RDPT_YN": "N",
+                        "PRCS_DVSN": "01",
+                        "CTX_AREA_FK100": "",
+                        "CTX_AREA_NK100": ""
+                    }
+                    
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                if data.get('rt_cd') == '0':
+                                    output2 = data.get('output2', [])
+                                    if output2:
+                                        kis_cash = int(float(output2[0].get('dnca_tot_amt', 0)))
+                                        if portfolio.exchange_cash is None:
+                                            portfolio.exchange_cash = {}
+                                        portfolio.exchange_cash['kis'] = kis_cash
+                                        
+                                    output1 = data.get('output1', [])
+                                    for item in output1:
+                                        qty = float(item.get('hldg_qty', 0))
+                                        if qty <= 0:
+                                            continue
+                                        pdno = item.get('pdno', '').strip().lstrip('A')
+                                        avg_price = float(item.get('pchs_avg_pric', 0))
+                                        current_price = float(item.get('prpr', 0))
+                                        
+                                        # 실시간 메모리 캐시 갱신
+                                        if system and hasattr(system, 'latest_prices'):
+                                            system.latest_prices[f"kis:{pdno}"] = {
+                                                "trade_price": current_price,
+                                                "timestamp": time.time()
+                                            }
+                                        
+                                        pos_key = ('kis', pdno)
+                                        new_positions[pos_key] = Position(
+                                            exchange='kis',
+                                            symbol=pdno,
+                                            quantity=qty,
+                                            avg_price=avg_price,
+                                            updated_at=time.time()
+                                        )
+                                    logger.info("sync_live_portfolio_from_exchange: KIS portfolio sync complete.")
+                                else:
+                                    logger.error(f"sync_live_portfolio_from_exchange: KIS API error: {data.get('msg1')}")
+                            else:
+                                err_txt = await resp.text()
+                                logger.error(f"sync_live_portfolio_from_exchange: KIS API status {resp.status} - {err_txt}")
+                else:
+                    logger.error("sync_live_portfolio_from_exchange: Failed to acquire KIS token.")
+            except Exception as e:
+                logger.error(f"sync_live_portfolio_from_exchange: KIS sync failed: {e}")
+
+        # 최종 통합 갱신 및 DB 저장
+        portfolio.positions = new_positions
+        if portfolio.exchange_cash:
+            portfolio.cash = sum(portfolio.exchange_cash.values())
+            
+        try:
+            await self.save_to_db('live')
+        except Exception as e:
+            logger.error(f"sync_live_portfolio_from_exchange: Failed to save to DB: {e}")
 
     def get_active_simulation_portfolio(self) -> Optional[Portfolio]:
         """현재 활성화된(즉 type이 'simulation'인) 가장 최근의 모의투자 포트폴리오 객체를 반환합니다."""
@@ -782,8 +886,6 @@ class PortfolioManager:
 
             if ex_key.lower() == 'upbit':
                 upbit_symbols.append(sym)
-            else:
-                current_prices[sym] = pos.avg_price  # 4순위 기본 폴백
 
         # 3순위: 로컬 DB candles 조회 (업비트가 아니거나 메모리 캐시에 없는 종목 대상)
         from src.database.connection import get_db_conn
