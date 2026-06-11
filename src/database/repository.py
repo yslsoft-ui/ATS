@@ -836,6 +836,10 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def get_all_strategy_versions(self) -> List[Dict[str, Any]]:
+        pass
+
+    @abc.abstractmethod
     async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
         pass
 
@@ -1363,6 +1367,19 @@ class SqliteTradingRepository(BaseTradingRepository):
                     ''', ('DAEMON_CRASHED', target, message, crash_ts))
                     await db.commit()
                     logger.warning(f"[{target}] 이전 프로세스의 비정상 종료 감지 및 DAEMON_CRASHED 보완 이력 적재 완료.")
+
+    async def get_all_strategy_versions(self) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute("SELECT * FROM strategy_versions") as cursor:
+                rows = await cursor.fetchall()
+                results = []
+                for row in rows:
+                    import json
+                    res = dict(row)
+                    res["current_params"] = json.loads(res["current_params"])
+                    res["applied_at"] = normalize_timestamp(res.get("applied_at"))
+                    results.append(res)
+                return results
 
     async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
@@ -2305,6 +2322,18 @@ class InMemoryTradingRepository(BaseTradingRepository):
                     "message": message,
                     "timestamp": crash_ts
                 })
+
+    async def get_all_strategy_versions(self) -> List[Dict[str, Any]]:
+        results = []
+        for s_id, ver in self.strategy_versions.items():
+            results.append({
+                "strategy_id": s_id,
+                "current_version_id": ver["current_version_id"],
+                "current_params": ver["current_params"],
+                "rollback_source_version": ver["rollback_source_version"],
+                "applied_at": ver["applied_at"]
+            })
+        return results
 
     async def get_strategy_version(self, strategy_id: str) -> Optional[Dict[str, Any]]:
         return self.strategy_versions.get(strategy_id)

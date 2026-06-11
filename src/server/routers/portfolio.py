@@ -17,7 +17,7 @@ router = APIRouter()
 
 class StartPortfolioRequest(BaseModel):
     initial_cash: Any
-    strategies: Dict[str, Any]
+    strategies: Optional[Dict[str, Any]] = None
 
 @router.get("/api/portfolios")
 async def list_portfolios(request: Request):

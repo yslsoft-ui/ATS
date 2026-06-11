@@ -290,6 +290,12 @@ Pareto 랭킹 연산의 병목 및 진동을 차단하기 위해, 국면 확률 
 
 **Counterfactual Simulation (동일 기간 대조 전략 시뮬레이션)**: 실제 자산 매매가 가동된 기간과 동일한 시점에 가상의 다른 전략이나 매개변수 조합을 대입하여 수익률 곡선의 변화를 비교하고, 챔피언 전략을 선별하기 위한 실시간 대조 시뮬레이션으로, 시스템 최종 비전(ADR 0008)의 핵심 구성요소입니다.
 
+**Auto-strategy Selection (자동 모의투자 전략 매핑)**:
+모의투자(실계좌) 포트폴리오 구동 시작 시 사용자가 적용할 전략을 별도로 선택하지 않았을 경우, DB 내에 존재하는 최신 챔피언 전략(`strategy_versions`)을 탐색하여 자동으로 기용하는 시스템 흐름. 만약 DB 내에 유효한 챔피언 전략 정보가 전무하다면, 사전에 약속된 기본 템플릿(Fallback Strategy)을 조립하여 모의투자를 가동합니다.
+
+**Exchange-specific Strategy Overrides (거래소별 전략 동적 오버라이드 및 병합)**:
+각 거래소(`Exchange`)의 규격과 자산 특성(예: 수수료율, 거래단위, 특정 interval 제약 등)에 맞추어 맞춤형 전략 운용이 가능하도록, 설정 파일(`settings.yaml`)의 `overrides.[exchange_id]` 영역에 명시된 전략 활성화 여부(`enabled`) 및 파라미터(`params`) 구성을 `reload_trade_engines` 시점에 실시간 포트폴리오에 동적으로 병합 및 오버라이드하여 적용하는 기능.
+
 ## Flagged ambiguities
 
 - "Trade"는 업비트 API에서 **Tick**을 의미하지만, 시스템 내에서는 **Trade Simulation**의 실행 단위(거래)와 혼동될 수 있으므로 개별 데이터는 **Tick**으로 통일합니다.

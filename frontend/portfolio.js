@@ -406,22 +406,6 @@ async function loadPortfolio(force = false) {
                 document.getElementById('port-duration').innerText = (data.duration || 0) + "초";
             }
 
-            if (appliedStrategies && data.applied_strategies) {
-                appliedStrategies.style.display = 'block';
-                let appliedHtml = '<strong>적용된 전략 정보:</strong><br>';
-                
-                const strategies = Array.isArray(data.applied_strategies)
-                    ? data.applied_strategies
-                    : Object.entries(data.applied_strategies).map(([name, params]) => ({ name, params }));
-
-                strategies.forEach(s => {
-                    const params = s.params || {};
-                    const paramStr = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(', ');
-                    appliedHtml += `<span class="ctx-badge" style="margin-top: 5px; display: inline-block;">${s.name} (${paramStr})</span> `;
-                });
-                appliedStrategies.innerHTML = appliedHtml;
-            }
-
             if (backtestAnalysisPanels) backtestAnalysisPanels.style.display = 'flex';
 
             renderBacktestPerformance(data);
@@ -442,11 +426,29 @@ async function loadPortfolio(force = false) {
             }
 
             if (backtestSummary) backtestSummary.style.display = 'none';
-            if (appliedStrategies) appliedStrategies.style.display = 'none';
 
             if (backtestAnalysisPanels) backtestAnalysisPanels.style.display = 'flex';
             
             renderBacktestPerformance(data);
+        }
+
+        // 적용된 전략 정보 표시 (백테스트 및 실시간/실계좌 세션 공통 적용)
+        if (appliedStrategies && data.applied_strategies && Object.keys(data.applied_strategies).length > 0) {
+            appliedStrategies.style.display = 'block';
+            let appliedHtml = '<strong>적용된 전략 정보:</strong><br>';
+            
+            const strategies = Array.isArray(data.applied_strategies)
+                ? data.applied_strategies
+                : Object.entries(data.applied_strategies).map(([name, params]) => ({ name, params }));
+
+            strategies.forEach(s => {
+                const params = s.params || {};
+                const paramStr = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(', ');
+                appliedHtml += `<span class="ctx-badge" style="margin-top: 5px; display: inline-block;">${s.name} (${paramStr})</span> `;
+            });
+            appliedStrategies.innerHTML = appliedHtml;
+        } else if (appliedStrategies) {
+            appliedStrategies.style.display = 'none';
         }
 
         // 요약 정보 업데이트

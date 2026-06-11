@@ -219,9 +219,37 @@ class UserCommandDispatcher:
 
     async def _handle_portfolio_start(self, command_id: str, payload: Dict[str, Any]):
         initial_cash = payload.get("initial_cash")
-        strategies = payload.get("strategies", {})
+        strategies = payload.get("strategies")
         if initial_cash is None:
             raise ValueError("initial_cash is required to start portfolio session")
+
+        # strategies가 생략되었거나 비어있는 경우 DB 챔피언 전략 자동 로드
+        if not strategies:
+            strategies = {}
+            try:
+                db_strategies = await self.repository.get_all_strategy_versions()
+                for s_ver in db_strategies:
+                    s_id = s_ver["strategy_id"]
+                    # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크
+                    s_config = self.config_manager.get(f"strategies.{s_id.lower()}")
+                    if s_config and s_config.get("enabled", False):
+                        strategies[s_id] = {
+                            "enabled": True,
+                            "params": s_ver["current_params"]
+                        }
+            except Exception as e:
+                logger.error(f"[Dispatcher] DB 챔피언 전략 로드 중 예외 발생: {e}")
+
+            # DB에 가용한 챔피언 전략이 없는 경우 settings.yaml의 기본 활성 전략을 활용
+            if not strategies:
+                logger.warning("[Dispatcher] DB 챔피언 전략이 발견되지 않아 settings.yaml의 기본 설정을 기용합니다.")
+                strategies_config = self.config_manager.get('strategies', {})
+                for s_id, s_conf in strategies_config.items():
+                    if s_conf.get('enabled', False):
+                        strategies[s_id] = {
+                            "enabled": True,
+                            "params": s_conf.get('params', {})
+                        }
 
         # 1. 기존 활성 모의투자 세션이 있다면 자동 종료 처리
         active_p = self.portfolio_manager.get_active_simulation_portfolio()

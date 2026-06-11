@@ -116,13 +116,26 @@ class StrategyService(DaemonService):
             for symbol in symbols:
                 instances = []
                 for s_id, s_params in enabled_strategies:
+                    # [오버라이드 가드] 설정 파일(settings.yaml)의 overrides에서 이 거래소용 enabled 오버라이드 확인
+                    s_config = self.config_manager.get(f"strategies.{s_id.lower()}")
+                    strategy_enabled = True  # applied_strategies에 이미 가용 등록된 전략이므로 기본 True
+                    
+                    if s_config and "overrides" in s_config and exchange_id in s_config["overrides"]:
+                        ex_override = s_config["overrides"][exchange_id]
+                        if "enabled" in ex_override:
+                            strategy_enabled = ex_override["enabled"]
+                    
+                    if not strategy_enabled:
+                        logger.info(f"[StrategyService] 전략 {s_id}는 {exchange_id} 거래소 오버라이드 설정에 의해 가동이 비활성화(skip) 처리됩니다.")
+                        continue
+
                     # [V1] DB에 저장된 활성 버전 파라미터가 있는지 조회
                     version_info = await self.portfolio_manager.repository.get_strategy_version(s_id)
                     if version_info and version_info.get("current_params"):
                         logger.info(f"[StrategyService] DB에서 전략 {s_id}의 최신 파라미터 복원 적용 (버전: {version_info['current_version_id']})")
-                        params = version_info["current_params"]
+                        params = version_info["current_params"].copy()
                     else:
-                        params = s_params
+                        params = s_params.copy()
                         # 최초 기동이므로 DB에 버전 1로 초기 등록
                         await self.portfolio_manager.repository.save_strategy_version(
                             strategy_id=s_id,
@@ -142,6 +155,13 @@ class StrategyService(DaemonService):
                             change_reason='STARTUP_RESTORE'
                         )
                         logger.info(f"[StrategyService] 전략 {s_id} 최초 기동 파라미터를 버전 1로 등록 완료")
+
+                    # [오버라이드 가드] 설정 파일의 overrides에서 이 거래소용 params 오버라이드를 챔피언 파라미터 위에 병합
+                    if s_config and "overrides" in s_config and exchange_id in s_config["overrides"]:
+                        ex_override = s_config["overrides"][exchange_id]
+                        if "params" in ex_override:
+                            logger.info(f"[StrategyService] 전략 {s_id}에 대해 {exchange_id} 전용 오버라이드 파라미터 병합 적용: {ex_override['params']}")
+                            params.update(ex_override["params"])
 
                     # [V1] 기동 시점 STARTUP 스냅샷 기록
                     latest_version = version_info['current_version_id'] if version_info else 1
