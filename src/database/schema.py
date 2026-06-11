@@ -208,13 +208,14 @@ async def _init_db_core(db_path: str = None):
                         low REAL,
                         close REAL,
                         volume REAL,
+                        is_closed INTEGER DEFAULT 1,
                         PRIMARY KEY (exchange, symbol, interval, timestamp)
                     )
                 ''')
                 # 데이터 복원
                 await db.execute('''
-                    INSERT OR IGNORE INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
-                    SELECT COALESCE(exchange, 'upbit'), symbol, interval, timestamp, open, high, low, close, volume
+                    INSERT OR IGNORE INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume, is_closed)
+                    SELECT COALESCE(exchange, 'upbit'), symbol, interval, timestamp, open, high, low, close, volume, COALESCE(is_closed, 1)
                     FROM candles_backup
                 ''')
                 # 백업 삭제
@@ -341,10 +342,12 @@ async def _init_db_core(db_path: str = None):
                 low REAL,
                 close REAL,
                 volume REAL,
+                is_closed INTEGER DEFAULT 1,
                 PRIMARY KEY (exchange, symbol, interval, timestamp)
             )
         ''')
         await ensure_column(db, 'candles', 'exchange', 'TEXT')
+        await ensure_column(db, 'candles', 'is_closed', 'INTEGER DEFAULT 1')
 
         # 8. asset_master
         await db.execute('''

@@ -96,6 +96,30 @@ class BaseMarketDataRepository(abc.ABC):
         """
         pass
 
+    @abc.abstractmethod
+    async def get_latest_closed_candle_close(
+        self, 
+        symbol: str, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        """특정 종목의 가장 최근 확정된(closed = 1) 캔들의 종가(close)를 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_candle_close_at_or_before(
+        self, 
+        symbol: str, 
+        timestamp_ms: int, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        """특정 시점(timestamp_ms)과 같거나 그 이전에 확정된(closed = 1) 캔들 중 가장 최근의 종가(close)를 조회합니다."""
+        pass
+
+
 
 
 
@@ -103,6 +127,9 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
     """
     실제 SQLite 데이터베이스 및 실시간 수집기의 메모리 상태를 연동하는 실거래용 어댑터입니다.
     """
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path
+
     async def get_candles(
         self,
         exchange: str,
@@ -486,6 +513,92 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             logger.warning(f"[KIS] Database warm-up failed for {symbol} in repository: {e}")
             return None
 
+    async def get_latest_closed_candle_close(
+        self, 
+        symbol: str, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        interval_val = None
+        if timeframe:
+            if timeframe.endswith('m'):
+                interval_val = int(timeframe[:-1]) * 60
+            elif timeframe.endswith('s'):
+                interval_val = int(timeframe[:-1])
+            elif timeframe.endswith('d'):
+                interval_val = int(timeframe[:-1]) * 86400
+            else:
+                try:
+                    interval_val = int(timeframe)
+                except ValueError:
+                    pass
+
+        query = "SELECT close FROM candles WHERE symbol = ? AND is_closed = 1"
+        params = [symbol]
+        if exchange:
+            query += " AND exchange = ?"
+            params.append(exchange.lower())
+        if interval_val is not None:
+            query += " AND interval = ?"
+            params.append(interval_val)
+        
+        query += " ORDER BY timestamp DESC LIMIT 1"
+
+        try:
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(query, tuple(params)) as cursor:
+                    row = await cursor.fetchone()
+                    return row[0] if row else None
+        except Exception as e:
+            logger.error(f"[SqliteMarketDataRepository] Failed to query latest closed candle close for {symbol}: {e}")
+            return None
+
+    async def get_candle_close_at_or_before(
+        self, 
+        symbol: str, 
+        timestamp_ms: int, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        interval_val = None
+        if timeframe:
+            if timeframe.endswith('m'):
+                interval_val = int(timeframe[:-1]) * 60
+            elif timeframe.endswith('s'):
+                interval_val = int(timeframe[:-1])
+            elif timeframe.endswith('d'):
+                interval_val = int(timeframe[:-1]) * 86400
+            else:
+                try:
+                    interval_val = int(timeframe)
+                except ValueError:
+                    pass
+
+        ts_s = int(timestamp_ms / 1000)
+
+        query = "SELECT close FROM candles WHERE symbol = ? AND timestamp <= ? AND is_closed = 1"
+        params = [symbol, ts_s]
+        if exchange:
+            query += " AND exchange = ?"
+            params.append(exchange.lower())
+        if interval_val is not None:
+            query += " AND interval = ?"
+            params.append(interval_val)
+
+        query += " ORDER BY timestamp DESC LIMIT 1"
+
+        try:
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(query, tuple(params)) as cursor:
+                    row = await cursor.fetchone()
+                    return row[0] if row else None
+        except Exception as e:
+            logger.error(f"[SqliteMarketDataRepository] Failed to query candle close at or before {timestamp_ms} for {symbol}: {e}")
+            return None
+
+
 
 
 
@@ -566,6 +679,102 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
 
     async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
         return None
+
+    async def get_latest_closed_candle_close(
+        self, 
+        symbol: str, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        keys_to_search = []
+        if exchange:
+            keys_to_search.append(self._get_key(exchange, symbol))
+        else:
+            for key in self.candles_store.keys():
+                if key.endswith(f":{symbol}"):
+                    keys_to_search.append(key)
+        
+        interval_val = None
+        if timeframe:
+            if timeframe.endswith('m'):
+                interval_val = int(timeframe[:-1]) * 60
+            elif timeframe.endswith('s'):
+                interval_val = int(timeframe[:-1])
+            elif timeframe.endswith('d'):
+                interval_val = int(timeframe[:-1]) * 86400
+            else:
+                try:
+                    interval_val = int(timeframe)
+                except ValueError:
+                    pass
+
+        candidates = []
+        for key in keys_to_search:
+            candles = self.candles_store.get(key, [])
+            for c in candles:
+                if interval_val is not None and c.get('interval') != interval_val:
+                    continue
+                if c.get('is_closed', True) is False:
+                    continue
+                candidates.append(c)
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x.get('timestamp', 0))
+        return candidates[-1].get('close')
+
+    async def get_candle_close_at_or_before(
+        self, 
+        symbol: str, 
+        timestamp_ms: int, 
+        exchange: Optional[str] = None, 
+        market_type: Optional[str] = None, 
+        timeframe: Optional[str] = None
+    ) -> Optional[float]:
+        keys_to_search = []
+        if exchange:
+            keys_to_search.append(self._get_key(exchange, symbol))
+        else:
+            for key in self.candles_store.keys():
+                if key.endswith(f":{symbol}"):
+                    keys_to_search.append(key)
+        
+        interval_val = None
+        if timeframe:
+            if timeframe.endswith('m'):
+                interval_val = int(timeframe[:-1]) * 60
+            elif timeframe.endswith('s'):
+                interval_val = int(timeframe[:-1])
+            elif timeframe.endswith('d'):
+                interval_val = int(timeframe[:-1]) * 86400
+            else:
+                try:
+                    interval_val = int(timeframe)
+                except ValueError:
+                    pass
+
+        ts_s = int(timestamp_ms / 1000)
+
+        candidates = []
+        for key in keys_to_search:
+            candles = self.candles_store.get(key, [])
+            for c in candles:
+                if interval_val is not None and c.get('interval') != interval_val:
+                    continue
+                if c.get('is_closed', True) is False:
+                    continue
+                if c.get('timestamp', 0) > ts_s:
+                    continue
+                candidates.append(c)
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x.get('timestamp', 0))
+        return candidates[-1].get('close')
+
 
 
 
@@ -729,6 +938,28 @@ class BaseTradingRepository(abc.ABC):
     @abc.abstractmethod
     async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         pass
+
+    @abc.abstractmethod
+    async def get_orders_for_performance_replay(
+        self, portfolio_id: str, strategy_id: str
+    ) -> List[Dict[str, Any]]:
+        """성능 스냅샷 리플레이를 위해 특정 포트폴리오와 전략의 모든 주문 이력을 시간 오름차순(ASC)으로 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_orders_for_proposal_evaluation(
+        self, portfolio_id: str, strategy_id: str, start_ts: int, end_ts: int
+    ) -> List[Dict[str, Any]]:
+        """제안 사후 평가를 위해 특정 기간 내에 전략이 체결한 주문 이력을 시간 오름차순(ASC)으로 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_latest_feature_snapshot_for_proposal(
+        self, proposal_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """제안의 자동 승격 판단을 위해 promotion_event_log에서 가장 최근에 기록된 feature_snapshot의 JSON 파싱된 데이터를 반환합니다."""
+        pass
+
 
 
 
@@ -909,7 +1140,74 @@ class SqliteTradingRepository(BaseTradingRepository):
                     orders.append(order)
                 return orders
 
+    async def get_orders_for_performance_replay(
+        self, portfolio_id: str, strategy_id: str
+    ) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            import json
+            async with db.execute(
+                "SELECT * FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? ORDER BY timestamp ASC",
+                (portfolio_id, strategy_id)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                orders = []
+                for r in rows:
+                    order = dict(r)
+                    if 'context' in order and isinstance(order['context'], str) and order['context']:
+                        try:
+                            order['context'] = json.loads(order['context'])
+                        except Exception:
+                            pass
+                    orders.append(order)
+                return orders
+
+    async def get_orders_for_proposal_evaluation(
+        self, portfolio_id: str, strategy_id: str, start_ts: int, end_ts: int
+    ) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            import json
+            async with db.execute(
+                "SELECT * FROM orders_history "
+                "WHERE portfolio_id = ? AND strategy_id = ? AND timestamp BETWEEN ? AND ? "
+                "ORDER BY timestamp ASC",
+                (portfolio_id, strategy_id, start_ts, end_ts)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                orders = []
+                for r in rows:
+                    order = dict(r)
+                    if 'context' in order and isinstance(order['context'], str) and order['context']:
+                        try:
+                            order['context'] = json.loads(order['context'])
+                        except Exception:
+                            pass
+                    orders.append(order)
+                return orders
+
+    async def get_latest_feature_snapshot_for_proposal(
+        self, proposal_id: str
+    ) -> Optional[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            import json
+            async with db.execute(
+                "SELECT feature_snapshot, model_version, scaler_version FROM promotion_event_log "
+                "WHERE proposal_id = ? ORDER BY global_sequence_no DESC LIMIT 1",
+                (proposal_id,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    res = dict(row)
+                    if res.get("feature_snapshot"):
+                        try:
+                            res["feature_snapshot"] = json.loads(res["feature_snapshot"])
+                        except Exception as e:
+                            logger.error(f"[SqliteTradingRepository] Failed to parse feature_snapshot JSON for proposal {proposal_id}: {e}")
+                            res["feature_snapshot"] = None
+                    return res
+                return None
+
     async def insert_alert(self, alert: Dict[str, Any]):
+
         async with get_db_conn(self.db_path) as db:
             await db.execute(
                 "INSERT INTO alerts (exchange, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
@@ -1845,6 +2143,7 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.proposal_evaluations: Dict[int, Dict[str, Any]] = {}
         self.proposal_evaluations_v2: Dict[int, Dict[str, Any]] = {}
         self.universe_guard_states: Dict[str, Dict[str, Any]] = {}
+        self.promotion_event_logs: List[Dict[str, Any]] = []
         self.next_proposal_id = 1
         self.next_eval_id = 1
         self.next_history_id = 1
@@ -2398,5 +2697,83 @@ class InMemoryTradingRepository(BaseTradingRepository):
         metrics = getattr(self, "girs_shadow_metrics", [])
         sorted_metrics = sorted(metrics, key=lambda x: x["timestamp"], reverse=True)
         return sorted_metrics[:limit]
+
+    async def get_orders_for_performance_replay(
+        self, portfolio_id: str, strategy_id: str
+    ) -> List[Dict[str, Any]]:
+        import json
+        filtered = [
+            o for o in self.order_histories
+            if o.get("portfolio_id") == portfolio_id and o.get("strategy_id") == strategy_id
+        ]
+        sorted_orders = sorted(filtered, key=lambda x: x.get("timestamp", 0))
+        res_list = []
+        for o in sorted_orders:
+            order = dict(o)
+            if 'context' in order and isinstance(order['context'], str) and order['context']:
+                try:
+                    order['context'] = json.loads(order['context'])
+                except Exception:
+                    pass
+            res_list.append(order)
+        return res_list
+
+    async def get_orders_for_proposal_evaluation(
+        self, portfolio_id: str, strategy_id: str, start_ts: int, end_ts: int
+    ) -> List[Dict[str, Any]]:
+        import json
+        filtered = [
+            o for o in self.order_histories
+            if o.get("portfolio_id") == portfolio_id 
+            and o.get("strategy_id") == strategy_id
+            and start_ts <= o.get("timestamp", 0) <= end_ts
+        ]
+        sorted_orders = sorted(filtered, key=lambda x: x.get("timestamp", 0))
+        res_list = []
+        for o in sorted_orders:
+            order = dict(o)
+            if 'context' in order and isinstance(order['context'], str) and order['context']:
+                try:
+                    order['context'] = json.loads(order['context'])
+                except Exception:
+                    pass
+            res_list.append(order)
+        return res_list
+
+    async def get_latest_feature_snapshot_for_proposal(
+        self, proposal_id: str
+    ) -> Optional[Dict[str, Any]]:
+        import json
+        # proposal_id는 문자열로 전달될 수도 있고 숫자로 전달될 수도 있으므로 문자열 변환 비교
+        pid_str = str(proposal_id)
+        filtered = [
+            log for log in self.promotion_event_logs
+            if str(log.get("proposal_id")) == pid_str
+        ]
+        if not filtered:
+            return None
+        
+        # global_sequence_no 기준으로 정렬, 없으면 리스트 순서(입력 순서) 유지
+        sorted_logs = sorted(
+            filtered,
+            key=lambda x: x.get("global_sequence_no", 0),
+            reverse=True
+        )
+        latest_log = sorted_logs[0]
+        
+        feature_snap = latest_log.get("feature_snapshot")
+        if isinstance(feature_snap, str) and feature_snap:
+            try:
+                feature_snap = json.loads(feature_snap)
+            except Exception as e:
+                logger.error(f"[InMemoryTradingRepository] Failed to parse feature_snapshot JSON for proposal {proposal_id}: {e}")
+                feature_snap = None
+        
+        return {
+            "feature_snapshot": feature_snap,
+            "model_version": latest_log.get("model_version"),
+            "scaler_version": latest_log.get("scaler_version")
+        }
+
 
 

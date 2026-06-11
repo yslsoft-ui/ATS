@@ -19,13 +19,16 @@ import src.engine.collector_upbit
 import src.engine.collector_kis
 import src.engine.collector_bithumb
 
+from src.database.repository import BaseMarketDataRepository
+
 logger = get_logger("strategy_service")
 
 class StrategyService(DaemonService):
     """전략 인스턴스 핫리로드, 포트폴리오 모니터링, 실시간 틱 연산 및 매매 집행 도메인 서비스"""
-    def __init__(self, config_manager: ConfigManager, event_bus: EventBus):
+    def __init__(self, config_manager: ConfigManager, event_bus: EventBus, market_data_repository: BaseMarketDataRepository):
         self.config_manager = config_manager
         self.event_bus = event_bus
+        self.market_data_repository = market_data_repository
         
         self.db_path = self.config_manager.get('system.db_path', 'data/backtest.db')
         self.portfolio_manager: Optional[PortfolioManager] = None
@@ -423,7 +426,6 @@ class StrategyService(DaemonService):
             return
 
         import hashlib
-        from src.database.connection import get_db_conn
         from src.engine.portfolio import Position
         from src.engine.utils.performance import calculate_performance_metrics
 
@@ -439,28 +441,18 @@ class StrategyService(DaemonService):
                 return
                 
             # 3. 이 전략이 체결한 거래 내역 조회
-            trades = []
-            async with get_db_conn(self.db_path) as db:
-                async with db.execute(
-                    "SELECT * FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? ORDER BY timestamp ASC",
-                    (self.current_portfolio_id, strategy_id)
-                ) as cursor:
-                    rows = await cursor.fetchall()
-                    trades = [dict(r) for r in rows]
+            trades = await self.portfolio_manager.repository.get_orders_for_performance_replay(
+                self.current_portfolio_id, strategy_id
+            )
                     
             # 4. 최신 가격 데이터 획득
             current_prices = {}
-            async with get_db_conn(self.db_path) as db:
-                for t in trades:
-                    sym = t['symbol']
-                    if sym not in current_prices:
-                        async with db.execute(
-                            "SELECT close FROM candles WHERE symbol = ? ORDER BY timestamp DESC LIMIT 1",
-                            (sym,)
-                        ) as cur:
-                            row = await cur.fetchone()
-                            if row:
-                                current_prices[sym] = row[0]
+            for t in trades:
+                sym = t['symbol']
+                if sym not in current_prices:
+                    close_val = await self.market_data_repository.get_latest_closed_candle_close(symbol=sym)
+                    if close_val is not None:
+                        current_prices[sym] = close_val
                                 
             # 5. 가상 잔고 및 포지션 복구
             temp_positions = {}
@@ -598,7 +590,6 @@ class StrategyService(DaemonService):
     async def _periodic_proposal_evaluation_loop(self):
         """실전 적용된 제안의 7일 사후 성과(ROI 및 거래량)를 분석해 예측값과의 괴리율을 기록합니다."""
         logger.info("[StrategyService] 제안 사후 평가 스케줄러 루프 기동")
-        from src.database.connection import get_db_conn
         from src.engine.utils.performance import calculate_performance_metrics
         from src.engine.portfolio import Position
         try:
@@ -621,30 +612,20 @@ class StrategyService(DaemonService):
                         end_ts = applied_ts + (7 * 24 * 3600)
                         
                         # 2. 해당 기간동안 이 전략이 실제 체결한 거래 내역 조회
-                        trades = []
-                        async with get_db_conn(self.db_path) as db:
-                            async with db.execute(
-                                "SELECT * FROM orders_history "
-                                "WHERE portfolio_id = ? AND strategy_id = ? AND timestamp BETWEEN ? AND ? "
-                                "ORDER BY timestamp ASC",
-                                (portfolio_id, strategy_id, applied_ts, end_ts)
-                            ) as cursor:
-                                rows = await cursor.fetchall()
-                                trades = [dict(r) for r in rows]
+                        trades = await self.portfolio_manager.repository.get_orders_for_proposal_evaluation(
+                            portfolio_id, strategy_id, applied_ts, end_ts
+                        )
                                 
                         # 3. 실측 성과 계산을 위한 간이 가상 자산 평가
                         current_prices = {}
-                        async with get_db_conn(self.db_path) as db:
-                            for t in trades:
-                                sym = t['symbol']
-                                if sym not in current_prices:
-                                    async with db.execute(
-                                        "SELECT close FROM candles WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1",
-                                        (sym, end_ts)
-                                    ) as cur:
-                                        row = await cur.fetchone()
-                                        if row:
-                                            current_prices[sym] = row[0]
+                        for t in trades:
+                            sym = t['symbol']
+                            if sym not in current_prices:
+                                close_val = await self.market_data_repository.get_candle_close_at_or_before(
+                                    symbol=sym, timestamp_ms=end_ts * 1000
+                                )
+                                if close_val is not None:
+                                    current_prices[sym] = close_val
                                             
                         temp_positions = {}
                         temp_cash = 10000000.0
@@ -748,7 +729,6 @@ class StrategyService(DaemonService):
     async def _girs_shadow_metrics_collector_loop(self):
         """30초 주기로 GIRS 섀도 메트릭 및 추적 필드들을 수집하여 DB에 적재하고, 유니버스 FSM 상태를 제어합니다."""
         logger.info("[StrategyService] GIRS Shadow Metrics & Universe Control 루프 기동")
-        from src.database.connection import get_db_conn
         from src.engine.girs_types import FeatureSnapshot
         from datetime import datetime
         
@@ -761,10 +741,7 @@ class StrategyService(DaemonService):
                     # 1. PENDING 제안 목록 조회
                     pending_proposals = []
                     try:
-                        async with get_db_conn(self.db_path) as db:
-                            async with db.execute("SELECT * FROM strategy_proposals WHERE status = 'PENDING'") as cursor:
-                                rows = await cursor.fetchall()
-                                pending_proposals = [dict(r) for r in rows]
+                        pending_proposals = await self.portfolio_manager.repository.get_active_proposals(status='PENDING')
                     except Exception as e:
                         logger.error(f"[StrategyService] PENDING 제안 조회 실패: {e}")
                     
@@ -793,36 +770,30 @@ class StrategyService(DaemonService):
                         passed_symbols_dict = {}
 
                         try:
-                            async with get_db_conn(self.db_path) as db:
-                                for prop in pending_proposals:
-                                    proposal_id_str = str(prop["id"])
-                                    strategy_id = prop["strategy_id"]
-                                    
-                                    # 2. promotion_event_log 에서 feature_snapshot 조회
-                                    async with db.execute(
-                                        "SELECT feature_snapshot, model_version, scaler_version FROM promotion_event_log "
-                                        "WHERE proposal_id = ? ORDER BY global_sequence_no DESC LIMIT 1",
-                                        (proposal_id_str,)
-                                    ) as cur:
-                                        log_row = await cur.fetchone()
-                                    
-                                    snapshot = None
-                                    if log_row and log_row["feature_snapshot"]:
-                                        try:
-                                            feat_dict = json.loads(log_row["feature_snapshot"])
-                                            snapshot = FeatureSnapshot(
-                                                price_features=feat_dict.get("price_features", {}),
-                                                liquidity_features=feat_dict.get("liquidity_features", {}),
-                                                regime_features=feat_dict.get("regime_features", {}),
-                                                schema_version=feat_dict.get("schema_version", "1.0"),
-                                                feature_hash=feat_dict.get("feature_hash", ""),
-                                                generated_at=feat_dict.get("generated_at", time.time()),
-                                                exchange=feat_dict.get("exchange", "upbit"),
-                                                symbol=feat_dict.get("symbol", "BTC"),
-                                                market_type=feat_dict.get("market_type", "crypto")
-                                            )
-                                        except Exception as e:
-                                            logger.error(f"[StrategyService] FeatureSnapshot 파싱 실패: {e}")
+                            for prop in pending_proposals:
+                                proposal_id_str = str(prop["id"])
+                                strategy_id = prop["strategy_id"]
+                                
+                                # 2. promotion_event_log 에서 feature_snapshot 조회
+                                log_row = await self.portfolio_manager.repository.get_latest_feature_snapshot_for_proposal(proposal_id_str)
+                                
+                                snapshot = None
+                                if log_row and log_row.get("feature_snapshot"):
+                                    try:
+                                        feat_dict = log_row["feature_snapshot"] # 리포지토리 내부에서 파싱 완료됨
+                                        snapshot = FeatureSnapshot(
+                                            price_features=feat_dict.get("price_features", {}),
+                                            liquidity_features=feat_dict.get("liquidity_features", {}),
+                                            regime_features=feat_dict.get("regime_features", {}),
+                                            schema_version=feat_dict.get("schema_version", "1.0"),
+                                            feature_hash=feat_dict.get("feature_hash", ""),
+                                            generated_at=feat_dict.get("generated_at", time.time()),
+                                            exchange=feat_dict.get("exchange", "upbit"),
+                                            symbol=feat_dict.get("symbol", "BTC"),
+                                            market_type=feat_dict.get("market_type", "crypto")
+                                        )
+                                    except Exception as e:
+                                        logger.error(f"[StrategyService] FeatureSnapshot 파싱 실패: {e}")
                                     
                                     if not snapshot:
                                         snapshot = FeatureSnapshot(
@@ -899,9 +870,8 @@ class StrategyService(DaemonService):
                                     idle_time = snapshot.idle_time if hasattr(snapshot, 'idle_time') else 0.0
                                     
                                     # 4. strategy_versions에서 현재 버전 획득
-                                    async with db.execute("SELECT current_version_id FROM strategy_versions WHERE strategy_id = ?", (strategy_id,)) as cur:
-                                        ver_row = await cur.fetchone()
-                                        strategy_version_id = ver_row["current_version_id"] if ver_row else 1
+                                    version_info = await self.portfolio_manager.repository.get_strategy_version(strategy_id)
+                                    strategy_version_id = version_info["current_version_id"] if version_info else 1
                                     
                                     # 5. DB 적재
                                     metric_data = {

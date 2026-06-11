@@ -13,6 +13,7 @@ from src.database.schema import init_db
 from src.engine.girs_types import FeatureSnapshot, CandidateProposal
 from src.engine.trade_engine import TradeEngine
 from src.services.strategy_service import StrategyService
+from src.database.repository import InMemoryMarketDataRepository
 from src.engine.evaluation_policy import calculate_due_at, EvaluationPolicyRouter
 from src.engine.shadow_backtest import ShadowBacktestEngine
 from scratch.generate_shadow_report import generate_report
@@ -154,7 +155,7 @@ async def test_proposal_evaluations_fsm_and_lock_timeout():
         async def subscribe(self, topic): return None
 
     # StrategyService를 구동하여 FSM 복구 및 평가 검증
-    service = StrategyService(config, MockEventBus())
+    service = StrategyService(config, MockEventBus(), InMemoryMarketDataRepository())
     service.db_path = TEST_DB_PATH
     
     # 2. _periodic_proposal_evaluation_loop의 락 복구 파트만 강제 수동 호출 또는 프라이빗 메소드 형태이므로 간접 테스트
@@ -211,7 +212,7 @@ async def test_universe_watched_candidate_control():
         async def publish(self, topic, data): pass
         async def subscribe(self, topic): return None
         
-    service = StrategyService(config, MockEventBus())
+    service = StrategyService(config, MockEventBus(), InMemoryMarketDataRepository())
     service.db_path = TEST_DB_PATH
     
     import src.database.connection

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, AsyncMock
 
 from src.database.schema import init_db
 from src.database.connection import get_db_conn
-from src.database.repository import SqliteTradingRepository, InMemoryTradingRepository
+from src.database.repository import SqliteTradingRepository, InMemoryTradingRepository, InMemoryMarketDataRepository
 from src.config.manager import ConfigManager
 from src.engine.daemon_supervisor import EventBus
 from src.services.strategy_service import StrategyService
@@ -203,7 +203,7 @@ async def test_universe_resource_guards_and_logging_rules():
     }.get(key, default)
     config_mock.config = {}
 
-    service = StrategyService(config_mock, event_bus)
+    service = StrategyService(config_mock, event_bus, InMemoryMarketDataRepository())
     
     # PortfolioManager Mocking 및 Repository 연동
     portfolio_mock = MagicMock(spec=PortfolioManager)

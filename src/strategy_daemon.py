@@ -6,7 +6,7 @@ import asyncio
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.config.manager import ConfigManager
-from src.database.repository import SqliteTradingRepository
+from src.database.repository import SqliteTradingRepository, SqliteMarketDataRepository
 from src.engine.daemon_supervisor import DaemonSupervisor
 from src.engine.daemon_adapters import ZmqEventBus, SysProcessController, SysSignalHandler
 from src.services.strategy_service import StrategyService
@@ -25,6 +25,7 @@ async def main():
 
     # 리포지토리 생성
     repository = SqliteTradingRepository(db_path=db_path)
+    market_data_repository = SqliteMarketDataRepository(db_path=db_path)
 
     # 설정 로드 이벤트 기록
     import subprocess
@@ -61,7 +62,8 @@ async def main():
     # 서비스 생성
     service = StrategyService(
         config_manager=config_manager,
-        event_bus=event_bus
+        event_bus=event_bus,
+        market_data_repository=market_data_repository
     )
 
     # Supervisor 생성 및 기동
