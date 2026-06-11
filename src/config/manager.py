@@ -39,6 +39,7 @@ class ConfigManager:
         else:
             self.config_path = config_path or "config/settings.yaml"
         self.config: Dict[str, Any] = {}
+        self.raw_config: Dict[str, Any] = {}
         self.last_mtime: float = 0
         self.subscribers: List[Callable[[Dict[str, Any]], Any]] = []
         
@@ -56,12 +57,19 @@ class ConfigManager:
 
         try:
             import hashlib
+            import copy
             with open(self.config_path, 'rb') as f:
                 content_bytes = f.read()
                 sha256_val = hashlib.sha256(content_bytes).hexdigest()
                 
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                new_config = yaml.safe_load(f) or {}
+                raw = yaml.safe_load(f) or {}
+            
+            # 치환 전 원본은 따로 보존
+            self.raw_config = copy.deepcopy(raw)
+            
+            # 치환 작업을 수행할 config 대상 생성
+            new_config = copy.deepcopy(raw)
                 
             # 1. YAML 내부의 ${VAR_NAME} 패턴 치환
             self._substitute_env_vars(new_config)
@@ -210,20 +218,22 @@ class ConfigManager:
     def update(self, key: str, value: Any):
         """특정 설정을 업데이트하고 파일로 즉시 저장합니다."""
         parts = key.split('.')
-        d = self.config
+        d = self.raw_config
         for part in parts[:-1]:
             if part not in d:
                 d[part] = {}
             d = d[part]
         
         d[parts[-1]] = value
-        return self.save()
+        if self.save():
+            return self.reload()
+        return False
 
     def save(self):
         """현재 메모리의 설정을 파일로 저장합니다."""
         try:
             with open(self.config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(self.config, f, allow_unicode=True, sort_keys=False)
+                yaml.dump(self.raw_config, f, allow_unicode=True, sort_keys=False)
             self.last_mtime = os.path.getmtime(self.config_path)
             return True
         except Exception as e:
