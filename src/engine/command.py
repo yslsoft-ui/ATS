@@ -231,10 +231,15 @@ class UserCommandDispatcher:
                 strategies_config = self.config_manager.get('strategies', {}) or {}
                 for s_ver in db_strategies:
                     s_id = s_ver["strategy_id"]
+                    s_id_lower = s_id.lower()
                     # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크 (대소문자 엄격 비교)
-                    s_config = strategies_config.get(s_id)
+                    s_config = strategies_config.get(s_id_lower)
                     if s_config and s_config.get("enabled", False):
-                        strategies[s_id] = {
+                        from src.engine.strategy import StrategyRegistry
+                        strat_cls = StrategyRegistry._strategies.get(s_id_lower)
+                        official_name = strat_cls.__name__ if strat_cls else s_id
+                        
+                        strategies[official_name] = {
                             "enabled": True,
                             "params": s_ver["current_params"]
                         }
@@ -247,7 +252,12 @@ class UserCommandDispatcher:
                 strategies_config = self.config_manager.get('strategies', {})
                 for s_id, s_conf in strategies_config.items():
                     if s_conf.get('enabled', False):
-                        strategies[s_id] = {
+                        s_id_lower = s_id.lower()
+                        from src.engine.strategy import StrategyRegistry
+                        strat_cls = StrategyRegistry._strategies.get(s_id_lower)
+                        official_name = strat_cls.__name__ if strat_cls else s_id
+                        
+                        strategies[official_name] = {
                             "enabled": True,
                             "params": s_conf.get('params', {})
                         }

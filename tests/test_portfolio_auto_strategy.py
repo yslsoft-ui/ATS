@@ -111,9 +111,9 @@ async def test_portfolio_start_without_strategies_fallback_to_config(setup_auto_
     applied_strategies = meta.get("applied_strategies", {})
     
     # 2. DB에 챔피언이 없어 config(settings.yaml)의 기본 활성 전략인 mockteststrategy가 복원되었는지 검증
-    assert "mockteststrategy" in applied_strategies
-    assert applied_strategies["mockteststrategy"]["enabled"] is True
-    assert applied_strategies["mockteststrategy"]["params"]["param1"] == 10
+    assert "MockTestStrategy" in applied_strategies
+    assert applied_strategies["MockTestStrategy"]["enabled"] is True
+    assert applied_strategies["MockTestStrategy"]["params"]["param1"] == 10
 
 @pytest.mark.asyncio
 async def test_portfolio_start_without_strategies_loads_db_champion(setup_auto_strategy_env):
@@ -136,9 +136,9 @@ async def test_portfolio_start_without_strategies_loads_db_champion(setup_auto_s
     applied_strategies = meta.get("applied_strategies", {})
     
     # 3. DB의 챔피언 파라미터(V2)가 자동 기용되었는지 검증
-    assert "mockteststrategy" in applied_strategies
-    assert applied_strategies["mockteststrategy"]["params"]["param1"] == 42
-    assert applied_strategies["mockteststrategy"]["params"]["param2"] == 9.9
+    assert "MockTestStrategy" in applied_strategies
+    assert applied_strategies["MockTestStrategy"]["params"]["param1"] == 42
+    assert applied_strategies["MockTestStrategy"]["params"]["param2"] == 9.9
 
 @pytest.mark.asyncio
 async def test_strategy_service_reload_engines_applies_overrides(setup_auto_strategy_env):
