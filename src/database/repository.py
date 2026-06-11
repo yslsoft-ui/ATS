@@ -1107,6 +1107,46 @@ class SqliteTradingRepository(BaseTradingRepository):
             await db.commit()
 
     async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        if portfolio_id == 'live':
+            async with get_db_conn(self.db_path) as db:
+                query = """
+                    SELECT * FROM real_orders
+                    WHERE exchange = 'upbit'
+                    ORDER BY created_at DESC
+                """
+                if limit is not None and limit > 0:
+                    query += f" LIMIT {limit}"
+                
+                async with db.execute(query) as cursor:
+                    rows = await cursor.fetchall()
+                    orders = []
+                    from datetime import datetime
+                    for r in rows:
+                        ts = int(time.time())
+                        created_at = r['created_at']
+                        if created_at:
+                            try:
+                                ts = int(datetime.fromisoformat(created_at).timestamp())
+                            except Exception:
+                                pass
+                        
+                        orders.append({
+                            'portfolio_id': 'live',
+                            'exchange': r['exchange'],
+                            'market': 'KRW',
+                            'strategy_id': 'live_auto',
+                            'symbol': r['symbol'],
+                            'side': r['side'],
+                            'price': float(r['price'] or 0.0),
+                            'quantity': float(r['executed_volume'] or 0.0),
+                            'fee': float(r['fee'] or 0.0),
+                            'timestamp': ts,
+                            'reason': '실거래 체결',
+                            'context': {}
+                        })
+                    orders.reverse()
+                    return orders
+
         async with get_db_conn(self.db_path) as db:
             import json
             if limit is not None and limit > 0:

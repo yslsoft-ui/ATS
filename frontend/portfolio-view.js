@@ -39,7 +39,7 @@ const PortfolioView = {
             let profitRate = 0;
             
             if (isBacktest) {
-                currentPrice = pos.current_price || pos.avg_price;
+                currentPrice = pos.current_price ?? pos.avg_price;
                 profitRate = pos.avg_price > 0 ? ((currentPrice - pos.avg_price) / pos.avg_price * 100).toFixed(4) : 0;
             } else {
                 const coin = marketData.find(c => c.market === pos.symbol);

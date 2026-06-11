@@ -5,7 +5,7 @@
  * 그리고 탭 전환 시의 라이프사이클(초기화 함수) 실행을 전담합니다.
  */
 const ViewRouter = (() => {
-    let currentActiveViewId = 'monitoring-view'; // 기본 활성 뷰
+    let currentActiveViewId = 'overview-view'; // 기본 활성 뷰
     let routes = {};
 
     /**
@@ -35,6 +35,8 @@ const ViewRouter = (() => {
                 currentActiveViewId = initialViewId;
             }
         }
+        // 초기 뷰로 네비게이션을 수행하여 display 속성을 동기화하고 콜백을 실행합니다.
+        navigateTo(currentActiveViewId);
     }
 
     /**

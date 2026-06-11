@@ -106,6 +106,10 @@ async function loadMoreHistory() {
 
 // --- 실시간 캔들 생성 및 업데이트 로직 (PUSH) ---
 function processTick(tick) {
+    if (typeof OverviewEngine !== 'undefined') {
+        OverviewEngine.update(tick);
+    }
+
     if (tick.type === 'system_event') {
         const isErrorOrSuspended = tick.event_type.includes('ERROR') || tick.event_type.includes('SUSPENDED');
         const alertType = isErrorOrSuspended ? 'error' : 'success';
@@ -441,6 +445,12 @@ async function loadRecentTrades() {
 
 // --- UI 초기화 및 바인딩 컨트롤러 ---
 function initViewNavigation() {
+    ViewRouter.registerRoute('overview-view', () => {
+        if (typeof OverviewEngine !== 'undefined') {
+            OverviewEngine.refreshData();
+        }
+    });
+
     ViewRouter.registerRoute('monitoring-view', () => {
         if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
             setTimeout(() => ChartEngine.resize(), 0);
@@ -583,6 +593,10 @@ async function init() {
     // 뷰 네비게이션 및 메인 트레이딩 바인딩 초기화
     initViewNavigation();
     initTradingControls();
+
+    if (typeof OverviewEngine !== 'undefined') {
+        OverviewEngine.initialize();
+    }
 }
 
 

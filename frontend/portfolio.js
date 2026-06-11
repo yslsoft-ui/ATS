@@ -73,6 +73,24 @@ async function loadPortfolioHistoryList(force = false) {
         // 정렬: 생성일시 역순 (최신이 위로)
         items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+        // 'live' 항목 최상단 고정 배치
+        const liveIndex = items.findIndex(item => item.id === 'live');
+        if (liveIndex > -1) {
+            const liveItem = items.splice(liveIndex, 1)[0];
+            items.unshift(liveItem);
+        } else {
+            items.unshift({
+                id: 'live',
+                name: '실계좌 자동매매',
+                type: 'live',
+                roi: 0.0,
+                trade_count: 0,
+                created_at: new Date().toISOString(),
+                isLive: true
+            });
+            addedIds.add('live');
+        }
+
         tbody.innerHTML = '';
 
         if (items.length === 0) {
@@ -94,6 +112,7 @@ async function loadPortfolioHistoryList(force = false) {
 
         items.forEach(item => {
             const tr = document.createElement('tr');
+            tr.setAttribute('data-portfolio-id', item.id);
             tr.style.borderBottom = '1px solid rgba(148, 163, 184, 0.08)';
             tr.style.cursor = 'pointer';
             if (item.id === state.currentPortfolioId) {
@@ -104,7 +123,9 @@ async function loadPortfolioHistoryList(force = false) {
             const roiText = `${item.roi >= 0 ? '+' : ''}${item.roi}%`;
 
             let badgeHtml = '';
-            if (item.type === 'simulation') {
+            if (item.type === 'live') {
+                badgeHtml = `<span class="ctx-badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">실거래</span>`;
+            } else if (item.type === 'simulation') {
                 badgeHtml = `<span class="ctx-badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">진행중</span>`;
             } else if (item.type === 'simulation_ended') {
                 badgeHtml = `<span class="ctx-badge" style="background: rgba(100, 116, 139, 0.2); color: #94A3B8; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">종료됨</span>`;
@@ -125,8 +146,8 @@ async function loadPortfolioHistoryList(force = false) {
                 loadPortfolio(true);
             };
 
-            // 삭제 버튼: 진행중(simulation)이 아닐 때만 노출
-            const showDelete = item.type !== 'simulation';
+            // 삭제 버튼: 진행중(simulation) 또는 실거래(live)가 아닐 때만 노출
+            const showDelete = item.type !== 'simulation' && item.type !== 'live';
             const deleteBtnHtml = showDelete 
                 ? `<button class="btn danger btn-delete-history" style="padding:2px 6px; font-size:0.7rem; background:#EF4444; border:none; color:white; border-radius:4px; cursor:pointer;" onclick="deletePortfolioHistory('${item.id}')">삭제</button>`
                 : '';
@@ -346,7 +367,7 @@ async function loadPortfolio(force = false) {
 
         state.currentPortfolioData = {
             id: portfolioId,
-            type: cachedPort ? cachedPort.type : (portfolioId.startsWith('backtest_') ? 'backtest' : 'simulation'),
+            type: portfolioId === 'live' ? 'live' : (cachedPort ? cachedPort.type : (portfolioId.startsWith('backtest_') ? 'backtest' : 'simulation')),
             total_value: totalValue,
             cash: cash,
             exchange_cash: exchangeCashMap,
@@ -408,8 +429,13 @@ async function loadPortfolio(force = false) {
             renderBacktestPerformance(data);
         } else {
             if (typeBadge) {
-                typeBadge.innerText = '실시간 모의투자';
-                typeBadge.style.background = '#3B82F6';
+                if (portfolioId === 'live') {
+                    typeBadge.innerText = '실계좌 자동매매';
+                    typeBadge.style.background = '#EF4444';
+                } else {
+                    typeBadge.innerText = '실시간 모의투자';
+                    typeBadge.style.background = '#3B82F6';
+                }
                 typeBadge.style.display = 'inline-block';
             }
             if (panicBtn) {

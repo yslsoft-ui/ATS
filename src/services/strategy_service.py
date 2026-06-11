@@ -201,7 +201,13 @@ class StrategyService(DaemonService):
 
         # 4. 초기 세션 활성화 및 엔진 로딩
         try:
-            active_p = self.portfolio_manager.get_active_simulation_portfolio()
+            op_mode = self.config_manager.get("system.operation_mode", "shadow")
+            if op_mode == 'live':
+                await self.portfolio_manager.sync_live_portfolio_from_exchange(self)
+                active_p = self.portfolio_manager.portfolios.get('live')
+            else:
+                active_p = self.portfolio_manager.get_active_simulation_portfolio()
+                
             self.current_portfolio_id = active_p.id if active_p else None
             if active_p:
                 new_engs = await self.reload_trade_engines(active_p)
@@ -364,7 +370,9 @@ class StrategyService(DaemonService):
                             logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
                             # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
                             await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
-                            await self.execution_pipeline.process_signal(sig, data['trade_price'])
+                            op_mode = self.config_manager.get("system.operation_mode", "shadow")
+                            target_portfolio_id = 'live' if op_mode == 'live' else None
+                            await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
         except asyncio.CancelledError:
             pass
         except Exception as e:

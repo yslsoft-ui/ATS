@@ -1,0 +1,544 @@
+/**
+ * OverviewEngine - 통합 요약 대시보드 렌더러 및 상태 동기화 모듈
+ */
+const OverviewEngine = (() => {
+    // 종목별 구분용 조화로운 파스텔/네온 톤 배색 (수익/손실 색상인 Red/Blue 제외)
+    const segmentColors = [
+        '#6366F1', // Indigo
+        '#F59E0B', // Amber
+        '#10B981', // Emerald
+        '#D946EF', // Fuchsia
+        '#8B5CF6', // Purple
+        '#14B8A6', // Teal
+        '#EC4899', // Pink
+        '#06B6D4'  // Cyan
+    ];
+
+    let cachedPortfolio = null;
+    let activityEvents = []; // 최근 5건 거래/이벤트 저장용
+
+    /**
+     * 초기화 함수
+     */
+    async function initialize() {
+        console.log("[OverviewEngine] Initializing...");
+        await refreshData();
+        
+        // 1. 초기 로드 시점의 최근 주문 이력을 가져와서 활동 피드에 삽입
+        try {
+            if (state.currentPortfolioId) {
+                const portfolioData = state.currentPortfolioData;
+                if (portfolioData && portfolioData.history) {
+                    const sorted = [...portfolioData.history].sort((a, b) => b.timestamp - a.timestamp);
+                    activityEvents = sorted.slice(0, 5).map(tx => ({
+                        type: 'trade',
+                        timestamp: tx.timestamp * 1000,
+                        exchange: tx.exchange,
+                        symbol: tx.symbol,
+                        side: tx.side,
+                        price: tx.price,
+                        quantity: tx.quantity,
+                        reason: tx.reason
+                    }));
+                }
+            }
+            renderActivityFeed();
+        } catch (e) {
+            console.error("[OverviewEngine] Failed to load initial activity feed:", e);
+        }
+        // [NEW] 토글 버튼 바인딩
+        bindToggleButtons();
+    }
+
+    /**
+     * 포트폴리오 데이터를 서버에서 강제 새로고침
+     */
+    async function refreshData() {
+        if (!state.currentPortfolioId) {
+            const sessionInfoEl = document.getElementById('overview-session-info');
+            if (sessionInfoEl) sessionInfoEl.innerText = "활성 포트폴리오 세션이 없습니다. 대기 중...";
+            return;
+        }
+
+        try {
+            const response = await APIClient.fetchPortfolio(state.currentPortfolioId);
+            if (response && response.status === 'success') {
+                cachedPortfolio = response;
+                renderMetrics();
+                renderAllocationBar();
+                renderPositionsTable();
+            }
+        } catch (e) {
+            console.error("[OverviewEngine] Refresh data failed:", e);
+        }
+    }
+
+    /**
+     * 1. 핵심 성과 메트릭 카드 렌더링
+     */
+    function renderMetrics() {
+        if (!cachedPortfolio) return;
+
+        // [NEW] 토글 UI 상태를 현재 세션 타입과 양방향 연동
+        if (cachedPortfolio.type === 'live') {
+            updateToggleUI('live');
+        } else {
+            updateToggleUI('simulation');
+        }
+
+        const sessionInfoEl = document.getElementById('overview-session-info');
+        if (sessionInfoEl) {
+            sessionInfoEl.innerText = `활성 세션: ${cachedPortfolio.name || '미지정'} (유형: ${cachedPortfolio.type || 'simulation'})`;
+        }
+
+        const summary = cachedPortfolio.summary || {};
+        const totalValue = cachedPortfolio.total_value || 0.0;
+        const initialCash = cachedPortfolio.initial_cash || 10000000.0;
+        const cash = cachedPortfolio.cash || 0.0;
+        const roi = summary.roi !== undefined ? summary.roi : 0.0;
+        
+        // 보유종목 평가액 계산 (총 가치 - 보유 현금)
+        const assetsValue = Math.max(0, totalValue - cash);
+
+        // 총 평가 자산
+        const totalValueEl = document.getElementById('overview-total-value');
+        if (totalValueEl) {
+            updateValueWithFlash(totalValueEl, Math.round(totalValue).toLocaleString() + ' 원');
+        }
+
+        // ROI
+        const roiEl = document.getElementById('overview-roi');
+        if (roiEl) {
+            const formatted = formatRate(roi);
+            roiEl.innerText = formatted.text;
+            roiEl.className = `card-value ${formatted.className}`;
+        }
+        const roiDiffEl = document.getElementById('overview-roi-diff');
+        if (roiDiffEl) {
+            const diff = totalValue - initialCash;
+            roiDiffEl.innerText = `원금 대비 변동: ${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()} 원`;
+        }
+
+        // 보유 현금
+        const cashEl = document.getElementById('overview-cash');
+        if (cashEl) {
+            updateValueWithFlash(cashEl, Math.round(cash).toLocaleString() + ' 원');
+        }
+        const cashRatioEl = document.getElementById('overview-cash-ratio');
+        if (cashRatioEl && totalValue > 0) {
+            const ratio = (cash / totalValue) * 100;
+            cashRatioEl.innerText = `비중: ${ratio.toFixed(1)}%`;
+        }
+
+        // 보유종목 평가액
+        const assetsValueEl = document.getElementById('overview-assets-value');
+        if (assetsValueEl) {
+            updateValueWithFlash(assetsValueEl, Math.round(assetsValue).toLocaleString() + ' 원');
+        }
+        const assetsRatioEl = document.getElementById('overview-assets-ratio');
+        if (assetsRatioEl && totalValue > 0) {
+            const ratio = (assetsValue / totalValue) * 100;
+            assetsRatioEl.innerText = `비중: ${ratio.toFixed(1)}%`;
+        }
+
+        // AI 판단 확신도 및 활성 엔진
+        const aiScoreEl = document.getElementById('overview-ai-score');
+        if (aiScoreEl) {
+            const gnnScore = Store.get('gnnScore') || 85.0;
+            aiScoreEl.innerText = `${gnnScore.toFixed(1)} 점`;
+        }
+        const engineCountEl = document.getElementById('overview-engine-count');
+        if (engineCountEl) {
+            const activeEngines = Store.get('collectorStatuses')?.strategy?.active_engines || 0;
+            engineCountEl.innerText = `활성 엔진: ${activeEngines}개 종목`;
+        }
+    }
+
+    /**
+     * 2. 거래소별 가로형 자산 비중 바 (Stacked Progress Bar) 렌더링
+     */
+    function renderAllocationBar() {
+        if (!cachedPortfolio) return;
+
+        const cash = cachedPortfolio.cash || 0.0;
+        const positions = cachedPortfolio.positions || [];
+        const exchangeCash = cachedPortfolio.exchange_cash || {};
+
+        // 거래소 목록 정의
+        const exchanges = ['upbit', 'bithumb', 'kis'];
+
+        exchanges.forEach(ex => {
+            const barContainer = document.getElementById(`overview-allocation-bar-${ex}`);
+            const legendContainer = document.getElementById(`overview-allocation-legend-${ex}`);
+            const totalEl = document.getElementById(`overview-allocation-total-${ex}`);
+
+            if (!barContainer || !legendContainer) return;
+
+            barContainer.innerHTML = '';
+            legendContainer.innerHTML = '';
+
+            // 2.1. 해당 거래소의 현금 분류
+            let exCash = 0.0;
+            if (exchangeCash && Object.keys(exchangeCash).length > 0) {
+                exCash = exchangeCash[ex] || exchangeCash[ex.toUpperCase()] || 0.0;
+            } else {
+                // exchange_cash 정보가 없으면 포트폴리오 기본 거래소에 올인
+                const mainEx = (cachedPortfolio.exchange_id || 'upbit').toLowerCase();
+                if (mainEx === ex) {
+                    exCash = cash;
+                }
+            }
+
+            // 2.2. 해당 거래소의 보유종목 필터링 및 평가액 계산 (현금은 그래프 비중 연산에서 제외)
+            const exPositions = positions.filter(pos => {
+                const posEx = (pos.exchange || '').toLowerCase();
+                return posEx === ex && pos.quantity > 0;
+            });
+
+            let calculatedTotal = 0.0; // 분모는 순수 종목 평가액 합계로 구성
+            let totalVal = exCash;
+            exPositions.forEach(pos => {
+                const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
+                calculatedTotal += evalValue;
+            });
+            totalVal += calculatedTotal;
+
+            // 총액 및 현금 라벨 헤더 한 줄 반영
+            if (totalEl) {
+                totalEl.innerText = ` - 총 ${Math.round(totalVal).toLocaleString()} 원 (현금 ${Math.round(exCash).toLocaleString()}원)`;
+            }
+
+            if (calculatedTotal <= 0) {
+                barContainer.innerHTML = `<div style="width: 100%; text-align: center; line-height: 24px; color: #64748B; font-size: 0.75rem;">보유종목 평가 정보가 없습니다.</div>`;
+                return;
+            }
+
+            // 2.3. 비중 세그먼트 빌드 (현금 제외)
+            let segments = [];
+            
+            // 종목 추가 (종목명 포맷: 한글명(종목명))
+            let itemSegs = [];
+            exPositions.forEach((pos, idx) => {
+                const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
+                const ratio = (evalValue / calculatedTotal) * 100;
+                
+                const korName = pos.korean_name;
+                const displayName = (korName && korName !== pos.symbol) ? `${korName}(${pos.symbol})` : pos.symbol;
+
+                itemSegs.push({
+                    name: displayName,
+                    value: evalValue,
+                    ratio: ratio,
+                    color: segmentColors[idx % segmentColors.length]
+                });
+            });
+
+            // 상위 N=10개 병합 로직
+            const N = 10;
+            if (itemSegs.length > N) {
+                itemSegs.sort((a, b) => b.value - a.value);
+                const topSegs = itemSegs.slice(0, N);
+                const otherSegs = itemSegs.slice(N);
+
+                let otherTotal = 0;
+                otherSegs.forEach(s => otherTotal += s.value);
+                const otherRatio = (otherTotal / calculatedTotal) * 100;
+
+                segments = [...topSegs];
+                if (otherTotal > 0) {
+                    segments.push({
+                        name: '기타',
+                        value: otherTotal,
+                        ratio: otherRatio,
+                        color: '#334155'
+                    });
+                }
+            } else {
+                itemSegs.sort((a, b) => b.value - a.value);
+                segments = [...itemSegs];
+            }
+
+            // 2.4. DOM 렌더링
+            segments.forEach(seg => {
+                if (seg.ratio <= 0.1) return;
+
+                const segEl = document.createElement('div');
+                segEl.className = 'bar-segment';
+                segEl.style.width = `${seg.ratio}%`;
+                segEl.style.backgroundColor = seg.color;
+                segEl.title = `${seg.name}: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)`;
+
+                // 표시폭 8% 이상 텍스트 노출
+                if (seg.ratio >= 8.0) {
+                    const labelSpan = document.createElement('span');
+                    labelSpan.innerText = `${seg.name} (${Math.round(seg.value).toLocaleString()}원) ${seg.ratio.toFixed(1)}%`;
+                    segEl.appendChild(labelSpan);
+                }
+                barContainer.appendChild(segEl);
+
+                // 범례 추가
+                const legEl = document.createElement('div');
+                legEl.className = 'legend-item';
+                legEl.innerHTML = `
+                    <div class="legend-color-box" style="background-color: ${seg.color}"></div>
+                    <span><strong>${seg.name}</strong>: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)</span>
+                `;
+                legendContainer.appendChild(legEl);
+            });
+        });
+    }
+
+    /**
+     * 3. 보유 포지션 간이 테이블 렌더링
+     */
+    function renderPositionsTable() {
+        if (!cachedPortfolio) return;
+
+        const positions = cachedPortfolio.positions || [];
+        const tbody = document.getElementById('overview-positions-tbody');
+        const countEl = document.getElementById('overview-position-count');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        const activePositions = positions.filter(p => p.quantity > 0);
+        if (countEl) countEl.innerText = `${activePositions.length}개 종목`;
+
+        if (activePositions.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748B; padding: 20px;">보유 포지션이 없습니다.</td></tr>`;
+            return;
+        }
+
+        activePositions.forEach(pos => {
+            const currentPrice = pos.current_price ?? pos.avg_price;
+            const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * currentPrice);
+            const profitPercent = pos.roi !== undefined ? pos.roi : (((currentPrice - pos.avg_price) / pos.avg_price) * 100);
+            
+            const formatted = formatRate(profitPercent);
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td style="font-weight: bold; color: #E2E8F0;">${pos.symbol}</td>
+                <td class="num">${formatPrice(pos.quantity)}</td>
+                <td class="num">${formatPrice(pos.avg_price)}</td>
+                <td class="num" id="overview-pos-price-${pos.symbol}">${formatPrice(currentPrice)}</td>
+                <td class="num ${formatted.className}">${formatted.text}</td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    /**
+     * 4. 실시간 거래 및 이벤트 피드 렌더링
+     */
+    function renderActivityFeed() {
+        const feedContainer = document.getElementById('overview-activity-feed');
+        if (!feedContainer) return;
+
+        feedContainer.innerHTML = '';
+
+        if (activityEvents.length === 0) {
+            feedContainer.innerHTML = `<div class="feed-empty">실시간 거래 이벤트 대기 중...</div>`;
+            return;
+        }
+
+        const sortedEvents = [...activityEvents].sort((a, b) => b.timestamp - a.timestamp);
+
+        sortedEvents.forEach(ev => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'feed-item';
+
+            const timeStr = new Date(ev.timestamp).toLocaleTimeString();
+            let badgeClass = 'system';
+            let badgeText = 'EVENT';
+            let messageText = '';
+
+            if (ev.type === 'trade') {
+                badgeClass = ev.side.toLowerCase();
+                badgeText = ev.side === 'BUY' ? '매수' : '매도';
+                messageText = `<strong>${ev.symbol}</strong> ${formatPrice(ev.quantity)}개 체결 (${formatPrice(ev.price)} 원)`;
+            } else if (ev.type === 'alert') {
+                badgeClass = 'alert';
+                badgeText = '감지';
+                messageText = ev.message;
+            } else if (ev.type === 'system') {
+                badgeClass = 'system';
+                badgeText = '시스템';
+                messageText = ev.message;
+            }
+
+            itemEl.innerHTML = `
+                <span class="feed-badge ${badgeClass}">${badgeText}</span>
+                <span class="feed-content" title="${messageText}">${messageText}</span>
+                <span class="feed-time">${timeStr}</span>
+            `;
+            feedContainer.appendChild(itemEl);
+        });
+    }
+
+    /**
+     * 값 업데이트 시 미세 애니메이션 효과 부여
+     */
+    function updateValueWithFlash(element, newValue) {
+        if (element.innerText !== newValue) {
+            element.innerText = newValue;
+            element.classList.add('value-updating');
+            setTimeout(() => element.classList.remove('value-updating'), 500);
+        }
+    }
+
+    /**
+     * 외부 실시간 웹소켓 틱 데이터 주입 및 동기화 콜백
+     */
+    function update(tick) {
+        // 1. 체결 신호나 알림이 오면 활동 피드에 긴급 인입
+        if (tick.type === 'alert') {
+            let evType = 'alert';
+            let evMessage = tick.message;
+            let evSide = '';
+            let evQty = 0;
+            let evPrice = 0;
+
+            if (tick.alert_type === 'trade') {
+                evType = 'trade';
+                evSide = tick.side || 'BUY';
+                evQty = tick.quantity || 0;
+                evPrice = tick.price || 0;
+            }
+
+            activityEvents.unshift({
+                type: evType,
+                timestamp: tick.timestamp || Date.now(),
+                symbol: tick.symbol || tick.code,
+                side: evSide,
+                quantity: evQty,
+                price: evPrice,
+                message: evMessage
+            });
+
+            // 5개 초과 시 버림
+            if (activityEvents.length > 5) {
+                activityEvents.pop();
+            }
+
+            renderActivityFeed();
+            
+            // 거래 관련 알림 시 포트폴리오 메트릭 새로고침
+            if (tick.alert_type === 'trade') {
+                refreshData();
+            }
+        }
+
+        // 2. 현재 관찰 중인 종목의 시세 갱신 시 실시간 보유 종목 현재가 동기화
+        if (cachedPortfolio && tick.trade_price && tick.code) {
+            const priceEl = document.getElementById(`overview-pos-price-${tick.code}`);
+            if (priceEl) {
+                priceEl.innerText = formatPrice(tick.trade_price);
+                priceEl.classList.add('value-updating');
+                setTimeout(() => priceEl.classList.remove('value-updating'), 400);
+            }
+        }
+        
+        // 3. 수집기 및 데몬 상태 변화 반영
+        if (tick.type === 'collector_status' || tick.type === 'strategy_status') {
+            renderMetrics();
+        }
+    }
+
+    /**
+     * [NEW] 실투자/모의투자 토글 버튼 핸들러 및 상태 동기화 함수
+     */
+    function bindToggleButtons() {
+        const btnLive = document.getElementById('btn-toggle-live');
+        const btnSim = document.getElementById('btn-toggle-sim');
+        
+        if (!btnLive || !btnSim) return;
+        
+        // 중복 이벤트 바인딩 방지 (클론하여 교체)
+        const newLive = btnLive.cloneNode(true);
+        const newSim = btnSim.cloneNode(true);
+        btnLive.parentNode.replaceChild(newLive, btnLive);
+        btnSim.parentNode.replaceChild(newSim, btnSim);
+
+        newLive.addEventListener('click', async () => {
+            if (state.currentPortfolioId === 'live') return;
+            
+            state.currentPortfolioId = 'live';
+            updateToggleUI('live');
+            syncSidebarHighlight('live');
+            
+            if (typeof loadPortfolio === 'function') {
+                await loadPortfolio(true);
+            }
+            await refreshData();
+        });
+        
+        newSim.addEventListener('click', async () => {
+            if (state.currentPortfolioId !== 'live' && state.currentPortfolioId) return;
+
+            let targetSimId = 'default';
+            if (state.portfoliosCache && state.portfoliosCache.length > 0) {
+                const sims = state.portfoliosCache.filter(p => p.id !== 'live' && p.id !== 'default');
+                if (sims.length > 0) {
+                    targetSimId = sims[0].id;
+                }
+            }
+            
+            state.currentPortfolioId = targetSimId;
+            updateToggleUI('simulation');
+            syncSidebarHighlight(targetSimId);
+            
+            if (typeof loadPortfolio === 'function') {
+                await loadPortfolio(true);
+            }
+            await refreshData();
+        });
+    }
+
+    function updateToggleUI(mode) {
+        const btnLive = document.getElementById('btn-toggle-live');
+        const btnSim = document.getElementById('btn-toggle-sim');
+        
+        if (!btnLive || !btnSim) return;
+        
+        if (mode === 'live') {
+            btnLive.classList.add('active');
+            btnLive.style.background = '#FF4B4B';
+            btnLive.style.color = '#F8FAFC';
+            
+            btnSim.classList.remove('active');
+            btnSim.style.background = 'transparent';
+            btnSim.style.color = '#94A3B8';
+        } else {
+            btnSim.classList.add('active');
+            btnSim.style.background = '#3B82F6';
+            btnSim.style.color = '#F8FAFC';
+            
+            btnLive.classList.remove('active');
+            btnLive.style.background = 'transparent';
+            btnLive.style.color = '#94A3B8';
+        }
+    }
+
+    function syncSidebarHighlight(portfolioId) {
+        const tbody = document.getElementById('portfolio-history-list-tbody');
+        if (!tbody) return;
+        
+        tbody.querySelectorAll('tr').forEach(r => {
+            r.style.background = '';
+        });
+        
+        const targetRow = tbody.querySelector(`tr[data-portfolio-id="${portfolioId}"]`);
+        if (targetRow) {
+            targetRow.style.background = 'rgba(99, 102, 241, 0.1)';
+        }
+    }
+
+    return {
+        initialize,
+        refreshData,
+        update
+    };
+})();
+
+window.OverviewEngine = OverviewEngine;

@@ -399,20 +399,39 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                     "assets": asset_list
                 }
             else:
-                # [Active Mode] 보유 중인 자산 조회 (기존 로직)
-                coins = [a for a in accounts if a['currency'] != 'KRW']
-                coin_symbols = [f"KRW-{c['currency']}" for c in coins if f"KRW-{c['currency']}" in valid_krw_markets]
+                # [Active Mode] 보유 중인 자산 조회 (KRW/BTC 마켓 자동 환산)
+                all_markets = []
+                async with session.get(f"{api_url}/market/all") as m_resp:
+                    if m_resp.status == 200:
+                        all_markets = await m_resp.json()
+                        
+                krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
+                btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
+
+                # 보유 코인들에 대한 조회 대상 마켓 리스트 빌드 (BTC 마켓 종목 원화 환산용 KRW-BTC 강제 포함)
+                query_markets = ["KRW-BTC"]
+                for a in accounts:
+                    currency = a['currency']
+                    if currency == 'KRW':
+                        continue
+                    if currency in krw_supported:
+                        query_markets.append(f"KRW-{currency}")
+                    elif currency in btc_supported:
+                        query_markets.append(f"BTC-{currency}")
+
+                query_markets = list(set(query_markets))
                 
                 prices = {}
-                if coin_symbols:
-                    for i in range(0, len(coin_symbols), 100):
-                        batch = ','.join(coin_symbols[i:i+100])
+                if query_markets:
+                    for i in range(0, len(query_markets), 100):
+                        batch = ','.join(query_markets[i:i+100])
                         async with session.get(f"{api_url}/ticker?markets={batch}") as resp:
                             if resp.status == 200:
                                 tickers = await resp.json()
                                 for t in tickers:
                                     prices[t['market']] = float(t['trade_price'])
                                     
+                btc_krw_price = prices.get("KRW-BTC", 0.0)
                 asset_list = []
                 total_eval_value = 0.0
                 
@@ -426,13 +445,20 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                     
                     if currency == 'KRW':
                         current_price = 1.0
+                        balance = int(balance)
                         eval_value = balance
                         korean_name = "원화"
                     else:
-                        symbol = f"KRW-{currency}"
-                        if symbol in valid_krw_markets:
+                        if currency in krw_supported:
+                            symbol = f"KRW-{currency}"
                             current_price = prices.get(symbol, avg_buy_price)
                             eval_value = balance * current_price
+                        elif currency in btc_supported:
+                            symbol = f"BTC-{currency}"
+                            btc_price = prices.get(symbol, 0.0)
+                            current_price = btc_price * btc_krw_price
+                            eval_value = balance * current_price
+                            # 업비트 avg_buy_price는 이미 KRW 기준이므로 환산 생략
                         else:
                             current_price = 0.0
                             eval_value = 0.0

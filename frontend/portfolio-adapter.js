@@ -65,7 +65,7 @@ const PortfolioAdapter = {
             
             let currentPrice = pos.avg_price;
             if (isBacktest) {
-                currentPrice = pos.current_price || pos.avg_price;
+                currentPrice = pos.current_price ?? pos.avg_price;
             } else {
                 const coin = marketData.find(c => c.market === pos.symbol);
                 currentPrice = coin ? coin.trade_price : pos.avg_price;

@@ -55,7 +55,7 @@ pip install -r requirements.txt
 | **수집기 데몬 설계서** | [docs/collector-design.md](file:///home/simon/ATS/docs/collector-design.md) | 다중 WebSocket 세션 유지보수 및 50건 배치 DB 커밋 쓰기 로직 |
 | **UI/UX 디자인 가이드** | [docs/ui-design.md](file:///home/simon/ATS/docs/ui-design.md) | 전문가용 터미널 다크 테마 색상 체계, 차트 위젯 표준 디자인 시스템 |
 | **한국투자증권(KIS) 연동 규격** | [docs/manual/kis/kis_api_list.md](file:///home/simon/ATS/docs/manual/kis/kis_api_list.md) | 국내외 주식, 선물옵션, 채권 주문 및 실시간 웹소켓 TR_ID 명세 |
-| **아키텍처 결정 기록 (ADR)** | [docs/adr/](file:///home/simon/ATS/docs/adr/) | 포트폴리오 매니저 분리 등 아키텍처 주요 변경 결정 이력 (7개 문서) |
+| **아키텍처 결정 기록 (ADR)** | [docs/adr/](file:///home/simon/ATS/docs/adr/) | 포트폴리오 매니저 분리 및 실시간 국소 복기·카운터팩츄얼 대조 기반 챔피언 전략 순환 매매 비전 선언(ADR 0008) 등 주요 결정 이력 |
 | **에이전트 지침서** | [AGENTS.md](file:///home/simon/ATS/AGENTS.md) | 개발 AI 에이전트의 작업 준수 가이드 및 문서화 동기화 필수 규정 |
 
 > [!IMPORTANT]

@@ -169,8 +169,16 @@ class PerformanceAnalyzer:
 
         # 4. 전체 종합 요약 지표 (summary) 생성
         total_initial = sum(ex_initial_cash_map.values())
-        total_profit = sum(ex_profit_sums.values())
-        total_value = total_initial + total_profit
+        if portfolio.portfolio_type == 'live':
+            total_positions_val = sum(pos.quantity * current_prices.get(pos.symbol, pos.avg_price) 
+                                      for pos in portfolio.positions.values() if pos.quantity > 0)
+            total_value = portfolio.cash + total_positions_val
+            if total_initial <= 0.0:
+                total_initial = total_value
+            total_profit = total_value - total_initial
+        else:
+            total_profit = sum(ex_profit_sums.values())
+            total_value = total_initial + total_profit
         total_roi = (total_profit / total_initial * 100) if total_initial > 0 else 0.0
 
         applied_strategies = []
@@ -227,6 +235,7 @@ class PerformanceAnalyzer:
                     "quantity": pos.quantity,
                     "avg_price": pos.avg_price,
                     "current_price": current_prices.get(pos.symbol, pos.avg_price),
+                    "korean_name": stock_mapper.get_name(pos.exchange.lower(), pos.symbol),
                     "updated_at": pos.updated_at
                 }
                 for pos in portfolio.positions.values() if pos.quantity > 0

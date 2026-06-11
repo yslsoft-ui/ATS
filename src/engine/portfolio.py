@@ -155,6 +155,152 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
             'timestamp': int(time.time() * 1000)
         }
 
+def _create_upbit_jwt(access_key, secret_key, query_hash=None):
+    import base64
+    import hmac
+    import hashlib
+    import json
+    import uuid
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "access_key": access_key,
+        "nonce": str(uuid.uuid4())
+    }
+    if query_hash:
+        payload["query_hash"] = query_hash
+        payload["query_hash_alg"] = "SHA512"
+        
+    def base64url(b):
+        return base64.urlsafe_b64encode(b).decode('utf-8').replace('=', '')
+        
+    header_b64 = base64url(json.dumps(header, separators=(',', ':')).encode('utf-8'))
+    payload_b64 = base64url(json.dumps(payload, separators=(',', ':')).encode('utf-8'))
+    signing_input = f"{header_b64}.{payload_b64}"
+    
+    sig = hmac.new(
+        secret_key.encode('utf-8'),
+        signing_input.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    return f"{signing_input}.{base64url(sig)}"
+
+class RealOrderExecutorAdapter(OrderExecutor):
+    """
+    실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다.
+    """
+    def __init__(self, config_manager: ConfigManager):
+        self.config_manager = config_manager
+
+    async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+        import os
+        import hashlib
+        import json
+        import aiohttp
+        import urllib.parse
+        from pathlib import Path
+        
+        exchange_lower = exchange.lower()
+        if exchange_lower != 'upbit':
+            logger.error(f"RealOrderExecutorAdapter: Currently only 'upbit' is supported. Received '{exchange}'")
+            return None
+            
+        root_dir = Path(__file__).resolve().parents[2]
+        env_path = root_dir / '.env'
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        k, v = line.split('=', 1)
+                        os.environ[k.strip()] = v.strip()
+                        
+        access_key = os.getenv("UPBIT_ACCESS_KEY")
+        secret_key = os.getenv("UPBIT_SECRET_KEY")
+        
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            logger.error("RealOrderExecutorAdapter: Upbit API keys are missing in environment/env file.")
+            return None
+            
+        api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+        base_url = api_url.rstrip('/')
+        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        clean_symbol = symbol.replace("KRW-", "").upper()
+        upbit_side = "bid" if side.upper() == "BUY" else "ask"
+        
+        order_type = kwargs.get('order_type')
+        trade_price = kwargs.get('trade_price')
+        market = kwargs.get('market', 'KRW')
+        
+        params = {
+            "market": f"KRW-{clean_symbol}",
+            "side": upbit_side,
+        }
+        
+        if order_type == "limit" or (order_type is None and trade_price is not None and kwargs.get('is_limit')):
+            params["ord_type"] = "limit"
+            params["price"] = str(trade_price)
+            params["volume"] = str(quantity)
+        else:
+            if upbit_side == "bid":
+                params["ord_type"] = "price"
+                if trade_price:
+                    params["price"] = str(int(quantity * trade_price))
+                else:
+                    logger.error("RealOrderExecutorAdapter: trade_price is required for market buy order.")
+                    return None
+            else:
+                params["ord_type"] = "market"
+                params["volume"] = str(quantity)
+                
+        try:
+            query_string = urllib.parse.urlencode(params).encode("utf-8")
+            
+            m = hashlib.sha512()
+            m.update(query_string)
+            query_hash = m.hexdigest()
+            
+            token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+            
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"{upbit_v1_url}/orders", params=params, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                        logger.error(f"RealOrderExecutorAdapter Upbit API error: {resp.status} - {err_msg}")
+                        return None
+                    
+                    executed_qty = float(res_data.get("executed_volume") or res_data.get("volume") or quantity)
+                    executed_price = float(res_data.get("avg_price") or res_data.get("price") or trade_price or 0.0)
+                    fee = float(res_data.get("paid_fee") or 0.0)
+                    executed_value = executed_price * executed_qty
+                    
+                    if executed_qty == 0.0 and trade_price is not None and trade_price > 0:
+                        executed_qty = quantity
+                        executed_value = executed_price * executed_qty
+                    
+                    return {
+                        'exchange': exchange,
+                        'market': market,
+                        'symbol': clean_symbol,
+                        'side': side.upper(),
+                        'price': executed_price,
+                        'quantity': executed_qty,
+                        'fee': fee,
+                        'executed_value': executed_value,
+                        'timestamp': int(time.time() * 1000)
+                    }
+        except Exception as e:
+            logger.error(f"RealOrderExecutorAdapter: Exception placing upbit order: {e}")
+            return None
+
 class PortfolioManager:
     """
     여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다.
@@ -173,6 +319,135 @@ class PortfolioManager:
 
     def add_portfolio(self, portfolio: Portfolio):
         self.portfolios[portfolio.id] = portfolio
+
+    async def sync_live_portfolio_from_exchange(self, system):
+        """
+        'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다.
+        """
+        import os
+        import time
+        import aiohttp
+        from pathlib import Path
+        from src.engine.utils.stock_mapper import stock_mapper
+        
+        portfolio = self.portfolios.get('live')
+        if not portfolio:
+            portfolio = Portfolio(
+                portfolio_id='live',
+                name='실계좌 자동매매',
+                initial_cash=0.0,
+                exchange_id='upbit',
+                portfolio_type='live'
+            )
+            self.add_portfolio(portfolio)
+            
+        root_dir = Path(__file__).resolve().parents[2]
+        env_path = root_dir / '.env'
+        if env_path.exists():
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#'):
+                        continue
+                    if '=' in line:
+                        k, v = line.split('=', 1)
+                        os.environ[k.strip()] = v.strip()
+
+        access_key = os.getenv("UPBIT_ACCESS_KEY")
+        secret_key = os.getenv("UPBIT_SECRET_KEY")
+        
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            logger.warning("sync_live_portfolio_from_exchange: API keys are missing in env. Cannot sync.")
+            return
+            
+        api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+        base_url = api_url.rstrip('/')
+        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        try:
+            from src.server.routers.portfolio import _sync_real_orders
+            await _sync_real_orders(access_key, secret_key, api_url, force_sync=True)
+        except Exception as e:
+            logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real orders: {e}")
+            
+        try:
+            token = _create_upbit_jwt(access_key, secret_key)
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json"
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{upbit_v1_url}/accounts", headers=headers) as resp:
+                    if resp.status != 200:
+                        logger.error(f"sync_live_portfolio_from_exchange: API error {resp.status}")
+                        return
+                    accounts = await resp.json()
+
+                # 업비트 전체 마켓 리스트 및 BTC 원화 가격 조회
+                all_markets = []
+                async with session.get(f"{upbit_v1_url}/market/all") as m_resp:
+                    if m_resp.status == 200:
+                        all_markets = await m_resp.json()
+
+                krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
+                btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
+
+                btc_krw_price = 0.0
+                async with session.get(f"{upbit_v1_url}/ticker?markets=KRW-BTC") as t_resp:
+                    if t_resp.status == 200:
+                        tickers = await t_resp.json()
+                        if tickers:
+                            btc_krw_price = float(tickers[0]['trade_price'])
+                    
+            new_positions = {}
+            for a in accounts:
+                currency = a['currency']
+                balance = float(a['balance']) + float(a['locked'])
+                avg_buy_price = float(a['avg_buy_price'])
+                
+                if balance <= 0.0:
+                    continue
+                    
+                if currency == 'KRW':
+                    balance = int(balance)
+                    portfolio.cash = balance
+                    if portfolio.exchange_cash is None:
+                        portfolio.exchange_cash = {}
+                    portfolio.exchange_cash['upbit'] = balance
+                else:
+                    symbol = currency.upper()
+                    pos_key = ('upbit', symbol)
+                    new_positions[pos_key] = Position(
+                        exchange='upbit',
+                        symbol=symbol,
+                        quantity=balance,
+                        avg_price=avg_buy_price,
+                        updated_at=time.time()
+                    )
+            portfolio.positions = new_positions
+            
+            # 최초 동기화 시 현재의 총자산 가치로 초기 자본을 계산하되, 상장폐지/거래불가 종목은 제외합니다.
+            if portfolio.initial_cash <= 0.0:
+                tot_val = portfolio.cash
+                for a in accounts:
+                    curr = a['currency']
+                    if curr != 'KRW':
+                        if curr not in krw_supported and curr not in btc_supported:
+                            continue
+                        bal = float(a['balance']) + float(a['locked'])
+                        avg_p = float(a['avg_buy_price'])
+                        tot_val += bal * avg_p
+                if tot_val > 0.0:
+                    portfolio.initial_cash = tot_val
+
+            # 실거래(live) 포트폴리오의 초기 투자금을 0원으로 강제 고정합니다.
+            portfolio.initial_cash = 0.0
+            
+            await self.save_to_db('live')
+            
+        except Exception as e:
+            logger.error(f"sync_live_portfolio_from_exchange: Exception occurred: {e}")
 
     def get_active_simulation_portfolio(self) -> Optional[Portfolio]:
         """현재 활성화된(즉 type이 'simulation'인) 가장 최근의 모의투자 포트폴리오 객체를 반환합니다."""
@@ -348,9 +623,14 @@ class PortfolioManager:
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         
         # [방안 B] 거래소 설정별로 주입된 어댑터 캐싱 및 다형적 호출
-        executor_key = f"simulation_{exchange_key.lower()}"
-        if executor_key not in self.executors:
-            self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
+        if portfolio.portfolio_type == 'live':
+            executor_key = f"live_{exchange_key.lower()}"
+            if executor_key not in self.executors:
+                self.executors[executor_key] = RealOrderExecutorAdapter(self.config_manager)
+        else:
+            executor_key = f"simulation_{exchange_key.lower()}"
+            if executor_key not in self.executors:
+                self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
         executor = self.executors[executor_key]
 
         market_val = getattr(signal, 'market', None)
@@ -534,25 +814,57 @@ class PortfolioManager:
             if needed_upbit:
                 import aiohttp
                 try:
-                    formatted = [f"KRW-{s}" if not s.startswith("KRW-") else s for s in needed_upbit]
-                    url = f"https://api.upbit.com/v1/ticker?markets={','.join(formatted)}"
+                    # 업비트 전체 마켓 정보를 조회하여 지원 마켓 판별
+                    all_markets = []
+                    market_url = "https://api.upbit.com/v1/market/all"
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(market_url) as m_resp:
+                            if m_resp.status == 200:
+                                all_markets = await m_resp.json()
+                    
+                    krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
+                    btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
+
+                    # 조회할 마켓 리스트 조립 (KRW-BTC 강제 포함)
+                    query_markets = ["KRW-BTC"]
+                    for s in needed_upbit:
+                        if s in krw_supported:
+                            query_markets.append(f"KRW-{s}")
+                        elif s in btc_supported:
+                            query_markets.append(f"BTC-{s}")
+                    
+                    query_markets = list(set(query_markets))
+                    
+                    prices = {}
+                    url = f"https://api.upbit.com/v1/ticker?markets={','.join(query_markets)}"
                     async with aiohttp.ClientSession() as session:
                         async with session.get(url) as resp:
                             if resp.status == 200:
                                 tickers = await resp.json()
                                 for t in tickers:
-                                    clean_sym = t['market'].replace("KRW-", "")
-                                    current_prices[clean_sym] = float(t['trade_price'])
+                                    prices[t['market']] = float(t['trade_price'])
+                                    
+                    btc_krw_price = prices.get("KRW-BTC", 0.0)
+                    
+                    for s in needed_upbit:
+                        if s in krw_supported:
+                            current_prices[s] = prices.get(f"KRW-{s}", 0.0)
+                        elif s in btc_supported:
+                            btc_price = prices.get(f"BTC-{s}", 0.0)
+                            current_prices[s] = btc_price * btc_krw_price
                 except Exception as e:
                     logger.error(f"Failed to fetch upbit prices for {needed_upbit}: {e}")
 
-        # 최종 폴백: 여전히 없는 종목들은 포지션의 평균 매수가로 채움
+        # 최종 폴백: 여전히 없는 종목들은 포지션의 평균 매수가로 채움 (단, live 실거래 포트폴리오의 경우 상장폐지/거래불가 종목은 0.0원으로 평가)
         for pos_key, pos in portfolio.positions.items():
             if pos.quantity <= 0:
                 continue
             _, sym = pos_key
             if sym not in current_prices:
-                current_prices[sym] = pos.avg_price
+                if portfolio.portfolio_type == 'live':
+                    current_prices[sym] = 0.0
+                else:
+                    current_prices[sym] = pos.avg_price
 
         return current_prices
 
@@ -562,6 +874,9 @@ class PortfolioManager:
         기존 backtest.py와 portfolio-adapter.js에 파편화되어 있던 성과 데이터 구조를 단일화합니다.
         실제 데이터 가공 및 성과 통계 계산은 PerformanceAnalyzer로 위임합니다.
         """
+        if portfolio_id == 'live':
+            await self.sync_live_portfolio_from_exchange(system)
+
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return {

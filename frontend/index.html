@@ -18,7 +18,8 @@
         <aside class="sidebar">
             <div class="logo">🚀 UPBIT TERMINAL</div>
             <nav class="menu">
-                <div class="menu-item active" data-view="market-view">🌐 마켓</div>
+                <div class="menu-item active" data-view="overview-view">🏠 대시보드</div>
+                <div class="menu-item" data-view="market-view">🌐 마켓</div>
                 <div class="menu-item" data-view="monitoring-view">📊 모니터링</div>
                 <div class="menu-item" data-view="alert-view">🔔 알림</div>
                 <div class="menu-item" data-view="strategy-view">🎯 전략</div>
@@ -70,6 +71,138 @@
 
         <!-- 메인 콘텐츠 -->
         <main class="content">
+            <!-- 통합 요약 대시보드 뷰 (기본 노출) -->
+            <section id="overview-view">
+                <header class="main-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px;">
+                    <div>
+                        <h1 style="margin: 0;">🏠 실시간 운용 대시보드</h1>
+                        <div id="overview-session-info" style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
+                            활성 세션: 로딩 중...
+                        </div>
+                    </div>
+                    <!-- 실투자 / 모의투자 토글 스위치 -->
+                    <div class="mode-toggle-container" style="display: flex; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 4px; gap: 4px;">
+                        <button id="btn-toggle-live" class="toggle-btn active" style="background: #FF4B4B; color: #F8FAFC; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">실거래</button>
+                        <button id="btn-toggle-sim" class="toggle-btn" style="background: transparent; color: #94A3B8; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">모의투자</button>
+                    </div>
+                </header>
+
+                <!-- 1. 핵심 성과 메트릭 (그라데이션 카드) -->
+                <div class="overview-metrics-grid">
+                    <div class="overview-card metric-card grad-value">
+                        <div class="card-label">💰 총 평가 자산</div>
+                        <div class="card-value" id="overview-total-value">0</div>
+                        <div class="card-sub-label">현금 + 보유종목 평가액</div>
+                    </div>
+                    <div class="overview-card metric-card grad-roi">
+                        <div class="card-label">📈 누적 수익률 (ROI)</div>
+                        <div class="card-value" id="overview-roi">0.00%</div>
+                        <div class="card-sub-label" id="overview-roi-diff">원금 대비 변동</div>
+                    </div>
+                    <div class="overview-card metric-card grad-cash">
+                        <div class="card-label">💵 보유 현금</div>
+                        <div class="card-value" id="overview-cash">0</div>
+                        <div class="card-sub-label" id="overview-cash-ratio">비중: 0.0%</div>
+                    </div>
+                    <div class="overview-card metric-card grad-assets-val">
+                        <div class="card-label">📦 보유종목 평가액</div>
+                        <div class="card-value" id="overview-assets-value">0</div>
+                        <div class="card-sub-label" id="overview-assets-ratio">비중: 0.0%</div>
+                    </div>
+                    <div class="overview-card metric-card grad-ai">
+                        <div class="card-label">🧠 AI 판단 확신도</div>
+                        <div class="card-value" id="overview-ai-score">—</div>
+                        <div class="card-sub-label" id="overview-engine-count">활성 엔진: 0개</div>
+                    </div>
+                </div>
+
+                <!-- 2. 거래소별 가로형 자산 비중 바 (Stacked Progress Bar) -->
+                <div class="overview-card allocation-card" style="margin-top: 20px;">
+                    <h3>📊 거래소별 자산 비중 (Asset Allocation by Exchange)</h3>
+                    
+                    <!-- 2.1. 업비트 (UPBIT) -->
+                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #FF4B4B;">
+                            <span>🔴 UPBIT (가상자산)</span>
+                            <span id="overview-allocation-total-upbit" style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
+                        </h4>
+                        <div class="allocation-bar-wrapper">
+                            <div id="overview-allocation-bar-upbit" class="stacked-bar-container">
+                                <!-- JS에서 동적 생성 -->
+                            </div>
+                        </div>
+                        <div id="overview-allocation-legend-upbit" class="allocation-legend-grid" style="margin-top: 8px;"></div>
+                    </div>
+
+                    <!-- 2.2. 빗썸 (BITHUMB) -->
+                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #F59E0B;">
+                            <span>🟡 BITHUMB (가상자산)</span>
+                            <span id="overview-allocation-total-bithumb" style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
+                        </h4>
+                        <div class="allocation-bar-wrapper">
+                            <div id="overview-allocation-bar-bithumb" class="stacked-bar-container">
+                                <!-- JS에서 동적 생성 -->
+                            </div>
+                        </div>
+                        <div id="overview-allocation-legend-bithumb" class="allocation-legend-grid" style="margin-top: 8px;"></div>
+                    </div>
+
+                    <!-- 2.3. 한국투자증권 (KIS) -->
+                    <div class="exchange-allocation-row">
+                        <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #0072FF;">
+                            <span>🔵 KIS (국내주식)</span>
+                            <span id="overview-allocation-total-kis" style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
+                        </h4>
+                        <div class="allocation-bar-wrapper">
+                            <div id="overview-allocation-bar-kis" class="stacked-bar-container">
+                                <!-- JS에서 동적 생성 -->
+                            </div>
+                        </div>
+                        <div id="overview-allocation-legend-kis" class="allocation-legend-grid" style="margin-top: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- 3. 콘텐츠 분할 영역 (보유 포지션 & 거래 활동 피드) -->
+                <div class="overview-content-layout" style="margin-top: 20px; display: flex; gap: 20px; flex-wrap: wrap;">
+                    <!-- 좌측: 보유 포지션 간이 리스트 -->
+                    <div class="overview-card" style="flex: 1; min-width: 400px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>💼 현재 보유 포지션</span>
+                            <span id="overview-position-count" class="badge" style="background: #3B82F6; font-size: 0.75rem;">0개 종목</span>
+                        </h3>
+                        <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
+                            <table id="overview-positions-table">
+                                <thead>
+                                    <tr>
+                                        <th>종목</th>
+                                        <th style="text-align: right;">보유량</th>
+                                        <th style="text-align: right;">평균단가</th>
+                                        <th style="text-align: right;">현재가</th>
+                                        <th style="text-align: right;">평가손익</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overview-positions-tbody">
+                                    <tr><td colspan="5" style="text-align: center; color: #64748B; padding: 20px;">보유 포지션이 없습니다.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 우측: 최근 실시간 거래 활동 및 알림 피드 -->
+                    <div class="overview-card" style="flex: 1; min-width: 400px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                            <span>🔔 실시간 거래 & 이벤트 피드</span>
+                            <span style="font-size: 0.75rem; color: #64748B;">최근 5건</span>
+                        </h3>
+                        <div id="overview-activity-feed" class="activity-feed-container">
+                            <!-- 타임라인 피드 항목 동적 생성 -->
+                            <div class="feed-empty">실시간 거래 이벤트 대기 중...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 모니터링 뷰 (초기엔 숨김) -->
             <section id="monitoring-view" style="display: none;">
                 <header class="main-header">
@@ -1229,12 +1362,13 @@
 
 
     <script src="store.js"></script>
+    <script src="utils.js"></script>
     <script src="router.js"></script>
     <script src="client.js"></script>
+    <script src="overview.js"></script>
     <script src="stream.js"></script>
     <script src="indicators.js"></script>
     <script src="chart.js"></script>
-    <script src="utils.js"></script>
     <script src="alerts.js"></script>
     <script src="market.js"></script>
     <script src="portfolio-adapter.js"></script>
