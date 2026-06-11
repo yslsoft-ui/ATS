@@ -194,18 +194,14 @@ class UserCommandDispatcher:
         if not strategy_id:
             raise ValueError("Strategy ID parameter is missing")
         s_id = strategy_id.lower()
-        current_config = self.config_manager.get(f"strategies.{s_id}", {"enabled": False, "params": {}})
-        current_config['enabled'] = True
-        self.config_manager.update(f"strategies.{s_id}", current_config)
+        self.config_manager.update(f"strategies.{s_id}.enabled", True)
 
     async def _handle_strategy_disable(self, command_id: str, payload: Dict[str, Any]):
         strategy_id = payload.get("strategy_id")
         if not strategy_id:
             raise ValueError("Strategy ID parameter is missing")
         s_id = strategy_id.lower()
-        current_config = self.config_manager.get(f"strategies.{s_id}", {"enabled": False, "params": {}})
-        current_config['enabled'] = False
-        self.config_manager.update(f"strategies.{s_id}", current_config)
+        self.config_manager.update(f"strategies.{s_id}.enabled", False)
 
     async def _handle_strategy_update_params(self, command_id: str, payload: Dict[str, Any]):
         strategy_id = payload.get("strategy_id")
@@ -213,9 +209,8 @@ class UserCommandDispatcher:
         if not strategy_id or params is None:
             raise ValueError("Strategy ID or params parameter is missing")
         s_id = strategy_id.lower()
-        current_config = self.config_manager.get(f"strategies.{s_id}", {"enabled": False, "params": {}})
-        current_config['params'].update(params)
-        self.config_manager.update(f"strategies.{s_id}", current_config)
+        for pk, pv in params.items():
+            self.config_manager.update(f"strategies.{s_id}.params.{pk}", pv)
 
     async def _handle_strategy_restart_daemon(self, command_id: str, payload: Dict[str, Any]):
         if not self.strategy_control_publisher:

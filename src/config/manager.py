@@ -39,7 +39,6 @@ class ConfigManager:
         else:
             self.config_path = config_path or "config/settings.yaml"
         self.config: Dict[str, Any] = {}
-        self.raw_config: Dict[str, Any] = {}
         self.last_mtime: float = 0
         self.subscribers: List[Callable[[Dict[str, Any]], Any]] = []
         
@@ -57,19 +56,14 @@ class ConfigManager:
 
         try:
             import hashlib
-            import copy
             with open(self.config_path, 'rb') as f:
                 content_bytes = f.read()
                 sha256_val = hashlib.sha256(content_bytes).hexdigest()
                 
+            self.raw_yaml_text = content_bytes.decode('utf-8')
+                
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                raw = yaml.safe_load(f) or {}
-            
-            # 치환 전 원본은 따로 보존
-            self.raw_config = copy.deepcopy(raw)
-            
-            # 치환 작업을 수행할 config 대상 생성
-            new_config = copy.deepcopy(raw)
+                new_config = yaml.safe_load(f) or {}
                 
             # 1. YAML 내부의 ${VAR_NAME} 패턴 치환
             self._substitute_env_vars(new_config)
@@ -215,27 +209,177 @@ class ConfigManager:
             except Exception as e:
                 logger.error(f"Config watcher error: {e}")
 
-    def update(self, key: str, value: Any):
-        """특정 설정을 업데이트하고 파일로 즉시 저장합니다."""
-        parts = key.split('.')
-        d = self.raw_config
-        for part in parts[:-1]:
-            if part not in d:
-                d[part] = {}
-            d = d[part]
+    def _update_yaml_text_surgically(self, yaml_text: str, key_path: str, new_value: Any) -> str:
+        import re
+        from typing import List, Dict, Tuple
         
-        d[parts[-1]] = value
-        if self.save():
+        lines = yaml_text.splitlines()
+        parts = key_path.split('.')
+        path_stack = []
+        modified = False
+        
+        def to_yaml_str(val: Any) -> str:
+            if isinstance(val, bool):
+                return "true" if val else "false"
+            elif isinstance(val, str):
+                if val.startswith("${") and val.endswith("}"):
+                    return val
+                return f"'{val}'" if "'" not in val else f'"{val}"'
+            elif val is None:
+                return "null"
+            else:
+                return str(val)
+
+        def dict_to_yaml_lines(d: Dict[str, Any], indent_size: int) -> List[str]:
+            result_lines = []
+            for k, v in d.items():
+                ind = " " * indent_size
+                if isinstance(v, dict):
+                    result_lines.append(f"{ind}{k}:")
+                    result_lines.extend(dict_to_yaml_lines(v, indent_size + 2))
+                else:
+                    result_lines.append(f"{ind}{k}: {to_yaml_str(v)}")
+            return result_lines
+
+        # 1. 원시 단일 값인 경우
+        if not isinstance(new_value, dict):
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                if not stripped or stripped.startswith('#'):
+                    continue
+                    
+                indent = len(line) - len(line.lstrip())
+                while path_stack and path_stack[-1][0] >= indent:
+                    path_stack.pop()
+                    
+                match = re.match(r'^([\w\-_\.]+)\s*:(.*)$', stripped)
+                if match:
+                    k = match.group(1).strip()
+                    rest = match.group(2).strip()
+                    path_stack.append((indent, k))
+                    
+                    current_path = [x[1] for x in path_stack]
+                    if len(current_path) == len(parts) and all(current_path[idx] == parts[idx] for idx in range(len(parts))):
+                        # 주석 보존
+                        comment_match = re.search(r'\s*(#.*)$', rest)
+                        comment = comment_match.group(1) if comment_match else ""
+                        
+                        indent_str = " " * indent
+                        lines[i] = f"{indent_str}{k}: {to_yaml_str(new_value)}{' ' + comment if comment else ''}"
+                        modified = True
+                        break
+            if modified:
+                return "\n".join(lines) + "\n"
+
+        # 2. 딕셔너리 값인 경우 (재귀 매칭)
+        def update_dict_recursively(lines_list: List[str], current_parts: List[str], val: Dict[str, Any]) -> Tuple[List[str], bool]:
+            path_stack_local = []
+            target_line_idx = -1
+            target_indent = 0
+            
+            for i, line in enumerate(lines_list):
+                stripped = line.strip()
+                if not stripped or stripped.startswith('#'):
+                    continue
+                indent = len(line) - len(line.lstrip())
+                while path_stack_local and path_stack_local[-1][0] >= indent:
+                    path_stack_local.pop()
+                
+                match = re.match(r'^([\w\-_\.]+)\s*:(.*)$', stripped)
+                if match:
+                    k = match.group(1).strip()
+                    path_stack_local.append((indent, k))
+                    current_path = [x[1] for x in path_stack_local]
+                    
+                    if current_path == current_parts:
+                        target_line_idx = i
+                        target_indent = indent
+                        break
+                        
+            if target_line_idx == -1:
+                return lines_list, False
+                
+            sub_start = target_line_idx + 1
+            sub_end = len(lines_list)
+            for i in range(sub_start, len(lines_list)):
+                stripped = lines_list[i].strip()
+                if not stripped:
+                    continue
+                indent = len(lines_list[i]) - len(lines_list[i].lstrip())
+                if indent <= target_indent and not stripped.startswith('#'):
+                    sub_end = i
+                    break
+                    
+            sub_lines = lines_list[sub_start:sub_end]
+            child_indent = target_indent + 2
+            
+            for k, v in val.items():
+                found_child = False
+                for j, sub_line in enumerate(sub_lines):
+                    s_stripped = sub_line.strip()
+                    if not s_stripped or s_stripped.startswith('#'):
+                        continue
+                    s_indent = len(sub_line) - len(sub_line.lstrip())
+                    if s_indent == child_indent:
+                        s_match = re.match(r'^([\w\-_\.]+)\s*:(.*)$', s_stripped)
+                        if s_match and s_match.group(1).strip() == k:
+                            found_child = True
+                            if isinstance(v, dict):
+                                temp_full_path = current_parts + [k]
+                                lines_list, _ = update_dict_recursively(lines_list, temp_full_path, v)
+                            else:
+                                abs_idx = sub_start + j
+                                s_rest = s_match.group(2).strip()
+                                s_comment_match = re.search(r'\s*(#.*)$', s_rest)
+                                s_comment = s_comment_match.group(1) if s_comment_match else ""
+                                lines_list[abs_idx] = f"{' ' * child_indent}{k}: {to_yaml_str(v)}{' ' + s_comment if s_comment else ''}"
+                            break
+                
+                if not found_child:
+                    new_block_lines = []
+                    ind_str = " " * child_indent
+                    if isinstance(v, dict):
+                        new_block_lines.append(f"{ind_str}{k}:")
+                        new_block_lines.extend(dict_to_yaml_lines(v, child_indent + 2))
+                    else:
+                        new_block_lines.append(f"{ind_str}{k}: {to_yaml_str(v)}")
+                    
+                    lines_list.insert(sub_end, "")
+                    for offset, new_l in enumerate(new_block_lines):
+                        lines_list.insert(sub_end + 1 + offset, new_l)
+                    sub_end += len(new_block_lines) + 1
+                    
+            return lines_list, True
+
+        if isinstance(new_value, dict):
+            new_lines, ok = update_dict_recursively(lines, parts, new_value)
+            if ok:
+                # 불필요한 연속 빈 줄 정리
+                cleaned_lines = []
+                prev_empty = False
+                for line in new_lines:
+                    if not line.strip():
+                        if not prev_empty:
+                            cleaned_lines.append(line)
+                            prev_empty = True
+                    else:
+                        cleaned_lines.append(line)
+                        prev_empty = False
+                return "\n".join(cleaned_lines) + "\n"
+
+        return yaml_text
+
+    def update(self, key: str, value: Any):
+        """특정 설정을 surgical하게 업데이트하고 파일로 즉시 저장한 뒤 다시 로드합니다."""
+        try:
+            updated_text = self._update_yaml_text_surgically(self.raw_yaml_text, key, value)
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                f.write(updated_text)
             return self.reload()
-        return False
+        except Exception as e:
+            logger.error(f"Surgical update failed for key '{key}': {e}")
+            return False
 
     def save(self):
-        """현재 메모리의 설정을 파일로 저장합니다."""
-        try:
-            with open(self.config_path, 'w', encoding='utf-8') as f:
-                yaml.dump(self.raw_config, f, allow_unicode=True, sort_keys=False)
-            self.last_mtime = os.path.getmtime(self.config_path)
-            return True
-        except Exception as e:
-            logger.error(f"Error saving config to {self.config_path}: {e}")
-            return False
+        """하위 호환성 가드를 유지합니다. (물리 파일 수정은 update 내에서 즉시 수행됩니다)"""
+        return True
