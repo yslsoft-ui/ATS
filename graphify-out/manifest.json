@@ -425,8 +425,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/strategy.js": {
-    "mtime": 1781102997.8301263,
-    "ast_hash": "887696de259b3e25d49f4b5a315cc0e1",
+    "mtime": 1781195528.9670851,
+    "ast_hash": "896817929aae8f80d2e99acc5c23b137",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/chart.js": {
@@ -1200,7 +1200,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781194918.693162,
+    "mtime": 1781195546.603348,
     "ast_hash": "bc48cace3daf7a4b8b5b7a3809b41da0",
     "semantic_hash": ""
   },
@@ -1220,8 +1220,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781194344.5710144,
-    "ast_hash": "ce694874a6149972d63a7589f9f6f138",
+    "mtime": 1781195518.118938,
+    "ast_hash": "ea4b7a5370966294319b347e4a6a17c2",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {

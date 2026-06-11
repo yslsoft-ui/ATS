@@ -114,6 +114,7 @@ async function loadStrategies() {
     try {
         const strategies = await APIClient.fetchStrategies();
         renderStrategyCards(strategies);
+        renderStrategyCardsInSettings(strategies);
     } catch (e) {
         listEl.innerHTML = '<p class="status-text">전략 정보를 불러오는데 실패했습니다.</p>';
     }
@@ -285,6 +286,7 @@ async function loadStrategiesOnly() {
             `;
             listEl.appendChild(card);
         });
+        renderStrategyCardsInSettings(strategies);
     } catch(e) {}
 }
 
