@@ -442,8 +442,17 @@ async function loadPortfolio(force = false) {
                 : Object.entries(data.applied_strategies).map(([name, params]) => ({ name, params }));
 
             strategies.forEach(s => {
-                const params = s.params || {};
-                const paramStr = Object.entries(params).map(([k, v]) => `${k}: ${v}`).join(', ');
+                let params = s.params || {};
+                
+                // 만약 { enabled: ..., params: { ... } } 구조의 중첩 객체라면 실제 params 객체 추출
+                if (params && typeof params === 'object' && 'params' in params && 'enabled' in params) {
+                    params = params.params || {};
+                }
+                
+                const paramStr = typeof params === 'object' && params !== null
+                    ? Object.entries(params).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ')
+                    : String(params);
+                
                 appliedHtml += `<span class="ctx-badge" style="margin-top: 5px; display: inline-block;">${s.name} (${paramStr})</span> `;
             });
             appliedStrategies.innerHTML = appliedHtml;
