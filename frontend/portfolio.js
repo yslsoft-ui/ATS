@@ -1458,6 +1458,19 @@ let currentRunMode = 'simulation'; // 'simulation' 또는 'backtest'
 /**
  * 공통 전략 기동 모달을 열고, 모드에 맞춰 화면 필드를 동적으로 온오프합니다.
  */
+function toggleStrategySelectionMode() {
+    const autoRadio = document.getElementById('modal-strat-mode-auto');
+    const selectionSection = document.getElementById('modal-strategy-selection-section');
+    if (!selectionSection) return;
+
+    if (autoRadio && autoRadio.checked) {
+        selectionSection.style.display = 'none';
+    } else {
+        selectionSection.style.display = 'flex';
+    }
+}
+window.toggleStrategySelectionMode = toggleStrategySelectionMode;
+
 async function openStrategyRunModal(mode) {
     currentRunMode = 'simulation';
     const modal = document.getElementById('strategy-run-modal');
@@ -1472,6 +1485,15 @@ async function openStrategyRunModal(mode) {
     if (submitBtn) {
         submitBtn.innerText = '▶️ 모의투자 가동';
     }
+
+    // 전략 모드 라디오 버튼 초기화: 챔피언 자동 기용이 기본값
+    const autoRadio = document.getElementById('modal-strat-mode-auto');
+    const manualRadio = document.getElementById('modal-strat-mode-manual');
+    if (autoRadio) autoRadio.checked = true;
+    if (manualRadio) manualRadio.checked = false;
+
+    const selectionSection = document.getElementById('modal-strategy-selection-section');
+    if (selectionSection) selectionSection.style.display = 'none';
 
     const listContainer = document.getElementById('modal-strategy-container');
     if (listContainer) {
@@ -1536,30 +1558,36 @@ function closeStrategyRunModal() {
  * 모달 설정을 종합하여 실시간 모의투자 기동 혹은 과거 백테스트를 실행합니다.
  */
 async function submitStrategyRun() {
-    const activeCheckboxes = document.querySelectorAll('.modal-strategy-checkbox:checked');
-    if (activeCheckboxes.length === 0) {
-        alert("최소 한 개 이상의 전략을 선택해야 합니다.");
-        return;
-    }
+    const autoRadio = document.getElementById('modal-strat-mode-auto');
+    const isAutoMode = autoRadio ? autoRadio.checked : true;
 
     const strategies = {};
-    activeCheckboxes.forEach(chk => {
-        const name = chk.getAttribute('data-strategy-name');
-        const params = {};
-        
-        const inputs = document.querySelectorAll(`[id^="param-${name}-"]`);
-        inputs.forEach(input => {
-            const key = input.id.replace(`param-${name}-`, '');
-            const val = input.value.trim();
-            const numVal = Number(val);
-            params[key] = isNaN(numVal) ? val : numVal;
-        });
 
-        strategies[name] = {
-            enabled: true,
-            params: params
-        };
-    });
+    if (!isAutoMode) {
+        const activeCheckboxes = document.querySelectorAll('.modal-strategy-checkbox:checked');
+        if (activeCheckboxes.length === 0) {
+            alert("최소 한 개 이상의 전략을 선택해야 합니다.");
+            return;
+        }
+
+        activeCheckboxes.forEach(chk => {
+            const name = chk.getAttribute('data-strategy-name');
+            const params = {};
+            
+            const inputs = document.querySelectorAll(`[id^="param-${name}-"]`);
+            inputs.forEach(input => {
+                const key = input.id.replace(`param-${name}-`, '');
+                const val = input.value.trim();
+                const numVal = Number(val);
+                params[key] = isNaN(numVal) ? val : numVal;
+            });
+
+            strategies[name] = {
+                enabled: true,
+                params: params
+            };
+        });
+    }
 
     const cash_config = {
         upbit: parseFloat(document.getElementById('modal-cash-upbit').value) || 0,

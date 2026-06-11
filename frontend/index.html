@@ -717,8 +717,26 @@
                                 </div>
                             </div>
 
-                            <!-- 3. 공통 전략 선택 및 파라미터 튜닝 영역 -->
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- 3. 전략 지정 방식 선택 영역 -->
+                            <div style="display: flex; flex-direction: column; gap: 8px; background: rgba(15, 23, 42, 0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.1);">
+                                <span style="font-weight: bold; color: #94A3B8; font-size: 0.85rem;">🎯 전략 구성 방식:</span>
+                                <div style="display: flex; gap: 20px; margin-top: 5px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #F8FAFC; font-size: 0.85rem; margin: 0;">
+                                        <input type="radio" name="modal-strategy-mode" id="modal-strat-mode-auto" value="auto" checked onchange="toggleStrategySelectionMode()">
+                                        🤖 챔피언 전략 자동 기용 (추천)
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #F8FAFC; font-size: 0.85rem; margin: 0;">
+                                        <input type="radio" name="modal-strategy-mode" id="modal-strat-mode-manual" value="manual" onchange="toggleStrategySelectionMode()">
+                                        🛠️ 수동 선택 및 파라미터 튜닝
+                                    </label>
+                                </div>
+                                <p id="modal-strategy-auto-desc" style="margin: 8px 0 0 0; font-size: 0.75rem; color: #64748B; line-height: 1.4;">
+                                    시스템이 데이터베이스에 저장된 최신 챔피언 전략(수익률/안정성 검증 필터 통과)을 실시간으로 가져와 자동 매핑하여 구동합니다. DB 내 챔피언 정보가 부족할 시에는 기본 템플릿(Fallback)을 활용합니다.
+                                </p>
+                            </div>
+
+                            <!-- 4. 공통 전략 선택 및 파라미터 튜닝 영역 -->
+                            <div id="modal-strategy-selection-section" style="display: none; flex-direction: column; gap: 8px;">
                                 <span style="font-weight: bold; color: #94A3B8; font-size: 0.85rem;">🎯 적용할 전략 조합 및 파라미터 선택:</span>
                                 <div id="modal-strategy-container" class="strategy-list-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 5px;">
                                     <!-- JS에서 전략 템플릿 카드가 채워짐 -->
