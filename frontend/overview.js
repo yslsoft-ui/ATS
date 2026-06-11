@@ -203,9 +203,36 @@ const OverviewEngine = (() => {
             });
             totalVal += calculatedTotal;
 
-            // 총액 및 현금 라벨 헤더 한 줄 반영
+            // 총액 및 현금 라벨 헤더 한 줄 반영 (상세 자산 메트릭 주입)
             if (totalEl) {
-                totalEl.innerText = ` - 총 ${Math.round(totalVal).toLocaleString()} 원 (현금 ${Math.round(exCash).toLocaleString()}원)`;
+                const exSummary = (cachedPortfolio.exchanges || []).find(e => e.exchange_id.toLowerCase() === ex);
+                const initCash = exSummary ? exSummary.initial_cash : 0.0;
+                
+                // 실시간 ROI 계산 (투자 원금 대비 실시간 평가액 변동률)
+                const roi = initCash > 0 ? ((totalVal - initCash) / initCash * 100) : (exSummary ? exSummary.roi : 0.0);
+                
+                let roiColor = '#94A3B8';
+                let roiSign = '';
+                if (roi > 0.005) {
+                    roiColor = '#FF4B4B'; // Bull Red
+                    roiSign = '+';
+                } else if (roi < -0.005) {
+                    roiColor = '#0072FF'; // Bear Blue
+                }
+                
+                totalEl.style.display = 'inline-flex';
+                totalEl.style.alignItems = 'center';
+                totalEl.style.gap = '10px';
+                totalEl.style.flexWrap = 'wrap';
+                totalEl.style.fontSize = '0.78rem';
+                
+                totalEl.innerHTML = `
+                    <span style="color: #475569;">|</span>
+                    <span style="color: #94A3B8;">총 평가: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(totalVal).toLocaleString()}</strong>원</span>
+                    <span style="color: #94A3B8;">ROI: <strong style="color: ${roiColor}; font-family: 'Roboto Mono', monospace;">${roiSign}${roi.toFixed(2)}%</strong></span>
+                    <span style="color: #94A3B8;">현금: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(exCash).toLocaleString()}</strong>원</span>
+                    <span style="color: #94A3B8;">평가액: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(calculatedTotal).toLocaleString()}</strong>원</span>
+                `;
             }
 
             if (calculatedTotal <= 0) {
@@ -322,7 +349,7 @@ const OverviewEngine = (() => {
                 <td class="num">${formatPrice(pos.quantity)}</td>
                 <td class="num">${formatPrice(pos.avg_price)}</td>
                 <td class="num" id="overview-pos-price-${pos.symbol}">${formatPrice(currentPrice)}</td>
-                <td class="num ${formatted.className}">${formatted.text}</td>
+                <td class="num ${formatted.className}" id="overview-pos-profit-${pos.symbol}">${formatted.text}</td>
             `;
             tbody.appendChild(row);
         });
@@ -431,11 +458,30 @@ const OverviewEngine = (() => {
 
         // 2. 현재 관찰 중인 종목의 시세 갱신 시 실시간 보유 종목 현재가 동기화
         if (cachedPortfolio && tick.trade_price && tick.code) {
-            const priceEl = document.getElementById(`overview-pos-price-${tick.code}`);
-            if (priceEl) {
-                priceEl.innerText = formatPrice(tick.trade_price);
-                priceEl.classList.add('value-updating');
-                setTimeout(() => priceEl.classList.remove('value-updating'), 400);
+            const pos = cachedPortfolio.positions.find(p => p.symbol === tick.code);
+            if (pos) {
+                pos.current_price = tick.trade_price;
+                
+                const priceEl = document.getElementById(`overview-pos-price-${tick.code}`);
+                if (priceEl) {
+                    priceEl.innerText = formatPrice(tick.trade_price);
+                    priceEl.classList.add('value-updating');
+                    setTimeout(() => priceEl.classList.remove('value-updating'), 400);
+                }
+                
+                const profitEl = document.getElementById(`overview-pos-profit-${tick.code}`);
+                if (profitEl) {
+                    const profitPercent = ((tick.trade_price - pos.avg_price) / pos.avg_price) * 100;
+                    const formatted = formatRate(profitPercent);
+                    profitEl.className = `num ${formatted.className}`;
+                    profitEl.innerText = formatted.text;
+                    profitEl.classList.add('value-updating');
+                    setTimeout(() => profitEl.classList.remove('value-updating'), 400);
+                }
+                
+                // 시세 변화를 대시보드 전반에 실시간 기민하게 동기화
+                renderMetrics();
+                renderAllocationBar();
             }
         }
         
