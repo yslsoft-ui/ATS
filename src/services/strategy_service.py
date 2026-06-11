@@ -210,9 +210,20 @@ class StrategyService(DaemonService):
         # GIRSScorer 싱글톤 인스턴스 초기 생성
         onnx_path = self.config_manager.get("system.onnx_model_path", None)
         model_ver = self.config_manager.get("system.model_version", "mock_v1")
+        
+        stability_config = self.config_manager.get("system.stability", {})
+        market_std_weight = stability_config.get("market_std_weight", 1.0)
+        market_mean_weight = stability_config.get("market_mean_weight", 0.5)
+        system_jitter_weight = stability_config.get("system_jitter_weight", 1.0)
+        system_latency_weight = stability_config.get("system_latency_weight", 0.5)
+
         self.girs_scorer = GIRSScorer(
             model=MockONNXModel(model_version=model_ver),
-            onnx_model_path=onnx_path
+            onnx_model_path=onnx_path,
+            market_std_weight=market_std_weight,
+            market_mean_weight=market_mean_weight,
+            system_jitter_weight=system_jitter_weight,
+            system_latency_weight=system_latency_weight
         )
         self.current_model_version = model_ver
 
@@ -717,9 +728,20 @@ class StrategyService(DaemonService):
         if self.current_model_version != model_ver:
             logger.info(f"[StrategyService] 모델 버전 변경 감지: {self.current_model_version} -> {model_ver}. GIRSScorer를 리로드합니다.")
             onnx_path = self.config_manager.get("system.onnx_model_path", None)
+            
+            stability_config = self.config_manager.get("system.stability", {})
+            market_std_weight = stability_config.get("market_std_weight", 1.0)
+            market_mean_weight = stability_config.get("market_mean_weight", 0.5)
+            system_jitter_weight = stability_config.get("system_jitter_weight", 1.0)
+            system_latency_weight = stability_config.get("system_latency_weight", 0.5)
+
             self.girs_scorer = GIRSScorer(
                 model=MockONNXModel(model_version=model_ver),
-                onnx_model_path=onnx_path
+                onnx_model_path=onnx_path,
+                market_std_weight=market_std_weight,
+                market_mean_weight=market_mean_weight,
+                system_jitter_weight=system_jitter_weight,
+                system_latency_weight=system_latency_weight
             )
             self.current_model_version = model_ver
 
@@ -839,9 +861,27 @@ class StrategyService(DaemonService):
                                         limits=limits
                                     )
                                     
+                                    # snapshot.trade_age_ms를 사용하여 average_latency를 획득 (초 단위 변환)
+                                    avg_lat = None
+                                    if hasattr(snapshot, "trade_age_ms") and snapshot.trade_age_ms is not None:
+                                        avg_lat = float(snapshot.trade_age_ms) / 1000.0
+                                    else:
+                                        logger.warning(f"[StrategyService] GIRSScorer 계산 시 snapshot.trade_age_ms가 누락되어 average_latency를 측정할 수 없습니다. proposal_id={proposal_id_str}")
+                                        try:
+                                            await self.portfolio_manager.repository.insert_system_event(
+                                                "GIRS_LATENCY_MISSING",
+                                                snapshot.symbol,
+                                                f"GIRSScorer 계산 시 snapshot.trade_age_ms가 누락되었습니다. proposal_id={proposal_id_str}"
+                                            )
+                                        except Exception as ex_log:
+                                            logger.error(f"[StrategyService] 시스템 이벤트 기록 실패: {ex_log}")
+
                                     rank_stab = self.girs_scorer.calculate_rank_stability(proposal_id_str, current_confirmed_rank=1, N=10)
                                     market_stab = self.girs_scorer.calculate_market_stability(proposal_id_str, volatility)
-                                    system_stab = self.girs_scorer.calculate_system_stability(0.01)
+                                    system_stab = self.girs_scorer.calculate_system_stability(
+                                        system_latency_jitter=0.01,
+                                        average_latency=avg_lat if avg_lat is not None else 0.0
+                                    )
                                     
                                     stability_score = self.girs_scorer.calculate_stability_score(rank_stab, market_stab, system_stab)
                                     

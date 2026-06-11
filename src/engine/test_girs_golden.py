@@ -505,8 +505,13 @@ def test_verify_score_scales_precision_boundaries():
 def test_stability_tracker_eviction_and_short_history():
     from src.engine.girs_scorer import StabilityTracker
     
-    # 윈도우 크기 = 3, baseline_volatility = 0.1
-    tracker = StabilityTracker(rolling_window_size=3, baseline_volatility=0.1)
+    # 윈도우 크기 = 3, baseline_volatility = 0.1, std와 mean 가중치를 1.0, 0.0으로 설정하여 std 전용 계산 검증
+    tracker = StabilityTracker(
+        rolling_window_size=3,
+        baseline_volatility=0.1,
+        market_std_weight=1.0,
+        market_mean_weight=0.0
+    )
     
     # 1. 히스토리가 2개 미만일 때 예외 없이 1.0 리턴 확인
     assert tracker.calculate_market_stability("p_evict", market_volatility=0.1) == 1.0
@@ -561,3 +566,127 @@ def test_onnx_inference_isolated_safety(monkeypatch):
         res_mp = scorer_mp.predict_onnx(snap)
         assert res_mp is None
 
+
+def test_fallback_conservatism_invariant():
+    """안정성 붕괴(stability_score <= 0.2) 또는 데이터 품질 에러(data_quality_blocked=True) 상황에서
+    리스크 계산 및 자동 승격이 전면 차단되는지 불변조건(Invariant)을 검증합니다."""
+    model = MockONNXModel("mock_model_v1")
+    scorer = GIRSScorer(model=model)
+
+    # 극단적으로 낙관적인 리스크 점수 (리스크 0.0 -> 프로모션 점수 1.0)
+    girs_risk = 0.0
+    fallback_risk = 0.0
+
+    # 1. stability_score <= 0.2 시나리오 검증
+    # 원래 식대로라면 girs_p=1.0, fallback_p=1.0이므로 final_p도 1.0이 나와야 하지만,
+    # 자동 승격 차단이 작동하여 girs_p=0.0, fallback_p=0.0, final_p=0.0, confidence=0.0 이 반환되어야 함.
+    gp_st, fp_st, final_st, meta_st = scorer.calculate_final_score(
+        model_risk_score=girs_risk,
+        fallback_risk_score=fallback_risk,
+        stability_score=0.15,  # <= 0.2
+        data_quality_blocked=False
+    )
+    assert gp_st == 0.0
+    assert fp_st == 0.0
+    assert final_st == 0.0
+    assert meta_st["confidence_score"] == 0.0
+    assert meta_st["blocked_reason"] == "LOW_STABILITY"
+    # verify_score_scales가 이 차단 점수 조합에 대해서도 True를 반환하는지 보장
+    assert verify_score_scales(1.0, 1.0, gp_st, fp_st, final_st)
+
+    # 2. data_quality_blocked = True 시나리오 검증 (정상 stability_score 상황)
+    gp_dq, fp_dq, final_dq, meta_dq = scorer.calculate_final_score(
+        model_risk_score=girs_risk,
+        fallback_risk_score=fallback_risk,
+        stability_score=0.8,  # > 0.2
+        data_quality_blocked=True
+    )
+    assert gp_dq == 0.0
+    assert fp_dq == 0.0
+    assert final_dq == 0.0
+    assert meta_dq["confidence_score"] == 0.0
+    assert meta_dq["blocked_reason"] == "DATA_QUALITY_BLOCKED"
+    assert verify_score_scales(1.0, 1.0, gp_dq, fp_dq, final_dq)
+
+    # 3. 정상 상황 검증 (기존 계산이 그대로 유지되는지)
+    # stability_score = 0.8, data_quality_blocked = False
+    # model_risk = 0.3 (girs_p = 0.7), fallback_risk = 0.2 (fallback_p = 0.8)
+    gp_ok, fp_ok, final_ok, meta_ok = scorer.calculate_final_score(
+        model_risk_score=0.3,
+        fallback_risk_score=0.2,
+        stability_score=0.8,
+        data_quality_blocked=False
+    )
+    # 차단되지 않았으므로 0.0이 아니어야 함
+    assert gp_ok == 0.7
+    assert fp_ok == 0.8
+    # alpha = 1 / (1 + exp(-10 * (0.8 - 0.5))) = 1 / (1 + exp(-3)) = 1 / (1 + 0.049787) = 0.95257
+    # final = 0.95257 * 0.7 + (1 - 0.95257) * 0.8 = 0.6668 + 0.0379 = 0.7047
+    assert math.isclose(final_ok, 0.7047, abs_tol=1e-3)
+    assert meta_ok.get("blocked_reason") is None
+    assert verify_score_scales(0.3, 0.2, gp_ok, fp_ok, final_ok)
+
+    # 4. 음수 가중치 오설정 시 0.0 자동 보정 검증
+    neg_scorer = GIRSScorer(
+        model=model,
+        market_std_weight=-1.5,
+        market_mean_weight=-0.1,
+        system_jitter_weight=-10.0,
+        system_latency_weight=-0.0
+    )
+    assert neg_scorer.market_std_weight == 0.0
+    assert neg_scorer.market_mean_weight == 0.0
+    assert neg_scorer.system_jitter_weight == 0.0
+    assert neg_scorer.system_latency_weight == 0.0
+
+
+def test_market_system_stability_improvement():
+    """market_stability 및 system_stability에 절대적인 크기(mean, average_latency)가 반영되는 공식 개선 사항을 검증합니다.
+    테스트의 명확성을 위해 baseline_volatility, baseline_latency, weight 값들을 명시적으로 고정합니다."""
+    model = MockONNXModel("mock_model_v1")
+    
+    # baseline 및 가중치 명시적 고정
+    baseline_vol = 0.1
+    baseline_lat = 0.05
+    market_std_w = 1.0
+    market_mean_w = 0.5
+    system_jitter_w = 1.0
+    system_latency_w = 0.5
+    
+    scorer = GIRSScorer(
+        model=model,
+        baseline_volatility=baseline_vol,
+        baseline_latency=baseline_lat,
+        market_std_weight=market_std_w,
+        market_mean_weight=market_mean_w,
+        system_jitter_weight=system_jitter_w,
+        system_latency_weight=system_latency_w
+    )
+    
+    # 시나리오 1: 변동성 0.8이 계속 유지되는 경우 (std = 0.0, mean = 0.8)
+    # std가 0이더라도 mean이 0.8이므로 weighted_metric = 1.0 * 0.0 + 0.5 * 0.8 = 0.4
+    # stability_market = 1.0 / (1.0 + 0.4 / 0.1) = 1.0 / 5.0 = 0.2
+    for _ in range(10):
+        m_stab = scorer.calculate_market_stability("p_high_vol", market_volatility=0.8)
+    assert math.isclose(m_stab, 0.2, rel_tol=1e-5)
+    
+    # 시나리오 2: 변동성 0.05가 계속 유지되는 경우 (std = 0.0, mean = 0.05)
+    # std = 0.0, mean = 0.05 -> weighted_metric = 1.0 * 0.0 + 0.5 * 0.05 = 0.025
+    # stability_market = 1.0 / (1.0 + 0.025 / 0.1) = 1.0 / 1.25 = 0.8
+    # 즉, 변동성이 매우 작고 안정되므로 0.8 이상 높게 유지되어야 함.
+    for _ in range(10):
+        m_stab_low = scorer.calculate_market_stability("p_low_vol", market_volatility=0.05)
+    assert math.isclose(m_stab_low, 0.8, rel_tol=1e-5)
+    assert m_stab_low >= 0.8
+    
+    # 시나리오 3: 지연시간 5초가 계속 유지되는 경우 (jitter = 0.0, latency = 5.0)
+    # jitter = 0.0, latency = 5.0 -> weighted_metric = 1.0 * 0.0 + 0.5 * 5.0 = 2.5
+    # stability_system = 1.0 / (1.0 + 2.5 / 0.05) = 1.0 / 51.0 = 0.0196
+    s_stab_high_lat = scorer.calculate_system_stability(system_latency_jitter=0.0, average_latency=5.0)
+    assert s_stab_high_lat < 0.05
+    
+    # 시나리오 4: 지연시간 jitter만 큰 경우 (latency_jitter = 1.0, average_latency = 0.01)
+    # jitter = 1.0, latency = 0.01 -> weighted_metric = 1.0 * 1.0 + 0.5 * 0.01 = 1.005
+    # stability_system = 1.0 / (1.0 + 1.005 / 0.05) = 1.0 / 21.1 = 0.047
+    s_stab_high_jit = scorer.calculate_system_stability(system_latency_jitter=1.0, average_latency=0.01)
+    assert s_stab_high_jit < 0.1

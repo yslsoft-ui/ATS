@@ -365,7 +365,7 @@
     "semantic_hash": "24924e04346a36ed4d802cb644f1680b"
   },
   "/home/simon/ATS/logs/label_quality_report.json": {
-    "mtime": 1781092734.017411,
+    "mtime": 1781139911.454833,
     "ast_hash": "f72078ade04cc8feadfd4ef8bce15343",
     "semantic_hash": ""
   },
@@ -655,8 +655,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/girs_scorer.py": {
-    "mtime": 1781093801.9197764,
-    "ast_hash": "064d9784f8ffd1aac7039ddb9b8b4f33",
+    "mtime": 1781139851.5326908,
+    "ast_hash": "a8579364ff267d62e7c7cc3353fe3498",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/candles.py": {
@@ -700,8 +700,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_girs_golden.py": {
-    "mtime": 1781101790.4647264,
-    "ast_hash": "99a6a657c126971e667898d5b0f59c91",
+    "mtime": 1781139879.2176802,
+    "ast_hash": "c5fe679c35cc8ede49e60038332d8dd2",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/girs_types.py": {
@@ -990,8 +990,8 @@
     "semantic_hash": "66a5f477a062814628811bee8a9b9055"
   },
   "/home/simon/ATS/src/services/strategy_service.py": {
-    "mtime": 1781050982.0125685,
-    "ast_hash": "36f28cb440daab9f93456e803e9e7c39",
+    "mtime": 1781139857.640909,
+    "ast_hash": "c995fc91593dbc7c65e6e192c15d01c5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
@@ -1120,13 +1120,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/CONTEXT.md": {
-    "mtime": 1781093828.244229,
-    "ast_hash": "87c8b0bf9e3f0ec5bb2ec9849dfb545b",
+    "mtime": 1781138378.520899,
+    "ast_hash": "f786171e6f3992f1935bec905332657f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/AGENTS.md": {
-    "mtime": 1781131599.8596485,
-    "ast_hash": "416b64f00a4ddd44a0ebfac2f22c1a74",
+    "mtime": 1781133239.233665,
+    "ast_hash": "4938fb3e9257de1ff8f0efdf739c5be8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/requirements.txt": {
@@ -1175,8 +1175,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781099386.6894262,
-    "ast_hash": "3e0a6ce8ccd1179766a648494a4c43e3",
+    "mtime": 1781140156.4955828,
+    "ast_hash": "bc48cace3daf7a4b8b5b7a3809b41da0",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_rehearsal_report.md": {
@@ -1185,8 +1185,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_report.md": {
-    "mtime": 1781127900.6796768,
-    "ast_hash": "9ef65845cb3ba089ea76870fefe99add",
+    "mtime": 1781134064.1616662,
+    "ast_hash": "48e19209066b909e351b751e5422c170",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_soak_report.md": {

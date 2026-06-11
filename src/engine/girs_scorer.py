@@ -41,13 +41,23 @@ class StabilityTracker:
         rolling_window_size: int = 20,
         baseline_volatility: float = 0.1,
         baseline_latency: float = 0.05,
-        eps: float = 1e-9
+        eps: float = 1e-9,
+        market_std_weight: float = 1.0,
+        market_mean_weight: float = 0.5,
+        system_jitter_weight: float = 1.0,
+        system_latency_weight: float = 0.5
     ):
         self.ema_alpha = ema_alpha
         self.rolling_window_size = rolling_window_size
         self.baseline_volatility = baseline_volatility
         self.baseline_latency = baseline_latency
         self.eps = eps
+
+        # 가중치 속성 정의 및 음수 보정
+        self.market_std_weight = max(0.0, market_std_weight)
+        self.market_mean_weight = max(0.0, market_mean_weight)
+        self.system_jitter_weight = max(0.0, system_jitter_weight)
+        self.system_latency_weight = max(0.0, system_latency_weight)
 
         # 상태 관리 필드 전담 소유
         self.rank_states: Dict[str, Tuple[int, float]] = {}
@@ -96,15 +106,22 @@ class StabilityTracker:
         rolling_std = math.sqrt(variance)
         
         safe_baseline_volatility = max(self.baseline_volatility, self.eps)
-        stability_market = 1.0 / (1.0 + rolling_std / safe_baseline_volatility)
+        
+        # std와 mean의 가중합 계산
+        weighted_metric = (self.market_std_weight * rolling_std) + (self.market_mean_weight * mean_val)
+        stability_market = 1.0 / (1.0 + weighted_metric / safe_baseline_volatility)
         return min(max(stability_market, 0.0), 1.0)
 
     def calculate_system_stability(
         self,
-        system_latency_jitter: float
+        system_latency_jitter: float,
+        average_latency: float = 0.0
     ) -> float:
         safe_baseline_latency = max(self.baseline_latency, self.eps)
-        stability_system = 1.0 / (1.0 + system_latency_jitter / safe_baseline_latency)
+        
+        # jitter와 average_latency의 가중합 계산
+        weighted_metric = (self.system_jitter_weight * system_latency_jitter) + (self.system_latency_weight * average_latency)
+        stability_system = 1.0 / (1.0 + weighted_metric / safe_baseline_latency)
         return min(max(stability_system, 0.0), 1.0)
 
     def calculate_stability_score(
@@ -211,7 +228,11 @@ class GIRSScorer:
         eps: float = 1e-9,
         onnx_model_path: Optional[str] = None,
         calibration_passed: bool = True,
-        limits: Optional[Dict[str, float]] = None
+        limits: Optional[Dict[str, float]] = None,
+        market_std_weight: Optional[float] = None,
+        market_mean_weight: Optional[float] = None,
+        system_jitter_weight: Optional[float] = None,
+        system_latency_weight: Optional[float] = None
     ):
         self.model = model
         self.baseline_volatility = baseline_volatility
@@ -229,13 +250,22 @@ class GIRSScorer:
             rolling_window_size=rolling_window_size,
             baseline_volatility=baseline_volatility,
             baseline_latency=baseline_latency,
-            eps=eps
+            eps=eps,
+            market_std_weight=market_std_weight if market_std_weight is not None else 1.0,
+            market_mean_weight=market_mean_weight if market_mean_weight is not None else 0.5,
+            system_jitter_weight=system_jitter_weight if system_jitter_weight is not None else 1.0,
+            system_latency_weight=system_latency_weight if system_latency_weight is not None else 0.5
         )
         self.fallback_scorer = FallbackRiskScorer(
             limits=limits,
             baseline_volatility=baseline_volatility,
             eps=eps
         )
+
+        self.market_std_weight = self.tracker.market_std_weight
+        self.market_mean_weight = self.tracker.market_mean_weight
+        self.system_jitter_weight = self.tracker.system_jitter_weight
+        self.system_latency_weight = self.tracker.system_latency_weight
 
     # 기존 인메모리 상태 직접 접근 코드를 위한 호환 프로퍼티 데코레이터
     @property
@@ -265,9 +295,10 @@ class GIRSScorer:
 
     def calculate_system_stability(
         self,
-        system_latency_jitter: float
+        system_latency_jitter: float,
+        average_latency: float = 0.0
     ) -> float:
-        return self.tracker.calculate_system_stability(system_latency_jitter)
+        return self.tracker.calculate_system_stability(system_latency_jitter, average_latency)
 
     def calculate_stability_score(
         self,
@@ -310,8 +341,26 @@ class GIRSScorer:
         model_risk_score: float,
         fallback_risk_score: float,
         stability_score: float,
-        snapshot: Optional[FeatureSnapshot] = None
+        snapshot: Optional[FeatureSnapshot] = None,
+        data_quality_blocked: bool = False
     ) -> Tuple[float, float, float, Dict[str, Any]]:
+        # 1. 자동 승격 전면 금지 국면 (데이터 품질 검사 실패 또는 stability_score <= 0.2)
+        if stability_score <= 0.2 or data_quality_blocked:
+            blocked_reason = "DATA_QUALITY_BLOCKED" if data_quality_blocked else "LOW_STABILITY"
+            logger.warning(f"[GIRSScorer] 자동 승격 금지 발동: {blocked_reason} (stability_score={stability_score:.4f})")
+            
+            meta = {
+                "is_calibrated": self.calibration_passed,
+                "shadow_risk_score": None,
+                "score_type": "risk_index",
+                "uncertainty_score": 1.0,
+                "confidence_score": 0.0,
+                "blocked_reason": blocked_reason
+            }
+            # 리스크 1.0에 대응하기 위해 모든 프로모션 점수를 0.0으로 반환하여 승격 원천 금지
+            return 0.0, 0.0, 0.0, meta
+
+        # 2. 그 외 정상 상황 -> GIRS / Fallback 계산
         girs_promotion_score = 1.0 - model_risk_score
         fallback_promotion_score = 1.0 - fallback_risk_score
 
@@ -390,12 +439,18 @@ def verify_score_scales(
             logger.error(f"ScoreScaleValidationError: '{name}' value {val} is outside [0.0, 1.0] range.")
             return False
             
-    if abs(girs_promotion_score - (1.0 - model_risk_score)) > 1e-6:
-        logger.error(f"ScoreScaleValidationError: girs_promotion_score ({girs_promotion_score}) does not match 1 - model_risk_score ({1.0 - model_risk_score})")
+    # 자동 승격 차단 시에는 실질 리스크가 1.0으로 강제되므로, 
+    # 단조성 계산 시 이를 보정하여 예외 처리합니다.
+    is_blocked = (girs_promotion_score == 0.0 and fallback_promotion_score == 0.0 and final_promotion_score == 0.0)
+    effective_model_risk = 1.0 if is_blocked else model_risk_score
+    effective_fallback_risk = 1.0 if is_blocked else fallback_risk_score
+
+    if abs(girs_promotion_score - (1.0 - effective_model_risk)) > 1e-6:
+        logger.error(f"ScoreScaleValidationError: girs_promotion_score ({girs_promotion_score}) does not match 1 - model_risk_score ({1.0 - effective_model_risk})")
         return False
         
-    if abs(fallback_promotion_score - (1.0 - fallback_risk_score)) > 1e-6:
-        logger.error(f"ScoreScaleValidationError: fallback_promotion_score ({fallback_promotion_score}) does not match 1 - fallback_risk_score ({1.0 - fallback_risk_score})")
+    if abs(fallback_promotion_score - (1.0 - effective_fallback_risk)) > 1e-6:
+        logger.error(f"ScoreScaleValidationError: fallback_promotion_score ({fallback_promotion_score}) does not match 1 - fallback_risk_score ({1.0 - effective_fallback_risk})")
         return False
         
     return True
