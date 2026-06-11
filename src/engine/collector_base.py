@@ -384,7 +384,6 @@ class BaseCollector(ABC):
                     if latest_symbols != self.available_symbols:
                         logger.info(f"[{self.exchange.upper()}] ws 재연결: 종목 목록 갱신 {len(self.available_symbols)} → {len(latest_symbols)}개")
                         self.available_symbols = latest_symbols
-                        self._init_trade_engines(config)
                     await self._subscribe(ws, config)
                     logger.info(f"[{self.exchange.upper()}] Collector Connected - {len(self.available_symbols)} symbols")
 

@@ -264,10 +264,6 @@ class KisCollector(BaseCollector):
                 self.available_symbols.append(code)
                 logger.info(f"[KIS] 동적 수집 종목 추가: {code}")
             
-            # 전략 엔진 재구성
-            if hasattr(self, 'config') and self.config:
-                self._init_trade_engines(self.config)
-            
             # 웹소켓 구독 등록
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
                 try:
@@ -295,10 +291,6 @@ class KisCollector(BaseCollector):
                 self.available_symbols.remove(code)
                 logger.info(f"[KIS] 동적 수집 종목 제거: {code}")
             
-            # 전략 엔진 재구성 (제거된 종목 정리)
-            if hasattr(self, 'config') and self.config:
-                self._init_trade_engines(self.config)
-
             # 웹소켓 구독 해제
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
                 try:

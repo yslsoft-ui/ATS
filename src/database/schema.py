@@ -839,23 +839,23 @@ async def migrate_data(db_path: str = None):
             except Exception as e:
                 logger.error(f"Migration error for {table}: {e}")
 
-        # KIS is_active 오염 복구
-        try:
-            # candles 또는 trades 테이블에 실제 데이터(수집 이력)가 전혀 없는 KIS 종목은 is_active를 0으로 원복시킵니다.
-            await db.execute('''
-                UPDATE exchange_assets
-                SET is_active = 0, updated_at = datetime('now')
-                WHERE exchange = 'kis'
-                  AND is_active = 1
-                  AND symbol NOT IN (
-                      SELECT DISTINCT symbol FROM candles WHERE exchange = 'kis'
-                      UNION
-                      SELECT DISTINCT symbol FROM trades WHERE exchange = 'kis'
-                  )
-            ''')
-            logger.info("Successfully cleaned up contaminated KIS assets: restored is_active to 0 for uncollected symbols.")
-        except Exception as e:
-            logger.error(f"Failed to restore KIS assets is_active: {e}")
+        # KIS is_active 오염 복구 (더 이상 신규 종목 추가를 방해하지 않도록 비활성화)
+        # try:
+        #     # candles 또는 trades 테이블에 실제 데이터(수집 이력)가 전혀 없는 KIS 종목은 is_active를 0으로 원복시킵니다.
+        #     await db.execute('''
+        #         UPDATE exchange_assets
+        #         SET is_active = 0, updated_at = datetime('now')
+        #         WHERE exchange = 'kis'
+        #           AND is_active = 1
+        #           AND symbol NOT IN (
+        #               SELECT DISTINCT symbol FROM candles WHERE exchange = 'kis'
+        #               UNION
+        #               SELECT DISTINCT symbol FROM trades WHERE exchange = 'kis'
+        #           )
+        #     ''')
+        #     logger.info("Successfully cleaned up contaminated KIS assets: restored is_active to 0 for uncollected symbols.")
+        # except Exception as e:
+        #     logger.error(f"Failed to restore KIS assets is_active: {e}")
 
         # 7. orders_history 중복 저장 이력 클리닝 (백테스트 체결 내역 2중 저장 버그 소거 대응)
         try:

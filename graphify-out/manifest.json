@@ -485,8 +485,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/overview.js": {
-    "mtime": 1781164151.76269,
-    "ast_hash": "69b8e15d2d37b9ad958905dd54a694ec",
+    "mtime": 1781169706.890718,
+    "ast_hash": "e85603e724caf36ad3095d25f68671c9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
@@ -710,8 +710,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1781090203.7314632,
-    "ast_hash": "247a1e6f4ac9ce2326728a1e8d6cd4e7",
+    "mtime": 1781171646.1785383,
+    "ast_hash": "8f1e8e0cde963b6edbe0a746fdbf88eb",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/analyzer.py": {
@@ -745,8 +745,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1781088836.0452664,
-    "ast_hash": "489e6ce23e259d529ea65946c63ff71c",
+    "mtime": 1781171650.710706,
+    "ast_hash": "0462092c3028d5d8c3d425d407556d13",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_processor.py": {
@@ -990,8 +990,8 @@
     "semantic_hash": "255b085c828b3d2ef38945638bb8556f"
   },
   "/home/simon/ATS/src/database/schema.py": {
-    "mtime": 1781143786.4001358,
-    "ast_hash": "1868830a47e00e4a21ba9b4fbdb89ee4",
+    "mtime": 1781171886.9714477,
+    "ast_hash": "8074af08064b178125f0fcb5980f2b78",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/retry.py": {
@@ -1169,6 +1169,11 @@
     "ast_hash": "eaa2b090598aab1522d62536ee33af2e",
     "semantic_hash": "eaa2b090598aab1522d62536ee33af2e"
   },
+  "/home/simon/ATS/scratch/kis-collector-bug/issue.md": {
+    "mtime": 1781176894.3012996,
+    "ast_hash": "066465e848fb0ba5c20df62a9766bcc2",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/graphify-wiki-enrichment/PRD.md": {
     "mtime": 1779162181.0,
     "ast_hash": "72ecec4a8b0b878d59c45996a88f1c61",
@@ -1225,8 +1230,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781164721.698796,
-    "ast_hash": "642c7f6c074a18e03c4e16bb605e9bc9",
+    "mtime": 1781169716.7073402,
+    "ast_hash": "27a3d3e79044686db4784fa72cfc97d9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
@@ -1255,8 +1260,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1781046389.0123851,
-    "ast_hash": "c5195dc2029055ba12e815a09d898e87",
+    "mtime": 1781176887.021192,
+    "ast_hash": "9a4638bffc06e6f83108860ed51d5b13",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
