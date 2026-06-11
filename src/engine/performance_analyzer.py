@@ -43,12 +43,18 @@ class PerformanceAnalyzer:
                 
         initial_cash_map = meta.get("initial_cash", {}) if isinstance(meta, dict) else {}
         
-        if initial_cash_map:
+        # 1.1. 거래소별 초기 자금 복원 (우선순위: portfolio.exchange_initial_cash -> strategy_info -> 동적 분할)
+        if hasattr(portfolio, 'exchange_initial_cash') and portfolio.exchange_initial_cash:
+            ex_initial_cash_map = {ex.lower(): float(val) for ex, val in portfolio.exchange_initial_cash.items()}
+        elif initial_cash_map:
             ex_initial_cash_map = {ex.lower(): float(val) for ex, val in initial_cash_map.items()}
         else:
             ex_set = set(t["exchange"].lower() for t in trades) if trades else set()
             for pos_key in portfolio.positions.keys():
                 ex_set.add(pos_key[0].lower())
+            if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
+                for ex in portfolio.exchange_cash.keys():
+                    ex_set.add(ex.lower())
             if ex_set:
                 each_cash = portfolio.initial_cash / len(ex_set)
                 ex_initial_cash_map = {ex.lower(): each_cash for ex in ex_set}
@@ -56,12 +62,19 @@ class PerformanceAnalyzer:
                 ex_id = portfolio.exchange_id if portfolio.exchange_id else "upbit"
                 ex_initial_cash_map = {ex_id.lower(): portfolio.initial_cash}
 
+        # 1.2. 거래소별 현금 복원
         if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
             for ex, val in portfolio.exchange_cash.items():
                 exchange_cash_map[ex.lower()] = val
+                # ex가 ex_initial_cash_map에 없으면 기본 세팅
+                ex_lower = ex.lower()
+                if ex_lower not in ex_initial_cash_map:
+                    ex_initial_cash_map[ex_lower] = val
         else:
             ex_id = (portfolio.exchange_id or 'upbit').lower()
             exchange_cash_map[ex_id] = portfolio.cash
+            if ex_id not in ex_initial_cash_map:
+                ex_initial_cash_map[ex_id] = portfolio.cash
 
         # 2. 종목별 성과 상세 분석 결과(results) 생성
         trades_by_ex_sym = {}

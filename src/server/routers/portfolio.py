@@ -142,6 +142,31 @@ def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     ).digest()
     return f"{signing_input}.{base64url(sig)}"
 
+def _create_bithumb_jwt(access_key, secret_key, query_hash=None):
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "access_key": access_key,
+        "nonce": str(uuid.uuid4()),
+        "timestamp": int(time.time() * 1000)
+    }
+    if query_hash:
+        payload["query_hash"] = query_hash
+        payload["query_hash_alg"] = "SHA512"
+        
+    def base64url(b):
+        return base64.urlsafe_b64encode(b).decode('utf-8').replace('=', '')
+        
+    header_b64 = base64url(json.dumps(header, separators=(',', ':')).encode('utf-8'))
+    payload_b64 = base64url(json.dumps(payload, separators=(',', ':')).encode('utf-8'))
+    signing_input = f"{header_b64}.{payload_b64}"
+    
+    sig = hmac.new(
+        secret_key.encode('utf-8'),
+        signing_input.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    return f"{signing_input}.{base64url(sig)}"
+
 async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, force_sync: bool = False):
     """
     업비트 거래소로부터 실제 완료된 거래 내역을 긁어와 로컬 DB real_orders에 누적 저장합니다.
@@ -489,5 +514,633 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                 
     except Exception as e:
         logger.error(f"Error fetching upbit assets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def _sync_real_bithumb_orders(access_key: str, secret_key: str, api_url: str, force_sync: bool = False):
+    """빗썸 거래소로부터 실제 완료된 거래 내역을 로컬 DB에 누적 저장합니다."""
+    has_records = False
+    has_pending = False
+    async with get_db_conn() as db:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'bithumb' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_records = True
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'bithumb' AND state = 'wait' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_pending = True
+
+    if has_records and not has_pending and not force_sync:
+        return
+
+    page = 1
+    limit = 100
+    base_url = api_url.rstrip('/')
+    bithumb_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+    
+    headers = {
+        "Accept": "application/json"
+    }
+
+    import urllib.parse
+    async with aiohttp.ClientSession() as session:
+        for state_val in ["done", "cancel"]:
+            page = 1
+            while True:
+                params = [
+                    ("state", state_val),
+                    ("limit", str(limit)),
+                    ("page", str(page))
+                ]
+                query_string = urllib.parse.urlencode(params).encode("utf-8")
+                
+                m = hashlib.sha512()
+                m.update(query_string)
+                query_hash = m.hexdigest()
+                
+                token = _create_bithumb_jwt(access_key, secret_key, query_hash=query_hash)
+                headers["Authorization"] = f"Bearer {token}"
+                
+                target_url = f"{bithumb_v1_url}/orders?{query_string.decode('utf-8')}"
+                
+                try:
+                    async with session.get(target_url, headers=headers) as resp:
+                        if resp.status != 200:
+                            err_txt = await resp.text()
+                            logger.error(f"Bithumb API error during order sync ({state_val}): {resp.status} - {err_txt}")
+                            break
+                        
+                        orders = await resp.json()
+                        if not orders:
+                            break
+                        
+                        async with get_db_conn() as db:
+                            for o in orders:
+                                if o.get("state") == "cancel" and float(o.get("executed_volume") or 0.0) == 0.0:
+                                    continue
+                                    
+                                market = o.get("market", "")
+                                symbol = market.replace("KRW-", "").upper() if market.startswith("KRW-") else market
+                                created_at = o.get("created_at")
+                                
+                                await db.execute('''
+                                    INSERT INTO real_orders 
+                                    (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    ON CONFLICT(uuid) DO UPDATE SET
+                                        price = excluded.price,
+                                        volume = excluded.volume,
+                                        executed_volume = excluded.executed_volume,
+                                        fee = excluded.fee,
+                                        state = excluded.state
+                                ''', (
+                                    'bithumb',
+                                    o.get("uuid"),
+                                    symbol,
+                                    "BUY" if o.get("side") == "bid" else "SELL",
+                                    float(o.get("avg_price") or o.get("price") or 0.0),
+                                    float(o.get("volume") or 0.0),
+                                    float(o.get("executed_volume") or 0.0),
+                                    float(o.get("paid_fee") or 0.0),
+                                    o.get("state"),
+                                    created_at
+                                ))
+                            await db.commit()
+                            
+                        if has_records and force_sync:
+                            break
+                        page += 1
+                        await asyncio.sleep(0.05)
+                except Exception as e:
+                    logger.error(f"Failed to fetch Bithumb order page {page} for state {state_val}: {e}")
+                    break
+
+
+async def _sync_real_kis_orders(system, force_sync: bool = False):
+    """한국투자증권(KIS)으로부터 일별 주문 체결 내역을 조회해 로컬 DB에 누적 저장합니다."""
+    kis_config = system.config_manager.get('exchanges.kis', {})
+    kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+    kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+    kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+    
+    if not kis_app_key or not kis_app_secret or not kis_account_no:
+        return
+
+    has_records = False
+    has_pending = False
+    async with get_db_conn() as db:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'kis' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_records = True
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'kis' AND state = 'wait' LIMIT 1") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                has_pending = True
+
+    if has_records and not has_pending and not force_sync:
+        return
+
+    kis_account_no = str(kis_account_no).strip()
+    if '-' in kis_account_no:
+        cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+    else:
+        cano = kis_account_no[:8]
+        acnt_prdt_cd = kis_account_no[8:]
+    if not acnt_prdt_cd:
+        acnt_prdt_cd = "01"
+
+    kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+    is_vts = "openapivts" in kis_api_url
+    tr_id = "VTTC0081R" if is_vts else "TTTC0081R"
+
+    token = await system.cred_provider.get_kis_access_token()
+    if not token:
+        logger.error("_sync_real_kis_orders: KIS access token is missing.")
+        return
+
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": kis_app_key,
+        "appsecret": kis_app_secret,
+        "tr_id": tr_id,
+        "custtype": "P"
+    }
+
+    today_str = datetime.now().strftime("%Y%m%d")
+    start_dt = (datetime.now() - datetime.timedelta(days=7)).strftime("%Y%m%d")
+    
+    params = {
+        "CANO": cano,
+        "ACNT_PRDT_CD": acnt_prdt_cd,
+        "INQR_STRT_DT": start_dt,
+        "INQR_END_DT": today_str,
+        "SLL_BUY_DVSN_CD": "00",
+        "INQR_DVSN": "00",
+        "PDNO": "",
+        "CCLD_DVSN": "00",
+        "ORD_GNO_BRNO": "",
+        "ODNO": "",
+        "INQR_DVSN_3": "00",
+        "INQR_DVSN_1": "",
+        "CTX_AREA_FK100": "",
+        "CTX_AREA_NK100": ""
+    }
+
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-daily-ccld", headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    err_txt = await resp.text()
+                    logger.error(f"_sync_real_kis_orders API error: {resp.status} - {err_txt}")
+                    return
+                
+                data = await resp.json()
+                if data.get("rt_cd") != "0":
+                    logger.error(f"_sync_real_kis_orders API failure: {data.get('msg1')}")
+                    return
+                
+                output1 = data.get("output1", [])
+                async with get_db_conn() as db:
+                    for o in output1:
+                        odno = o.get("odno")
+                        if not odno:
+                            continue
+                        
+                        pdno = o.get("pdno", "").strip().lstrip('A')
+                        ord_qty = float(o.get("ord_qty") or 0.0)
+                        ccld_qty = float(o.get("tot_ccld_qty") or 0.0)
+                        cncl_cfrm_qty = float(o.get("cnc_cfrm_qty") or 0.0)
+                        
+                        if ccld_qty == ord_qty:
+                            state = "done"
+                        elif cncl_cfrm_qty > 0 or o.get("cncl_yn") == "Y":
+                            state = "cancel"
+                        else:
+                            state = "wait"
+                            
+                        side = "BUY" if o.get("sll_buy_dvsn_cd") == "02" else "SELL"
+                        price = float(o.get("avg_prvs") or o.get("ord_unpr") or 0.0)
+                        
+                        ord_dt = o.get("ord_dt")
+                        ord_tmd = o.get("ord_tmd")
+                        created_at = None
+                        if ord_dt and ord_tmd:
+                            created_at = f"{ord_dt[:4]}-{ord_dt[4:6]}-{ord_dt[6:8]} {ord_tmd[:2]}:{ord_tmd[2:4]}:{ord_tmd[4:6]}"
+                        
+                        await db.execute('''
+                            INSERT INTO real_orders 
+                            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ON CONFLICT(uuid) DO UPDATE SET
+                                price = excluded.price,
+                                volume = excluded.volume,
+                                executed_volume = excluded.executed_volume,
+                                fee = excluded.fee,
+                                state = excluded.state
+                        ''', (
+                            'kis',
+                            odno,
+                            pdno,
+                            side,
+                            price,
+                            ord_qty,
+                            ccld_qty,
+                            0.0,
+                            state,
+                            created_at
+                        ))
+                    await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to sync KIS orders: {e}")
+
+
+@router.get("/api/exchanges/bithumb/assets")
+async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool = False):
+    """빗썸 실제 잔고 및 평가 자산 목록을 반환합니다."""
+    access_key = os.getenv("BITHUMB_API_KEY")
+    secret_key = os.getenv("BITHUMB_SECRET_KEY")
+    
+    if not access_key or not secret_key or "your_access_key" in access_key:
+        raise HTTPException(status_code=400, detail="빗썸 API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.")
+        
+    system = request.app.state.system
+    bithumb_config = system.config_manager.get('exchanges.bithumb', {})
+    api_url = bithumb_config.get('api_url', 'https://api.bithumb.com').rstrip('/')
+    bithumb_v1_url = api_url if api_url.endswith('/v1') else f"{api_url}/v1"
+    
+    try:
+        try:
+            await _sync_real_bithumb_orders(access_key, secret_key, bithumb_v1_url, force_sync=(sync or mode == "liquidated"))
+        except Exception as sync_err:
+            logger.error(f"Failed to sync real bithumb orders: {sync_err}")
+
+        token = _create_bithumb_jwt(access_key, secret_key)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{bithumb_v1_url}/accounts", headers=headers) as resp:
+                if resp.status != 200:
+                    err_txt = await resp.text()
+                    raise HTTPException(status_code=resp.status, detail=f"빗썸 API 오류: {err_txt}")
+                accounts = await resp.json()
+                
+            if not accounts:
+                return {"total_eval_value": 0, "formatted_total_value": "0", "assets": []}
+                
+            valid_krw_markets = {f"KRW-{k}" for k in stock_mapper.get_active_symbols('bithumb')}
+
+            if mode == "liquidated":
+                active_set = {a['currency'].upper() for a in accounts if float(a['balance']) + float(a['locked']) > 0}
+                traded_coins = []
+                sell_info = {}
+                async with get_db_conn() as db:
+                    async with db.execute(
+                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'bithumb' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                    ) as cursor:
+                        rows = await cursor.fetchall()
+                        traded_coins = [r['symbol'].upper() for r in rows]
+
+                    query = """
+                        SELECT r.symbol, r.price, r.executed_volume
+                        FROM real_orders r
+                        INNER JOIN (
+                            SELECT symbol, MAX(created_at) as max_created_at
+                            FROM real_orders
+                            WHERE exchange = 'bithumb' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                            GROUP BY symbol
+                        ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
+                        WHERE r.exchange = 'bithumb' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                    """
+                    async with db.execute(query) as cursor:
+                        rows = await cursor.fetchall()
+                        for r in rows:
+                            sym = r['symbol'].upper()
+                            sell_info[sym] = {
+                                "price": float(r['price'] or 0.0),
+                                "volume": float(r['executed_volume'] or 0.0)
+                            }
+
+                liquidated_coins = sorted(list((set(traded_coins) - active_set) - {"KRW"}))
+                prices = {}
+                coin_symbols = [f"KRW-{c}" for c in liquidated_coins if f"KRW-{c}" in valid_krw_markets]
+                if coin_symbols:
+                    for i in range(0, len(coin_symbols), 100):
+                        batch = ','.join(coin_symbols[i:i+100])
+                        async with session.get(f"{bithumb_v1_url}/ticker?markets={batch}") as resp:
+                            if resp.status == 200:
+                                tickers = await resp.json()
+                                for t in tickers:
+                                    prices[t['market']] = float(t['trade_price'])
+
+                asset_list = []
+                for currency in liquidated_coins:
+                    symbol = f"KRW-{currency}"
+                    if symbol in valid_krw_markets:
+                        current_price = prices.get(symbol, 0.0)
+                    else:
+                        current_price = 0.0
+                    
+                    korean_name = stock_mapper.get_name('bithumb', currency)
+                    info = sell_info.get(currency.upper(), {"price": 0.0, "volume": 0.0})
+                    sell_price = info["price"]
+                    sell_volume = info["volume"]
+                    sell_value = sell_price * sell_volume
+                    
+                    asset_list.append({
+                        "currency": currency,
+                        "korean_name": korean_name,
+                        "balance": 0.0,
+                        "avg_buy_price": sell_price,
+                        "current_price": current_price,
+                        "eval_value": sell_value,
+                        "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
+                        "percent": 0.0,
+                        "exchange": "bithumb"
+                    })
+                
+                return {
+                    "total_eval_value": 0.0,
+                    "formatted_total_value": "0",
+                    "assets": asset_list
+                }
+            else:
+                all_markets = []
+                async with session.get(f"{bithumb_v1_url}/market/all") as m_resp:
+                    if m_resp.status == 200:
+                        all_markets = await m_resp.json()
+                        
+                krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
+                btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
+
+                query_markets = ["KRW-BTC"]
+                for a in accounts:
+                    currency = a['currency']
+                    if currency == 'KRW':
+                        continue
+                    if currency in krw_supported:
+                        query_markets.append(f"KRW-{currency}")
+                    elif currency in btc_supported:
+                        query_markets.append(f"BTC-{currency}")
+
+                query_markets = list(set(query_markets))
+                
+                prices = {}
+                if query_markets:
+                    for i in range(0, len(query_markets), 100):
+                        batch = ','.join(query_markets[i:i+100])
+                        async with session.get(f"{bithumb_v1_url}/ticker?markets={batch}") as resp:
+                            if resp.status == 200:
+                                tickers = await resp.json()
+                                for t in tickers:
+                                    prices[t['market']] = float(t['trade_price'])
+                                    
+                btc_krw_price = prices.get("KRW-BTC", 0.0)
+                asset_list = []
+                total_eval_value = 0.0
+                
+                for a in accounts:
+                    currency = a['currency']
+                    balance = float(a['balance']) + float(a['locked'])
+                    avg_buy_price = float(a['avg_buy_price'])
+                    
+                    if balance <= 0:
+                        continue
+                    
+                    if currency == 'KRW':
+                        current_price = 1.0
+                        balance = int(balance)
+                        eval_value = balance
+                        korean_name = "원화"
+                    else:
+                        if currency in krw_supported:
+                            symbol = f"KRW-{currency}"
+                            current_price = prices.get(symbol, avg_buy_price)
+                            eval_value = balance * current_price
+                        elif currency in btc_supported:
+                            symbol = f"BTC-{currency}"
+                            btc_price = prices.get(symbol, 0.0)
+                            current_price = btc_price * btc_krw_price
+                            eval_value = balance * current_price
+                        else:
+                            current_price = 0.0
+                            eval_value = 0.0
+                        korean_name = stock_mapper.get_name('bithumb', currency)
+                            
+                    total_eval_value += eval_value
+                    
+                    asset_list.append({
+                        "currency": currency,
+                        "korean_name": korean_name,
+                        "balance": balance,
+                        "avg_buy_price": avg_buy_price,
+                        "current_price": current_price,
+                        "eval_value": eval_value,
+                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
+                        "exchange": "bithumb"
+                    })
+                    
+                for asset in asset_list:
+                    asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
+                    
+                asset_list.sort(key=lambda x: x["eval_value"], reverse=True)
+                
+                return {
+                    "total_eval_value": total_eval_value,
+                    "formatted_total_value": f"{int(total_eval_value):,}",
+                    "assets": asset_list
+                }
+    except Exception as e:
+        logger.error(f"Error fetching bithumb assets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/exchanges/kis/assets")
+async def get_kis_assets(request: Request, mode: str = "active", sync: bool = False):
+    """한국투자증권(KIS) 실제 계좌 자산 잔고와 주식 목록을 반환합니다."""
+    system = request.app.state.system
+    kis_config = system.config_manager.get('exchanges.kis', {})
+    kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+    kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+    kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+    
+    if not kis_app_key or not kis_app_secret or not kis_account_no:
+        raise HTTPException(status_code=400, detail="KIS API 키 또는 계좌 정보가 설정되지 않았습니다.")
+        
+    kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+    is_vts = "openapivts" in kis_api_url
+    tr_id = "VTTC8434R" if is_vts else "TTTC8434R"
+
+    try:
+        try:
+            await _sync_real_kis_orders(system, force_sync=(sync or mode == "liquidated"))
+        except Exception as sync_err:
+            logger.error(f"Failed to sync real KIS orders: {sync_err}")
+
+        token = await system.cred_provider.get_kis_access_token()
+        if not token:
+            raise HTTPException(status_code=401, detail="KIS 토큰을 발급받을 수 없습니다.")
+
+        kis_account_no = str(kis_account_no).strip()
+        if '-' in kis_account_no:
+            cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+        else:
+            cano = kis_account_no[:8]
+            acnt_prdt_cd = kis_account_no[8:]
+        if not acnt_prdt_cd:
+            acnt_prdt_cd = "01"
+
+        headers = {
+            "content-type": "application/json",
+            "authorization": f"Bearer {token}",
+            "appkey": kis_app_key,
+            "appsecret": kis_app_secret,
+            "tr_id": tr_id
+        }
+        
+        params = {
+            "CANO": cano,
+            "ACNT_PRDT_CD": acnt_prdt_cd,
+            "AFHR_FLPR_YN": "N",
+            "OFL_YN": "",
+            "INQR_DVSN": "02",
+            "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "01",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": ""
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    err_txt = await resp.text()
+                    raise HTTPException(status_code=resp.status, detail=f"KIS API 오류: {err_txt}")
+                data = await resp.json()
+                
+        if data.get('rt_cd') != '0':
+            raise HTTPException(status_code=400, detail=f"KIS API 에러: {data.get('msg1')}")
+            
+        output1 = data.get('output1', [])
+        output2 = data.get('output2', [])
+        
+        # 예수금 (총 예수금 금액)
+        kis_cash = 0
+        if output2:
+            kis_cash = int(float(output2[0].get('dnca_tot_amt', 0)))
+
+        asset_list = []
+        total_eval_value = float(kis_cash)
+
+        if mode == "liquidated":
+            # 처분 완료 자산 조회
+            active_set = {item.get('pdno', '').strip().lstrip('A') for item in output1 if float(item.get('hldg_qty', 0)) > 0}
+            traded_stocks = []
+            sell_info = {}
+            async with get_db_conn() as db:
+                async with db.execute(
+                    "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'kis' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                ) as cursor:
+                    rows = await cursor.fetchall()
+                    traded_stocks = [r['symbol'].upper() for r in rows]
+
+                query = """
+                    SELECT r.symbol, r.price, r.executed_volume
+                    FROM real_orders r
+                    INNER JOIN (
+                        SELECT symbol, MAX(created_at) as max_created_at
+                        FROM real_orders
+                        WHERE exchange = 'kis' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                        GROUP BY symbol
+                    ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
+                    WHERE r.exchange = 'kis' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                """
+                async with db.execute(query) as cursor:
+                    rows = await cursor.fetchall()
+                    for r in rows:
+                        sym = r['symbol'].upper()
+                        sell_info[sym] = {
+                            "price": float(r['price'] or 0.0),
+                            "volume": float(r['executed_volume'] or 0.0)
+                        }
+
+            liquidated_stocks = sorted(list(set(traded_stocks) - active_set))
+            for stock in liquidated_stocks:
+                korean_name = stock_mapper.get_name('kis', stock)
+                info = sell_info.get(stock, {"price": 0.0, "volume": 0.0})
+                sell_price = info["price"]
+                sell_volume = info["volume"]
+                sell_value = sell_price * sell_volume
+                
+                asset_list.append({
+                    "currency": stock,
+                    "korean_name": korean_name,
+                    "balance": 0.0,
+                    "avg_buy_price": sell_price,
+                    "current_price": 0.0,
+                    "eval_value": sell_value,
+                    "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
+                    "percent": 0.0,
+                    "exchange": "kis"
+                })
+            return {
+                "total_eval_value": 0.0,
+                "formatted_total_value": "0",
+                "assets": asset_list
+            }
+        else:
+            # 원화 예수금 기본 추가 (원화 자산 시드)
+            asset_list.append({
+                "currency": "KRW",
+                "korean_name": "원화 예수금",
+                "balance": float(kis_cash),
+                "avg_buy_price": 1.0,
+                "current_price": 1.0,
+                "eval_value": float(kis_cash),
+                "formatted_eval_value": f"{kis_cash:,}",
+                "exchange": "kis"
+            })
+            
+            for item in output1:
+                qty = float(item.get('hldg_qty', 0))
+                if qty <= 0:
+                    continue
+                pdno = item.get('pdno', '').strip().lstrip('A')
+                avg_price = float(item.get('pchs_avg_pric', 0))
+                current_price = float(item.get('prpr', 0))
+                eval_amt = float(item.get('evlu_amt', 0))
+                prdt_name = item.get('prdt_name', '').strip() or stock_mapper.get_name('kis', pdno)
+                
+                total_eval_value += eval_amt
+                
+                asset_list.append({
+                    "currency": pdno,
+                    "korean_name": prdt_name,
+                    "balance": qty,
+                    "avg_buy_price": avg_price,
+                    "current_price": current_price,
+                    "eval_value": eval_amt,
+                    "formatted_eval_value": f"{int(eval_amt):,}",
+                    "exchange": "kis"
+                })
+                
+            for asset in asset_list:
+                asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
+                
+            asset_list.sort(key=lambda x: x["eval_value"], reverse=True)
+            
+            return {
+                "total_eval_value": total_eval_value,
+                "formatted_total_value": f"{int(total_eval_value):,}",
+                "assets": asset_list
+            }
+    except Exception as e:
+        logger.error(f"Error fetching KIS assets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -189,19 +189,19 @@ const OverviewEngine = (() => {
                 }
             }
 
-            // 2.2. 해당 거래소의 보유종목 필터링 및 평가액 계산 (현금은 그래프 비중 연산에서 제외)
+            // 2.2. 해당 거래소의 보유종목 필터링 및 평가액 계산
             const exPositions = positions.filter(pos => {
                 const posEx = (pos.exchange || '').toLowerCase();
                 return posEx === ex && pos.quantity > 0;
             });
 
-            let calculatedTotal = 0.0; // 분모는 순수 종목 평가액 합계로 구성
-            let totalVal = exCash;
+            let calculatedTotal = 0.0; // 종목 평가액 합계
             exPositions.forEach(pos => {
                 const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
                 calculatedTotal += evalValue;
             });
-            totalVal += calculatedTotal;
+            
+            const totalVal = exCash + calculatedTotal; // 현금 + 종목 합산 총 자산 평가액
 
             // 총액 및 현금 라벨 헤더 한 줄 반영 (상세 자산 메트릭 주입)
             if (totalEl) {
@@ -235,19 +235,30 @@ const OverviewEngine = (() => {
                 `;
             }
 
-            if (calculatedTotal <= 0) {
-                barContainer.innerHTML = `<div style="width: 100%; text-align: center; line-height: 24px; color: #64748B; font-size: 0.75rem;">보유종목 평가 정보가 없습니다.</div>`;
+            if (totalVal <= 0) {
+                barContainer.innerHTML = `<div style="width: 100%; text-align: center; line-height: 24px; color: #64748B; font-size: 0.75rem;">보유 자산 정보가 없습니다.</div>`;
                 return;
             }
 
-            // 2.3. 비중 세그먼트 빌드 (현금 제외)
+            // 2.3. 비중 세그먼트 빌드
             let segments = [];
+            
+            // 현금 세그먼트 추가
+            if (exCash > 0) {
+                const cashRatio = (exCash / totalVal) * 100;
+                segments.push({
+                    name: '원화 현금',
+                    value: exCash,
+                    ratio: cashRatio,
+                    color: '#10B981' // 현금은 항상 초록색 테마
+                });
+            }
             
             // 종목 추가 (종목명 포맷: 한글명(종목명))
             let itemSegs = [];
             exPositions.forEach((pos, idx) => {
                 const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
-                const ratio = (evalValue / calculatedTotal) * 100;
+                const ratio = (evalValue / totalVal) * 100;
                 
                 const korName = pos.korean_name;
                 const displayName = (korName && korName !== pos.symbol) ? `${korName}(${pos.symbol})` : pos.symbol;
@@ -269,9 +280,9 @@ const OverviewEngine = (() => {
 
                 let otherTotal = 0;
                 otherSegs.forEach(s => otherTotal += s.value);
-                const otherRatio = (otherTotal / calculatedTotal) * 100;
+                const otherRatio = (otherTotal / totalVal) * 100;
 
-                segments = [...topSegs];
+                segments = [...segments, ...topSegs];
                 if (otherTotal > 0) {
                     segments.push({
                         name: '기타',
@@ -282,7 +293,7 @@ const OverviewEngine = (() => {
                 }
             } else {
                 itemSegs.sort((a, b) => b.value - a.value);
-                segments = [...itemSegs];
+                segments = [...segments, ...itemSegs];
             }
 
             // 2.4. DOM 렌더링

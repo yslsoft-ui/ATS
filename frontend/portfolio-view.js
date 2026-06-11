@@ -224,9 +224,14 @@ const PortfolioView = {
             }
             
             // 수량 정밀도 처리
-            const balanceStr = asset.currency === 'KRW' 
-                ? Math.floor(asset.balance).toLocaleString() 
-                : asset.balance.toFixed(4);
+            let balanceStr;
+            if (asset.currency === 'KRW') {
+                balanceStr = Math.floor(asset.balance).toLocaleString();
+            } else if (asset.exchange === 'kis') {
+                balanceStr = Math.floor(asset.balance).toLocaleString();
+            } else {
+                balanceStr = asset.balance.toFixed(4);
+            }
                 
             // 게이지 비주얼 바 렌더링
             const barHtml = `
@@ -236,10 +241,12 @@ const PortfolioView = {
                 </div>
             `;
             
-            // 코인 로고 아이콘 URL 및 Fallback SVG 처리
+            // 코인/주식 로고 아이콘 URL 및 Fallback SVG 처리
             let iconHtml = '';
             if (asset.currency === 'KRW') {
                 iconHtml = `<img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%234caf50'/><text x='50%' y='62%' font-size='10' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>₩</text></svg>" style="width:24px; height:24px; border-radius:50%; flex-shrink:0;">`;
+            } else if (asset.exchange === 'kis') {
+                iconHtml = `<img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%233B82F6'/><text x='50%' y='62%' font-size='8' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>ST</text></svg>" style="width:24px; height:24px; border-radius:50%; flex-shrink:0;">`;
             } else {
                 const iconUrl = `https://static.upbit.com/logos/${asset.currency}.png`;
                 iconHtml = `<img src="${iconUrl}" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'24\\' height=\\'24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%231E293B\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'9\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'%2394A3B8\\' text-anchor=\\'middle\\'>${asset.currency.slice(0, 3)}</text></svg>';">`;
@@ -253,12 +260,15 @@ const PortfolioView = {
                 </div>
             `;
             
+            const exchangeName = asset.exchange ? asset.exchange.toUpperCase() : 'UPBIT';
+            const exBadgeHtml = `<span class="ctx-badge" style="font-size: 0.65rem; padding: 2px 4px; margin-left: 5px; vertical-align: middle; background: rgba(148, 163, 184, 0.15);">${exchangeName}</span>`;
+
             tr.innerHTML = `
                 <td>
                     <div style="display:flex; align-items:center; gap: 10px;">
                         ${iconHtml}
                         <div style="display:flex; flex-direction:column; line-height:1.2;">
-                            <span style="font-weight:bold; color:#F8FAFC; font-size:0.9rem;">${asset.korean_name}</span>
+                            <span style="font-weight:bold; color:#F8FAFC; font-size:0.9rem;">${asset.korean_name}${exBadgeHtml}</span>
                             <span style="font-size:0.72rem; color:#94A3B8; font-family:'Roboto Mono', monospace;">${asset.currency}</span>
                         </div>
                     </div>

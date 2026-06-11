@@ -53,6 +53,7 @@ async def _init_db_core(db_path: str = None):
         ''')
         await db.execute("INSERT OR IGNORE INTO exchanges (id, name, fee_rate, market_type) VALUES ('upbit', 'Upbit', 0.0005, 'crypto')")
         await db.execute("INSERT OR IGNORE INTO exchanges (id, name, fee_rate, market_type) VALUES ('kis', 'KIS', 0.00015, 'stock')")
+        await db.execute("INSERT OR IGNORE INTO exchanges (id, name, fee_rate, market_type) VALUES ('bithumb', 'Bithumb', 0.0025, 'crypto')")
 
         # 2. trades
         await db.execute('''

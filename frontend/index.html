@@ -873,10 +873,14 @@
                 <header class="main-header">
                     <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
                         <div style="display: flex; align-items: center; gap: 15px;">
-                            <h1>💳 Upbit 실자산 현황</h1>
+                            <h1>💳 실거래 자산 현황</h1>
                             <span class="badge" style="background: #4caf50; color: #FFF; font-weight: bold;">LIVE WALLET</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 8px;">
+                            <button id="btn-real-exchange-upbit" class="btn sm active" style="background: var(--accent-color); color: white;" onclick="changeRealAssetExchange('upbit')">업비트</button>
+                            <button id="btn-real-exchange-bithumb" class="btn sm" style="background: #475569; color: #94A3B8;" onclick="changeRealAssetExchange('bithumb')">빗썸</button>
+                            <button id="btn-real-exchange-kis" class="btn sm" style="background: #475569; color: #94A3B8;" onclick="changeRealAssetExchange('kis')">국내주식(KIS)</button>
+                            <span style="color: #475569; margin: 0 4px;">|</span>
                             <button id="btn-real-asset-filter-active" class="btn sm active" style="background: var(--accent-color); color: white;" onclick="changeRealAssetFilter('active')">보유 자산</button>
                             <button id="btn-real-asset-filter-liquidated" class="btn sm" style="background: #475569; color: #94A3B8;" onclick="changeRealAssetFilter('liquidated')">처분 완료 자산</button>
                             <span style="color: #475569; margin: 0 4px;">|</span>
@@ -890,7 +894,7 @@
                             <span id="real-total-value" class="value" style="font-family: 'Roboto Mono', monospace;">-</span>
                         </div>
                         <div class="metric">
-                            <span class="label">📊 보유 가상자산 수</span>
+                            <span class="label">📊 보유 자산 수</span>
                             <span id="real-asset-count" class="value" style="font-family: 'Roboto Mono', monospace;">-</span>
                         </div>
                     </div>

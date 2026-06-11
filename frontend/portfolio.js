@@ -571,7 +571,9 @@ async function loadRealAssets(sync = false) {
     
     if (!tbody) return;
     
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; 업비트 API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>';
+    const exchange = state.realAssetExchange || 'upbit';
+    const exchangeName = (exchange === 'upbit' ? '업비트' : (exchange === 'bithumb' ? '빗썸' : '한국투자증권(KIS)'));
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; ${exchangeName} API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>`;
     
     try {
         const filter = state.realAssetFilter || 'active';
@@ -588,7 +590,7 @@ async function loadRealAssets(sync = false) {
             }
         }
 
-        const data = await APIClient.fetchRealAssets('upbit', filter, sync);
+        const data = await APIClient.fetchRealAssets(exchange, filter, sync);
         
         if (data && data.assets) {
             const krwAsset = data.assets.find(asset => asset.currency === 'KRW');
@@ -609,16 +611,22 @@ async function loadRealAssets(sync = false) {
         
         // 실시간 더블클릭 차트 이동 콜백 어댑터
         const onAssetDblClick = (asset) => {
-            const symbol = `KRW-${asset.currency}`;
+            const targetExchange = asset.exchange || exchange;
+            let symbol;
+            if (targetExchange === 'kis') {
+                symbol = asset.currency;
+            } else {
+                symbol = `KRW-${asset.currency}`;
+            }
             state.currentSymbol = symbol;
-            state.currentExchange = 'upbit';
-            updateHeaderInfo('upbit', symbol);
+            state.currentExchange = targetExchange;
+            updateHeaderInfo(targetExchange, symbol);
             
             const select = document.getElementById('symbol-select');
-            if (select) select.value = `upbit:${symbol}`;
+            if (select) select.value = `${targetExchange}:${symbol}`;
             
             if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-                state.ws.send(JSON.stringify({ subscribe: symbol, exchange: 'upbit' }));
+                state.ws.send(JSON.stringify({ subscribe: symbol, exchange: targetExchange }));
             }
             
             ViewRouter.navigateTo('monitoring-view');
@@ -670,15 +678,45 @@ function changeRealAssetFilter(filter) {
 }
 
 /**
+ * 실자산 조회 거래소를 변경합니다 (업비트 / 빗썸 / KIS).
+ */
+function changeRealAssetExchange(exchange) {
+    state.realAssetExchange = exchange;
+    
+    // 거래소 버튼 활성화 UI 갱신
+    const exchanges = ['upbit', 'bithumb', 'kis'];
+    exchanges.forEach(ex => {
+        const btn = document.getElementById(`btn-real-exchange-${ex}`);
+        if (btn) {
+            if (ex === exchange) {
+                btn.classList.add('active');
+                btn.style.background = 'var(--accent-color)';
+                btn.style.color = 'white';
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = '#475569';
+                btn.style.color = '#94A3B8';
+            }
+        }
+    });
+    
+    // 거래소 변경 시 원화 잔고 초기화 및 재조회
+    state.realKRWBalance = 0;
+    loadRealAssets(false);
+}
+
+/**
  * 거래소로부터 과거 MTS/외부 주문 내역을 동기화하여 로컬 DB를 최신화합니다.
  */
 async function syncRealOrderHistory() {
-    showAlert("거래소로부터 과거 주문/체결 내역을 동기화하고 있습니다. 잠시만 기다려주세요...", "info");
+    const exchange = state.realAssetExchange || 'upbit';
+    const exchangeName = (exchange === 'upbit' ? '업비트' : (exchange === 'bithumb' ? '빗썸' : '한국투자증권(KIS)'));
+    showAlert(`${exchangeName}로부터 과거 주문/체결 내역을 동기화하고 있습니다. 잠시만 기다려주세요...`, "info");
     try {
         await loadRealAssets(true);
-        showAlert("거래소 이력 동기화가 완료되었습니다.", "success");
+        showAlert(`${exchangeName} 이력 동기화가 완료되었습니다.`, "success");
     } catch (e) {
-        showAlert("거래소 이력 동기화 중 오류가 발생했습니다.", "error");
+        showAlert(`${exchangeName} 이력 동기화 중 오류가 발생했습니다.`, "error");
         console.error(e);
     }
 }
@@ -703,14 +741,14 @@ function openRealAssetOrderModal(asset) {
     
     state.realOrderState.asset = asset;
     state.realOrderState.symbol = asset.currency;
-    state.realOrderState.exchange = 'upbit';
+    state.realOrderState.exchange = asset.exchange || state.realAssetExchange || 'upbit';
     
     // 모달 타이틀 설정
     const orderExchange = document.getElementById('real-order-exchange');
     const orderSymbol = document.getElementById('real-order-symbol');
     const orderName = document.getElementById('real-order-name');
     
-    if (orderExchange) orderExchange.innerText = 'UPBIT';
+    if (orderExchange) orderExchange.innerText = state.realOrderState.exchange.toUpperCase();
     if (orderSymbol) orderSymbol.innerText = asset.currency;
     if (orderName) orderName.innerText = asset.korean_name;
     
@@ -722,12 +760,16 @@ function openRealAssetOrderModal(asset) {
         const balance = state.realKRWBalance || 0;
         availableKrw.innerText = `${Math.floor(balance).toLocaleString()} 원`;
     }
+    
+    const isStock = state.realOrderState.exchange === 'kis';
+    const unit = isStock ? '주' : asset.currency;
+    
     if (availableQty) {
-        availableQty.innerText = `${asset.balance} ${asset.currency}`;
+        availableQty.innerText = `${asset.balance} ${unit}`;
     }
     
     const qtyUnit = document.getElementById('real-order-volume-unit');
-    if (qtyUnit) qtyUnit.innerText = asset.currency;
+    if (qtyUnit) qtyUnit.innerText = unit;
     
     // 인풋 초기화
     const priceInput = document.getElementById('real-order-price');
@@ -779,16 +821,24 @@ async function pollRealOrderbook() {
     if (!state.realOrderState.asset) return;
     
     try {
-        const symbol = `KRW-${state.realOrderState.symbol}`;
-        const data = await APIClient.fetchOrderbook('upbit', symbol);
+        const exchange = state.realOrderState.exchange || 'upbit';
+        const symbol = exchange === 'kis' ? state.realOrderState.symbol : `KRW-${state.realOrderState.symbol}`;
+        const data = await APIClient.fetchOrderbook(exchange, symbol);
         
         if (data && data.orderbook) {
             renderRealOrderbook(data);
             
             // 만약 가격 인풋이 비어있으면 현재가를 기본값으로 설정
             const priceInput = document.getElementById('real-order-price');
-            if (priceInput && !priceInput.value) {
-                priceInput.value = data.trade_price;
+            const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+            if (priceInput) {
+                if (orderType === 'limit') {
+                    if (!priceInput.value) {
+                        priceInput.value = data.trade_price;
+                    }
+                } else {
+                    priceInput.value = data.trade_price;
+                }
             }
         }
     } catch (e) {
@@ -815,6 +865,10 @@ function renderRealOrderbook(data) {
     const total_ask_size = data.orderbook.total_ask_size || units.reduce((a, b) => a + b.ask_size, 0);
     const total_bid_size = data.orderbook.total_bid_size || units.reduce((a, b) => a + b.bid_size, 0);
     
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isCrypto = (exchange === 'upbit' || exchange === 'bithumb');
+    const sizeFormat = (size) => isCrypto ? size.toFixed(4) : Math.floor(size).toLocaleString();
+    
     // 매도 호가 (Asks) - 내림차순 정렬 (높은 가격이 위로 가도록)
     for (let i = units.length - 1; i >= 0; i--) {
         const u = units[i];
@@ -824,7 +878,7 @@ function renderRealOrderbook(data) {
                 <span class="price bear" style="color:#0072FF; font-weight:bold;">${u.ask_price.toLocaleString()}</span>
                 <div style="position:relative; width:50%; text-align:right;">
                     <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(0, 114, 255, 0.1); width:${percentage}%;"></div>
-                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${u.ask_size.toFixed(4)}</span>
+                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${sizeFormat(u.ask_size)}</span>
                 </div>
             </div>
         `;
@@ -850,7 +904,7 @@ function renderRealOrderbook(data) {
                 <span class="price bull" style="color:#FF4B4B; font-weight:bold;">${u.bid_price.toLocaleString()}</span>
                 <div style="position:relative; width:50%; text-align:right;">
                     <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(255, 75, 75, 0.1); width:${percentage}%;"></div>
-                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${u.bid_size.toFixed(4)}</span>
+                    <span class="size" style="position:relative; z-index:1; color:#94A3B8;">${sizeFormat(u.bid_size)}</span>
                 </div>
             </div>
         `;
@@ -906,6 +960,8 @@ function setOrderSide(side) {
 function onOrderTypeChange() {
     const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
     const side = state.realOrderState.side;
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isStock = exchange === 'kis';
     
     const groupPrice = document.getElementById('group-order-price');
     const groupVolume = document.getElementById('group-order-volume');
@@ -923,15 +979,29 @@ function onOrderTypeChange() {
         if (groupVolume) groupVolume.style.display = 'block';
         if (groupTotal) groupTotal.style.display = 'block';
     } else {
+        // 시장가
         if (side === 'BUY') {
-            if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
-            if (volumeInput) { volumeInput.disabled = true; volumeInput.value = ''; }
-            if (totalInput) totalInput.disabled = false;
-            
-            if (groupPrice) groupPrice.style.display = 'none';
-            if (groupVolume) groupVolume.style.display = 'none';
-            if (groupTotal) groupTotal.style.display = 'block';
+            if (isStock) {
+                // 주식 시장가 매수는 수량 입력
+                if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
+                if (volumeInput) volumeInput.disabled = false;
+                if (totalInput) { totalInput.disabled = true; totalInput.value = ''; }
+                
+                if (groupPrice) groupPrice.style.display = 'none';
+                if (groupVolume) groupVolume.style.display = 'block';
+                if (groupTotal) groupTotal.style.display = 'none';
+            } else {
+                // 코인 시장가 매수는 금액 입력
+                if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
+                if (volumeInput) { volumeInput.disabled = true; volumeInput.value = ''; }
+                if (totalInput) totalInput.disabled = false;
+                
+                if (groupPrice) groupPrice.style.display = 'none';
+                if (groupVolume) groupVolume.style.display = 'none';
+                if (groupTotal) groupTotal.style.display = 'block';
+            }
         } else {
+            // 시장가 매도는 코인/주식 모두 수량 입력
             if (priceInput) { priceInput.disabled = true; priceInput.value = ''; }
             if (volumeInput) volumeInput.disabled = false;
             if (totalInput) { totalInput.disabled = true; totalInput.value = ''; }
@@ -973,12 +1043,18 @@ function onTotalAmountInput() {
     const priceInput = document.getElementById('real-order-price');
     const volumeInput = document.getElementById('real-order-volume');
     const totalInput = document.getElementById('real-order-total');
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isStock = exchange === 'kis';
     
     if (priceInput && volumeInput && totalInput) {
         const price = parseFloat(priceInput.value) || 0;
         const total = parseFloat(totalInput.value) || 0;
         if (price > 0 && total > 0) {
-            volumeInput.value = (total / price).toFixed(8);
+            if (isStock) {
+                volumeInput.value = Math.floor(total / price);
+            } else {
+                volumeInput.value = (total / price).toFixed(8);
+            }
         }
     }
 }
@@ -989,6 +1065,8 @@ function onTotalAmountInput() {
 function setOrderRatio(ratio) {
     const side = state.realOrderState.side;
     const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isStock = exchange === 'kis';
     
     const priceInput = document.getElementById('real-order-price');
     const volumeInput = document.getElementById('real-order-volume');
@@ -1002,36 +1080,67 @@ function setOrderRatio(ratio) {
         
         if (orderType === 'limit') {
             if (currentPrice > 0) {
-                if (totalInput) totalInput.value = targetKrw;
-                if (volumeInput) volumeInput.value = (targetKrw / currentPrice).toFixed(8);
+                if (isStock) {
+                    const qty = Math.floor(targetKrw / currentPrice);
+                    if (volumeInput) volumeInput.value = qty;
+                    if (totalInput) totalInput.value = qty * currentPrice;
+                } else {
+                    if (totalInput) totalInput.value = targetKrw;
+                    if (volumeInput) volumeInput.value = (targetKrw / currentPrice).toFixed(8);
+                }
             } else {
                 showAlert("가격을 먼저 선택하거나 입력해주세요.", "warning");
             }
         } else {
-            if (totalInput) totalInput.value = targetKrw;
+            // 시장가 매수
+            if (isStock) {
+                if (currentPrice > 0) {
+                    const qty = Math.floor(targetKrw / currentPrice);
+                    if (volumeInput) volumeInput.value = qty;
+                } else {
+                    showAlert("현재가 정보를 수신할 때까지 잠시만 기다려주세요.", "warning");
+                }
+            } else {
+                if (totalInput) totalInput.value = targetKrw;
+            }
         }
     } else {
         const qtyBalance = state.realOrderState.asset ? state.realOrderState.asset.balance : 0;
         const targetQty = qtyBalance * ratio;
         
         if (orderType === 'limit') {
-            if (volumeInput) volumeInput.value = targetQty.toFixed(8);
-            if (currentPrice > 0 && totalInput) {
-                totalInput.value = Math.floor(currentPrice * targetQty);
+            if (isStock) {
+                const qty = Math.floor(targetQty);
+                if (volumeInput) volumeInput.value = qty;
+                if (currentPrice > 0 && totalInput) {
+                    totalInput.value = Math.floor(currentPrice * qty);
+                }
+            } else {
+                if (volumeInput) volumeInput.value = targetQty.toFixed(8);
+                if (currentPrice > 0 && totalInput) {
+                    totalInput.value = Math.floor(currentPrice * targetQty);
+                }
             }
         } else {
-            if (volumeInput) volumeInput.value = targetQty.toFixed(8);
+            // 시장가 매도
+            if (isStock) {
+                if (volumeInput) volumeInput.value = Math.floor(targetQty);
+            } else {
+                if (volumeInput) volumeInput.value = targetQty.toFixed(8);
+            }
         }
     }
 }
 
 /**
- * 주문을 실제로 업비트 거래소에 제출합니다.
+ * 주문을 실제로 거래소에 제출합니다.
  */
 async function executeRealOrder() {
     const asset = state.realOrderState.asset;
     if (!asset) return;
     
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isStock = exchange === 'kis';
     const side = state.realOrderState.side;
     const orderType = document.querySelector('input[name="real-order-type"]:checked').value;
     
@@ -1044,14 +1153,17 @@ async function executeRealOrder() {
     const total = totalInput ? parseFloat(totalInput.value) : null;
     
     let orderData = {
-        symbol: `KRW-${asset.currency}`,
+        symbol: isStock ? asset.currency : `KRW-${asset.currency}`,
         side: side,
         order_type: orderType
     };
     
     let confirmMsg = `[실계좌 주문 경고]\n정말로 실제 자산을 사용해 주문하시겠습니까?\n\n`;
+    confirmMsg += `거래소: ${exchange.toUpperCase()}\n`;
     confirmMsg += `종목: ${asset.korean_name} (${asset.currency})\n`;
     confirmMsg += `구분: ${side === 'BUY' ? '매수' : '매도'} / ${orderType === 'limit' ? '지정가' : '시장가'}\n`;
+    
+    const unit = isStock ? '주' : asset.currency;
     
     if (orderType === 'limit') {
         if (!price || price <= 0 || !volume || volume <= 0) {
@@ -1061,17 +1173,27 @@ async function executeRealOrder() {
         orderData.price = price;
         orderData.volume = volume;
         confirmMsg += `가격: ${price.toLocaleString()} 원\n`;
-        confirmMsg += `수량: ${volume} ${asset.currency}\n`;
+        confirmMsg += `수량: ${volume} ${unit}\n`;
         confirmMsg += `총액: ${Math.floor(price * volume).toLocaleString()} 원\n`;
     } else {
         if (side === 'BUY') {
-            if (!total || total <= 0) {
-                alert("시장가 매수는 매수 총액을 올바르게 입력해야 합니다.");
-                return;
+            if (isStock) {
+                if (!volume || volume <= 0) {
+                    alert("시장가 매수는 매수 수량을 올바르게 입력해야 합니다.");
+                    return;
+                }
+                orderData.order_type = 'market';
+                orderData.volume = volume;
+                confirmMsg += `매수 수량: ${volume} 주 (시장가)\n`;
+            } else {
+                if (!total || total <= 0) {
+                    alert("시장가 매수는 매수 총액을 올바르게 입력해야 합니다.");
+                    return;
+                }
+                orderData.order_type = 'price';
+                orderData.price = total;
+                confirmMsg += `총 매수액: ${total.toLocaleString()} 원 (시장가)\n`;
             }
-            orderData.order_type = 'price';
-            orderData.price = total;
-            confirmMsg += `총 매수액: ${total.toLocaleString()} 원 (시장가)\n`;
         } else {
             if (!volume || volume <= 0) {
                 alert("시장가 매도는 매도 수량을 올바르게 입력해야 합니다.");
@@ -1079,7 +1201,7 @@ async function executeRealOrder() {
             }
             orderData.order_type = 'market';
             orderData.volume = volume;
-            confirmMsg += `매도 수량: ${volume} ${asset.currency} (시장가)\n`;
+            confirmMsg += `매도 수량: ${volume} ${unit} (시장가)\n`;
         }
     }
     
@@ -1095,7 +1217,7 @@ async function executeRealOrder() {
     }
     
     try {
-        const res = await APIClient.placeRealOrder('upbit', orderData);
+        const res = await APIClient.placeRealOrder(exchange, orderData);
         showAlert("주문이 성공적으로 제출되었습니다.", "success");
         closeRealAssetOrderModal();
         await loadRealAssets(false);
@@ -1593,6 +1715,7 @@ window.endSimulationSession = endSimulationSession;
 
 // 실자산 및 실계좌 관련 신규 바인딩
 window.changeRealAssetFilter = changeRealAssetFilter;
+window.changeRealAssetExchange = changeRealAssetExchange;
 window.syncRealOrderHistory = syncRealOrderHistory;
 window.openRealAssetOrderModal = openRealAssetOrderModal;
 window.closeRealAssetOrderModal = closeRealAssetOrderModal;

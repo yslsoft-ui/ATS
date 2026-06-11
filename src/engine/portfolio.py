@@ -184,6 +184,37 @@ def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     ).digest()
     return f"{signing_input}.{base64url(sig)}"
 
+def _create_bithumb_jwt(access_key, secret_key, query_hash=None):
+    import time
+    import uuid
+    import json
+    import base64
+    import hmac
+    import hashlib
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {
+        "access_key": access_key,
+        "nonce": str(uuid.uuid4()),
+        "timestamp": int(time.time() * 1000)
+    }
+    if query_hash:
+        payload["query_hash"] = query_hash
+        payload["query_hash_alg"] = "SHA512"
+        
+    def base64url(b):
+        return base64.urlsafe_b64encode(b).decode('utf-8').replace('=', '')
+        
+    header_b64 = base64url(json.dumps(header, separators=(',', ':')).encode('utf-8'))
+    payload_b64 = base64url(json.dumps(payload, separators=(',', ':')).encode('utf-8'))
+    signing_input = f"{header_b64}.{payload_b64}"
+    
+    sig = hmac.new(
+        secret_key.encode('utf-8'),
+        signing_input.encode('utf-8'),
+        hashlib.sha256
+    ).digest()
+    return f"{signing_input}.{base64url(sig)}"
+
 class RealOrderExecutorAdapter(OrderExecutor):
     """
     실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다.
@@ -197,11 +228,12 @@ class RealOrderExecutorAdapter(OrderExecutor):
         import json
         import aiohttp
         import urllib.parse
+        import time
         from pathlib import Path
         
         exchange_lower = exchange.lower()
-        if exchange_lower != 'upbit':
-            logger.error(f"RealOrderExecutorAdapter: Currently only 'upbit' is supported. Received '{exchange}'")
+        if exchange_lower not in ('upbit', 'bithumb', 'kis'):
+            logger.error(f"RealOrderExecutorAdapter: Unsupported exchange '{exchange}'")
             return None
             
         root_dir = Path(__file__).resolve().parents[2]
@@ -216,90 +248,276 @@ class RealOrderExecutorAdapter(OrderExecutor):
                         k, v = line.split('=', 1)
                         os.environ[k.strip()] = v.strip()
                         
-        access_key = os.getenv("UPBIT_ACCESS_KEY")
-        secret_key = os.getenv("UPBIT_SECRET_KEY")
-        
-        if not access_key or not secret_key or "your_access_key" in access_key:
-            logger.error("RealOrderExecutorAdapter: Upbit API keys are missing in environment/env file.")
-            return None
+        if exchange_lower == 'upbit':
+            access_key = os.getenv("UPBIT_ACCESS_KEY")
+            secret_key = os.getenv("UPBIT_SECRET_KEY")
             
-        api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
-        base_url = api_url.rstrip('/')
-        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
-        
-        clean_symbol = symbol.replace("KRW-", "").upper()
-        upbit_side = "bid" if side.upper() == "BUY" else "ask"
-        
-        order_type = kwargs.get('order_type')
-        trade_price = kwargs.get('trade_price')
-        market = kwargs.get('market', 'KRW')
-        
-        params = {
-            "market": f"KRW-{clean_symbol}",
-            "side": upbit_side,
-        }
-        
-        if order_type == "limit" or (order_type is None and trade_price is not None and kwargs.get('is_limit')):
-            params["ord_type"] = "limit"
-            params["price"] = str(trade_price)
-            params["volume"] = str(quantity)
-        else:
-            if upbit_side == "bid":
-                params["ord_type"] = "price"
-                if trade_price:
-                    params["price"] = str(int(quantity * trade_price))
-                else:
-                    logger.error("RealOrderExecutorAdapter: trade_price is required for market buy order.")
-                    return None
-            else:
-                params["ord_type"] = "market"
-                params["volume"] = str(quantity)
+            if not access_key or not secret_key or "your_access_key" in access_key:
+                logger.error("RealOrderExecutorAdapter: Upbit API keys are missing in environment/env file.")
+                return None
                 
-        try:
-            query_string = urllib.parse.urlencode(params).encode("utf-8")
+            api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+            base_url = api_url.rstrip('/')
+            upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
             
-            m = hashlib.sha512()
-            m.update(query_string)
-            query_hash = m.hexdigest()
+            clean_symbol = symbol.replace("KRW-", "").upper()
+            upbit_side = "bid" if side.upper() == "BUY" else "ask"
             
-            token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+            order_type = kwargs.get('order_type')
+            trade_price = kwargs.get('trade_price')
+            market = kwargs.get('market', 'KRW')
             
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
+            params = {
+                "market": f"KRW-{clean_symbol}",
+                "side": upbit_side,
             }
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(f"{upbit_v1_url}/orders", params=params, headers=headers) as resp:
-                    res_data = await resp.json()
-                    if resp.status not in (200, 201):
-                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
-                        logger.error(f"RealOrderExecutorAdapter Upbit API error: {resp.status} - {err_msg}")
+            if order_type == "limit" or (order_type is None and trade_price is not None and kwargs.get('is_limit')):
+                params["ord_type"] = "limit"
+                params["price"] = str(trade_price)
+                params["volume"] = str(quantity)
+            else:
+                if upbit_side == "bid":
+                    params["ord_type"] = "price"
+                    if trade_price:
+                        params["price"] = str(int(quantity * trade_price))
+                    else:
+                        logger.error("RealOrderExecutorAdapter: trade_price is required for market buy order.")
                         return None
+                else:
+                    params["ord_type"] = "market"
+                    params["volume"] = str(quantity)
                     
-                    executed_qty = float(res_data.get("executed_volume") or res_data.get("volume") or quantity)
-                    executed_price = float(res_data.get("avg_price") or res_data.get("price") or trade_price or 0.0)
-                    fee = float(res_data.get("paid_fee") or 0.0)
-                    executed_value = executed_price * executed_qty
-                    
-                    if executed_qty == 0.0 and trade_price is not None and trade_price > 0:
-                        executed_qty = quantity
+            try:
+                query_string = urllib.parse.urlencode(params).encode("utf-8")
+                m = hashlib.sha512()
+                m.update(query_string)
+                query_hash = m.hexdigest()
+                
+                token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+                
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{upbit_v1_url}/orders", params=params, headers=headers) as resp:
+                        res_data = await resp.json()
+                        if resp.status not in (200, 201):
+                            err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                            logger.error(f"RealOrderExecutorAdapter Upbit API error: {resp.status} - {err_msg}")
+                            return None
+                        
+                        executed_qty = float(res_data.get("executed_volume") or res_data.get("volume") or quantity)
+                        executed_price = float(res_data.get("avg_price") or res_data.get("price") or trade_price or 0.0)
+                        fee = float(res_data.get("paid_fee") or 0.0)
                         executed_value = executed_price * executed_qty
+                        
+                        if executed_qty == 0.0 and trade_price is not None and trade_price > 0:
+                            executed_qty = quantity
+                            executed_value = executed_price * executed_qty
+                        
+                        return {
+                            'exchange': exchange,
+                            'market': market,
+                            'symbol': clean_symbol,
+                            'side': side.upper(),
+                            'price': executed_price,
+                            'quantity': executed_qty,
+                            'fee': fee,
+                            'executed_value': executed_value,
+                            'timestamp': int(time.time() * 1000)
+                        }
+            except Exception as e:
+                logger.error(f"RealOrderExecutorAdapter: Exception placing upbit order: {e}")
+                return None
+
+        elif exchange_lower == 'bithumb':
+            access_key = os.getenv("BITHUMB_API_KEY")
+            secret_key = os.getenv("BITHUMB_SECRET_KEY")
+            
+            if not access_key or not secret_key or "your_access_key" in access_key:
+                logger.error("RealOrderExecutorAdapter: Bithumb API keys are missing in environment/env file.")
+                return None
+                
+            api_url = self.config_manager.get('exchanges.bithumb.api_url', 'https://api.bithumb.com')
+            base_url = api_url.rstrip('/')
+            bithumb_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+            
+            clean_symbol = symbol.replace("KRW-", "").upper()
+            bithumb_side = "bid" if side.upper() == "BUY" else "ask"
+            
+            order_type = kwargs.get('order_type')
+            trade_price = kwargs.get('trade_price')
+            market = kwargs.get('market', 'KRW')
+            
+            params = {
+                "market": f"KRW-{clean_symbol}",
+                "side": bithumb_side,
+            }
+            
+            if order_type == "limit" or (order_type is None and trade_price is not None and kwargs.get('is_limit')):
+                params["ord_type"] = "limit"
+                params["price"] = str(trade_price)
+                params["volume"] = str(quantity)
+            else:
+                if bithumb_side == "bid":
+                    params["ord_type"] = "price"
+                    if trade_price:
+                        params["price"] = str(int(quantity * trade_price))
+                    else:
+                        logger.error("RealOrderExecutorAdapter: trade_price is required for market buy order.")
+                        return None
+                else:
+                    params["ord_type"] = "market"
+                    params["volume"] = str(quantity)
                     
-                    return {
-                        'exchange': exchange,
-                        'market': market,
-                        'symbol': clean_symbol,
-                        'side': side.upper(),
-                        'price': executed_price,
-                        'quantity': executed_qty,
-                        'fee': fee,
-                        'executed_value': executed_value,
-                        'timestamp': int(time.time() * 1000)
-                    }
-        except Exception as e:
-            logger.error(f"RealOrderExecutorAdapter: Exception placing upbit order: {e}")
-            return None
+            try:
+                query_string = urllib.parse.urlencode(params).encode("utf-8")
+                m = hashlib.sha512()
+                m.update(query_string)
+                query_hash = m.hexdigest()
+                
+                token = _create_bithumb_jwt(access_key, secret_key, query_hash=query_hash)
+                
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{bithumb_v1_url}/orders", params=params, headers=headers) as resp:
+                        res_data = await resp.json()
+                        if resp.status not in (200, 201):
+                            err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                            logger.error(f"RealOrderExecutorAdapter Bithumb API error: {resp.status} - {err_msg}")
+                            return None
+                        
+                        executed_qty = float(res_data.get("executed_volume") or res_data.get("volume") or quantity)
+                        executed_price = float(res_data.get("avg_price") or res_data.get("price") or trade_price or 0.0)
+                        fee = float(res_data.get("paid_fee") or 0.0)
+                        executed_value = executed_price * executed_qty
+                        
+                        if executed_qty == 0.0 and trade_price is not None and trade_price > 0:
+                            executed_qty = quantity
+                            executed_value = executed_price * executed_qty
+                        
+                        return {
+                            'exchange': exchange,
+                            'market': market,
+                            'symbol': clean_symbol,
+                            'side': side.upper(),
+                            'price': executed_price,
+                            'quantity': executed_qty,
+                            'fee': fee,
+                            'executed_value': executed_value,
+                            'timestamp': int(time.time() * 1000)
+                        }
+            except Exception as e:
+                logger.error(f"RealOrderExecutorAdapter: Exception placing Bithumb order: {e}")
+                return None
+
+        elif exchange_lower == 'kis':
+            kis_config = self.config_manager.get('exchanges.kis', {})
+            kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+            kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+            kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+            
+            if not kis_app_key or not kis_app_secret or not kis_account_no:
+                logger.error("RealOrderExecutorAdapter: KIS credentials or account details are missing.")
+                return None
+                
+            kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+            is_vts = "openapivts" in kis_api_url
+            
+            if side.upper() == "BUY":
+                tr_id = "VTTC0012U" if is_vts else "TTTC0012U"
+            else:
+                tr_id = "VTTC0011U" if is_vts else "TTTC0011U"
+                
+            try:
+                from src.engine.credentials import CredentialProvider
+                cred_provider = CredentialProvider(self.config_manager.config)
+                token = await cred_provider.get_kis_access_token()
+                if not token:
+                    logger.error("RealOrderExecutorAdapter KIS: Failed to acquire access token.")
+                    return None
+                    
+                kis_account_no = str(kis_account_no).strip()
+                if '-' in kis_account_no:
+                    cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+                else:
+                    cano = kis_account_no[:8]
+                    acnt_prdt_cd = kis_account_no[8:]
+                if not acnt_prdt_cd:
+                    acnt_prdt_cd = "01"
+                    
+                clean_symbol = symbol.replace("KRW-", "").upper()
+                order_type = kwargs.get('order_type')
+                trade_price = kwargs.get('trade_price')
+                market = kwargs.get('market', 'KRW')
+                
+                if order_type == "limit" or (order_type is None and trade_price is not None and kwargs.get('is_limit')):
+                    ord_dvsn = "00"
+                    ord_unpr = str(int(trade_price or 0))
+                    ord_qty = str(int(quantity))
+                else:
+                    ord_dvsn = "01"
+                    ord_unpr = "0"
+                    ord_qty = str(int(quantity))
+                    
+                headers = {
+                    "content-type": "application/json",
+                    "authorization": f"Bearer {token}",
+                    "appkey": kis_app_key,
+                    "appsecret": kis_app_secret,
+                    "tr_id": tr_id,
+                    "custtype": "P"
+                }
+                
+                params = {
+                    "CANO": cano,
+                    "ACNT_PRDT_CD": acnt_prdt_cd,
+                    "PDNO": clean_symbol,
+                    "ORD_DVSN": ord_dvsn,
+                    "ORD_QTY": ord_qty,
+                    "ORD_UNPR": ord_unpr,
+                    "ALGO_NO": ""
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-cash", json=params, headers=headers) as resp:
+                        res_data = await resp.json()
+                        if resp.status != 200:
+                            logger.error(f"RealOrderExecutorAdapter KIS API error: {resp.status} - {res_data.get('msg1')}")
+                            return None
+                            
+                        if res_data.get("rt_cd") != "0":
+                            logger.error(f"RealOrderExecutorAdapter KIS order failure: {res_data.get('msg1')}")
+                            return None
+                            
+                        output = res_data.get("output", {})
+                        odno = output.get("ODNO") or output.get("odno") or f"kis-{int(time.time()*1000)}"
+                        
+                        # KIS는 즉시 체결 가격/수량을 제공하지 않으므로 초기 주문가/수량으로 모의 구성
+                        executed_price = float(trade_price) if trade_price is not None else 0.0
+                        
+                        return {
+                            'exchange': exchange,
+                            'market': market,
+                            'symbol': clean_symbol,
+                            'side': side.upper(),
+                            'price': executed_price,
+                            'quantity': float(ord_qty),
+                            'fee': 0.0,
+                            'executed_value': executed_price * float(ord_qty),
+                            'timestamp': int(time.time() * 1000),
+                            'uuid': odno
+                        }
+            except Exception as e:
+                logger.error(f"RealOrderExecutorAdapter: Exception placing KIS order: {e}")
+                return None
 
 class PortfolioManager:
     """
@@ -447,6 +665,109 @@ class PortfolioManager:
         except Exception as e:
             logger.error(f"sync_live_portfolio_from_exchange (Upbit): Exception occurred: {e}")
 
+        # Bithumb 실거래 잔고 동기화
+        bithumb_config = self.config_manager.get('exchanges.bithumb', {})
+        bithumb_enabled = bithumb_config.get('enabled', False)
+        bithumb_access_key = os.getenv("BITHUMB_API_KEY") or bithumb_config.get('api_key')
+        bithumb_secret_key = os.getenv("BITHUMB_SECRET_KEY") or bithumb_config.get('api_secret')
+        
+        if bithumb_enabled and bithumb_access_key and bithumb_secret_key:
+            try:
+                bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com').rstrip('/')
+                bithumb_v1_url = bithumb_api_url if bithumb_api_url.endswith('/v1') else f"{bithumb_api_url}/v1"
+                
+                from src.server.routers.portfolio import _sync_real_bithumb_orders
+                await _sync_real_bithumb_orders(bithumb_access_key, bithumb_secret_key, bithumb_v1_url, force_sync=True)
+                
+                token = _create_bithumb_jwt(bithumb_access_key, bithumb_secret_key)
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json"
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{bithumb_v1_url}/accounts", headers=headers) as resp:
+                        if resp.status == 200:
+                            b_accounts = await resp.json()
+                            
+                            all_markets = []
+                            async with session.get(f"{bithumb_v1_url}/market/all") as m_resp:
+                                if m_resp.status == 200:
+                                    all_markets = await m_resp.json()
+                            krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
+                            btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
+ 
+                            query_markets = ["KRW-BTC"]
+                            for a in b_accounts:
+                                currency = a['currency']
+                                if currency == 'KRW':
+                                    continue
+                                if currency in krw_supported:
+                                    query_markets.append(f"KRW-{currency}")
+                                elif currency in btc_supported:
+                                    query_markets.append(f"BTC-{currency}")
+ 
+                            query_markets = list(set(query_markets))
+                            prices = {}
+                            if query_markets:
+                                for i in range(0, len(query_markets), 100):
+                                    batch = ','.join(query_markets[i:i+100])
+                                    async with session.get(f"{bithumb_v1_url}/ticker?markets={batch}") as t_resp:
+                                        if t_resp.status == 200:
+                                            tickers = await t_resp.json()
+                                            for t in tickers:
+                                                prices[t['market']] = float(t['trade_price'])
+ 
+                            btc_krw_price = prices.get("KRW-BTC", 0.0)
+                            
+                            for a in b_accounts:
+                                currency = a['currency']
+                                balance = float(a['balance']) + float(a['locked'])
+                                avg_buy_price = float(a['avg_buy_price'])
+                                
+                                if balance <= 0.0:
+                                    continue
+                                    
+                                if currency == 'KRW':
+                                    balance = int(balance)
+                                    if portfolio.exchange_cash is None:
+                                        portfolio.exchange_cash = {}
+                                    portfolio.exchange_cash['bithumb'] = balance
+                                else:
+                                    symbol = currency.upper()
+                                    pos_key = ('bithumb', symbol)
+                                    
+                                    if currency in krw_supported:
+                                        curr_price = prices.get(f"KRW-{currency}", avg_buy_price)
+                                    elif currency in btc_supported:
+                                        curr_price = prices.get(f"BTC-{currency}", 0.0) * btc_krw_price
+                                    else:
+                                        curr_price = 0.0
+                                        
+                                    if system and hasattr(system, 'latest_prices'):
+                                        system.latest_prices[f"bithumb:{symbol}"] = {
+                                            "trade_price": curr_price,
+                                            "timestamp": time.time()
+                                        }
+                                        
+                                    new_positions[pos_key] = Position(
+                                        exchange='bithumb',
+                                        symbol=symbol,
+                                        quantity=balance,
+                                        avg_price=avg_buy_price,
+                                        updated_at=time.time()
+                                    )
+                            logger.info("sync_live_portfolio_from_exchange: Bithumb portfolio sync complete.")
+            except Exception as e:
+                logger.error(f"sync_live_portfolio_from_exchange (Bithumb): Exception occurred: {e}")
+        else:
+            logger.warning(
+                f"sync_live_portfolio_from_exchange: Bithumb sync skipped. "
+                f"enabled={bithumb_enabled}, "
+                f"has_access_key={bool(bithumb_access_key)}, "
+                f"has_secret_key={bool(bithumb_secret_key)}"
+            )
+
         # KIS 실거래 잔고 동기화
         kis_config = self.config_manager.get('exchanges.kis', {})
         kis_enabled = kis_config.get('enabled', False)
@@ -547,6 +868,33 @@ class PortfolioManager:
         portfolio.positions = new_positions
         if portfolio.exchange_cash:
             portfolio.cash = sum(portfolio.exchange_cash.values())
+            
+        # 실거래(live) 거래소별 초기 원금 동적 세팅
+        if not hasattr(portfolio, 'exchange_initial_cash') or portfolio.exchange_initial_cash is None:
+            portfolio.exchange_initial_cash = {}
+            
+        for ex_id in ['upbit', 'bithumb', 'kis']:
+            if portfolio.exchange_cash and ex_id in portfolio.exchange_cash:
+                ex_cash = portfolio.exchange_cash[ex_id]
+                ex_pos_val = 0.0
+                
+                # new_positions에서 해당 거래소의 포지션만 골라서 평가액 계산
+                for (ex_k, sym), pos in new_positions.items():
+                    if ex_k == ex_id:
+                        # 평단가 기준으로 평가액 가산
+                        ex_pos_val += pos.quantity * pos.avg_price
+                
+                total_ex_val = ex_cash + ex_pos_val
+                
+                # 기존에 등록된 원금이 없거나 0원인 경우에만 현재 총자산 가치로 초기 투자금 설정
+                current_init = portfolio.exchange_initial_cash.get(ex_id, 0.0)
+                if current_init <= 0.0:
+                    portfolio.exchange_initial_cash[ex_id] = total_ex_val
+                    logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for {ex_id} to {total_ex_val}")
+                    
+        # live 포트폴리오의 전체 initial_cash는 각 거래소별 initial_cash의 합산으로 갱신
+        if portfolio.exchange_initial_cash:
+            portfolio.initial_cash = sum(portfolio.exchange_initial_cash.values())
             
         try:
             await self.save_to_db('live')

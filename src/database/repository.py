@@ -1015,11 +1015,20 @@ class SqliteTradingRepository(BaseTradingRepository):
             # 1.5. 거래소별 격리 자금 정보 저장 (portfolio_exchanges)
             if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
                 for ex_id, ex_cash in portfolio.exchange_cash.items():
+                    init_cash = 10000000.0
+                    if hasattr(portfolio, 'exchange_initial_cash') and portfolio.exchange_initial_cash and ex_id in portfolio.exchange_initial_cash:
+                        init_cash = float(portfolio.exchange_initial_cash[ex_id])
+                    else:
+                        init_cash = float(ex_cash)
+                        if not hasattr(portfolio, 'exchange_initial_cash') or portfolio.exchange_initial_cash is None:
+                            portfolio.exchange_initial_cash = {}
+                        portfolio.exchange_initial_cash[ex_id] = init_cash
+
                     await db.execute('''
                         INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                        VALUES (?, ?, 10000000.0, ?, datetime('now'))
+                        VALUES (?, ?, ?, ?, datetime('now'))
                         ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, updated_at = datetime('now')
-                    ''', (portfolio.id, ex_id, ex_cash, ex_cash))
+                    ''', (portfolio.id, ex_id, init_cash, ex_cash, ex_cash))
 
             # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
             await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (portfolio.id,))
@@ -1062,9 +1071,11 @@ class SqliteTradingRepository(BaseTradingRepository):
             for pid, p in loaded_portfolios.items():
                 # 2.1. portfolio_exchanges 로드
                 p.exchange_cash = {}
-                async with db.execute("SELECT exchange_id, cash FROM portfolio_exchanges WHERE portfolio_id = ?", (pid,)) as cursor:
+                p.exchange_initial_cash = {}
+                async with db.execute("SELECT exchange_id, initial_cash, cash FROM portfolio_exchanges WHERE portfolio_id = ?", (pid,)) as cursor:
                     async for row in cursor:
                         p.exchange_cash[row['exchange_id']] = row['cash']
+                        p.exchange_initial_cash[row['exchange_id']] = row['initial_cash']
                 
                 # 2.2. positions 로드
                 async with db.execute("SELECT * FROM positions WHERE portfolio_id = ?", (pid,)) as cursor:
