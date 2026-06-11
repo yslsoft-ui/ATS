@@ -228,10 +228,11 @@ class UserCommandDispatcher:
             strategies = {}
             try:
                 db_strategies = await self.repository.get_all_strategy_versions()
+                strategies_config = self.config_manager.get('strategies', {}) or {}
                 for s_ver in db_strategies:
                     s_id = s_ver["strategy_id"]
-                    # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크
-                    s_config = self.config_manager.get(f"strategies.{s_id.lower()}")
+                    # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크 (대소문자 엄격 비교)
+                    s_config = strategies_config.get(s_id)
                     if s_config and s_config.get("enabled", False):
                         strategies[s_id] = {
                             "enabled": True,
