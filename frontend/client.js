@@ -211,37 +211,7 @@ const APIClient = (() => {
                 body: JSON.stringify({ code, name, ...(isActive !== undefined && { is_active: isActive }) })
             }),
 
-        /**
-         * 백테스트용 기본 전략 및 파라미터 구성 로드
-         */
-        fetchBacktestDefaultConfigs: () => _fetchAPI('/api/backtest/default-configs'),
 
-        /**
-         * 리플레이 백테스트 실행
-         */
-        runBacktest: (data) => 
-            _fetchAPI('/api/backtest/run', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            }),
-
-        /**
-         * 백테스트 이력(세트) 목록 조회
-         */
-        fetchBacktestHistory: () => _fetchAPI(`/api/backtest/history?t=${Date.now()}`),
-
-
-
-        /**
-         * 특정 백테스트 이력 영구 삭제
-         */
-        deleteBacktestHistory: (portfolioId) => _fetchAPI(`/api/backtest/history/${portfolioId}`, { method: 'DELETE' }),
-
-        /**
-         * 전체 백테스트 이력 영구 삭제
-         */
-        clearAllBacktestHistory: () => _fetchAPI('/api/backtest/history', { method: 'DELETE' }),
 
         /**
          * 실시간 모의투자 세션 시작
@@ -258,6 +228,17 @@ const APIClient = (() => {
          */
         endPortfolioSession: (portfolioId) => 
             _fetchAPI(`/api/portfolio/${portfolioId}/end`, { method: 'POST' }),
+
+
+        /**
+         * 특정 모의투자 및 백테스트 이력 영구 삭제
+         */
+        deletePortfolioHistory: (portfolioId) => _fetchAPI(`/api/portfolio/history/${portfolioId}`, { method: 'DELETE' }),
+
+        /**
+         * 전체 모의투자 및 백테스트 이력 영구 삭제
+         */
+        clearAllPortfolioHistory: () => _fetchAPI('/api/portfolio/history', { method: 'DELETE' }),
 
         /**
          * 특정 전략의 상세 상태 조회

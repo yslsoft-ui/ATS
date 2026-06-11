@@ -18,10 +18,8 @@ async function loadPortfolioHistoryList(force = false) {
 
 
     try {
-        const [portfolios, backtestHistory] = await Promise.all([
-            APIClient.fetchPortfolioList(),
-            APIClient.fetchBacktestHistory()
-        ]);
+        const portfolios = await APIClient.fetchPortfolioList();
+        const backtestHistory = [];
 
         state.portfoliosCache = portfolios;
 
@@ -186,7 +184,7 @@ async function deletePortfolioHistory(portfolioId) {
     }
 
     try {
-        const res = await APIClient.deleteBacktestHistory(portfolioId);
+        const res = await APIClient.deletePortfolioHistory(portfolioId);
         if (res.status === 'success') {
             showAlert("이력이 정상적으로 삭제되었습니다.", "success");
             
@@ -218,7 +216,7 @@ async function clearAllPortfolioHistory() {
     }
 
     try {
-        const res = await APIClient.clearAllBacktestHistory();
+        const res = await APIClient.clearAllPortfolioHistory();
         if (res.status === 'success') {
             showAlert("모든 이력이 정상적으로 삭제되었습니다.", "success");
             
@@ -1459,42 +1457,18 @@ let currentRunMode = 'simulation'; // 'simulation' 또는 'backtest'
  * 공통 전략 기동 모달을 열고, 모드에 맞춰 화면 필드를 동적으로 온오프합니다.
  */
 async function openStrategyRunModal(mode) {
-    currentRunMode = mode;
+    currentRunMode = 'simulation';
     const modal = document.getElementById('strategy-run-modal');
     if (!modal) return;
 
     const titleEl = document.getElementById('modal-run-title');
     if (titleEl) {
-        titleEl.innerText = mode === 'backtest' ? '⚙️ 과거 백테스트 실행 설정' : '⚙️ 실시간 모의투자 실행 설정';
-    }
-
-    const backtestFields = document.getElementById('modal-backtest-fields');
-    if (backtestFields) {
-        backtestFields.style.display = mode === 'backtest' ? 'flex' : 'none';
+        titleEl.innerText = '⚙️ 실시간 모의투자 실행 설정';
     }
 
     const submitBtn = document.getElementById('btn-modal-submit');
     if (submitBtn) {
-        submitBtn.innerText = mode === 'backtest' ? '🚀 백테스트 실행' : '▶️ 모의투자 가동';
-    }
-
-    if (mode === 'backtest') {
-        const startInput = document.getElementById('modal-backtest-start-date');
-        const endInput = document.getElementById('modal-backtest-end-date');
-        if (startInput && endInput && !startInput.value) {
-            const now = new Date();
-            const startDay = new Date(now);
-            startDay.setHours(0, 0, 0, 0);
-            const endDay = new Date(now);
-            endDay.setMinutes(0, 0, 0);
-
-            const toLocalISO = (date) => {
-                const tzOffset = date.getTimezoneOffset() * 60000;
-                return (new Date(date - tzOffset)).toISOString().slice(0, 16);
-            };
-            startInput.value = toLocalISO(startDay);
-            endInput.value = toLocalISO(endDay);
-        }
+        submitBtn.innerText = '▶️ 모의투자 가동';
     }
 
     const listContainer = document.getElementById('modal-strategy-container');
@@ -1599,39 +1573,15 @@ async function submitStrategyRun() {
     }
 
     try {
-        if (currentRunMode === 'backtest') {
-            showAlert("백테스트 시뮬레이션을 생성하여 수행 중입니다... 완료 시까지 잠시 대기하세요.", "info");
-            
-            const reqData = {
-                exchange: document.getElementById('modal-backtest-exchange').value,
-                symbol: document.getElementById('modal-backtest-symbol').value.trim() || "",
-                start_date: document.getElementById('modal-backtest-start-date').value,
-                end_date: document.getElementById('modal-backtest-end-date').value,
-                initial_cash: cash_config,
-                strategies: strategies
-            };
-
-            const res = await APIClient.runBacktest(reqData);
-            if (res.status === 'success') {
-                showAlert(`백테스트 완료: ROI ${res.summary.roi}%`, "success");
-                state.currentPortfolioId = res.portfolio_id;
-                closeStrategyRunModal();
-                await loadPortfolioHistoryList(true);
-                await loadPortfolio(true);
-            } else {
-                showAlert(res.message || "백테스트 실패", "error");
-            }
+        const res = await APIClient.startPortfolioSession(cash_config, strategies);
+        if (res.status === 'success') {
+            showAlert(`실시간 모의투자가 가동되었습니다.`, "success");
+            state.currentPortfolioId = res.portfolio_id;
+            closeStrategyRunModal();
+            await loadPortfolioHistoryList(true);
+            await loadPortfolio(true);
         } else {
-            const res = await APIClient.startPortfolioSession(cash_config, strategies);
-            if (res.status === 'success') {
-                showAlert(`실시간 모의투자가 가동되었습니다.`, "success");
-                state.currentPortfolioId = res.portfolio_id;
-                closeStrategyRunModal();
-                await loadPortfolioHistoryList(true);
-                await loadPortfolio(true);
-            } else {
-                showAlert(res.message || "모의투자 기동 실패", "error");
-            }
+            showAlert(res.message || "모의투자 기동 실패", "error");
         }
     } catch (e) {
         showAlert("전략 기동 과정에 장애가 발생했습니다.", "error");

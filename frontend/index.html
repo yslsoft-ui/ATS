@@ -580,8 +580,6 @@
                             <div id="session-action-group" style="display: flex; flex-direction: column; gap: 8px;">
                                 <button class="btn success" style="width: 100%; font-size: 0.85rem;" onclick="openStrategyRunModal('simulation')">▶️ 실시간 모의투자 시작</button>
                             </div>
-                            
-                            <button class="btn primary" style="width: 100%; font-size: 0.85rem; background: #6366F1; border: none;" onclick="openStrategyRunModal('backtest')">📊 과거 백테스트 실행</button>
                         </div>
                         
                         <!-- 통합 이력 관리 테이블 패널 -->
@@ -626,26 +624,6 @@
                                     <div class="metric">
                                         <span class="label">💵 보유 현금</span>
                                         <span id="port-cash" class="value">0</span>
-                                    </div>
-                                </div>
-                                
-                                <!-- 백테스트 메타 정보 (백테스트 결과 시에만 노출) -->
-                                <div id="portfolio-backtest-summary" class="header-metrics" style="margin-top: 0; display: none; border-left: 1px solid rgba(148, 163, 184, 0.15); padding-left: 15px; grid-template-columns: repeat(4, 1fr);">
-                                    <div class="metric">
-                                        <span class="label">💵 투자 원금</span>
-                                        <span id="port-initial-cash" class="value">0</span>
-                                    </div>
-                                    <div class="metric">
-                                        <span class="label">💸 발생 수수료</span>
-                                        <span id="port-total-fee" class="value">0</span>
-                                    </div>
-                                    <div class="metric">
-                                        <span class="label">🔄 체결 건수</span>
-                                        <span id="port-trade-count" class="value">0</span>
-                                    </div>
-                                    <div class="metric">
-                                        <span class="label">⏱️ 소요 시간</span>
-                                        <span id="port-duration" class="value">0초</span>
                                     </div>
                                 </div>
                             </div>
@@ -703,87 +681,7 @@
                     </div>
                 </div>
 
-                <!-- 과거 백테스트 결과일 때만 추가로 표시할 성과 분석 패널 -->
-                <div id="portfolio-backtest-analysis-panels" style="display: none; flex-direction: column; gap: 20px; margin-top: 20px; width: 100%;">
-                    <!-- 거래 발생 종목 / 거래소별 분리 레이아웃 -->
-                    <div class="backtest-split-container">
-                        <!-- 좌측: 거래소별 요약 패널 -->
-                        <div class="portfolio-card" id="port-exchanges-card" style="display: block; width: 100%;">
-                            <h3>거래 발생 거래소 요약</h3>
-                            <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">거래소를 선택하면 우측 패널에 해당 거래소의 상세 종목 현황이 노출됩니다.</p>
-                            <div class="table-wrapper">
-                                <table id="port-exchanges-table">
-                                    <thead>
-                                        <tr>
-                                            <th>거래소 (Exchange)</th>
-                                            <th style="text-align:right">투자 원금</th>
-                                            <th style="text-align:right">최종 평가액</th>
-                                            <th style="text-align:right">종목 수</th>
-                                            <th style="text-align:right">총 체결</th>
-                                            <th style="text-align:right">총 수수료</th>
-                                            <th style="text-align:right">총 수익금</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="port-exchanges-tbody">
-                                        <!-- JS에서 렌더링 -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
 
-                        <!-- 우측: 선택된 거래소의 종목별 상세 패널 -->
-                        <div class="portfolio-card" id="port-symbols-card" style="display: block; width: 100%;">
-                            <h3 id="port-symbols-title">종목별 상세 현황</h3>
-                            <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">종목을 클릭하면 하단 패널에 상세 체결 및 매매 내역이 출력됩니다.</p>
-                            <div class="table-wrapper">
-                                <table id="port-symbols-table">
-                                    <thead>
-                                        <tr>
-                                            <th>종목 (Asset)</th>
-                                            <th style="text-align:right">체결 건수</th>
-                                            <th style="text-align:right">누적 매수금액</th>
-                                            <th style="text-align:right">누적 매도금액</th>
-                                            <th style="text-align:right">보유량</th>
-                                            <th style="text-align:right">최종가격</th>
-                                            <th style="text-align:right">미실현 평가액</th>
-                                            <th style="text-align:right">누적 수수료</th>
-                                            <th style="text-align:right">수익금</th>
-                                            <th style="text-align:right">수익률</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="port-symbols-tbody">
-                                        <tr><td colspan="10" style="text-align:center; padding:20px; color:#64748B;">좌측에서 거래소를 선택해 주세요.</td></tr>
-                                    </tbody>
-                                    <tfoot id="port-symbols-tfoot" style="display: none;"></tfoot>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 백테스트 상세 거래 내역 -->
-                    <div class="portfolio-card" id="port-history-detail-card" style="display: block;">
-                        <h3>백테스트 전체 거래 내역</h3>
-                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
-                            <table id="port-history-detail-table">
-                                <thead>
-                                    <tr>
-                                        <th>시간</th>
-                                        <th>종목 (Asset)</th>
-                                        <th>구분</th>
-                                        <th style="text-align:right">가격</th>
-                                        <th style="text-align:right">수량</th>
-                                        <th style="text-align:right">거래금액</th>
-                                        <th style="text-align:right">수수료</th>
-                                        <th>사유</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="port-history-detail-tbody">
-                                    <!-- JS에서 렌더링 -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
                 <!-- 닫는 태그: portfolio-main-content 및 좌우 분할 컨테이너 -->
                     </main>
                 </div>
@@ -799,36 +697,6 @@
                         
                         <!-- 모달 바디 (스크롤 지원) -->
                         <div style="max-height: 70vh; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; padding-right: 5px;">
-                            
-                            <!-- 1. 백테스트 전용 설정 영역 (백테스트 모드일 때만 활성화) -->
-                            <div id="modal-backtest-fields" style="display: none; flex-direction: column; gap: 12px; background: rgba(15, 23, 42, 0.2); padding: 12px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.08);">
-                                <h4 style="margin: 0 0 5px 0; color: #6366F1; font-size: 0.85rem;">⏱️ 백테스트 기간 설정</h4>
-                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                    <label style="flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #94A3B8;">
-                                        대상 거래소:
-                                        <select id="modal-backtest-exchange" class="dark-input" style="width: 100%; margin: 0; padding: 5px 10px;">
-                                            <option value="all">전체 (All)</option>
-                                            <option value="upbit">업비트 (Upbit)</option>
-                                            <option value="bithumb">빗썸 (Bithumb)</option>
-                                            <option value="kis">한국투자증권 (KIS)</option>
-                                        </select>
-                                    </label>
-                                    <label style="flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #94A3B8;">
-                                        종목 심볼 (공란 시 전체):
-                                        <input type="text" id="modal-backtest-symbol" class="dark-input" style="width: 100%; margin: 0;" placeholder="예: BTC">
-                                    </label>
-                                </div>
-                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                                    <label style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #94A3B8;">
-                                        시작 일시:
-                                        <input type="datetime-local" id="modal-backtest-start-date" class="dark-input" style="width: 100%; margin: 0;">
-                                    </label>
-                                    <label style="flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: #94A3B8;">
-                                        종료 일시:
-                                        <input type="datetime-local" id="modal-backtest-end-date" class="dark-input" style="width: 100%; margin: 0;">
-                                    </label>
-                                </div>
-                            </div>
 
                             <!-- 2. 공통 자본금 설정 영역 -->
                             <div style="display: flex; flex-direction: column; gap: 10px;">

@@ -100,6 +100,42 @@ async def panic_sell(portfolio_id: str, request: Request):
         logger.error(f"Panic Sell Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.delete("/api/portfolio/history/{portfolio_id}")
+async def delete_portfolio_history(portfolio_id: str, request: Request):
+    """특정 마각된 모의투자 또는 과거 백테스트 이력 세션을 DB와 메모리에서 삭제합니다."""
+    system = request.app.state.system
+    db_path = system.portfolio_manager.db_path
+    
+    async with get_db_conn(db_path) as db:
+        cursor = await db.execute("DELETE FROM portfolios WHERE id = ? AND type IN ('simulationR', 'simulation_ended')", (portfolio_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=400, detail="삭제할 포트폴리오를 찾을 수 없습니다. (가동 중이거나 존재하지 않음)")
+        await db.commit()
+        
+    # 메모리 캐시에서 제거
+    system.portfolio_manager.portfolios.pop(portfolio_id, None)
+    return {"status": "success", "message": "이력이 정상적으로 삭제되었습니다."}
+
+@router.delete("/api/portfolio/history")
+async def delete_all_portfolio_history(request: Request):
+    """모든 종료된 모의투자 및 과거 백테스트 이력을 DB와 메모리에서 일괄 영구 삭제합니다."""
+    system = request.app.state.system
+    db_path = system.portfolio_manager.db_path
+    
+    async with get_db_conn(db_path) as db:
+        await db.execute("DELETE FROM portfolios WHERE type IN ('simulationR', 'simulation_ended')")
+        await db.commit()
+        
+    to_delete = [
+        pid for pid, p in system.portfolio_manager.portfolios.items()
+        if getattr(p, 'portfolio_type', 'simulation') in ('simulationR', 'simulation_ended')
+    ]
+    for pid in to_delete:
+        system.portfolio_manager.portfolios.pop(pid, None)
+        
+    return {"status": "success", "message": "모든 이력이 성공적으로 삭제되었습니다."}
+
+
 @router.get("/trades")
 async def get_trades(request: Request, exchange: str = "upbit", symbol: str = "BTC", limit: int = 10):
     """최근 체결 데이터를 DB에서 조회하여 반환합니다."""

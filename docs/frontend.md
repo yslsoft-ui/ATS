@@ -32,7 +32,7 @@
 ### 2.1. 진입점 및 제어 (Entrypoint & Routing)
 - **[index.html](file:///home/simon/ATS/frontend/index.html)**: 대시보드 UI 레이아웃, 실시간 차트 및 테이블 영역 정의.
 - **[app.js](file:///home/simon/ATS/frontend/app.js)**: 애플리케이션 메인 초기화 루프를 수행하고 이벤트를 연동합니다.
-- **[router.js](file:///home/simon/ATS/frontend/router.js)**: `ViewRouter` 클래스를 구동하여 해시 라우팅(`#dashboard`, `#backtest`, `#settings` 등)에 의거해 알맞은 화면 섹션을 동적으로 온/오프시킵니다.
+- **[router.js](file:///home/simon/ATS/frontend/router.js)**: `ViewRouter` 클래스를 구동하여 해시 라우팅(`#dashboard`, `#settings` 등)에 의거해 알맞은 화면 섹션을 동적으로 온/오프시킵니다.
 
 ### 2.2. 데이터 레이어 (Data & State Management)
 - **[store.js](file:///home/simon/ATS/frontend/store.js)**: 전역 애플리케이션의 메모리 상태 관리기입니다.
@@ -46,7 +46,6 @@
 - **[portfolio-view.js](file:///home/simon/ATS/frontend/portfolio-view.js)**: 포트폴리오의 실물 보유 현황 및 가상 투자 운용 상태를 표와 폼으로 렌더링합니다.
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
-- **[backtest.js](file:///home/simon/ATS/frontend/backtest.js)**: 백테스트 설정 값 전송, 백테스트 진행 상태 표시 및 결과 성과 리포트 출력 폼을 관리합니다.
 - **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.

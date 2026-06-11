@@ -160,44 +160,17 @@
 - **`GET /trades?portfolio_id={id}&limit={count}`**
   - **설명**: 특정 포트폴리오에서 발주된 주문들의 최근 체결 내역을 조회합니다.
 
+- **`DELETE /api/portfolio/history/{portfolio_id}`**
+  - **설명**: 특정 마감된 모의투자 또는 과거 백테스트 이력 세션을 DB와 메모리에서 영구 삭제합니다.
+  - **응답 (JSON)**: `{"status": "success", "message": "이력이 정상적으로 삭제되었습니다."}`
+
+- **`DELETE /api/portfolio/history`**
+  - **설명**: 모든 종료된 모의투자 및 과거 백테스트 이력을 DB와 메모리에서 일괄 영구 삭제합니다.
+  - **응답 (JSON)**: `{"status": "success", "message": "모든 이력이 성공적으로 삭제되었습니다."}`
+
 - **`GET /api/exchanges/upbit/assets`**
   - **설명**: 업비트의 실제 계좌 잔고를 API를 통해 직접 조회하고 실시간 평가가치를 반영해 평가액이 높은 자산 순서대로 정렬해 반환합니다.
     - **원화(KRW) 잔고 절사**: UI상의 깔끔한 시인성 확보를 위해 원화(KRW) 잔고에 한해 소수점 이하 단위를 버림(int 절사)하여 반환합니다.
-
----
-
-### 1.4. 백테스트 (Backtest Execution)
-역사적 과거 틱/캔들 데이터를 기반으로 트레이딩 전략 성과를 검증합니다.
-
-- **`POST /api/backtest/run`**
-  - **설명**: 틱 리플레이 기반 백테스트 작업을 요청합니다.
-  - **요청 Body (JSON)**:
-    ```json
-    {
-      "exchange": "upbit",
-      "symbol": "BTC",
-      "start_date": "2026-05-23T00:00:00",
-      "end_date": "2026-05-25T00:00:00",
-      "initial_cash": 10000000,
-      "strategies": {
-        "rsi_strategy": { "enabled": true, "params": { "interval": 60, "rsi_period": 14 } }
-      },
-      "risk_limits_enabled": true,
-      "slippage_rate": 0.001
-    }
-    ```
-
-- **`GET /api/backtest/history`**
-  - **설명**: 이전 실행했던 백테스트 최종 성과 리포트 히스토리 목록을 반환합니다.
-
-- **`DELETE /api/backtest/history/{portfolio_id}`**
-  - **설명**: 특정 백테스트 세트 또는 마감된 실시간 모의투자 세션의 상세 정보를 DB에서 영구 삭제합니다.
-
-- **`DELETE /api/backtest/history`**
-  - **설명**: 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다.
-
-- **`GET /api/backtest/default-configs`**
-  - **설명**: 백테스트 폼 화면에 표기할 디폴트 매개변수 및 전략 명세 데이터를 반환합니다.
 
 ---
 

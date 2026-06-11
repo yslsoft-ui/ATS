@@ -14,7 +14,6 @@ from src.server.routers.collector import router as collector_router
 from src.server.routers.strategy import router as strategy_router
 from src.server.routers.portfolio import router as portfolio_router
 from src.server.routers.telemetry import router as telemetry_router
-from src.server.routers.backtest import router as backtest_router
 from src.server.routers.intelligence import router as intelligence_router
 
 # 로깅 시스템 초기화 (초기 단계)
@@ -41,7 +40,6 @@ app.include_router(collector_router)
 app.include_router(strategy_router)
 app.include_router(portfolio_router)
 app.include_router(telemetry_router)
-app.include_router(backtest_router)
 app.include_router(intelligence_router)
 
 
