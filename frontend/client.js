@@ -268,7 +268,65 @@ const APIClient = (() => {
         /**
          * 특정 전략의 파라미터 변경 이력 목록 조회
          */
-        fetchStrategyHistory: (strategyId) => _fetchAPI(`/api/strategies/${strategyId}/history`)
+        fetchStrategyHistory: (strategyId) => _fetchAPI(`/api/strategies/${strategyId}/history`),
+
+        /**
+         * 의사결정 콘솔 상단 요약 정보 조회
+         */
+        fetchDecisionConsoleSummary: () => _fetchAPI('/api/decision-console/summary'),
+
+        /**
+         * 모든 전략의 설정/DB/엔진 기동 상태 및 불일치 조회
+         */
+        fetchDecisionConsoleStrategies: () => _fetchAPI('/api/decision-console/strategies'),
+
+        /**
+         * 특정 전략의 동기화, 파라미터 Diff, 성과, 타임라인 상세 추적 데이터 조회
+         */
+        fetchDecisionConsoleStrategyTrace: (strategyId) => _fetchAPI(`/api/decision-console/strategies/${strategyId}/trace`),
+
+        /**
+         * 필터링 조건에 따른 제안 목록 조회
+         */
+        fetchDecisionConsoleProposals: (strategyId = null, status = null) => {
+            let url = '/api/decision-console/proposals';
+            const params = [];
+            if (strategyId) params.push(`strategy_id=${strategyId}`);
+            if (status) params.push(`status=${status}`);
+            if (params.length > 0) url += `?${params.join('&')}`;
+            return _fetchAPI(url);
+        },
+
+        /**
+         * 특정 제안의 GIRS, Feature, Counterfactual 등 10대 상세 추적 데이터 조회
+         */
+        fetchDecisionConsoleProposalTrace: (proposalId) => _fetchAPI(`/api/decision-console/proposals/${proposalId}/trace`),
+
+        /**
+         * 특정 제안의 수동 재평가 Job Queue 비동기 등록
+         */
+        requestDecisionConsoleReevaluation: (proposalId) => 
+            _fetchAPI(`/api/decision-console/proposals/${proposalId}/reevaluate`, { method: 'POST' }),
+
+        /**
+         * 특정 제안의 수동 재평가 Job 이력 리스트 조회
+         */
+        fetchDecisionConsoleReevaluationJobs: (proposalId) => _fetchAPI(`/api/decision-console/proposals/${proposalId}/reevaluation-jobs`),
+
+        /**
+         * 의사결정 관련 주요 시스템 감사 이력 조회
+         */
+        fetchDecisionConsoleEvents: (eventType = null, target = null, limit = 50) => {
+            let url = `/api/decision-console/events?limit=${limit}`;
+            if (eventType) url += `&event_type=${eventType}`;
+            if (target) url += `&target=${target}`;
+            return _fetchAPI(url);
+        },
+
+        /**
+         * 특정 데이터 유형의 원본 DB JSON 레코드 데이터 조회
+         */
+        fetchDecisionConsoleRaw: (objectType, objectId) => _fetchAPI(`/api/decision-console/raw/${objectType}/${objectId}`)
     };
 })();
 

@@ -89,7 +89,7 @@ async def test_auto_pruning():
     
     # 60점 미만으로 평가되도록 셋업 (예: win_rate=30% 강제 하한으로 50점 유도)
     candidate = [{
-        "strategy_id": "rsistrategy",
+        "strategy_id": "RSIStrategy",
         "portfolio_id": "port_test",
         "original_params": {"rsi_window": 14},
         "proposed_params": {"rsi_window": 16},
@@ -103,7 +103,7 @@ async def test_auto_pruning():
         "proposal_group_id": "group_pruned",
         "version": 1,
         "portfolio_id": "port_test",
-        "strategy_id": "rsistrategy",
+        "strategy_id": "RSIStrategy",
         "status": "PENDING",
         "outcome": "RUNNING",
         "original_params": {"rsi_window": 14},
@@ -128,7 +128,7 @@ async def test_hybrid_auto_apply_scheduler():
     from src.engine.auto_scheduler import HybridAutoApplyScheduler
     
     # 1. 초기 셋업
-    strategy_id = "rsistrategy"
+    strategy_id = "RSIStrategy"
     portfolio_id = "port_apply"
     
     await repo.save_strategy_version(strategy_id, 1, {"rsi_window": 14}, int(time.time()*1000))
@@ -213,7 +213,7 @@ async def test_rollback_auto_disable():
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
     from src.engine.auto_scheduler import HybridAutoApplyScheduler
     
-    strategy_id = "rsistrategy"
+    strategy_id = "RSIStrategy"
     scheduler = HybridAutoApplyScheduler(db_path=TEST_DB_PATH)
     
     # 1. 최초 활성화 상태 설정

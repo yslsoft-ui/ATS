@@ -39,11 +39,11 @@ async def test_adaptive_diversity():
     # Penalty = 18.0 * (1 - 0.0142/0.18) = 18.0 * (1 - 0.0789) = 18.0 * 0.9211 = 16.58점
     
     # 챔피언 버전을 DB에 저장하여 다양성 비교군 생성
-    await engine.repository.save_strategy_version("rsistrategy", 1, {"rsi_window": 14, "buy_threshold": 30.0, "sell_threshold": 70.0}, int(time.time()*1000))
+    await engine.repository.save_strategy_version("RSIStrategy", 1, {"rsi_window": 14, "buy_threshold": 30.0, "sell_threshold": 70.0}, int(time.time()*1000))
     
     # 후보 제안 실행
     candidate = [{
-        "strategy_id": "rsistrategy",
+        "strategy_id": "RSIStrategy",
         "portfolio_id": "port_test",
         "original_params": {"rsi_window": 14, "buy_threshold": 30.0, "sell_threshold": 70.0},
         "proposed_params": {"rsi_window": 15, "buy_threshold": 30.0, "sell_threshold": 70.0}, # 매우 인접한 파라미터
@@ -111,7 +111,7 @@ async def test_importance_sampling():
         "proposal_group_id": "group_sample",
         "version": 1,
         "portfolio_id": "port_test",
-        "strategy_id": "rsistrategy",
+        "strategy_id": "RSIStrategy",
         "status": "PENDING",
         "outcome": "RUNNING",
         "original_params": {"rsi_window": 14},
@@ -144,7 +144,7 @@ async def test_decision_path_hash():
     # 동일한 입력 하에서 항상 일관되고 고유한 해시를 만드는지 검증
     proposed_params = {"rsi_window": 15, "buy_threshold": 30.0}
     original_params = {"rsi_window": 14, "buy_threshold": 30.0}
-    strategy_id = "rsistrategy"
+    strategy_id = "RSIStrategy"
     atr_ratio = 1.0
     adx = 20.0
     
@@ -171,7 +171,7 @@ async def test_counterfactual_sampling_tracker():
         "proposal_group_id": "group_track",
         "version": 1,
         "portfolio_id": "port_test",
-        "strategy_id": "rsistrategy",
+        "strategy_id": "RSIStrategy",
         "status": "PRUNED",
         "outcome": "RUNNING",
         "original_params": {"rsi_window": 14, "buy_threshold": 30.0, "sell_threshold": 70.0},

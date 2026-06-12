@@ -433,6 +433,48 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 
 ---
 
+### 1.21. proposal_reevaluation_jobs [NEW]
+
+수동 Shadow 재평가 비동기 Job Queue입니다. 의사결정 콘솔 UI의 [재평가 요청] 버튼 클릭 시 생성되며, `shadow_eval_daemon`이 QUEUED 상태를 감지하여 순차 처리합니다. **실거래·자동 승격에 절대 영향을 주지 않습니다.**
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **job_id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | Job 일련번호 |
+| **proposal_id** | INTEGER | NOT NULL | 재평가 대상 제안 ID |
+| **status** | TEXT | DEFAULT 'QUEUED' | FSM 상태 (`QUEUED`, `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED`) |
+| **requested_at** | INTEGER | - | Job 등록 타임스탬프 (Unix epoch ms) |
+| **started_at** | INTEGER | - | 처리 시작 타임스탬프 |
+| **finished_at** | INTEGER | - | 처리 완료/실패 타임스탬프 |
+| **requested_by** | TEXT | DEFAULT 'user' | Job 요청 주체 (`user`, `system` 등) |
+| **mode** | TEXT | DEFAULT 'shadow_revaluation' | 재평가 모드 |
+| **input_snapshot_id** | INTEGER | - | 입력으로 사용된 FeatureSnapshot ID (NULL 시 최신 스냅샷 사용) |
+| **error_message** | TEXT | - | 실패 시 오류 메시지 |
+| **worker_id** | TEXT | - | 처리한 데몬 프로세스 식별자 |
+
+---
+
+### 1.22. proposal_evaluation_runs [NEW]
+
+수동 재평가 Job 완료 시 생성되는 점수 이력 누적 테이블입니다. 기존 평가를 덮어쓰지 않고 `evaluation_run_id`를 채번하여 append-only로 이력을 보존하며, 시간에 따른 GIRS 점수 변화 추이를 추적합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **evaluation_run_id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 런 일련번호 |
+| **proposal_id** | INTEGER | NOT NULL | 평가 대상 제안 ID |
+| **job_id** | INTEGER | - | 연결된 reevaluation Job ID |
+| **girs_score** | REAL | - | GIRS 모델 리스크 점수 (0~1, 낮을수록 안전) |
+| **promotion_score** | REAL | - | 최종 승격 심사 점수 (1 - final_risk) |
+| **stability_score** | REAL | - | 시장·시스템·랭킹 안정성 종합 점수 |
+| **rollback_probability** | REAL | - | 롤백 위험 확률 추정값 |
+| **data_quality_blocked** | INTEGER | DEFAULT 0 | 데이터 품질 차단 여부 (0/1) |
+| **counterfactual_result_id** | INTEGER | - | 연결된 proposal_evaluations ID (NULL 시 미계산) |
+| **model_version** | TEXT | - | 평가에 사용된 GIRS 모델 버전 |
+| **scorer_version** | TEXT | - | 평가에 사용된 Scorer 버전 |
+| **simulator_version** | TEXT | - | 백테스트 시뮬레이터 버전 |
+| **created_at** | INTEGER | - | 런 생성 타임스탬프 (Unix epoch ms) |
+
+---
+
 ## 2. 데이터베이스 인덱스 (Database Indexes)
 
 데이터 로딩 성능 및 백테스트 조회 최적화를 위해 다음과 같은 복합/단일 인덱스를 운용합니다.

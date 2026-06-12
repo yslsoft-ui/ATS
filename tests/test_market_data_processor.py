@@ -192,7 +192,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
     assert len(signals_received) == 1
     assert signals_received[0].action == 'BUY'
     assert signals_received[0].price == 1060.0
-    assert signals_received[0].strategy_id == 'mockprocessorteststrategy'
+    assert signals_received[0].strategy_id == 'MockProcessorTestStrategy'
 
     await processor.stop()
 

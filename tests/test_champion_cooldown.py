@@ -53,7 +53,7 @@ async def test_champion_cooldown_sqlite():
         # PENDING proposal 추가
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (1, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
+            VALUES (1, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
         """)
         await db.commit()
         
@@ -65,7 +65,7 @@ async def test_champion_cooldown_sqlite():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (2, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 90)
+            VALUES (2, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 90)
         """)
         await db.commit()
         
@@ -80,7 +80,7 @@ async def test_champion_cooldown_sqlite():
         for i in range(5):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
         await db.commit()
         
@@ -102,14 +102,14 @@ async def test_champion_cooldown_sqlite():
         for i in range(10):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p2', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+                VALUES ('p2', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
             
         # target 포트폴리오 p1에 price가 0.0인 주문 2건 추가
         for i in range(2):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
             
         await db.commit()
@@ -124,7 +124,7 @@ async def test_champion_cooldown_sqlite():
         for i in range(5):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
         await db.commit()
         
@@ -151,7 +151,7 @@ async def test_champion_cooldown_safety_features_unblocked():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (1, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
+            VALUES (1, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
         """)
         await db.commit()
     await repo.approve_proposal_atomic(1, now_ms)
@@ -159,7 +159,7 @@ async def test_champion_cooldown_safety_features_unblocked():
     # 2. 수동 롤백 (이전 버전이 없어 예외가 날 수 있으므로 history 강제 추가 후 롤백 수행)
     # 롤백은 approve_proposal_atomic이 아닌 rollback_strategy_atomic을 호출함.
     # 쿨다운 중(1초 경과, 0거래)임에도 롤백이 차단되지 않고 정상 실행되어야 함.
-    res_rollback = await repo.rollback_strategy_atomic('rsistrategy', 1, now_ms + 1000)
+    res_rollback = await repo.rollback_strategy_atomic('RSIStrategy', 1, now_ms + 1000)
     assert res_rollback["new_version_id"] == 2
     assert res_rollback["rollback_version_id"] == 1
     
@@ -184,7 +184,7 @@ async def test_champion_cooldown_safety_features_unblocked():
     
     # 모의 포트폴리오 추가
     p = Portfolio(portfolio_id="p1", name="Test Simulation", initial_cash=10000000.0, portfolio_type="simulation")
-    p.update_position("upbit", "BTC", "BUY", 50000000.0, 0.1, 2500.0, strategy_id="rsistrategy")
+    p.update_position("upbit", "BTC", "BUY", 50000000.0, 0.1, 2500.0, strategy_id="RSIStrategy")
     pm.add_portfolio(p)
     
     # 청산 실행 -> 쿨다운 영향 없이 정상적으로 SELL 체결 목록이 반환되어야 함
@@ -205,7 +205,7 @@ async def test_champion_cooldown_safety_features_unblocked():
         exchange = "upbit"
         symbol = "BTC"
         action = "BUY"
-        strategy_id = "rsistrategy"
+        strategy_id = "RSIStrategy"
         reason = "Test"
         context = {}
         
@@ -238,7 +238,7 @@ async def test_auto_scheduler_cooldown_logging():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (1, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
+            VALUES (1, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
         """)
         await db.commit()
         
@@ -248,7 +248,7 @@ async def test_auto_scheduler_cooldown_logging():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (2, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 85)
+            VALUES (2, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 85)
         """)
         await db.commit()
         
@@ -260,7 +260,7 @@ async def test_auto_scheduler_cooldown_logging():
     events = await scheduler.repository.get_system_events(limit=5)
     cooldown_events = [e for e in events if e["event_type"] == "PROMOTION_COOLDOWN_BLOCKED"]
     assert len(cooldown_events) >= 1
-    assert "rsistrategy" in cooldown_events[0]["target"]
+    assert "RSIStrategy" in cooldown_events[0]["target"]
     assert "Champion Cooldown 미경과" in cooldown_events[0]["message"]
     
     await scheduler.close()
@@ -288,7 +288,7 @@ async def test_champion_cooldown_detailed_filtering():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (1, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
+            VALUES (1, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
         """)
         await db.commit()
         
@@ -299,7 +299,7 @@ async def test_champion_cooldown_detailed_filtering():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (2, 'rsistrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 90)
+            VALUES (2, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 90)
         """)
         await db.commit()
         
@@ -309,7 +309,7 @@ async def test_champion_cooldown_detailed_filtering():
         for i in range(10):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (applied_at_sec - 1 - i,))
             
         # 3.2. 타 전략 주문 ('other_strategy' - 기존 champion strategy_id와 불일치)
@@ -323,14 +323,14 @@ async def test_champion_cooldown_detailed_filtering():
         for i in range(10):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
             """, (applied_at_sec + 1 + i,))
             
         # 3.4. quantity <= 0 인 주문
         for i in range(10):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.0, 0, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.0, 0, ?)
             """, (applied_at_sec + 1 + i,))
             
         await db.commit()
@@ -345,7 +345,7 @@ async def test_champion_cooldown_detailed_filtering():
     
     # 5. 차단 실패 이후 DB 상태 원자성(Atomicity) 검증
     # - strategy_versions 테이블의 current_version_id가 1로 보존되었는지 검증
-    ver_check = await repo.get_strategy_version('rsistrategy')
+    ver_check = await repo.get_strategy_version('RSIStrategy')
     assert ver_check["current_version_id"] == 1
     
     # - strategy_proposals 테이블의 id=2 제안 status가 여전히 'PENDING'인지 검증
@@ -358,14 +358,14 @@ async def test_champion_cooldown_detailed_filtering():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-            VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+            VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
         """, (applied_at_sec,))
         
         # 나머지 유효 주문 4건 적재 (applied_at_sec 시점 이후)
         for i in range(4):
             await db.execute("""
                 INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
-                VALUES ('p1', 'upbit', 'KRW', 'rsistrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
+                VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (applied_at_sec + 1 + i,))
             
         await db.commit()
@@ -375,7 +375,7 @@ async def test_champion_cooldown_detailed_filtering():
     assert res2["new_version_id"] == 2
     
     # 최종 DB 갱신 검증
-    ver_final = await repo.get_strategy_version('rsistrategy')
+    ver_final = await repo.get_strategy_version('RSIStrategy')
     assert ver_final["current_version_id"] == 2
     
     prop_final = await repo.get_strategy_proposal(2)

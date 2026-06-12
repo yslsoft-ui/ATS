@@ -130,6 +130,9 @@ class TradeEngine:
             
             # 1. 매수 전략 체크
             for host in self.entry_hosts:
+                # 만약 전략이 비활성화(enabled = False) 상태라면 신규 매수 진입은 스킵한다!
+                if getattr(host.strategy, 'enabled', True) is False:
+                    continue
                 if host.interval == candle.interval:
                     action_result = await host.execute(context, portfolio_manager)
                     if not is_warmup and action_result:

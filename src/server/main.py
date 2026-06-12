@@ -15,6 +15,7 @@ from src.server.routers.strategy import router as strategy_router
 from src.server.routers.portfolio import router as portfolio_router
 from src.server.routers.telemetry import router as telemetry_router
 from src.server.routers.intelligence import router as intelligence_router
+from src.server.routers.decision_console import router as decision_console_router
 
 # 로깅 시스템 초기화 (초기 단계)
 setup_logging()
@@ -41,6 +42,7 @@ app.include_router(strategy_router)
 app.include_router(portfolio_router)
 app.include_router(telemetry_router)
 app.include_router(intelligence_router)
+app.include_router(decision_console_router)
 
 
 # ZeroMQ IPC 구독 태스크 정의

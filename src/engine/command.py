@@ -189,26 +189,81 @@ class UserCommandDispatcher:
             raise RuntimeError("ZMQ Control Publisher is not initialized")
         await self.control_publisher.publish("collector_control", {"type": "restart_daemon"})
 
+    def _get_official_config_key(self, strategy_id: str) -> str:
+        strategies_config = self.config_manager.get('strategies', {}) or {}
+        for k in strategies_config.keys():
+            if k.lower() == strategy_id.lower():
+                return k
+        return strategy_id
+
     async def _handle_strategy_enable(self, command_id: str, payload: Dict[str, Any]):
         strategy_id = payload.get("strategy_id")
         if not strategy_id:
             raise ValueError("Strategy ID parameter is missing")
-        s_id = strategy_id.lower()
+        s_id = self._get_official_config_key(strategy_id)
         self.config_manager.update(f"strategies.{s_id}.enabled", True)
+        await self._sync_active_portfolio_strategies(s_id, True)
 
     async def _handle_strategy_disable(self, command_id: str, payload: Dict[str, Any]):
         strategy_id = payload.get("strategy_id")
         if not strategy_id:
             raise ValueError("Strategy ID parameter is missing")
-        s_id = strategy_id.lower()
+        s_id = self._get_official_config_key(strategy_id)
         self.config_manager.update(f"strategies.{s_id}.enabled", False)
+        await self._sync_active_portfolio_strategies(s_id, False)
+
+    async def _sync_active_portfolio_strategies(self, strategy_id: str, enabled: bool):
+        active_p = self.portfolio_manager.get_active_simulation_portfolio()
+        if not active_p:
+            active_p = self.portfolio_manager.portfolios.get('live')
+            
+        if active_p and active_p.strategy_info:
+            try:
+                meta = json.loads(active_p.strategy_info)
+                applied = meta.get("applied_strategies", {})
+                
+                from src.engine.strategy import StrategyRegistry
+                strat_cls = StrategyRegistry.get_strategy_class(strategy_id)
+                official_name = strat_cls.__name__ if strat_cls else strategy_id
+                
+                version_info = await self.repository.get_strategy_version(official_name)
+                
+                if enabled:
+                    if official_name not in applied:
+                        if version_info and version_info.get("current_params"):
+                            params = version_info["current_params"]
+                        else:
+                            s_conf = self.config_manager.get(f"strategies.{strategy_id}") or {}
+                            params = s_conf.get("params", {})
+                        applied[official_name] = {
+                            "enabled": True,
+                            "params": params
+                        }
+                    else:
+                        applied[official_name]["enabled"] = True
+                else:
+                    if official_name in applied:
+                        applied[official_name]["enabled"] = False
+                
+                meta["applied_strategies"] = applied
+                active_p.strategy_info = json.dumps(meta)
+                
+                await self.portfolio_manager.save_to_db(active_p.id)
+                
+                if self.strategy_control_publisher:
+                    await self.strategy_control_publisher.publish("strategy_control", {
+                        "type": "update_portfolio",
+                        "portfolio_id": active_p.id
+                    })
+            except Exception as e:
+                logger.error(f"[Dispatcher] Active portfolio strategy sync failed: {e}")
 
     async def _handle_strategy_update_params(self, command_id: str, payload: Dict[str, Any]):
         strategy_id = payload.get("strategy_id")
         params = payload.get("params")
         if not strategy_id or params is None:
             raise ValueError("Strategy ID or params parameter is missing")
-        s_id = strategy_id.lower()
+        s_id = self._get_official_config_key(strategy_id)
         for pk, pv in params.items():
             self.config_manager.update(f"strategies.{s_id}.params.{pk}", pv)
 
@@ -231,36 +286,44 @@ class UserCommandDispatcher:
                 strategies_config = self.config_manager.get('strategies', {}) or {}
                 for s_ver in db_strategies:
                     s_id = s_ver["strategy_id"]
-                    s_id_lower = s_id.lower()
-                    # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크 (대소문자 엄격 비교)
-                    s_config = strategies_config.get(s_id_lower)
+                    # settings.yaml을 확인하여 전역적으로 켜져 있는 전략인지 교차 체크 (대소문자 무관 비교 및 공식 키 조회)
+                    official_key = self._get_official_config_key(s_id)
+                    s_config = strategies_config.get(official_key)
                     if s_config and s_config.get("enabled", False):
                         from src.engine.strategy import StrategyRegistry
-                        strat_cls = StrategyRegistry._strategies.get(s_id_lower)
+                        strat_cls = StrategyRegistry.get_strategy_class(s_id)
                         official_name = strat_cls.__name__ if strat_cls else s_id
                         
+                        current_ver_id = s_ver.get("current_version_id", 0)
+                        existing = strategies.get(official_name)
+                        if existing:
+                            existing_ver_id = existing.get("_version_id", 0)
+                            if current_ver_id <= existing_ver_id:
+                                continue
+                                
                         strategies[official_name] = {
                             "enabled": True,
-                            "params": s_ver["current_params"]
+                            "params": s_ver["current_params"],
+                            "_version_id": current_ver_id
                         }
-            except Exception as e:
-                logger.error(f"[Dispatcher] DB 챔피언 전략 로드 중 예외 발생: {e}")
+                # 임시 버전 키 정리
+                for s_name in list(strategies.keys()):
+                    strategies[s_name].pop("_version_id", None)
 
-            # DB에 가용한 챔피언 전략이 없는 경우 settings.yaml의 기본 활성 전략을 활용
-            if not strategies:
-                logger.warning("[Dispatcher] DB 챔피언 전략이 발견되지 않아 settings.yaml의 기본 설정을 기용합니다.")
-                strategies_config = self.config_manager.get('strategies', {})
+                # DB 챔피언 기록이 없어 누락되었으나 settings.yaml에 enabled=true인 신규 전략들 병합 (덮어쓰지 않음)
                 for s_id, s_conf in strategies_config.items():
                     if s_conf.get('enabled', False):
-                        s_id_lower = s_id.lower()
                         from src.engine.strategy import StrategyRegistry
-                        strat_cls = StrategyRegistry._strategies.get(s_id_lower)
+                        strat_cls = StrategyRegistry.get_strategy_class(s_id)
                         official_name = strat_cls.__name__ if strat_cls else s_id
                         
-                        strategies[official_name] = {
-                            "enabled": True,
-                            "params": s_conf.get('params', {})
-                        }
+                        if official_name not in strategies:
+                            strategies[official_name] = {
+                                "enabled": True,
+                                "params": s_conf.get('params', {})
+                            }
+            except Exception as e:
+                logger.error(f"[Dispatcher] DB 챔피언 전략 로드 중 예외 발생: {e}")
 
         # 1. 기존 활성 모의투자 세션이 있다면 자동 종료 처리
         active_p = self.portfolio_manager.get_active_simulation_portfolio()

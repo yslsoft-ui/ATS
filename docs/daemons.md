@@ -88,9 +88,10 @@ sequenceDiagram
     Pipeline->>ZMQ: 11. 체결 결과 strategy_signal 토픽으로 Pub
 ```
 
-### 3.3. 세션 핫리로드 (ZMQ strategy_control)
+### 3.3. 세션 핫리로드 (ZMQ strategy_control) 및 동시성 제어
 - 사용자가 웹 대시보드에서 특정 모의투자 세션을 시작하거나 종료할 때, 웹서버는 ZMQ `strategy_control` 토픽으로 `{ "type": "update_portfolio" }` 메시지를 전파합니다.
 - 이를 감지한 전략 데몬은 기존 종목별 `TradeEngine` 맵을 완전히 클리어한 후, 새롭게 활성화된 포트폴리오 정보에 맞춰 자산군 및 전략 파라미터를 읽어와 TradeEngine을 **실시간으로 재생성하고 초기 웜업 과정을 동적 수행**합니다.
+- **원자성 보장**: 실시간 틱 처리 루프(`_market_data_loop`)와 핫리로드(`reload_trade_engines`) 및 파라미터 갱신(`apply_params`)이 충돌하지 않도록 `asyncio.Lock`을 사용해 배타적 실행(Mutual Exclusion)을 보장합니다. 이를 통해 틱 처리 중 핫리로드가 끼어들어 발생하는 딕셔너리 변경 예외 및 틱 유실을 방지합니다.
 
 ---
 
@@ -224,6 +225,15 @@ sequenceDiagram
   3. **Stale Lock 복구 루틴 (`_stale_lock_recovery_loop`)**:
      - 60초 주기로 `EVALUATING` 상태로 오랜 시간(300초 초과) 머물러 락이 고정된 stale 레코드를 감지합니다.
      - 재시도 횟수 내에서는 `PENDING` 상태로 원복하여 재시도하게 하며, 재시도 한도를 초과하면 `ERROR` 상태로 최종 복구 격리 처리합니다.
+   4. **수동 재평가 Job Queue 처리 루프 (`_manual_reeval_loop`) [NEW]**:
+      - 10초 주기로 `proposal_reevaluation_jobs` 테이블에서 `QUEUED` 상태의 수동 재평가 Job을 감지합니다.
+      - 원자적 UPDATE로 Job을 선점(`RUNNING`)한 후 `_execute_reevaluation()`를 호출합니다.
+      - **`_execute_reevaluation()` 내부 처리 흐름**:
+        1. `promotion_event_log`에서 제안의 FeatureSnapshot을 조회합니다. 데이터가 없으면 합성 기본값 Snapshot으로 폴백합니다(Shadow 전용, 실거래 미사용 안전).
+        2. `GIRSScorer`로 GIRS 리스크·안정성·최종 승격 점수를 재추론합니다.
+        3. `BacktestEngine`으로 Counterfactual Simulation을 시도하며, 틱 데이터 부족 등으로 실패 시 결과를 `None`으로 처리하고 GIRS 점수만으로 완료합니다.
+        4. 결과를 `proposal_evaluation_runs` 테이블에 Append-only로 저장하고 `system_events`에 감사 로그를 기록합니다.
+      - **Side Effect 완벽 차단**: `allow_live_order=False`, `allow_promotion_apply=False`로 실거래·자동 승격이 절대 발생하지 않습니다.
 
 ---
 

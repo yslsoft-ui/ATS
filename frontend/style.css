@@ -2655,4 +2655,705 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     100% { }
 }
 
+/* ===== 3단 의사결정 콘솔 레이아웃 스타일 ===== */
+.console-summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    padding-bottom: 5px;
+    flex-wrap: nowrap;
+}
+
+.console-summary-bar .summary-badge {
+    flex: 1;
+    min-width: 130px;
+    background: #1E293B;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.console-summary-bar .summary-badge:hover {
+    transform: translateY(-2px);
+    border-color: #38BDF8;
+    background: rgba(56, 189, 248, 0.05);
+}
+
+.console-summary-bar .summary-badge .label {
+    font-size: 0.72rem;
+    color: #94A3B8;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.console-summary-bar .summary-badge .value {
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: #F8FAFC;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* 3단 분할 레이아웃 */
+.console-three-column-layout {
+    display: flex;
+    gap: 20px;
+    height: calc(100vh - 200px);
+    align-items: stretch;
+    width: 100%;
+}
+
+/* 좌측 Tree */
+.console-left-tree {
+    flex: 0 0 260px;
+    width: 260px;
+    background: #1E293B;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.console-left-tree .tree-section-title {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: #F8FAFC;
+    margin-bottom: 15px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.console-left-tree .tree-node {
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #94A3B8;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.console-left-tree .tree-node:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: #F8FAFC;
+}
+
+.console-left-tree .tree-node.active {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38BDF8;
+    font-weight: bold;
+}
+
+.console-left-tree .tree-node.warning-node {
+    border-left: 3px solid #EF4444;
+}
+
+.console-left-tree .tree-sub-list {
+    margin-left: 15px;
+    border-left: 1px dashed rgba(148, 163, 184, 0.2);
+    padding-left: 8px;
+}
+
+/* 중앙 Workspace */
+.console-center-workspace {
+    flex: 1;
+    background: #1E293B;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px;
+    min-width: 0;
+}
+
+.console-center-workspace .workspace-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748B;
+    text-align: center;
+}
+
+.console-center-workspace .workspace-placeholder .icon {
+    font-size: 3rem;
+    margin-bottom: 15px;
+}
+
+.console-center-workspace .pane-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+    flex-shrink: 0;
+}
+
+.console-center-workspace .pane-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #F8FAFC;
+}
+
+.console-center-workspace .pane-header .sync-badge {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+    font-size: 0.72rem;
+    font-weight: bold;
+    padding: 3px 8px;
+    border-radius: 4px;
+}
+
+.console-center-workspace .pane-header .sync-badge.mismatch {
+    background: rgba(239, 68, 68, 0.15);
+    color: #EF4444;
+}
+
+.console-center-workspace .pane-header .count-badge {
+    background: #3B82F6;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+/* 진단판 */
+.diagnostic-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.diagnostic-grid .diag-card {
+    background: #0F172A;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.diagnostic-grid .diag-card .label {
+    font-size: 0.72rem;
+    color: #64748B;
+}
+
+.diagnostic-grid .diag-card .value {
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #F8FAFC;
+}
+
+.diagnostic-grid .diag-card .value.active { color: #10B981; }
+.diagnostic-grid .diag-card .value.inactive { color: #64748B; }
+.diagnostic-grid .diag-card .value.mismatch { color: #EF4444; }
+
+/* 경고 배너 */
+.alert-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+}
+
+.alert-banner.warning {
+    background: rgba(245, 158, 11, 0.15);
+    border: 1px solid #F59E0B;
+    color: #FBBF24;
+}
+
+.alert-banner.success {
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid #10B981;
+    color: #34D399;
+}
+
+.alert-banner.danger {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid #EF4444;
+    color: #FCA5A5;
+}
+
+/* 우측 상세 패널 */
+.console-right-tracer-panel {
+    flex: 0 0 280px;
+    width: 280px;
+    background: #1E293B;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    overflow-y: auto;
+}
+
+.console-right-tracer-panel .tracer-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #64748B;
+    text-align: center;
+}
+
+.console-right-tracer-panel .tracer-placeholder .icon {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.console-right-tracer-panel .tracer-panel-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    height: 100%;
+}
+
+.console-right-tracer-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    padding-bottom: 8px;
+}
+
+.console-right-tracer-panel .panel-header h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    color: #F8FAFC;
+}
+
+.console-right-tracer-panel .panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.console-right-tracer-panel .panel-section .label {
+    font-size: 0.72rem;
+    color: #94A3B8;
+    font-weight: 600;
+}
+
+.console-right-tracer-panel .section-status {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background: #0F172A;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.console-right-tracer-panel .section-status .item-title {
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #F8FAFC;
+}
+
+.console-right-tracer-panel .section-status .item-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #60A5FA;
+    font-weight: bold;
+}
+
+.console-right-tracer-panel .section-reason p {
+    font-size: 0.8rem;
+    color: #E2E8F0;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.quad-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.quad-metrics-grid .quad-card {
+    background: #0F172A;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+.quad-metrics-grid .quad-card .card-title {
+    font-size: 0.65rem;
+    color: #64748B;
+}
+
+.quad-metrics-grid .quad-card .card-val {
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #38BDF8;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* FSM Step Progress Bar */
+.fsm-progress-bar-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 20px 0;
+    background: #0F172A;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.fsm-progress-bar-container .fsm-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    z-index: 2;
+}
+
+.fsm-progress-bar-container .fsm-step .dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #475569;
+    border: 3px solid #0F172A;
+    box-shadow: 0 0 0 1px #475569;
+    transition: all 0.3s;
+}
+
+.fsm-progress-bar-container .fsm-step.active .dot {
+    background: #38BDF8;
+    box-shadow: 0 0 0 1px #38BDF8, 0 0 8px #38BDF8;
+}
+
+.fsm-progress-bar-container .fsm-step.completed .dot {
+    background: #10B981;
+    box-shadow: 0 0 0 1px #10B981;
+}
+
+.fsm-progress-bar-container .fsm-step.failed .dot {
+    background: #EF4444;
+    box-shadow: 0 0 0 1px #EF4444, 0 0 8px #EF4444;
+}
+
+.fsm-progress-bar-container .fsm-step .label {
+    font-size: 0.7rem;
+    color: #64748B;
+    font-weight: bold;
+}
+
+.fsm-progress-bar-container .fsm-step.active .label { color: #38BDF8; }
+.fsm-progress-bar-container .fsm-step.completed .label { color: #10B981; }
+
+.fsm-progress-bar-container .fsm-line {
+    flex: 1;
+    height: 2px;
+    background: #475569;
+    margin: 0 -5px;
+    position: relative;
+    top: -9px;
+    z-index: 1;
+    transition: all 0.3s;
+}
+
+.fsm-progress-bar-container .fsm-line.completed {
+    background: #10B981;
+}
+
+/* 전체화면 모달 */
+.full-screen-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(12px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 3000;
+}
+
+.full-screen-modal-content {
+    width: 95vw;
+    height: 90vh;
+    background: #1E293B;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.full-screen-modal-content .modal-header {
+    flex-shrink: 0;
+    padding: 15px 25px;
+    background: #0F172A;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.modal-header .tracer-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-header .tracer-title .badge {
+    background: #3B82F6;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: bold;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.modal-header .tracer-title .id {
+    font-family: 'Roboto Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #38BDF8;
+}
+
+.modal-header .tracer-title .name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #F8FAFC;
+}
+
+.modal-header .tracer-title .subtitle {
+    font-size: 0.8rem;
+    color: #64748B;
+    margin-left: 10px;
+}
+
+.modal-body-layout {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.tracer-tab-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: #0F172A;
+    border-right: 1px solid rgba(148, 163, 184, 0.1);
+    display: flex;
+    flex-direction: column;
+    padding: 15px 0;
+    overflow-y: auto;
+}
+
+.tracer-tab-sidebar .tab-menu-item {
+    padding: 12px 20px;
+    font-size: 0.85rem;
+    color: #94A3B8;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    border-left: 3px solid transparent;
+}
+
+.tracer-tab-sidebar .tab-menu-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+    color: #F8FAFC;
+}
+
+.tracer-tab-sidebar .tab-menu-item.active {
+    background: rgba(56, 189, 248, 0.08);
+    color: #38BDF8;
+    font-weight: bold;
+    border-left-color: #38BDF8;
+}
+
+.tracer-tab-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 25px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background: #1E293B;
+}
+
+.tracer-tab-content h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #F8FAFC;
+}
+
+.tracer-tab-content .description-text {
+    font-size: 0.85rem;
+    color: #94A3B8;
+    margin: 0;
+    line-height: 1.5;
+}
+
+.tracer-tab-content .tab-pane {
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+}
+
+.tracer-tab-content .tab-pane.active {
+    display: flex;
+}
+
+/* 4분할 뷰 점수 */
+.score-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+}
+
+.score-grid .score-card {
+    background: #0F172A;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.score-grid .score-card .title {
+    font-size: 0.75rem;
+    color: #64748B;
+    font-weight: 600;
+}
+
+.score-grid .score-card .value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #38BDF8;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.score-grid .score-card .sub {
+    font-size: 0.7rem;
+    color: #475569;
+}
+
+/* Feature 3단 분할 레이아웃 */
+.feature-tables-layout {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+/* Diff 분할 */
+.diff-split-layout {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 15px;
+}
+
+.ranking-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: #0F172A;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.ranking-panel .rank-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed rgba(148, 163, 184, 0.1);
+    padding-bottom: 8px;
+}
+
+.ranking-panel .rank-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.ranking-panel .rank-item .label {
+    font-size: 0.8rem;
+    color: #94A3B8;
+}
+
+.ranking-panel .rank-item .value {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #F8FAFC;
+    font-family: 'Roboto Mono', monospace;
+}
+
+/* 재평가 통제 */
+.reeval-control-area {
+    background: #0F172A;
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: flex-start;
+}
+
+/* Raw Console */
+.raw-console-panel {
+    font-family: 'Roboto Mono', 'Source Code Pro', monospace;
+    font-size: 0.8rem;
+    background: #0F172A !important;
+    border: 1px solid #334155 !important;
+    color: #38BDF8 !important;
+    border-radius: 6px;
+    padding: 15px;
+    overflow-y: auto;
+    height: 350px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.json-code-panel {
+    font-family: 'Roboto Mono', 'Source Code Pro', monospace;
+    font-size: 0.8rem;
+    background: #0F172A !important;
+    border: 1px solid #334155 !important;
+    color: #10B981 !important;
+    border-radius: 6px;
+    padding: 15px;
+    overflow-y: auto;
+    height: 350px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+/* 대기 및 로딩 */
+.placeholder-text {
+    text-align: center;
+    color: #64748B;
+    padding: 20px;
+    font-style: italic;
+}
+
 

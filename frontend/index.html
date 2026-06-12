@@ -370,192 +370,212 @@
 
             <!-- 전략 뷰 (초기엔 숨김) -->
             <section id="strategy-view" style="display: none;">
-                <header class="main-header">
-                    <h1>🎯 보유 전략 및 의사결정 콘솔</h1>
-                </header>
-                <div class="strategy-layout" style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 15px; width: 100%;">
-                    <!-- 좌측: 전략 목록 카드 그리드 -->
-                    <div style="flex: 0 0 300px; width: 300px; display: flex; flex-direction: column; gap: 15px;">
-                        <div class="card" style="padding: 15px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
-                            <h3 style="margin: 0 0 5px 0; color: #F8FAFC; font-size: 0.95rem;">🎯 전략 목록</h3>
-                            <div id="strategy-list" class="strategy-list-grid" style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-                                <p class="status-text">전략 목록을 불러오는 중...</p>
+                <div class="console-summary-bar">
+                    <div class="summary-badge">
+                        <span class="label">운영 모드</span>
+                        <span class="value" id="summary-op-mode">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">활성 전략 수</span>
+                        <span class="value" id="summary-active-count">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">챔피언 전략 수</span>
+                        <span class="value" id="summary-champ-count">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">대기 중 제안</span>
+                        <span class="value" id="summary-pending-count">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">차단된 제안</span>
+                        <span class="value" id="summary-blocked-count">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">최근 승격 시각</span>
+                        <span class="value" id="summary-last-promotion" style="font-size: 0.85rem;">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">데이터 품질</span>
+                        <span class="value" id="summary-data-quality">-</span>
+                    </div>
+                    <div class="summary-badge">
+                        <span class="label">GIRS 안정성</span>
+                        <span class="value" id="summary-girs-stability">-</span>
+                    </div>
+                </div>
+
+                <div class="console-three-column-layout">
+                    <!-- 1단: 좌측 트리 탐색기 -->
+                    <div class="console-left-tree">
+                        <div class="tree-section-title">🧭 의사결정 내비게이터</div>
+                        <div id="console-tree-root" style="display: flex; flex-direction: column; gap: 4px;">
+                            <!-- strategy.js에서 동적으로 트리 노드를 채움 -->
+                        </div>
+                    </div>
+
+                    <!-- 2단: 중앙 워크스페이스 -->
+                    <div class="console-center-workspace">
+                        <!-- 초기 빈 화면 -->
+                        <div id="workspace-empty-view" class="workspace-placeholder">
+                            <div class="icon">🧭</div>
+                            <h3>의사결정 콘솔</h3>
+                            <p>좌측 탐색기에서 전략 또는 AI 제안을 선택하여 실시간 상태와 백데이터를 추적하십시오.</p>
+                        </div>
+
+                        <!-- 특정 전략 워크스페이스 -->
+                        <div id="workspace-strategy-view" style="display: none;">
+                            <div class="pane-header">
+                                <h2 id="workspace-strategy-name">전략 상세</h2>
+                                <span class="sync-badge" id="workspace-strategy-sync-badge">동기화됨</span>
+                            </div>
+                            
+                            <!-- 4대 상태 진단판 -->
+                            <div class="diagnostic-grid" style="margin-bottom: 20px;">
+                                <div class="diag-card">
+                                    <span class="label">settings.yaml 활성 상태</span>
+                                    <span class="value" id="diag-settings-val">-</span>
+                                </div>
+                                <div class="diag-card">
+                                    <span class="label">DB strategy_versions 챔피언</span>
+                                    <span class="value" id="diag-db-val">-</span>
+                                </div>
+                                <div class="diag-card">
+                                    <span class="label">데몬 로딩 상태 (TradeEngine)</span>
+                                    <span class="value" id="diag-engine-val">-</span>
+                                </div>
+                                <div class="diag-card">
+                                    <span class="label">전체 일치성 검증 결과</span>
+                                    <span class="value" id="diag-sync-val">-</span>
+                                </div>
+                            </div>
+
+                            <!-- 경고 배너 -->
+                            <div class="alert-banner warning" id="workspace-strategy-warning-banner" style="display: none; margin-bottom: 20px;">
+                                <span class="icon">⚠️</span>
+                                <span id="workspace-strategy-warning-msg">설정과 엔진 런타임 간에 불일치가 감지되었습니다.</span>
+                            </div>
+
+                            <!-- 파라미터 변동 이력 -->
+                            <div class="card" style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                                <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.9rem;">📜 챔피언 파라미터 변동 이력</h3>
+                                <div class="table-wrapper" style="max-height: 180px; overflow-y: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left;">파라미터</th>
+                                                <th style="text-align: right;">현재 챔피언 값</th>
+                                                <th style="text-align: right;">직전 값</th>
+                                                <th style="text-align: left; padding-left: 10px;">변경 사유</th>
+                                                <th style="text-align: left;">변경 시각</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="workspace-param-diff-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- 최근 수집 성과 지표 -->
+                            <div class="card" style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                                <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.9rem;">📈 챔피언 버전별 수집 성과 (Shadow/Real)</h3>
+                                <div class="table-wrapper" style="max-height: 180px; overflow-y: auto;">
+                                    <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                                        <thead>
+                                            <tr>
+                                                <th>버전 ID</th>
+                                                <th>타입</th>
+                                                <th style="text-align: right;">누적 ROI</th>
+                                                <th style="text-align: right;">최대 낙폭 (MDD)</th>
+                                                <th style="text-align: right;">Profit Factor</th>
+                                                <th style="text-align: right;">승률</th>
+                                                <th style="text-align: right;">체결 횟수</th>
+                                                <th>갱신 시각</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="workspace-perf-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- 의사결정 및 버전 적용 타임라인 -->
+                            <div class="card" style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px;">
+                                <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.9rem;">🌿 버전 생명주기 및 의사결정 감사 타임라인</h3>
+                                <div id="workspace-strategy-timeline" style="display: flex; flex-direction: column; gap: 12px; max-height: 250px; overflow-y: auto; padding-right: 5px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- 제안 목록 / 감사 이벤트 워크스페이스 -->
+                        <div id="workspace-proposal-list-view" style="display: none;">
+                            <div class="pane-header">
+                                <h2 id="workspace-proposal-list-title">AI 의사결정 제안</h2>
+                                <span class="count-badge" id="workspace-proposal-list-count">0</span>
+                            </div>
+                            
+                            <div class="table-wrapper" style="flex: 1; min-height: 200px; overflow-y: auto;">
+                                <table id="proposal-workspace-table" style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                    <thead>
+                                        <!-- JS에서 채움 -->
+                                    </thead>
+                                    <tbody id="workspace-proposal-list-tbody"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
-                    
-                    <!-- 우측: 선택된 전략의 상세 운영 대시보드 -->
-                    <div id="strategy-detail-panel" style="flex: 1; min-width: 0; display: none; flex-direction: column; gap: 20px;">
-                        <!-- 전략 상태 패널 및 ROI 차트 -->
-                        <div style="display: flex; gap: 20px; flex-wrap: wrap; width: 100%;">
-                            <!-- 전략 요약 및 활성 버전 정보 -->
-                            <div class="card" style="flex: 1; min-width: 300px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 12px;">
-                                <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">
-                                    <h2 id="detail-strategy-name" style="margin: 0; font-size: 1.2rem; color: #F8FAFC;">전략명</h2>
-                                    <span id="detail-strategy-status" class="ctx-badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; font-size: 0.75rem; padding: 2px 8px;">가동중</span>
-                                </div>
-                                <div class="detail-metrics-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.85rem;">
-                                    <div><span style="color: #94A3B8;">현재 버전 ID:</span> <strong id="detail-current-version" style="color: #F8FAFC; margin-left: 5px;">-</strong></div>
-                                    <div><span style="color: #94A3B8;">마지막 적용:</span> <strong id="detail-applied-at" style="color: #F8FAFC; margin-left: 5px;">-</strong></div>
-                                    <div style="grid-column: span 2;"><span style="color: #94A3B8;">롤백 원인 버전:</span> <strong id="detail-rollback-source" style="color: #F8FAFC; margin-left: 5px;">None</strong></div>
-                                </div>
-                                <div style="margin-top: 5px; display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="color: #94A3B8; font-size: 0.85rem;">⚙️ 현재 활성 파라미터:</span>
-                                    <pre id="detail-current-params" style="background: #0F172A; border: 1px solid #334155; border-radius: 4px; padding: 10px; font-family: 'Roboto Mono', monospace; font-size: 0.8rem; color: #38BDF8; margin: 0; overflow-x: auto; max-height: 120px;"></pre>
-                                </div>
+
+                    <!-- 3단: 우측 Tracer 패널 -->
+                    <div class="console-right-tracer-panel">
+                        <div id="tracer-panel-empty" class="tracer-placeholder">
+                            <div class="icon">🔍</div>
+                            <p>목록에서 노드를 클릭하여 의사결정 흐름을 실시간 추적하십시오.</p>
+                        </div>
+                        
+                        <div id="tracer-panel-content" class="tracer-panel-container" style="display: none;">
+                            <div class="panel-header">
+                                <h3>Decision Tracer</h3>
+                                <button id="btn-expand-tracer" class="btn sm" style="font-size: 0.72rem; padding: 2px 6px; background: #3B82F6; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">전체화면 확장 ↗</button>
                             </div>
                             
-                            <!-- Plotly 누적 ROI 차트 -->
-                            <div class="card" style="flex: 2; min-width: 400px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
-                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">📈 버전별 누적 ROI 추이 (시계열)</h3>
-                                <div id="strategy-roi-chart" style="width: 100%; height: 220px; background: #0F172A; border-radius: 4px; border: 1px solid #334155;"></div>
+                            <!-- 타겟 정보 -->
+                            <div class="panel-section section-status" style="display: flex;">
+                                <span class="item-title" id="tracer-item-title">-</span>
+                                <span class="item-badge" id="tracer-item-badge">-</span>
                             </div>
-                        </div>
-                        
-                        <!-- AI 제안 카드 영역 -->
-                        <div class="card" style="padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; flex-direction: column; gap: 15px; width: 100%;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">
-                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">🤖 AI 제안 및 의사결정 카드</h3>
-                                <div style="display: flex; gap: 8px; align-items: center;">
-                                    <label style="color: #94A3B8; font-size: 0.75rem;">상태 필터:</label>
-                                    <select id="proposal-status-filter" onchange="filterProposals()" class="dark-input" style="font-size: 0.75rem; padding: 2px 6px; background: #0F172A; color: #F8FAFC; border: 1px solid #334155; border-radius: 4px; outline: none; cursor: pointer;">
-                                        <option value="PENDING">대기중 (Pending)</option>
-                                        <option value="APPLIED">적용됨 (Applied)</option>
-                                        <option value="PRUNED_DEFERRED">보류/폐기 (Deferred/Pruned)</option>
-                                    </select>
+
+                            <!-- 판단 근거/미반영 사유 -->
+                            <div class="panel-section">
+                                <span class="label">결정 근거 및 미반영 사유</span>
+                                <div class="section-reason" style="background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); padding: 10px; border-radius: 6px;">
+                                    <p id="tracer-reason-text" style="font-size: 0.78rem; word-break: keep-all;"></p>
                                 </div>
                             </div>
-                            <div id="proposal-cards-container" style="display: flex; gap: 15px; flex-wrap: wrap; width: 100%;">
-                                <!-- PENDING 제안 카드들이 여기에 동적으로 채워짐 -->
-                                <p style="color: #64748B; font-size: 0.85rem;">현재 대기 중인 제안이 없습니다.</p>
+
+                            <!-- 4분할 지표 표 -->
+                            <div class="panel-section">
+                                <span class="label">핵심 검증 지표 요약</span>
+                                <div class="quad-metrics-grid">
+                                    <div class="quad-card">
+                                        <span class="label" style="font-size: 0.65rem; color:#64748B;">GIRS Model Risk</span>
+                                        <span class="value" id="quad-girs" style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; font-weight: bold; color: #38BDF8;">-</span>
+                                    </div>
+                                    <div class="quad-card">
+                                        <span class="label" style="font-size: 0.65rem; color:#64748B;">Stability Score</span>
+                                        <span class="value" id="quad-promotion" style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; font-weight: bold; color: #10B981;">-</span>
+                                    </div>
+                                    <div class="quad-card">
+                                        <span class="label" style="font-size: 0.65rem; color:#64748B;">Fallback Risk</span>
+                                        <span class="value" id="quad-stability" style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; font-weight: bold; color: #F59E0B;">-</span>
+                                    </div>
+                                    <div class="quad-card">
+                                        <span class="label" style="font-size: 0.65rem; color:#64748B;">Rollback Prob.</span>
+                                        <span class="value" id="quad-rollback" style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; font-weight: bold; color: #EF4444;">-</span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        
-                        <!-- ───────────────────────────────── -->
-                        <!-- Step 4: AI 건강 지표 (접이식 패널) -->
-                        <!-- ───────────────────────────────── -->
-                        <details id="ai-health-panel" style="width: 100%;" open>
-                            <summary style="cursor: pointer; user-select: none; padding: 14px 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; display: flex; align-items: center; gap: 8px; list-style: none; color: #F8FAFC; font-size: 0.95rem; font-weight: 600;">
-                                <span style="font-size: 1rem;">🧠</span>
-                                AI 건강 지표 (Diversity Intelligence)
-                                <span id="ai-health-alert-badge" style="display: none; margin-left: 8px; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; background: rgba(239, 68, 68, 0.2); color: #EF4444;">⚠ 수렴 경고</span>
-                                <span style="margin-left: auto; font-size: 0.75rem; color: #64748B;">▼</span>
-                            </summary>
 
-                            <div style="margin-top: 2px; padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-top: none; border-radius: 0 0 8px 8px; display: flex; flex-direction: column; gap: 16px;">
-
-                                <!-- 상단: Entropy 게이지 + λ 신호 + Pruning Accuracy -->
-                                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-
-                                    <!-- Entropy 게이지 카드 -->
-                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">파라미터 공간 다양성</div>
-                                        <div id="ai-entropy-value" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #10B981;">—</div>
-                                        <div style="height: 6px; background: #1E293B; border-radius: 3px; overflow: hidden;">
-                                            <div id="ai-entropy-bar" style="height: 100%; width: 0%; border-radius: 3px; background: #10B981; transition: width 0.6s ease, background 0.4s;"></div>
-                                        </div>
-                                        <div id="ai-entropy-label" style="font-size: 0.72rem; color: #64748B;">측정 중...</div>
-                                    </div>
-
-                                    <!-- λ 보정 신호 카드 -->
-                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">λ 자동 보정 신호</div>
-                                        <div id="ai-lambda-boost" style="font-size: 1.8rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #F59E0B;">×—</div>
-                                        <div id="ai-alert-level" style="font-size: 0.8rem; padding: 3px 8px; border-radius: 4px; width: fit-content; background: rgba(100,116,139,0.2); color: #64748B;">NONE</div>
-                                        <div id="ai-threshold-delta" style="font-size: 0.72rem; color: #64748B;">다양성 임계치 조정: +0.00</div>
-                                    </div>
-
-                                    <!-- Pruning Accuracy 카드 -->
-                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">채점 오판율 (Pruning Bias)</div>
-                                        <div id="ai-outperform-rate" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #D946EF;">—%</div>
-                                        <div id="ai-pruning-counts" style="font-size: 0.72rem; color: #64748B;">추적 완료: 0건 / 오판: 0건</div>
-                                        <div id="ai-bias-alert" style="font-size: 0.72rem; display: none; color: #EF4444;">⚠ 편향 경고: 오판율 30% 초과</div>
-                                    </div>
-
-                                    <!-- Replay Correction 상태 카드 [NEW] -->
-                                    <div style="flex: 1; min-width: 160px; background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em;">비동기 랭킹 보정 (Replay)</div>
-                                        <div id="ai-replay-drift" style="font-size: 2rem; font-weight: 700; font-family: 'Roboto Mono', monospace; color: #10B981;">—</div>
-                                        <div id="ai-replay-status" style="font-size: 0.8rem; padding: 3px 8px; border-radius: 4px; width: fit-content; background: rgba(100,116,139,0.2); color: #64748B;">정상 (대기)</div>
-                                        <div id="ai-replay-corrected-at" style="font-size: 0.72rem; color: #64748B;">최종 보정: 없음</div>
-                                        <div id="ai-replay-block-reason" style="font-size: 0.72rem; color: #EF4444; display: none;">차단 사유: 없음</div>
-                                    </div>
-
-                                </div>
-
-                                <!-- Entropy 시계열 미니차트 -->
-                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px;">
-                                    <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600; margin-bottom: 10px;">📉 Entropy 시계열 (최근 7일)</div>
-                                    <div id="ai-entropy-chart" style="width: 100%; height: 140px;"></div>
-                                </div>
-
-                                <!-- Mutation Trace Graph (파라미터 변이 계보) -->
-                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px;">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600;">🌿 파라미터 변이 계보 (Mutation Trace Graph)</div>
-                                        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                                            <div style="display: flex; align-items: center; gap: 4px;">
-                                                <label style="color: #64748B; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                                    <input type="checkbox" id="ai-mutation-collapse-pruned" onchange="renderMutationGraph()" style="cursor: pointer; accent-color: #6366F1;">
-                                                    폐기 노드 숨기기
-                                                </label>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 4px;">
-                                                <label style="color: #64748B; font-size: 0.7rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                                                    <input type="checkbox" id="ai-mutation-highlight-best" onchange="renderMutationGraph()" checked style="cursor: pointer; accent-color: #10B981;">
-                                                    최적 ROI 경로 강조
-                                                </label>
-                                            </div>
-                                            <div style="display: flex; align-items: center; gap: 4px;">
-                                                <label style="color: #64748B; font-size: 0.7rem;">기준 파라미터:</label>
-                                                <select id="mutation-graph-param-select" onchange="renderMutationGraph()" class="dark-input" style="font-size: 0.7rem; padding: 1px 4px; background: #1E293B; color: #F8FAFC; border: 1px solid #334155; border-radius: 3px; outline: none; cursor: pointer;"></select>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div id="ai-mutation-chart" style="width: 100%; height: 320px; background: #0F172A; border-radius: 4px;"></div>
-                                    <div id="ai-mutation-meta-info" style="font-family: monospace; font-size: 0.7rem; color: #64748B; border-top: 1px solid rgba(148,163,184,0.05); padding-top: 6px; display: flex; justify-content: space-between;">
-                                        <span>노드: - | 에지: - | 최대깊이: -</span>
-                                        <span>분기수: - | 밀도: -</span>
-                                    </div>
-                                </div>
-
-                                <!-- Counterfactual 상세 목록 -->
-                                <div style="background: #0F172A; border: 1px solid #334155; border-radius: 6px; padding: 14px;">
-                                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                                        <div style="color: #94A3B8; font-size: 0.75rem; font-weight: 600;">🔍 반사실적 추적 목록 (Counterfactual)</div>
-                                        <button onclick="refreshAIHealth()" style="background: #1E293B; border: 1px solid #334155; color: #94A3B8; font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; cursor: pointer;">↻ 새로고침</button>
-                                    </div>
-                                    <div id="ai-counterfactual-list" style="max-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
-                                        <p style="color: #64748B; font-size: 0.8rem;">데이터를 불러오는 중...</p>
-                                    </div>
-                                </div>
-
-                            </div>
-                        </details>
-
-                        <!-- 버전 히스토리 및 롤백 영역 -->
-
-                        <div class="card" style="padding: 20px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.15); border-radius: 8px; width: 100%;">
-                            <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.95rem; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 8px;">📜 파라미터 버전 이력 및 원클릭 롤백</h3>
-                            <div class="table-wrapper" style="max-height: 300px; overflow-y: auto;">
-                                <table id="version-history-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 60px;">버전</th>
-                                            <th style="width: 80px;">부모 버전</th>
-                                            <th style="width: 80px;">변경인</th>
-                                            <th style="width: 130px;">변경 사유</th>
-                                            <th>신규 설정값</th>
-                                            <th>이전 설정값</th>
-                                            <th style="width: 150px;">변경 시각</th>
-                                            <th style="text-align: center; width: 110px;">복구</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="version-history-tbody">
-                                        <!-- JS에서 동적 렌더링 -->
-                                    </tbody>
-                                </table>
+                            <!-- 안전 제한 상태 (Guards) -->
+                            <div class="panel-section" id="tracer-alerts-section" style="display: none;">
+                                <span class="label" style="color: #EF4444;">안전 제한 작동 내역 (Guards)</span>
+                                <div id="tracer-alerts-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
                             </div>
                         </div>
                     </div>
@@ -1259,6 +1279,322 @@
         </div>
     </div>
 
+    <!-- 🧠 전체화면 Decision Intelligence Tracer 모달 -->
+    <div id="full-tracer-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); z-index: 2000; justify-content: center; align-items: center;">
+        <div class="modal-content card" style="width: 92%; max-width: 1300px; height: 88vh; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);">
+            <!-- 모달 헤더 -->
+            <div class="modal-header" style="padding: 15px 20px; border-bottom: 1px solid rgba(148, 163, 184, 0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <div class="tracer-title" style="display: flex; align-items: center; gap: 10px;">
+                    <span class="badge" id="modal-tracer-badge" style="background: rgba(129, 140, 248, 0.2); color: #818CF8; font-size: 0.72rem; padding: 2px 6px; font-weight: bold; border: 1px solid rgba(129, 140, 248, 0.4); border-radius: 4px;">PENDING</span>
+                    <span class="id" id="modal-tracer-id" style="font-family: 'Roboto Mono', monospace; font-weight: bold; color: #F8FAFC; font-size: 1.1rem;">#0</span>
+                    <span class="name" id="modal-tracer-strategy-name" style="font-weight: bold; color: #38BDF8; font-size: 1.1rem;">RSIStrategy</span>
+                    <span class="subtitle" style="font-size: 0.8rem; color: #64748B; margin-left: 10px;">의사결정 상세 추적기 (Decision Intelligence Tracer)</span>
+                </div>
+                <button class="close-modal" onclick="closeFullTracerModal()" style="background: none; border: none; color: #94A3B8; font-size: 1.8rem; cursor: pointer; line-height: 1; transition: color 0.15s;">&times;</button>
+            </div>
+
+            <!-- 모달 바디 (가로 분할 레이아웃) -->
+            <div style="display: flex; flex: 1; min-height: 0;">
+                <!-- 좌측 탭 사이드바 -->
+                <div class="tracer-tab-sidebar" style="width: 210px; background: #0F172A; border-right: 1px solid rgba(148, 163, 184, 0.1); display: flex; flex-direction: column; padding: 10px 0; overflow-y: auto; flex-shrink: 0;">
+                    <div class="tab-menu-item active" data-tab="fsm" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🔄 FSM 주기</div>
+                    <div class="tab-menu-item" data-tab="girs" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🎯 GIRS 리스크</div>
+                    <div class="tab-menu-item" data-tab="feature" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">📊 Feature 스냅샷</div>
+                    <div class="tab-menu-item" data-tab="counterfactual" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🔍 Counterfactual</div>
+                    <div class="tab-menu-item" data-tab="queue-diff" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">⚖️ Pareto Front / Diff</div>
+                    <div class="tab-menu-item" data-tab="performance" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">📈 주문/성과</div>
+                    <div class="tab-menu-item" data-tab="audit" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🛡️ 감사 이벤트</div>
+                    <div class="tab-menu-item" data-tab="reeval" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🔄 [Shadow] 재평가</div>
+                    <div class="tab-menu-item" data-tab="rawlog" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">📝 감사 텍스트 로그</div>
+                    <div class="tab-menu-item" data-tab="rawjson" style="padding: 12px 20px; color: #94A3B8; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500;">🌐 Raw JSON</div>
+                </div>
+
+                <!-- 우측 탭 본문 영역 -->
+                <div class="tracer-tab-content" style="flex: 1; padding: 25px; overflow-y: auto; background: #1E293B; display: flex; flex-direction: column; min-width: 0;">
+                    <!-- FSM 주기 탭 -->
+                    <div class="tab-pane active" id="tab-pane-fsm">
+                        <h3>FSM 생명주기 시각화 (Finite State Machine Status)</h3>
+                        <p class="description-text">해당 AI 제안이 생성(Candidate)되어 대기(Pending), 최종 승인(Approved)을 거쳐 챔피언으로 적용(Applied)되기까지의 FSM 생명주기 및 흐름 상태를 추적합니다.</p>
+                        
+                        <div class="fsm-graphic-container" style="display: flex; align-items: center; justify-content: space-around; margin: 30px 0; background: #0F172A; padding: 20px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.1);">
+                            <div class="fsm-step" id="step-candidate">
+                                <div class="circle">1</div>
+                                <div class="label">CANDIDATE</div>
+                            </div>
+                            <div class="fsm-line" id="line-candidate-pending"></div>
+                            <div class="fsm-step" id="step-pending">
+                                <div class="circle">2</div>
+                                <div class="label">PENDING</div>
+                            </div>
+                            <div class="fsm-line" id="line-pending-approved"></div>
+                            <div class="fsm-step" id="step-approved">
+                                <div class="circle">3</div>
+                                <div class="label">APPROVED</div>
+                            </div>
+                            <div class="fsm-line" id="line-approved-applied"></div>
+                            <div class="fsm-step" id="step-applied">
+                                <div class="circle">4</div>
+                                <div class="label">APPLIED</div>
+                            </div>
+                        </div>
+
+                        <h4>FSM 전이 히스토리 (FSM Transition History)</h4>
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 150px; text-align: left;">목표 상태 (Target State)</th>
+                                        <th style="width: 180px; text-align: left;">기록 시각</th>
+                                        <th style="text-align: left;">컨텍스트 페이로드 (Context Payload)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fsm-history-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- GIRS 리스크 탭 -->
+                    <div class="tab-pane" id="tab-pane-girs">
+                        <h3>GIRS 리스크 점수 진단 (GIRS Performance & Risk Scorer)</h3>
+                        <p class="description-text">ONNX 리스크 모델 추론 결과와 룰 기반 보정값을 종합 계산한 GIRS 최종 점수와 상세 내역입니다.</p>
+                        
+                        <div class="girs-summary-grid" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px;">
+                            <div class="card" style="background:#0F172A; padding: 15px; border-radius: 6px; border:1px solid rgba(148, 163, 184, 0.1); text-align: center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">Model Inference Risk</span>
+                                <h2 id="girs-model-risk" style="margin:8px 0 0 0; color:#38BDF8; font-family:'Roboto Mono'; font-size:1.8rem;">0.000</h2>
+                            </div>
+                            <div class="card" style="background:#0F172A; padding: 15px; border-radius: 6px; border:1px solid rgba(148, 163, 184, 0.1); text-align: center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">Fallback Rule Risk</span>
+                                <h2 id="girs-fallback-risk" style="margin:8px 0 0 0; color:#F59E0B; font-family:'Roboto Mono'; font-size:1.8rem;">0.000</h2>
+                            </div>
+                            <div class="card" style="background:#0F172A; padding: 15px; border-radius: 6px; border:1px solid rgba(148, 163, 184, 0.1); text-align: center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">Stability Score</span>
+                                <h2 id="girs-stability-score" style="margin:8px 0 0 0; color:#10B981; font-family:'Roboto Mono'; font-size:1.8rem;">0.000</h2>
+                            </div>
+                            <div class="card" style="background:#0F172A; padding: 15px; border-radius: 6px; border:1px solid rgba(148, 163, 184, 0.1); text-align: center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">Final Score</span>
+                                <h2 id="girs-final-promotion" style="margin:8px 0 0 0; color:#EF4444; font-family:'Roboto Mono'; font-size:1.8rem;">0점</h2>
+                            </div>
+                        </div>
+
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">평가 차원 (Dimension)</th>
+                                        <th style="width: 120px; text-align: right;">수치 (Value)</th>
+                                        <th style="width: 180px; text-align: left; padding-left: 10px;">상태 (Status)</th>
+                                        <th style="text-align: left;">설명 (Notes)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="girs-details-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Feature 스냅샷 탭 -->
+                    <div class="tab-pane" id="tab-pane-feature">
+                        <h3>판단 대상 피처 스냅샷 (Feature Snapshot & Contract Validation)</h3>
+                        <p class="description-text">AI 제안 생성 당시의 상태를 기록한 피처 계약(Feature Contract) 스냅샷 데이터를 검증하고 카테고리별 수치를 제공합니다.</p>
+                        
+                        <div class="alert-banner success" id="feature-validation-alert" style="margin-bottom: 20px;">
+                            <span class="icon">✅</span>
+                            <span id="feature-validation-msg">Feature Contract 스키마 검증 완료</span>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; min-height: 300px;">
+                            <div class="card" style="background: #0F172A; padding: 15px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.1); display: flex; flex-direction: column; overflow: hidden;">
+                                <h4 style="margin: 0 0 10px 0; color: #F8FAFC; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 8px;">📈 시세 & 기술 지표 피처</h4>
+                                <div style="flex:1; overflow-y:auto; max-height: 350px;">
+                                    <table style="width:100%; font-size:0.75rem; border-collapse:collapse;">
+                                        <thead>
+                                            <tr><th style="text-align: left;">피처 키</th><th style="text-align: right;">수치</th></tr>
+                                        </thead>
+                                        <tbody id="feature-price-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="card" style="background: #0F172A; padding: 15px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.1); display: flex; flex-direction: column; overflow: hidden;">
+                                <h4 style="margin: 0 0 10px 0; color: #F8FAFC; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 8px;">💧 유동성 & 거래량 피처</h4>
+                                <div style="flex:1; overflow-y:auto; max-height: 350px;">
+                                    <table style="width:100%; font-size:0.75rem; border-collapse:collapse;">
+                                        <thead>
+                                            <tr><th style="text-align: left;">피처 키</th><th style="text-align: right;">수치</th></tr>
+                                        </thead>
+                                        <tbody id="feature-liquidity-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="card" style="background: #0F172A; padding: 15px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.1); display: flex; flex-direction: column; overflow: hidden;">
+                                <h4 style="margin: 0 0 10px 0; color: #F8FAFC; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 8px;">🌐 시장 국면 & 기타 피처</h4>
+                                <div style="flex:1; overflow-y:auto; max-height: 350px;">
+                                    <table style="width:100%; font-size:0.75rem; border-collapse:collapse;">
+                                        <thead>
+                                            <tr><th style="text-align: left;">피처 키</th><th style="text-align: right;">수치</th></tr>
+                                        </thead>
+                                        <tbody id="feature-regime-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Counterfactual 탭 -->
+                    <div class="tab-pane" id="tab-pane-counterfactual">
+                        <h3>반사실적 가상 시뮬레이션 (Counterfactual Multi-horizon Simulation)</h3>
+                        <p class="description-text">제안 파라미터(Candidate)를 챔피언 파라미터(Champion)와 동일 기간(과거 1일, 3일, 7일 등) 동안 동일한 호가 데이터를 흘려 시뮬레이션 한 뒤, 수익성(ROI) 및 안정성(MDD)의 상대 우위를 검증합니다.</p>
+                        
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">시뮬레이션 구간 (Horizon)</th>
+                                        <th style="text-align: right;">후보군 누적 ROI</th>
+                                        <th style="text-align: right;">챔피언 누적 ROI</th>
+                                        <th style="text-align: right;">수익률 차이 (Gap)</th>
+                                        <th style="text-align: right;">후보군 MDD</th>
+                                        <th style="text-align: right;">챔피언 MDD</th>
+                                        <th style="text-align: center;">가상 롤백 여부</th>
+                                        <th>상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="counterfactual-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Queue / Diff 탭 -->
+                    <div class="tab-pane" id="tab-pane-queue-diff">
+                        <h3>Pareto Front 승격 랭킹 및 파라미터 변경점 (Pareto Front Queue & Diff)</h3>
+                        <p class="description-text">수천 건의 파라미터 변이 세트 중, 수익성과 위험성을 동시에 극대화하여 Pareto Front 군에 포함되었는지의 랭킹 지표와 챔피언 대비 변이된 파라미터 대조 정보입니다.</p>
+
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                            <div class="card" style="flex:1; background:#0F172A; padding:15px; border-radius:6px; border:1px solid rgba(148,163,184,0.1); text-align:center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">Pareto Front 최종 백분위</span>
+                                <h2 id="pareto-final-rank" style="margin:8px 0 0 0; color:#38BDF8; font-family:'Roboto Mono';">Top 10%</h2>
+                            </div>
+                            <div class="card" style="flex:1; background:#0F172A; padding:15px; border-radius:6px; border:1px solid rgba(148, 163, 184, 0.1); text-align:center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">기대 ROI 랭킹 (Expected)</span>
+                                <h2 id="pareto-roi-rank" style="margin:8px 0 0 0; color:#10B981; font-family:'Roboto Mono';">ROI: +0.0%</h2>
+                            </div>
+                            <div class="card" style="flex:1; background:#0F172A; padding:15px; border-radius:6px; border:1px solid rgba(148, 163, 184, 0.1); text-align:center;">
+                                <span style="font-size:0.75rem; color:#94A3B8; font-weight:600;">리스크 점수 랭킹 (MDD)</span>
+                                <h2 id="pareto-mdd-rank" style="margin:8px 0 0 0; color:#EF4444; font-family:'Roboto Mono';">MDD: 0.0</h2>
+                            </div>
+                        </div>
+
+                        <h4>파라미터 변경점 (Champion vs Candidate)</h4>
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">파라미터명 (Parameter)</th>
+                                        <th style="text-align: left;">기존 챔피언 설정값 (Original)</th>
+                                        <th style="text-align: left;">제안 후보군 설정값 (Proposed)</th>
+                                        <th>변이 상태 (Mutated)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pareto-diff-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Performance / Orders 탭 -->
+                    <div class="tab-pane" id="tab-pane-performance">
+                        <h3>실거래 체결 주문 및 성과 (Real Order Execution)</h3>
+                        <p class="description-text">해당 파라미터가 챔피언으로 적용(Applied)된 이후 실제 또는 모의투자로 체결된 실거래 체결 주문 이력입니다.</p>
+                        
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">주문 ID</th>
+                                        <th style="text-align: left;">구분 (Side)</th>
+                                        <th style="text-align: left;">종목 (Symbol)</th>
+                                        <th style="text-align: right;">체결가 (Price)</th>
+                                        <th style="text-align: right;">체결수량 (Qty)</th>
+                                        <th style="text-align: right;">수수료 (Fee)</th>
+                                        <th style="text-align: left;">주문 사유</th>
+                                        <th>체결 시간</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="perf-orders-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 감사 이벤트 탭 -->
+                    <div class="tab-pane" id="tab-pane-audit">
+                        <h3>의사결정 감사 이벤트 기록 (Decision Audit Logs)</h3>
+                        <p class="description-text">시스템 FSM 전이, 수동 롤백, 파라미터 자동 승격 프로세스 진행 등과 관련된 감사 로그 목록입니다.</p>
+                        
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left; width: 150px;">이벤트 분류</th>
+                                        <th style="text-align: left; width: 100px;">대상 ID</th>
+                                        <th style="text-align: left;">상세 메시지 (Message)</th>
+                                        <th style="text-align: left; width: 160px;">기록 시간</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="audit-events-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Shadow 재평가 탭 -->
+                    <div class="tab-pane" id="tab-pane-reeval">
+                        <h3>원본 Feature 기준 재평가 분석 큐 (Shadow Reevaluation Panel)</h3>
+                        <p class="description-text">해당 AI 제안의 원본 Feature Snapshot을 기준으로 GIRSScorer 및 Counterfactual Simulation을 비동기로 다시 실행합니다. 이 작업은 실거래 런타임에 어떤 Side-Effect도 일으키지 않는 완전한 Shadow 분석 용도입니다.</p>
+                        
+                        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 15px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                            <div style="color: #cbd5e1; font-size: 0.85rem;">
+                                💡 <strong>재평가 요청 작동 흐름:</strong> 버튼 클릭 시 비동기 Job 생성 ➡️ shadow_eval_daemon이 Job 처리 ➡️ GIRS/Counterfactual 재계산 ➡️ evaluation_run 저장 및 화면 자동 갱신
+                            </div>
+                            <button id="btn-request-reevaluation-action" class="btn success" onclick="requestReevaluation()" style="padding: 8px 16px; font-weight: bold; cursor: pointer; white-space: nowrap;">🔄 [재평가 요청] 실행</button>
+                        </div>
+
+                        <h4>재평가 비동기 Job 실행 목록</h4>
+                        <div class="table-wrapper">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="text-align: left;">Job ID</th>
+                                        <th style="text-align: left;">상태 (Status)</th>
+                                        <th style="text-align: left;">요청 시각</th>
+                                        <th style="text-align: left;">시작 시각</th>
+                                        <th style="text-align: left;">완료 시각</th>
+                                        <th style="text-align: left;">처리 데몬 ID</th>
+                                        <th style="text-align: left;">오류 로그 (Error Log)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reeval-jobs-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 원본 텍스트 감사 로그 탭 -->
+                    <div class="tab-pane" id="tab-pane-rawlog">
+                        <h3>시스템 원본 텍스트 감사 로그 (Raw Text Console Output)</h3>
+                        <p class="description-text">결정 감사 이벤트 객체들의 원본 페이로드를 조립하여 출력한 텍스트 로그 스트림입니다.</p>
+                        
+                        <pre id="raw-text-log-console" class="raw-console-panel" style="background:#0F172A; border:1px solid #334155; border-radius:6px; padding:15px; font-family:'Roboto Mono', monospace; font-size:0.8rem; color:#A7F3D0; overflow-y:auto; height:400px; margin:0; white-space:pre-wrap;"></pre>
+                    </div>
+
+                    <!-- Raw JSON 탭 -->
+                    <div class="tab-pane" id="tab-pane-rawjson">
+                        <h3>제안 객체 원본 JSON 데이터 (Raw Proposal JSON payload)</h3>
+                        <p class="description-text">데이터베이스에 보존된 AI 의사결정 제안 레코드의 원본 JSON 페이로드 구조를 그대로 출력합니다.</p>
+                        
+                        <pre id="raw-json-viewer" class="raw-console-panel" style="background:#0F172A; border:1px solid #334155; border-radius:6px; padding:15px; font-family:'Roboto Mono', monospace; font-size:0.8rem; color:#38BDF8; overflow-y:auto; height:400px; margin:0; white-space:pre-wrap;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="store.js"></script>
     <script src="utils.js"></script>

@@ -57,6 +57,8 @@ class StrategyService(DaemonService):
         self.promotion_count = 0
         self.demotion_count = 0
         self.last_universe_summary_time = time.time()
+        
+        self._lock = asyncio.Lock()
 
     async def fetch_exchange_symbols(self, exchange_id: str, config: Dict[str, Any]) -> List[str]:
         symbols = config.get('exchanges', {}).get(exchange_id, {}).get('symbols', [])
@@ -91,11 +93,36 @@ class StrategyService(DaemonService):
             try:
                 meta = json.loads(portfolio.strategy_info)
                 strategies_config = meta.get("applied_strategies", {})
+                
+                from src.database.connection import get_db_conn
+                from src.engine.strategy import StrategyRegistry
+                
                 for s_id, s_conf in strategies_config.items():
-                    if s_conf.get("enabled", False):
+                    strat_cls = StrategyRegistry.get_strategy_class(s_id)
+                    official_name = strat_cls.__name__ if strat_cls else s_id
+                    
+                    is_active = s_conf.get("enabled", False)
+                    has_positions = False
+                    
+                    if not is_active:
+                        try:
+                            async with get_db_conn(self.db_path) as db:
+                                async with db.execute(
+                                    "SELECT SUM(CASE WHEN side = 'BUY' THEN quantity ELSE -quantity END) as qty "
+                                    "FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? GROUP BY symbol",
+                                    (portfolio.id, official_name)
+                                ) as cursor:
+                                    rows = await cursor.fetchall()
+                                    if any(row[0] > 0.000001 for row in rows if row[0] is not None):
+                                        has_positions = True
+                        except Exception as pos_err:
+                            logger.error(f"[StrategyService] 포지션 유무 확인 쿼리 실패 ({official_name}): {pos_err}")
+                            
+                    if is_active or has_positions:
                         params = s_conf.get("params", {}).copy()
-                        enabled_strategies.append((s_id, params))
-                logger.info(f"[StrategyService] 세션 활성 전략 목록: {[s[0] for s in enabled_strategies]}")
+                        enabled_strategies.append((official_name, params, is_active))
+                        
+                logger.info(f"[StrategyService] 세션 가동 전략 목록: {[s[0] for s in enabled_strategies]} (활성여부: {[s[2] for s in enabled_strategies]})")
             except Exception as e:
                 logger.error(f"[StrategyService] 포트폴리오 전략 정보 파싱 에러: {e}")
                 
@@ -104,6 +131,51 @@ class StrategyService(DaemonService):
             return new_engines
 
         exchanges_config = self.config_manager.get('exchanges', {})
+        
+        # 0. 전략별 챔피언 파라미터 복원 및 DB 초기 등록 (종목 루프 외부에서 단 1회 실행)
+        resolved_strategy_params = {}
+        for s_id, s_params, is_active in enabled_strategies:
+            version_info = await self.portfolio_manager.repository.get_strategy_version(s_id)
+            if version_info and version_info.get("current_params"):
+                logger.info(f"[StrategyService] DB에서 전략 {s_id}의 최신 파라미터 복원 적용 (버전: {version_info['current_version_id']})")
+                params = version_info["current_params"].copy()
+            else:
+                params = s_params.copy()
+                # 최초 기동이므로 DB에 버전 1로 초기 등록
+                await self.portfolio_manager.repository.save_strategy_version(
+                    strategy_id=s_id,
+                    version_id=1,
+                    params=params,
+                    applied_at=int(time.time() * 1000)
+                )
+                await self.portfolio_manager.repository.insert_strategy_parameter_history(
+                    strategy_id=s_id,
+                    version_id=1,
+                    parent_version_id=None,
+                    old_params=None,
+                    new_params=json.dumps(params),
+                    proposal_id=None,
+                    is_current=1,
+                    changed_by='AUTO',
+                    change_reason='STARTUP_RESTORE'
+                )
+                logger.info(f"[StrategyService] 전략 {s_id} 최초 기동 파라미터를 버전 1로 등록 완료")
+                version_info = {
+                    "current_version_id": 1,
+                    "current_params": params
+                }
+
+            resolved_strategy_params[s_id] = params
+            
+            # [V1] 기동 시점 STARTUP 스냅샷 기록도 1회만 수행
+            latest_version = version_info.get('current_version_id', 1)
+            await self.record_performance_snapshot(
+                strategy_id=s_id,
+                version_id=latest_version,
+                snapshot_type='STARTUP',
+                params=params
+            )
+
         for exchange_id, exch_config in exchanges_config.items():
             if not exch_config.get('enabled', True):
                 continue
@@ -115,7 +187,7 @@ class StrategyService(DaemonService):
 
             for symbol in symbols:
                 instances = []
-                for s_id, s_params in enabled_strategies:
+                for s_id, s_params, is_active in enabled_strategies:
                     # [오버라이드 가드] 설정 파일(settings.yaml)의 overrides에서 이 거래소용 enabled 오버라이드 확인
                     s_config = self.config_manager.get(f"strategies.{s_id.lower()}")
                     strategy_enabled = True  # applied_strategies에 이미 가용 등록된 전략이므로 기본 True
@@ -129,32 +201,8 @@ class StrategyService(DaemonService):
                         logger.info(f"[StrategyService] 전략 {s_id}는 {exchange_id} 거래소 오버라이드 설정에 의해 가동이 비활성화(skip) 처리됩니다.")
                         continue
 
-                    # [V1] DB에 저장된 활성 버전 파라미터가 있는지 조회
-                    version_info = await self.portfolio_manager.repository.get_strategy_version(s_id)
-                    if version_info and version_info.get("current_params"):
-                        logger.info(f"[StrategyService] DB에서 전략 {s_id}의 최신 파라미터 복원 적용 (버전: {version_info['current_version_id']})")
-                        params = version_info["current_params"].copy()
-                    else:
-                        params = s_params.copy()
-                        # 최초 기동이므로 DB에 버전 1로 초기 등록
-                        await self.portfolio_manager.repository.save_strategy_version(
-                            strategy_id=s_id,
-                            version_id=1,
-                            params=params,
-                            applied_at=int(time.time() * 1000)
-                        )
-                        await self.portfolio_manager.repository.insert_strategy_parameter_history(
-                            strategy_id=s_id,
-                            version_id=1,
-                            parent_version_id=None,
-                            old_params=None,
-                            new_params=json.dumps(params),
-                            proposal_id=None,
-                            is_current=1,
-                            changed_by='AUTO',
-                            change_reason='STARTUP_RESTORE'
-                        )
-                        logger.info(f"[StrategyService] 전략 {s_id} 최초 기동 파라미터를 버전 1로 등록 완료")
+                    # 캐싱된 복원 파라미터를 사용
+                    params = resolved_strategy_params[s_id].copy()
 
                     # [오버라이드 가드] 설정 파일의 overrides에서 이 거래소용 params 오버라이드를 챔피언 파라미터 위에 병합
                     if s_config and "overrides" in s_config and exchange_id in s_config["overrides"]:
@@ -163,17 +211,9 @@ class StrategyService(DaemonService):
                             logger.info(f"[StrategyService] 전략 {s_id}에 대해 {exchange_id} 전용 오버라이드 파라미터 병합 적용: {ex_override['params']}")
                             params.update(ex_override["params"])
 
-                    # [V1] 기동 시점 STARTUP 스냅샷 기록
-                    latest_version = version_info['current_version_id'] if version_info else 1
-                    await self.record_performance_snapshot(
-                        strategy_id=s_id,
-                        version_id=latest_version,
-                        snapshot_type='STARTUP',
-                        params=params
-                    )
-
                     strat = StrategyRegistry.create_strategy(s_id, params)
                     if strat:
+                        strat.enabled = is_active
                         instances.append(strat)
                 
                 if not instances:
@@ -230,9 +270,10 @@ class StrategyService(DaemonService):
                 
             self.current_portfolio_id = active_p.id if active_p else None
             if active_p:
-                new_engs = await self.reload_trade_engines(active_p)
-                self.trade_engines.clear()
-                self.trade_engines.update(new_engs)
+                async with self._lock:
+                    new_engs = await self.reload_trade_engines(active_p)
+                    self.trade_engines.clear()
+                    self.trade_engines.update(new_engs)
         except Exception as e:
             logger.error(f"[StrategyService] 초기 세션 로드 예외: {e}")
 
@@ -298,19 +339,21 @@ class StrategyService(DaemonService):
     async def handle_control_message(self, topic: str, data: dict) -> bool:
         if data.get('type') == 'update_portfolio':
             logger.info(f"[StrategyService] 포트폴리오 업데이트 제어 신호 수신")
-            await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
-            active_p = self.portfolio_manager.get_active_simulation_portfolio()
-            active_id = active_p.id if active_p else None
-            
-            if active_id != self.current_portfolio_id:
-                logger.info(f"[StrategyService] 세션 변경 감지: {self.current_portfolio_id} -> {active_id}")
-                self.current_portfolio_id = active_id
+            async with self._lock:
+                await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                active_p = self.portfolio_manager.get_active_simulation_portfolio()
+                active_id = active_p.id if active_p else None
                 
-                self.trade_engines.clear()
+                if active_id != self.current_portfolio_id:
+                    logger.info(f"[StrategyService] 세션 변경 감지: {self.current_portfolio_id} -> {active_id}")
+                    self.current_portfolio_id = active_id
+                    
                 if active_p:
                     new_engs = await self.reload_trade_engines(active_p)
+                    self.trade_engines.clear()
                     self.trade_engines.update(new_engs)
                 else:
+                    self.trade_engines.clear()
                     logger.info("[StrategyService] 활성 세션이 없어 대기 상태로 진입합니다.")
             return True
         elif data.get('type') == 'apply_params':
@@ -322,8 +365,9 @@ class StrategyService(DaemonService):
             if strategy_id and params and version_id:
                 logger.info(f"[StrategyService] 전략 파라미터 동적 갱신 수신: strategy_id={strategy_id}, version={version_id}, params={params}")
                 # 1. 모든 실행 중인 trade_engine의 해당 전략 파라미터를 즉시 갱신
-                for key, engine in self.trade_engines.items():
-                    engine.update_strategy_params(strategy_id, params)
+                async with self._lock:
+                    for key, engine in self.trade_engines.items():
+                        engine.update_strategy_params(strategy_id, params)
                 
                 # 2. 성과 스냅샷 생성 및 기록 (PARAMETER_CHANGE 또는 ROLLBACK)
                 snap_type = 'ROLLBACK' if reason == 'ROLLBACK' else 'PARAMETER_CHANGE'
@@ -375,24 +419,26 @@ class StrategyService(DaemonService):
                     symbol = data.get('code')
                     key = f"{exchange}:{symbol}"
                     
-                    if key in self.trade_engines:
-                        engine = self.trade_engines[key]
-                        tick_payload = {
-                            'trade_price': data['trade_price'],
-                            'trade_volume': data['trade_volume'],
-                            'ask_bid': data['ask_bid'],
-                            'trade_timestamp': data['trade_timestamp']
-                        }
+                    signals = []
+                    async with self._lock:
+                        if key in self.trade_engines:
+                            engine = self.trade_engines[key]
+                            tick_payload = {
+                                'trade_price': data['trade_price'],
+                                'trade_volume': data['trade_volume'],
+                                'ask_bid': data['ask_bid'],
+                                'trade_timestamp': data['trade_timestamp']
+                            }
+                            
+                            signals, _ = await engine.process_tick(tick_payload, self.portfolio_manager)
                         
-                        signals, _ = await engine.process_tick(tick_payload, self.portfolio_manager)
-                        
-                        for sig in signals:
-                            logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
-                            # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
-                            await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
-                            op_mode = self.config_manager.get("system.operation_mode", "shadow")
-                            target_portfolio_id = 'live' if op_mode == 'live' else None
-                            await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
+                    for sig in signals:
+                        logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
+                        # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
+                        await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                        op_mode = self.config_manager.get("system.operation_mode", "shadow")
+                        target_portfolio_id = 'live' if op_mode == 'live' else None
+                        await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
         except asyncio.CancelledError:
             pass
         except Exception as e:

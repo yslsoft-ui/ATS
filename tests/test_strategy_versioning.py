@@ -273,7 +273,7 @@ async def test_analyzer_and_shadow_backtest_with_regime():
     from src.database.connection import get_db_conn
     
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
-    strategy_id = "rsistrategy"
+    strategy_id = "RSIStrategy"
     portfolio_id = "sim_port_2"
     
     # 1. 캔들 및 거래소, 포트폴리오 셋업
@@ -830,7 +830,7 @@ async def test_strategy_execution_full_loop():
 async def test_atomic_mutations_and_async_enrichment():
     from src.database.connection import get_db_conn
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH, champion_cooldown_days=0.0, champion_cooldown_trades=0)
-    strategy_id = "rsistrategy"
+    strategy_id = "RSIStrategy"
     portfolio_id = "sim_port_atomic"
     
     # 1. 자산 마스터 및 포트폴리오 등록

@@ -7,6 +7,70 @@ from src.engine.command import UserCommand
 logger = get_logger(__name__)
 router = APIRouter()
 
+async def _get_active_evaluations_count(system, strategy_id: str) -> int:
+    """해당 전략에 대해 shadow_eval_daemon이 현재 진행 중(PENDING)인 평가 건수를 조회합니다."""
+    from src.database.connection import get_db_conn
+    from src.engine.strategy import StrategyRegistry
+    
+    strat_cls = StrategyRegistry.get_strategy_class(strategy_id)
+    official_name = strat_cls.__name__ if strat_cls else strategy_id
+    
+    try:
+        async with get_db_conn(system.db_path) as db:
+            async with db.execute(
+                "SELECT COUNT(*) FROM proposal_evaluations pe "
+                "JOIN strategy_proposals sp ON pe.proposal_id = sp.id "
+                "WHERE (sp.strategy_id = ? OR sp.strategy_id = ?) AND pe.evaluation_status = 'PENDING'",
+                (strategy_id, official_name)
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+    except Exception as e:
+        logger.error(f"Error getting active evaluations count for {strategy_id}: {e}")
+        return 0
+
+async def _determine_strategy_status(system, strategy_id: str) -> str:
+    """활성 포트폴리오와 보유 잔고 상태를 연산하여 전략의 실시간 동작 상태를 판별합니다."""
+    active_p = system.portfolio_manager.get_active_simulation_portfolio()
+    if not active_p:
+        active_p = system.portfolio_manager.portfolios.get('live')
+        
+    if not active_p or not getattr(active_p, 'strategy_info', None):
+        return "DISABLED"
+        
+    try:
+        import json
+        meta = json.loads(active_p.strategy_info)
+        applied = meta.get("applied_strategies", {})
+        
+        from src.engine.strategy import StrategyRegistry
+        strat_cls = StrategyRegistry.get_strategy_class(strategy_id)
+        official_name = strat_cls.__name__ if strat_cls else strategy_id
+        
+        if official_name not in applied:
+            return "DISABLED"
+            
+        s_conf = applied[official_name]
+        is_enabled = s_conf.get("enabled", False)
+        if is_enabled:
+            return "RUNNING"
+            
+        # 비활성화 상태인 경우 미청산 잔고가 남아있는지 대조
+        from src.database.connection import get_db_conn
+        async with get_db_conn(system.db_path) as db:
+            async with db.execute(
+                "SELECT SUM(CASE WHEN side = 'BUY' THEN quantity ELSE -quantity END) as qty "
+                "FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? GROUP BY symbol",
+                (active_p.id, official_name)
+            ) as cursor:
+                rows = await cursor.fetchall()
+                if any(row[0] > 0.000001 for row in rows if row[0] is not None):
+                    return "EXIT_ONLY"
+    except Exception as e:
+        logger.error(f"Error determining strategy runtime status for {strategy_id}: {e}")
+        
+    return "DISABLED"
+
 @router.get("/api/strategies")
 async def list_strategies(request: Request):
     """사용 가능한 모든 전략 목록과 메타데이터를 반환합니다."""
@@ -27,13 +91,18 @@ async def list_strategies(request: Request):
                 "current": current_val
             }
             
+        status = await _determine_strategy_status(system, s_id)
+        eval_count = await _get_active_evaluations_count(system, s_id)
+            
         results.append({
             "id": s_id,
             "name": meta['name'],
             "type": meta['type'],
             "description": meta['description'],
             "enabled": config.get('enabled', False),
-            "params": params_with_values
+            "params": params_with_values,
+            "status": status,
+            "active_eval_count": eval_count
         })
         
     return results
@@ -241,6 +310,9 @@ async def get_strategy_detail(strategy_id: str, request: Request):
                 "applied_at": int(time.time() * 1000)
             }
             
+        status = await _determine_strategy_status(system, strategy_id)
+        eval_count = await _get_active_evaluations_count(system, strategy_id)
+            
         return {
             "strategy_id": strategy_id,
             "name": meta.get('name', strategy_id) if meta else strategy_id,
@@ -249,7 +321,9 @@ async def get_strategy_detail(strategy_id: str, request: Request):
             "current_params": ver["current_params"],
             "rollback_source_version": ver["rollback_source_version"],
             "applied_at": ver["applied_at"],
-            "description": meta.get('description', '') if meta else ''
+            "description": meta.get('description', '') if meta else '',
+            "status": status,
+            "active_eval_count": eval_count
         }
     except Exception as e:
         logger.error(f"Failed to fetch strategy detail: {e}")

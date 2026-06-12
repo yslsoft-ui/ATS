@@ -83,4 +83,63 @@
    - 따라서 반드시 널 병합 연산자 `??`를 사용하여 `0.0`원이 평가 및 비중 연산에 그대로 적용되도록 보장합니다.
 
 2. **원화(KRW) 현금 절사**:
-   - 수수료나 분할 거래 등으로 인해 발생하는 미세한 소수점 단위의 원화(KRW) 잔고 찌꺼기가 화면에 소수점으로 노출되는 것을 방지하기 위해, 원화 잔고에 한해 원 단위 이하 절사(정수화)를 수행하여 화면 시인성을 확보합니다.
+   - 수수료나 분할 거래 등으로 인해 발생하는 미세한 소수점 단위의 원화(KRW) 잔고 찌꺼기가 화면에 노출되는 것을 방지하기 위해, 원화 잔고에 한해 원 단위 이하 절사(정수화)를 수행하여 화면 시인성을 확보합니다.
+
+---
+
+## 6. 의사결정 콘솔 뷰 (Decision Console View)
+
+### 6.1. 개요
+
+`strategy-view` 섹션은 단순 나열식 목록이 아닌, **전략의 전체 생애주기를 드릴다운으로 추적할 수 있는 입체적 의사결정 콘솔**로 재설계되었습니다.
+
+**레이아웃**: 3단 분할 + 전체화면 Tracer 모달 하이브리드 구조
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  [상단 요약 바] — 운영모드 · 활성전략 · 대기제안 · GIRS안정성   │
+├─────────────┬─────────────────────────┬──────────────────────┤
+│ 좌측 Tree   │   중앙 Workspace          │  우측 Tracer 요약    │
+│ (전략/제안  │  (전략 상세 / 제안 목록) │  (GIRS · 가드 · 이력) │
+│  카테고리)  │                          │  [전체화면 확장 ↗]   │
+└─────────────┴─────────────────────────┴──────────────────────┘
+                              ↓ 전체화면 확장 클릭
+┌──────────────────────────────────────────────────────────────┐
+│  Decision Intelligence Tracer (10개 탭 전체화면 모달)          │
+│  FSM | GIRS | Feature | CF | Queue | Diff | Orders | Log |   │
+│  Events | [Shadow] 재평가                                     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+### 6.2. 핵심 모듈: [strategy.js](file:///home/simon/ATS/frontend/strategy.js)
+
+- **`loadStrategies()`**: 의사결정 콘솔 초기 진입 시 summary API 및 트리 데이터를 로드합니다.
+- **`selectTreeLeaf(type, id)`**: 좌측 트리 노드 클릭 핸들러. `type`이 `strategy`이면 전략 상세 워크스페이스를, `proposal-group`이면 제안 목록을 중앙에 렌더링합니다.
+- **`selectStrategy(strategyId)`**: 레거시/E2E 호환용 래퍼 (내부적으로 `selectTreeLeaf` 호출).
+- **`loadStrategyWorkspace(strategyId)`**: `/api/decision-console/strategies/{id}/trace` 호출 후 4대 일치성 진단판, 파라미터 Diff, 성과 타임라인을 중앙 패널에 렌더링합니다.
+- **`loadProposalListWorkspace(groupKey)`**: 제안 목록을 상태 필터와 함께 테이블로 렌더링하고 행 클릭 시 우측 Tracer 패널을 갱신합니다.
+- **`loadTracerPanel(proposalId)`**: `/api/decision-console/proposals/{id}/trace` 호출 후 우측 요약 패널(GIRS 점수, 가드 목록, 이벤트 이력)을 업데이트합니다.
+- **`openFullTracerModal()`** / **`closeFullTracerModal()`**: 전체화면 모달 열기/닫기.
+- **`switchTracerTab(tabId)`**: 10개 Tracer 탭 전환 및 각 탭별 렌더러 호출.
+- **`requestReevaluation()`**: `POST /api/decision-console/proposals/{id}/reevaluate` 호출 후 3초 폴링으로 Job 상태(QUEUED→RUNNING→COMPLETED)를 추적하여 UI에 실시간 반영합니다.
+- **`initDecisionConsole()`**: 모달 확장 버튼, 탭 전환, 재평가 버튼 이벤트를 일괄 바인딩합니다.
+
+### 6.3. APIClient 확장 메서드 ([client.js](file:///home/simon/ATS/frontend/client.js))
+
+| 메서드 | 호출 엔드포인트 |
+|---|---|
+| `fetchDecisionConsoleSummary()` | `GET /api/decision-console/summary` |
+| `fetchDecisionConsoleStrategies()` | `GET /api/decision-console/strategies` |
+| `fetchDecisionConsoleStrategyTrace(id)` | `GET /api/decision-console/strategies/{id}/trace` |
+| `fetchDecisionConsoleProposals(params)` | `GET /api/decision-console/proposals` |
+| `fetchDecisionConsoleProposalTrace(id)` | `GET /api/decision-console/proposals/{id}/trace` |
+| `requestProposalReevaluation(id)` | `POST /api/decision-console/proposals/{id}/reevaluate` |
+| `fetchReevaluationJobs(id)` | `GET /api/decision-console/proposals/{id}/reevaluation-jobs` |
+| `fetchDecisionConsoleEvents(params)` | `GET /api/decision-console/events` |
+| `fetchDecisionConsoleRaw(type, id)` | `GET /api/decision-console/raw/{type}/{id}` |
+
+### 6.4. 라우팅 등록
+
+`strategy.js` 최하단에서 `DOMContentLoaded` 이벤트 이후 `ViewRouter.registerRoute('strategy-view', ...)` 를 호출하여 전략 탭 진입 시 `initDecisionConsole()` → `loadStrategies()` 순으로 초기화합니다.
+
+> **중요**: `registerRoute` 호출은 반드시 `DOMContentLoaded` 이후에 실행해야 합니다 (`router.js` 로딩 Race Condition 방지).

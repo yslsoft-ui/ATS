@@ -625,6 +625,45 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
+        # 22. proposal_reevaluation_jobs [NEW]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS proposal_reevaluation_jobs (
+                job_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proposal_id INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                requested_at INTEGER NOT NULL,
+                started_at INTEGER,
+                finished_at INTEGER,
+                requested_by TEXT NOT NULL,
+                mode TEXT NOT NULL,
+                input_snapshot_id INTEGER,
+                error_message TEXT,
+                worker_id TEXT,
+                FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE
+            )
+        ''')
+
+        # 23. proposal_evaluation_runs [NEW]
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS proposal_evaluation_runs (
+                evaluation_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                proposal_id INTEGER NOT NULL,
+                job_id INTEGER,
+                girs_score REAL,
+                promotion_score REAL,
+                stability_score REAL,
+                rollback_probability REAL,
+                data_quality_blocked INTEGER DEFAULT 0,
+                counterfactual_result_id INTEGER,
+                model_version TEXT,
+                scorer_version TEXT,
+                simulator_version TEXT,
+                created_at INTEGER NOT NULL,
+                FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE,
+                FOREIGN KEY (job_id) REFERENCES proposal_reevaluation_jobs(job_id) ON UPDATE CASCADE ON DELETE SET NULL
+            )
+        ''')
+
         # [Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 감지 및 실행
         cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='proposal_evaluations'")
         row = await cursor.fetchone()
@@ -712,6 +751,8 @@ async def _init_db_core(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_prop_eval_id_horizon ON proposal_evaluations (proposal_id, horizon_name)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_girs_shadow_metrics_time ON girs_shadow_metrics (timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_promotion_event_log_prop ON promotion_event_log (proposal_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_proposal_reeval_jobs_prop ON proposal_reevaluation_jobs (proposal_id, status)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_proposal_eval_runs_prop ON proposal_evaluation_runs (proposal_id)')
         await db.commit()
     
     await migrate_data(target_path)

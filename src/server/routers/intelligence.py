@@ -32,7 +32,7 @@ async def _load_proposals(system, strategy_id: str = None, days: int = 30) -> li
     all_proposals = [p for p in proposals if (p.get("created_at") or 0) > cutoff]
 
     for prop in all_proposals:
-        for field in ("proposed_params", "original_params"):
+        for field in ("proposed_params", "original_params", "metrics"):
             if isinstance(prop.get(field), str):
                 try:
                     prop[field] = json.loads(prop[field])

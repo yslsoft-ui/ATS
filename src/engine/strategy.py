@@ -48,7 +48,7 @@ class BaseStrategy(ABC):
     def get_metadata(cls) -> Dict:
         """전략의 이름, 설명, 타입, 파라미터 정보를 반환합니다."""
         return {
-            "id": cls.__name__.lower(),
+            "id": cls.__name__,
             "name": cls.__name__,
             "type": cls.type.value,
             "description": cls.__doc__.strip() if cls.__doc__ else "",
@@ -67,7 +67,7 @@ class StrategyRegistry:
 
     @classmethod
     def register(cls, strategy_cls):
-        cls._strategies[strategy_cls.__name__.lower()] = strategy_cls
+        cls._strategies[strategy_cls.__name__] = strategy_cls
         return strategy_cls
 
     @classmethod
@@ -75,9 +75,16 @@ class StrategyRegistry:
         return [s.get_metadata() for s in cls._strategies.values()]
 
     @classmethod
+    def get_strategy_class(cls, strategy_id: str) -> Optional[type]:
+        target_id_lower = strategy_id.lower()
+        for name, s_cls in cls._strategies.items():
+            if name.lower() == target_id_lower:
+                return s_cls
+        return None
+
+    @classmethod
     def create_strategy(cls, strategy_id: str, params: Dict = None) -> Optional[BaseStrategy]:
-        strategy_id = strategy_id.lower()
-        strategy_cls = cls._strategies.get(strategy_id)
+        strategy_cls = cls.get_strategy_class(strategy_id)
         if strategy_cls:
-            return strategy_cls(strategy_id=strategy_id, params=params)
+            return strategy_cls(strategy_id=strategy_cls.__name__, params=params)
         return None
