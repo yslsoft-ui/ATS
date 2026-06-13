@@ -153,6 +153,8 @@ sequenceDiagram
 ### 3.1. 거래소 수집기 및 데이터 정규화 (Collector & Adapters)
 - **독립 구동**: `src/collector/upbit_ws.py` 등은 큐 기반의 독립 수집 세션을 통해 구동됩니다.
 - **데이터 규격 일원화**: 거래소별 JSON/텍스트 스키마를 공통 내부 데이터 형태인 `Tick` 데이터로 통일(Normalize)합니다. 특히 한국투자증권(KIS)의 경우, 실시간 WebSocket 체결가(`H0STCNT0`) 데이터에서 제공하는 문자형 체결시간(`HHMMSS`)을 로컬 당일 날짜와 결합하여 서울 타임존 기준의 정수형 Unix Timestamp로 정밀하게 변환함으로써, 네트워크 지연 등으로 인한 분봉 경계면의 가격 및 거래량 데이터 왜곡을 방지합니다.
+- **1분봉 압축 DB 저장 및 역할 격리**: 수집기 데몬([collector_service.py](file:///home/simon/ATS/src/services/collector_service.py))은 실시간 수신한 틱 데이터를 최소 보존 단위인 **1분봉(60초)**으로만 가공 조립하여 DB의 `candles` 테이블에 영속화하며, 그 외 다양한 시간봉(인터벌) 조립 연산은 전략 데몬으로 격리 이관하여 디스크 I/O와 DB 용량 낭비를 최적화합니다.
+- **호가 데이터 수집 및 디스크 용량 관리**: 실시간 호가(Orderbook) 데이터를 수집하여 `orderbooks` 테이블에 저장할 수 있으나, 호가 데이터의 극심한 데이터 밀도로 인한 디스크 고갈을 막기 위해 `system.enable_orderbook_features: false` 설정을 통해 호가 관련 적재/피처 계산 기능을 선택적으로 비활성화할 수 있습니다. 또한 수집된 과거 시장 데이터는 [market_cleanup_service.py](file:///home/simon/ATS/src/services/market_cleanup_service.py)에 의해 틱 데이터는 3일, 분봉은 30일 경과 시 삭제 및 1시간봉 압축 등의 생명주기 관리를 받습니다.
 - **비동기 백필 기동**: 수집기 기동 시 과거 누락된 1분봉 동기화 작업이 실시간 수집 시작을 지연시키지 않도록 백필 작업을 `asyncio.create_task`로 비동기 실행하여 구동 즉시 실시간 데이터 수집을 병행합니다.
 - **벌크 병합 백필 (Bulk Merged Backfill)**: 과거 누락 캔들을 채울 때 개별 틈새마다 요청을 쪼개지 않고, 전체 누락 타임스탬프의 `[min, max]` 단일 대형 구간을 계산하여 1회의 벌크 API 호출로 데이터를 수집하고, 이미 존재하는 데이터는 메모리 상에서 중복 필터링하여 저장함으로써 API 호출 횟수를 90% 이상 절감합니다.
 
@@ -171,6 +173,7 @@ sequenceDiagram
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
 - **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
+- **실시간 다중 인터벌 캔들 조립**: 전략 데몬([strategy_service.py](file:///home/simon/ATS/src/services/strategy_service.py))은 수집기 데몬이 발행한 실시간 틱 데이터를 구독하여, 탑재된 전략의 설정 주기(예: 3분, 5분, 15분 등)에 맞는 다양한 시간봉을 메모리 상에서 독립적으로 직접 조립하고 관리합니다.
 - **파라미터 평가 및 스코어링 모듈 분리 (ParameterEvaluator Seam)**: 제안된 파라미터 후보군 평가 시 사용되던 파라미터 가중 거리 계산, 시장 국면별 적합도 가중치 산정, 다요소 신뢰도 점수(Confidence Score) 연산 등의 수학적 연산 정책들을 `ShadowBacktestEngine`으로부터 분리하여 무상태(Stateless) 전용 연산기인 `ParameterEvaluator`로 이관했습니다. 이를 통해 DB나 백테스트 엔진 구동 없이 계산 정책만을 독립적으로 단위 테스트하고 재사용할 수 있는 기반을 구축했습니다.
 - **단기상승흐름 전략 (Short-Term Trend Momentum)**: 룰 기반 파라미터 변이 및 머신러닝 데이터의 행동 공간(Action Space) 다양성 강화를 위해 기존 평균회귀(Mean-reversion) 계열과 대조되는 추세추종 속성의 전략입니다. 해당 전략은 이평 정배열, RSI 강세 & 기울기(Slope) 상승, 볼린저 밴드 상단(98%) 돌파 시 매수 진입하며, 2.0% 고정 손절선, 2.5% 트레일링 스탑, 이평 데드 크로스, RSI 극단 과매수(80.0) 감지 시 청산하여 단기 추세를 회수합니다.
 
