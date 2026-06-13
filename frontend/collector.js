@@ -29,6 +29,14 @@ const CollectorView = (() => {
     let activeSymbolsMetadata = {};
     let isStaleState = false;
 
+    // 모니터링 관련 임계값 설정 (백엔드와 동기화되며, 연결 전에는 안전한 기본값으로 fallback)
+    let monitoringConfig = {
+        daemon_detail_stale_ms: 15000,
+        active_symbols_stale_ms: 75000,
+        request_symbols_sync_cooldown_ms: 10000,
+        control_ack_timeout_ms: 5000
+    };
+
     /**
      * 고유한 command_id 생성 헬퍼
      */
@@ -133,6 +141,11 @@ const CollectorView = (() => {
             const data = await APIClient.fetchCollectorDaemonDetail();
             if (!data) return;
 
+            // 모니터링 임계값 동기화
+            if (data.monitoring_config) {
+                monitoringConfig = { ...monitoringConfig, ...data.monitoring_config };
+            }
+
             // 로컬 캐시 업데이트
             activeSymbols = data.active_symbols || {};
             activeSymbolsMetadata = data.active_symbols_metadata || {};
@@ -211,8 +224,8 @@ const CollectorView = (() => {
         const now = Date.now();
         const badge = document.getElementById('collector-stale-badge');
         
-        // 1. 데몬 디테일 하트비트 지연 검증 (15초 이상 무반응 시 STALE 판정)
-        const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > 15000);
+        // 1. 데몬 디테일 하트비트 지연 검증 (설정된 stale_ms 이상 무반응 시 STALE 판정)
+        const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
         
         if (isDaemonStale) {
             if (badge) {
@@ -240,13 +253,13 @@ const CollectorView = (() => {
             }
         }
 
-        // 2. 거래소별 종목 동기화 만료(75초 이상 지연) 및 버전 불일치 배너 노출 체크
+        // 2. 거래소별 종목 동기화 만료 및 버전 불일치 배너 노출 체크
         let anySyncIssue = false;
         let issueMsg = "";
         
         for (const [exch, meta] of Object.entries(activeSymbolsMetadata)) {
             const ageMs = meta.synced_at ? (now - meta.synced_at) : 999999;
-            const isSymStale = ageMs > 75000;
+            const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
             
             // 데몬 측 캐시 버전 대조
             const daemonVer = window.state.collectorStatuses?.[exch]?.symbols_version || 1;
@@ -315,6 +328,38 @@ const CollectorView = (() => {
         }
         if (mapperEl && detail.memory) {
             mapperEl.innerText = `${detail.memory.stock_mapper_cache_count.toLocaleString()} 개`;
+        }
+
+        // 3.5 글로벌 설정 데이터 렌더링
+        if (data.collector_config) {
+            const cfg = data.collector_config;
+            const warmupEl = document.getElementById('cfg-warmup');
+            const workersEl = document.getElementById('cfg-workers');
+            const dbPathEl = document.getElementById('cfg-db-path');
+            const backfillEl = document.getElementById('cfg-backfill');
+            const delaysEl = document.getElementById('cfg-delays');
+
+            if (warmupEl) {
+                warmupEl.innerText = cfg.warmup_enabled ? "활성화 (True)" : "비활성화 (False)";
+                warmupEl.style.color = cfg.warmup_enabled ? "#10B981" : "#EF4444";
+            }
+            if (workersEl) workersEl.innerText = `${cfg.worker_count || 0} 워커`;
+            if (dbPathEl) {
+                dbPathEl.innerText = cfg.db_path || '-';
+                dbPathEl.setAttribute('title', cfg.db_path || '-');
+            }
+            
+            if (backfillEl && cfg.backfill) {
+                const bfEnabled = cfg.backfill.enabled;
+                const bfHours = cfg.backfill.max_hours || 0;
+                backfillEl.innerText = `${bfEnabled ? '활성화' : '비활성화'} / 최근 ${bfHours}시간`;
+                backfillEl.style.color = bfEnabled ? "#10B981" : "#EF4444";
+            }
+            
+            if (delaysEl && cfg.backfill && cfg.backfill.delays) {
+                const d = cfg.backfill.delays;
+                delaysEl.innerText = `Upbit: ${d.upbit || 0}s | Bithumb: ${d.bithumb || 0}s | KIS: ${d.kis || 0}s`;
+            }
         }
 
         // 4. 거래소별 상세 모니터링 카드 렌더링
@@ -431,7 +476,7 @@ const CollectorView = (() => {
         const meta = activeSymbolsMetadata[exch] || {};
         const now = Date.now();
         const ageMs = meta.synced_at ? (now - meta.synced_at) : 999999;
-        const isSymStale = ageMs > 75000;
+        const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
         
         const daemonVer = exchInfo.symbols_version || 1;
         const cachedVer = meta.symbols_version || 0;
@@ -676,7 +721,7 @@ const CollectorView = (() => {
     }
 
     /**
-     * 제어 명령 펜딩 등록 및 5초 타임아웃 타이머 스케줄링
+     * 제어 명령 펜딩 등록 및 설정된 타임아웃 타이머 스케줄링
      */
     function registerPendingCommand(cmdId, type, exchange) {
         pendingCommands.set(cmdId, {
@@ -684,7 +729,7 @@ const CollectorView = (() => {
             exchange,
             timeoutId: setTimeout(() => {
                 handleTimeout(cmdId);
-            }, 5000) // 일반 시작/중지 커맨드는 5초 타임아웃
+            }, monitoringConfig.control_ack_timeout_ms) // 일반 시작/중지 커맨드는 설정값(ms) 타임아웃
         });
         refreshControlsState();
     }

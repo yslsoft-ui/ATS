@@ -4,7 +4,7 @@ import aiohttp
 import time
 from typing import List, Dict, Optional, Any
 from src.engine.utils.telemetry import get_logger
-from src.engine.collector_base import BaseCollector, CollectorRegistry
+from src.engine.collector_base import BaseCollector, CollectorRegistry, ConnectionMetadata
 from src.engine.credentials import CredentialProvider
 from src.engine.utils.stock_mapper import stock_mapper
 from src.engine.utils.market_hours import MarketHours
@@ -25,6 +25,16 @@ class KisCollector(BaseCollector):
     @property
     def exchange(self) -> str:
         return 'kis'
+
+    def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
+        kis_config = config.get('exchanges', {}).get('kis', {})
+        hours = kis_config.get('market_hours', {})
+        op_hours = f"{hours.get('start_time', '08:30')} ~ {hours.get('end_time', '18:00')}"
+        return {
+            "operating_hours": op_hours,
+            "websocket_url": self._get_websocket_url(config),
+            "api_url": kis_config.get('api_url', "https://openapi.koreainvestment.com:9443")
+        }
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         # DB에서 활성 종목 조회

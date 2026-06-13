@@ -1,7 +1,7 @@
 import asyncio
 import time
 import aiohttp
-from typing import List, Dict, Optional, Any, Callable
+from typing import List, Dict, Optional, Any, Callable, TypedDict
 from abc import ABC, abstractmethod
 
 from src.engine.utils.telemetry import get_logger
@@ -29,6 +29,13 @@ class CollectorRegistry:
     @classmethod
     def available(cls) -> List[str]:
         return list(cls._collectors.keys())
+
+
+class ConnectionMetadata(TypedDict):
+    operating_hours: str
+    websocket_url: str
+    api_url: str
+
 
 class BaseCollector(ABC):
     """
@@ -73,6 +80,11 @@ class BaseCollector(ABC):
     @abstractmethod
     def exchange(self) -> str:
         """거래소 식별 ID (예: 'upbit', 'bithumb', 'kis')"""
+        pass
+
+    @abstractmethod
+    def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
+        """수집기 접속 및 장 운영 명세를 반환합니다."""
         pass
         
     async def start(self, config: Dict[str, Any] = None):

@@ -428,23 +428,15 @@ class CollectorService(DaemonService):
                     err = getattr(collector.cred_provider, 'last_error', None)
                 
                 # 거래소별 설정 및 운영 시간 가공
-                exch_config = self.config_manager.get(f"exchanges.{exch_id}", {})
-                if exch_id == 'kis':
-                    hours = exch_config.get('market_hours', {})
-                    op_hours = f"{hours.get('start_time', '08:30')} ~ {hours.get('end_time', '18:00')}"
-                    ws_url = exch_config.get('websocket_url', "ws://ops.koreainvestment.com:21000")
-                    api_url = exch_config.get('api_url', "https://openapi.koreainvestment.com:9443")
-                else:
-                    op_hours = "24시간 (연중무휴)"
-                    if exch_id == 'upbit':
-                        ws_url = exch_config.get('websocket_url', "wss://api.upbit.com/websocket/v1")
-                        api_url = "https://api.upbit.com"
-                    elif exch_id == 'bithumb':
-                        ws_url = exch_config.get('websocket_url', "wss://pubwss.bithumb.com/pub/ws")
-                        api_url = "https://api.bithumb.com"
-                    else:
-                        ws_url = exch_config.get('websocket_url', "")
-                        api_url = exch_config.get('api_url', "")
+                try:
+                    metadata = collector.get_connection_metadata(self.full_config)
+                except Exception:
+                    logger.exception(f"[CollectorService] Failed to get connection metadata for {exch_id}")
+                    metadata = {
+                        "operating_hours": "오류 (조회 실패)",
+                        "websocket_url": "",
+                        "api_url": ""
+                    }
 
                 exchanges_data[exch_id] = {
                     "is_running": collector.is_running,
@@ -455,9 +447,9 @@ class CollectorService(DaemonService):
                     "last_tick": getattr(collector, 'last_tick', None),
                     "last_raw": getattr(collector, 'last_raw', None),
                     "last_error": err,
-                    "operating_hours": op_hours,
-                    "websocket_url": ws_url,
-                    "api_url": api_url
+                    "operating_hours": metadata.get("operating_hours", ""),
+                    "websocket_url": metadata.get("websocket_url", ""),
+                    "api_url": metadata.get("api_url", "")
                 }
 
             detail_payload = {

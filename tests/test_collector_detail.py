@@ -112,20 +112,40 @@ async def test_daemon_detail_api_endpoint(temp_db):
         }
     }
     
-    # 1. daemon_detail_stale 유도 (synced_at을 17초 전으로 주입해 15초 기준 stale하게 만듦)
+    # ConfigManager를 통해 설정된 실제 임계 시각을 획득
+    monitoring_config = system.config_manager.get_monitoring_config()
+    detail_stale_ms = monitoring_config["daemon_detail_stale_ms"]
+    active_stale_ms = monitoring_config["active_symbols_stale_ms"]
+    
+    # 1. daemon_detail_stale 유도 (synced_at을 stale_ms + 2초 전으로 주입)
     system.collector_daemon_detail = {
         "type": "collector_daemon_detail",
-        "synced_at": now_ms - 17000,
+        "synced_at": now_ms - (detail_stale_ms + 2000),
         "symbols_version": {"upbit": 3},
         "source_pid": 8888,
-        "daemon_started_at": now_ms - 50000
+        "daemon_started_at": now_ms - 50000,
+        "exchanges": {
+            "upbit": {
+                "is_running": True,
+                "status": "RUNNING",
+                "symbols_count": 10,
+                "processed_count": 100,
+                "dropped_count": 0,
+                "last_tick": None,
+                "last_raw": None,
+                "last_error": None,
+                "operating_hours": "24시간 (연중무휴)",
+                "websocket_url": "wss://api.upbit.com/websocket/v1",
+                "api_url": "https://api.upbit.com"
+            }
+        }
     }
     
-    # 2. active_symbols_stale 및 mismatch 유도 (synced_at을 80초 전으로 주입하고 캐시 버전을 1로 설정하여 데몬 버전 3과 다르게 유도)
+    # 2. active_symbols_stale 및 mismatch 유도 (synced_at을 stale_ms + 5초 전으로 주입하고 캐시 버전을 1로 설정)
     system.collector_active_symbols = {
         "upbit": {
             "symbols": ["KRW-BTC"],
-            "synced_at": now_ms - 80000,
+            "synced_at": now_ms - (active_stale_ms + 5000),
             "symbols_version": 1,
             "source_pid": 8888,
             "daemon_started_at": now_ms - 50000
@@ -149,6 +169,33 @@ async def test_daemon_detail_api_endpoint(temp_db):
         # 4. defaultdict 제거 및 dict 형변환 안전성 검증
         assert isinstance(res_data["daemon_detail"]["symbols_version"], dict)
         assert res_data["daemon_detail"]["symbols_version"]["upbit"] == 3
+        
+        # 5. ConfigManager 기반 공통 API 응답 검증
+        assert "monitoring_config" in res_data
+        assert res_data["monitoring_config"]["daemon_detail_stale_ms"] == detail_stale_ms
+        assert res_data["monitoring_config"]["active_symbols_stale_ms"] == active_stale_ms
+        assert res_data["monitoring_config"]["request_symbols_sync_cooldown_ms"] == monitoring_config["request_symbols_sync_cooldown_ms"]
+        assert res_data["monitoring_config"]["control_ack_timeout_ms"] == monitoring_config["control_ack_timeout_ms"]
+        
+        # 6. exchanges 메타데이터 스키마 정합성 검증
+        exchanges_info = res_data["daemon_detail"]["exchanges"]
+        assert "upbit" in exchanges_info
+        upbit_meta = exchanges_info["upbit"]
+        assert isinstance(upbit_meta["operating_hours"], str)
+        assert isinstance(upbit_meta["websocket_url"], str)
+        assert isinstance(upbit_meta["api_url"], str)
+        assert upbit_meta["operating_hours"] == "24시간 (연중무휴)"
+        assert upbit_meta["websocket_url"] == "wss://api.upbit.com/websocket/v1"
+        assert upbit_meta["api_url"] == "https://api.upbit.com"
+
+        # 7. collector_config 전체 설정 데이터 검증
+        assert "collector_config" in res_data
+        coll_cfg = res_data["collector_config"]
+        assert "warmup_enabled" in coll_cfg
+        assert "worker_count" in coll_cfg
+        assert "db_path" in coll_cfg
+        assert "backfill" in coll_cfg
+        assert coll_cfg["backfill"]["enabled"] is True
         
     finally:
         system.db_path = old_db_path

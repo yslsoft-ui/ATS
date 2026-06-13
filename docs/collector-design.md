@@ -47,37 +47,26 @@
 
 ## 2. 수집기 아키텍처 (Collector Architecture)
 
-현재 수집기는 **두 가지 구현체**가 존재합니다.
+수집기 모듈은 공통 뼈대인 `BaseCollector`와 거래소별 고유 처리를 담당하는 구체 클래스(어댑터)들로 구성되며, `CollectorRegistry` 팩토리를 통해 동적으로 생성 및 기동됩니다.
 
-### 2.1. 통합 서버 내장 수집기 — `src/server/main.py: CollectorManager` (메인)
+### 2.1. 클래스 구조 및 공통 Seam
+- **`BaseCollector` (추상 클래스)**:
+  - 템플릿 메서드 패턴을 기반으로 공통적인 WebSocket 재연결 루프, 데이터 버퍼 큐 전달, 백그라운드 캔들 백필([backfill_candles]) 처리를 담당합니다.
+  - `@abstractmethod`를 통해 하위 클래스가 가져야 할 접속 명세를 위한 공통 Seam인 `get_connection_metadata(config)`를 강제합니다.
+- **`ConnectionMetadata(TypedDict)`**:
+  - 수집기 접속 및 장 운영 명세를 엄격히 제한하는 스키마 타입입니다.
+  - `operating_hours` (장 운영 시간), `websocket_url` (실시간 소켓 연결 주소), `api_url` (REST API 조회 주소) 필드를 포함합니다.
 
-서버 프로세스 내에서 `asyncio.Task`로 동작하며, 웹 UI를 통해 원격 제어합니다.
-
-- **WebSocket 라이브러리**: `aiohttp`
-- **수집 대상**: KRW-BTC, KRW-ETH, KRW-XRP, KRW-SOL, KRW-DOGE (5개 종목)
-- **데이터 유형**: `trade` (체결) 데이터만 구독
-- **처리 흐름**:
-  1. WebSocket 수신 → 즉시 `ConnectionManager.broadcast()`로 브라우저에 PUSH.
-  2. 동시에 DB INSERT 실행 → **50건마다 배치 커밋**.
-- **제어 API**:
-  - `POST /collector/start`: 수집 시작
-  - `POST /collector/stop`: 수집 중단 (task cancel)
-  - `GET /collector/status`: 실행 상태 조회
-- **재연결**: 에러 발생 시 5초 후 재연결 (고정 간격).
-
-### 2.2. 독립 수집기 — `src/collector/upbit_ws.py: UpbitCollector` (대체)
-
-별도 프로세스로 실행 가능한 Queue 기반 수집기입니다.
-
-- **WebSocket 라이브러리**: `websockets`
-- **데이터 유형**: `trade` + `orderbook` 모두 구독
-- **처리 흐름**: 듀얼 트랙(Dual-Track) 파이프라인 구조
-  1. **Dispatcher**: WebSocket 수신 데이터를 `asyncio.Queue`에 삽입.
-  2. **DB Writer** (`src/database/db_writer.py`): Queue에서 데이터를 꺼내 배치 처리.
-     - **Batch Size**: 100건
-     - **Flush Interval**: 1초 (타임아웃 시 잔여 버퍼 플러시)
-     - trade와 orderbook 버퍼를 분리 관리.
-     - `executemany()`로 벌크 INSERT.
+### 2.2. 거래소별 구현체 (Adapters)
+- **`UpbitCollector`**:
+  - 업비트 원화(KRW) 마켓 실시간 체결 데이터를 수집합니다.
+  - `get_connection_metadata`를 통해 "24시간 (연중무휴)" 운영 정보 및 업비트 전용 WebSocket/API URL을 제공합니다. (config 오버라이드 지원)
+- **`BithumbCollector`**:
+  - 빗썸 원화(KRW) 마켓 실시간 체결 데이터를 수집합니다.
+  - `get_connection_metadata`를 통해 "24시간 (연중무휴)" 운영 정보 및 빗썸 전용 WebSocket/API URL을 제공합니다. (config 오버라이드 지원)
+- **`KisCollector`**:
+  - 한국투자증권 OpenAPI 국내 주식 실시간 체결가 및 장운영정보를 수집합니다.
+  - `get_connection_metadata`를 통해 설정에 정의된 `market_hours` 기반 운영 시간과 한투 전용 접속 사양을 동적으로 계산하여 제공합니다.
 
 ### 2.3. 데이터 관리 API — `src/server/main.py`
 

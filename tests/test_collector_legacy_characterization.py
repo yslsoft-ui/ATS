@@ -1,7 +1,7 @@
 import asyncio
 import pytest
 from typing import Dict, List, Optional, Any
-from src.engine.collector_base import BaseCollector
+from src.engine.collector_base import BaseCollector, ConnectionMetadata
 from src.engine.market_data_processor import MarketDataProcessor
 from src.engine.candles import Candle
 
@@ -9,6 +9,13 @@ class MockCollector(BaseCollector):
     @property
     def exchange(self) -> str:
         return "mock_exchange"
+
+    def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
+        return {
+            "operating_hours": "24시간 (연중무휴)",
+            "websocket_url": "ws://mock",
+            "api_url": "http://mock"
+        }
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         return ["BTC"]

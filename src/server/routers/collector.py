@@ -138,17 +138,22 @@ async def get_daemon_detail(request: Request):
     symbols_version_mismatch = {}
     symbols_stale = {}
     
+    # 공통 헬퍼를 통해 모니터링 관련 임계값 조회
+    monitoring_config = system.config_manager.get_monitoring_config()
+    detail_stale_ms = monitoring_config["daemon_detail_stale_ms"]
+    active_stale_ms = monitoring_config["active_symbols_stale_ms"]
+
     # 활성 상태 수집기들 기준 루프 처리 (하드코딩 방지)
     exchanges = list(system.collector_statuses.keys())
     for exch in exchanges:
-        # 1) daemon_detail_stale 검증 (하트비트 5초 주기, 15초 이상 수신 지연 시)
+        # 1) daemon_detail_stale 검증 (하트비트 5초 주기, 설정된 stale_ms 이상 수신 지연 시)
         detail_synced_at = system.collector_daemon_detail.get("synced_at", 0)
-        daemon_detail_stale[exch] = (now_ms - detail_synced_at > 15000) if detail_synced_at > 0 else True
+        daemon_detail_stale[exch] = (now_ms - detail_synced_at > detail_stale_ms) if detail_synced_at > 0 else True
         
-        # 2) active_symbols_stale 검증 (30초 정기/동적 동기화 주기, 75초 이상 수신 지연 시)
+        # 2) active_symbols_stale 검증 (30초 정기/동적 동기화 주기, 설정된 stale_ms 이상 수신 지연 시)
         sym_info = system.collector_active_symbols.get(exch, {})
         symbols_synced_at = sym_info.get("synced_at", 0)
-        active_symbols_stale[exch] = (now_ms - symbols_synced_at > 75000) if symbols_synced_at > 0 else True
+        active_symbols_stale[exch] = (now_ms - symbols_synced_at > active_stale_ms) if symbols_synced_at > 0 else True
         
         # 3) symbols_version_mismatch 검증 (데몬 측과 웹서버 캐시 버전이 어긋날 시)
         daemon_ver = system.collector_daemon_detail.get("symbols_version", {}).get(exch)
@@ -163,6 +168,8 @@ async def get_daemon_detail(request: Request):
     if "symbols_version" in clean_daemon_detail:
         clean_daemon_detail["symbols_version"] = dict(clean_daemon_detail["symbols_version"])
         
+    collector_config = system.config_manager.get("collector", {})
+    
     return {
         "daemon_detail": clean_daemon_detail,
         "active_symbols": {ex: info.get("symbols", []) for ex, info in system.collector_active_symbols.items()},
@@ -178,5 +185,7 @@ async def get_daemon_detail(request: Request):
             "active_symbols_stale": active_symbols_stale,
             "symbols_version_mismatch": symbols_version_mismatch,
             "symbols_stale": symbols_stale
-        }
+        },
+        "monitoring_config": monitoring_config,
+        "collector_config": collector_config
     }

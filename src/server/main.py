@@ -101,7 +101,8 @@ async def zmq_listener_loop():
                             now_ms = int(time.time() * 1000)
                             # 동적으로 거래소 쿨다운 관리
                             last_req_time = getattr(app.state, 'last_request_symbols_sync_time', {}).get(exch, 0)
-                            if now_ms - last_req_time > 10000:
+                            cooldown_ms = system.config_manager.get_monitoring_config()["request_symbols_sync_cooldown_ms"]
+                            if now_ms - last_req_time > cooldown_ms:
                                 if not hasattr(app.state, 'last_request_symbols_sync_time'):
                                     app.state.last_request_symbols_sync_time = {}
                                 app.state.last_request_symbols_sync_time[exch] = now_ms

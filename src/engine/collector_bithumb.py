@@ -5,7 +5,7 @@ import time
 from src.engine.utils.telemetry import get_logger
 from src.engine.utils.stock_mapper import stock_mapper
 from typing import List, Dict, Optional, Any
-from src.engine.collector_base import BaseCollector, CollectorRegistry
+from src.engine.collector_base import BaseCollector, CollectorRegistry, ConnectionMetadata
 from src.engine.candles import Candle
 
 logger = get_logger(__name__)
@@ -18,6 +18,14 @@ class BithumbCollector(BaseCollector):
     @property
     def exchange(self) -> str:
         return 'bithumb'
+
+    def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
+        exch_config = config.get('exchanges', {}).get('bithumb', {})
+        return {
+            "operating_hours": "24시간 (연중무휴)",
+            "websocket_url": self._get_websocket_url(config),
+            "api_url": exch_config.get('api_url', "https://api.bithumb.com")
+        }
 
     async def _fetch_symbols(self, config: Dict[str, Any]) -> List[str]:
         try:

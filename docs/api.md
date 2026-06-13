@@ -40,6 +40,79 @@
   - **설명**: 수집기 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다.
   - **응답 (JSON)**: `{"message": "Collector daemon restart signal published successfully"}`
 
+- **`GET /collector/daemon-detail`**
+  - **설명**: 수집기 데몬의 실시간 가공 처리 큐 상태, 거래소별 메타데이터, 메모리, 매퍼 캐시 수 및 정합성 유효성을 진단하여 반환합니다.
+  - **응답 (JSON)**:
+    ```json
+    {
+      "daemon_detail": {
+        "type": "collector_daemon_detail",
+        "queues": {
+          "processing": {"qsize": 0, "max_size": 5000, "usage_pct": 0.0, "level": "NORMAL"},
+          "database": {"qsize": 0, "max_size": 1000, "usage_pct": 0.0, "level": "NORMAL"},
+          "candle": {"qsize": 0, "max_size": 1000, "usage_pct": 0.0, "level": "NORMAL"},
+          "total_processed": 1205,
+          "total_dropped": 0
+        },
+        "exchanges": {
+          "upbit": {
+            "is_running": true,
+            "status": "RUNNING",
+            "symbols_count": 5,
+            "processed_count": 1205,
+            "dropped_count": 0,
+            "last_tick": null,
+            "last_raw": null,
+            "last_error": null,
+            "operating_hours": "24시간 (연중무휴)",
+            "websocket_url": "wss://api.upbit.com/websocket/v1",
+            "api_url": "https://api.upbit.com"
+          }
+        },
+        "memory": {
+          "rss_mb": 45.2,
+          "stock_mapper_cache_count": 89
+        },
+        "symbols_version": {"upbit": 1},
+        "daemon_started_at": 1718020000000,
+        "source_pid": 1234
+      },
+      "active_symbols": {
+        "upbit": ["BTC", "ETH"]
+      },
+      "active_symbols_metadata": {
+        "upbit": {
+          "synced_at": 1718020050000,
+          "symbols_version": 1,
+          "source_pid": 1234,
+          "daemon_started_at": 1718020000000,
+          "age_ms": 1000
+        }
+      },
+      "stale_status": {
+        "daemon_detail_stale": {"upbit": false},
+        "active_symbols_stale": {"upbit": false},
+        "symbols_version_mismatch": {"upbit": false},
+        "symbols_stale": {"upbit": false}
+      },
+      "monitoring_config": {
+        "daemon_detail_stale_ms": 15000,
+        "active_symbols_stale_ms": 75000,
+        "request_symbols_sync_cooldown_ms": 10000,
+        "control_ack_timeout_ms": 5000
+      },
+      "collector_config": {
+        "warmup_enabled": true,
+        "worker_count": 2,
+        "db_path": "data/backtest.db",
+        "backfill": {
+          "enabled": true,
+          "max_hours": 24,
+          "delays": {"upbit": 0.2, "bithumb": 0.2, "kis": 0.2}
+        }
+      }
+    }
+    ```
 
 ---
 

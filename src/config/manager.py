@@ -170,6 +170,15 @@ class ConfigManager:
                 return default
         return val if val is not None else default
 
+    def get_monitoring_config(self) -> dict:
+        """수집기 상세 모니터링 및 제어 관련 임계값을 반환하는 백엔드 공통 헬퍼입니다."""
+        return {
+            "daemon_detail_stale_ms": self.get("collector.daemon_detail_stale_ms", 15000),
+            "active_symbols_stale_ms": self.get("collector.active_symbols_stale_ms", 75000),
+            "request_symbols_sync_cooldown_ms": self.get("collector.request_symbols_sync_cooldown_ms", 10000),
+            "control_ack_timeout_ms": self.get("collector.control_ack_timeout_ms", 5000)
+        }
+
     def subscribe(self, callback: Callable[[Dict[str, Any]], Any]):
         """설정 변경 시 호출될 콜백을 등록합니다."""
         self.subscribers.append(callback)
