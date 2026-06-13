@@ -99,13 +99,28 @@ sequenceDiagram
 
 프로세스 간 조율을 위해 정의된 ZeroMQ IPC 메시지 전문 형식입니다.
 
-### 4.1. `collector_control` 토픽 (수집기 제어)
+### 4.1. `collector_control` 토픽 (수집기 및 데몬 제어)
+- **종목 구독 업데이트**:
 ```json
 {
   "type": "update_symbols",
   "exchange": "kis",
   "code": "005930",
   "is_collected": true
+}
+```
+- **거래소 종목 목록 강제 재동기화 요청 (`request_symbols_sync`)**:
+```json
+{
+  "type": "request_symbols_sync",
+  "exchange": "upbit"
+}
+```
+- **데몬 프로세스 자가 재기동 요청 (`restart_daemon`)**:
+```json
+{
+  "type": "restart_daemon",
+  "command_id": "cmd-xyz-1234"
 }
 ```
 
@@ -116,13 +131,79 @@ sequenceDiagram
 }
 ```
 
-### 4.3. `signal_data` 토픽 (수집 데몬 상태 송출)
+### 4.3. `collector_signal` 토픽 (수집 데몬 상태 및 메트릭 송출)
+- **기본 상태 알림 (`collector_status`)**:
 ```json
 {
   "type": "collector_status",
   "exchange": "upbit",
   "is_running": true,
+  "status": "RUNNING",
+  "status_reason": null,
   "error": null
+}
+```
+- **큐 상태 전송 (`queue_status`)**:
+```json
+{
+  "type": "queue_status",
+  "processing": 12,
+  "database": 4,
+  "candle": 0,
+  "total": 150032
+}
+```
+- **[NEW] 데몬 상태 상세 취합 정보 (`collector_daemon_detail` - 2초 주기)**:
+```json
+{
+  "type": "collector_daemon_detail",
+  "queues": {
+    "processing": { "qsize": 15, "max_size": 5000, "usage_pct": 0.3, "level": "NORMAL" },
+    "database": { "qsize": 5, "max_size": 1000, "usage_pct": 0.5, "level": "NORMAL" },
+    "candle": { "qsize": 0, "max_size": 1000, "usage_pct": 0.0, "level": "NORMAL" },
+    "total_processed": 152003,
+    "total_dropped": 0
+  },
+  "exchanges": {
+    "upbit": {
+      "is_running": true,
+      "status": "RUNNING",
+      "symbols_count": 12,
+      "processed_count": 89400,
+      "dropped_count": 0,
+      "last_tick": { "code": "BTC", "trade_price": 72100000, "trade_timestamp": 1718251234567 },
+      "last_error": null
+    }
+  },
+  "memory": {
+    "rss_mb": 84.52,
+    "stock_mapper_cache_count": 284
+  },
+  "symbols_version": { "upbit": 1, "bithumb": 1, "kis": 3 },
+  "daemon_started_at": 1718250000000,
+  "source_pid": 12453
+}
+```
+- **[NEW] 종목 목록 전체 동기화 신호 (`collector_symbols_sync`)**:
+```json
+{
+  "type": "collector_symbols_sync",
+  "exchange": "upbit",
+  "symbols": ["BTC", "ETH", "XRP"],
+  "symbols_version": 1,
+  "source_pid": 12453,
+  "daemon_started_at": 1718250000000
+}
+```
+- **[NEW] 제어 명령 비동기 처리 응답 (`collector_command_result`)**:
+```json
+{
+  "type": "collector_command_result",
+  "command_id": "cmd-xyz-1234",
+  "exchange": "upbit",
+  "status": "SUCCESS",
+  "error": null,
+  "timestamp": 1718251240000
 }
 ```
 

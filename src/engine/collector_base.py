@@ -62,6 +62,8 @@ class BaseCollector(ABC):
         self.available_symbols: List[str] = []
         self.total_processed_count = 0
         self.total_dropped_count = 0  # [NEW] 큐 오버로드로 드롭된 틱 카운트
+        self.last_tick: Optional[dict] = None  # [NEW] 마지막 수신 틱 캐싱
+        self.last_raw: Optional[str] = None  # [NEW] 마지막 수신 원본 raw 데이터 캐싱
         self.last_error: Optional[str] = None
         self.ws: Optional[aiohttp.ClientWebSocketResponse] = None
         self.status = "STOPPED"
@@ -390,12 +392,27 @@ class BaseCollector(ABC):
                     async for msg in ws:
                         if not self.is_running: break
                         
+                        # [NEW] 마지막 수신 원본 raw 데이터 캐싱
+                        if msg.type == aiohttp.WSMsgType.TEXT:
+                            self.last_raw = msg.data
+                        elif msg.type == aiohttp.WSMsgType.BINARY:
+                            try:
+                                self.last_raw = msg.data.decode('utf-8', errors='ignore')
+                            except Exception:
+                                self.last_raw = str(msg.data)
+                        
                         tick_data = self._parse_message(msg)
                         if tick_data:
+                            # [NEW] 마지막 수신 틱 캐싱 및 처리 건수 카운팅
+                            last_item = tick_data[-1] if isinstance(tick_data, list) else tick_data
+                            self.last_tick = last_item
+                            
                             if isinstance(tick_data, list):
+                                self.total_processed_count += len(tick_data)
                                 for tick in tick_data:
                                     self.processing_queue.put_nowait(tick)
                             else:
+                                self.total_processed_count += 1
                                 self.processing_queue.put_nowait(tick_data)
 
                 self.ws = None

@@ -80,7 +80,9 @@ class UserCommandDispatcher:
         if command not in self.handlers:
             raise ValueError(f"Unknown command: {command}")
 
-        command_id = str(uuid.uuid4())
+        command_id = payload.get("command_id", str(uuid.uuid4()))
+        # [NEW] payload에 command_id 주입하여 하위 ZMQ 전달 보장
+        payload["command_id"] = command_id
         
         # 1. REQUEST 감사 로그 기록
         await self._log_event(command, "REQUEST", command_id, payload)
@@ -167,6 +169,14 @@ class UserCommandDispatcher:
             if exch_config is None:
                 raise ValueError(f"Configuration for exchange '{exchange}' not found")
             self.config_manager.update(f"{config_key}.enabled", True)
+            
+        # [NEW] ZMQ 제어 채널로 명령 송출하여 데몬에서 기동 확인 및 ACK 방출 유도
+        if self.control_publisher:
+            await self.control_publisher.publish("collector_control", {
+                "type": "collector_start",
+                "exchange": exchange,
+                "command_id": command_id
+            })
 
     async def _handle_collector_stop(self, command_id: str, payload: Dict[str, Any]):
         exchange = payload.get("exchange")
@@ -183,11 +193,23 @@ class UserCommandDispatcher:
             if exch_config is None:
                 raise ValueError(f"Configuration for exchange '{exchange}' not found")
             self.config_manager.update(f"{config_key}.enabled", False)
+            
+        # [NEW] ZMQ 제어 채널로 명령 송출하여 데몬에서 정지 확인 및 ACK 방출 유도
+        if self.control_publisher:
+            await self.control_publisher.publish("collector_control", {
+                "type": "collector_stop",
+                "exchange": exchange,
+                "command_id": command_id
+            })
 
     async def _handle_collector_restart_daemon(self, command_id: str, payload: Dict[str, Any]):
         if not self.control_publisher:
             raise RuntimeError("ZMQ Control Publisher is not initialized")
-        await self.control_publisher.publish("collector_control", {"type": "restart_daemon"})
+        # [NEW] command_id를 포함하여 restart_daemon 발행
+        await self.control_publisher.publish("collector_control", {
+            "type": "restart_daemon",
+            "command_id": command_id
+        })
 
     def _get_official_config_key(self, strategy_id: str) -> str:
         strategies_config = self.config_manager.get('strategies', {}) or {}

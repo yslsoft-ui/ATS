@@ -129,6 +129,36 @@ function processTick(tick) {
                 updateSystemEvents();
             }
         }
+        // [NEW] 수집기 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
+        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'collector-view') {
+            if (typeof CollectorView !== 'undefined' && typeof CollectorView.loadEvents === 'function') {
+                CollectorView.loadEvents();
+            }
+        }
+        return;
+    }
+
+    // [NEW] 실시간 수집기 데몬 상세 정보 수신 시 라우팅
+    if (tick.type === 'collector_daemon_detail') {
+        if (typeof CollectorView !== 'undefined' && typeof CollectorView.handleDaemonDetail === 'function') {
+            CollectorView.handleDaemonDetail(tick);
+        }
+        return;
+    }
+
+    // [NEW] 실시간 수집기 종목 동기화 수신 시 라우팅
+    if (tick.type === 'collector_symbols_sync') {
+        if (typeof CollectorView !== 'undefined' && typeof CollectorView.handleSymbolsSync === 'function') {
+            CollectorView.handleSymbolsSync(tick);
+        }
+        return;
+    }
+
+    // [NEW] 실시간 제어 명령 완료 ACK 수신 시 라우팅
+    if (tick.type === 'collector_command_result') {
+        if (typeof CollectorView !== 'undefined' && typeof CollectorView.handleCommandResult === 'function') {
+            CollectorView.handleCommandResult(tick);
+        }
         return;
     }
 

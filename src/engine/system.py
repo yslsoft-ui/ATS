@@ -91,6 +91,10 @@ class TradingSystem:
             "candle": 0,
             "total": 0
         }
+        # [NEW] 동적 active_symbols 목록 보관용 캐시
+        self.collector_active_symbols: Dict[str, Dict[str, Any]] = {}
+        # [NEW] 수집기 데몬 상세 실시간 상태 보관용 캐시
+        self.collector_daemon_detail: Dict[str, Any] = {}
 
 
     async def boot(self):

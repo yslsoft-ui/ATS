@@ -47,6 +47,7 @@
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
 - **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
+- **[collector.js](file:///home/simon/ATS/frontend/collector.js)**: [NEW] 수집 데몬 프로세스의 실시간 리소스(메모리, 큐 사용률)와 거래소별 틱 수신 정보를 시각화하고, 기동/중지/데몬 자가재기동 등 라이프사이클 제어와 비동기 command_id 펜딩/ACK 처리를 주관합니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.
 
@@ -143,3 +144,29 @@
 `strategy.js` 최하단에서 `DOMContentLoaded` 이벤트 이후 `ViewRouter.registerRoute('strategy-view', ...)` 를 호출하여 전략 탭 진입 시 `initDecisionConsole()` → `loadStrategies()` 순으로 초기화합니다.
 
 > **중요**: `registerRoute` 호출은 반드시 `DOMContentLoaded` 이후에 실행해야 합니다 (`router.js` 로딩 Race Condition 방지).
+
+---
+
+## 7. 수집기 데몬 모니터링 및 제어 뷰 (Collector Daemon Monitor View)
+
+### 7.1. 개요
+`collector-view` 섹션은 데이터 수집 데몬 프로세스의 내부 상세 건강 상태(Health Status)를 직관적으로 파악하고, 개별/전체 거래소 수집 제어와 데몬의 자가재기동을 수행할 수 있는 실시간 진단 대시보드입니다.
+
+### 7.2. 주요 기능 및 제어 메커니즘
+1. **실시간 큐(Queue) 텔레메트리 렌더링**:
+   - 수집 대기열(RCV), DB 쓰기 대기열(DB), 캔들 대기열(Candle)의 실시간 적재량과 동적 `max_size`를 비교하여 사용률(`usage_pct`)을 계산합니다.
+   - 사용률에 맞춰 경고 등급(`NORMAL` ≤ 50%, `WARNING` 50%~85%, `CRITICAL` ≥ 85%)을 부여하고, UI 진단 카드 테두리에 깜빡임(Pulse) 애니메이션과 경고 색상을 동적으로 바인딩합니다.
+2. **거래소 카드 동적 시각화**:
+   - 수집 데몬으로부터 수신한 거래소 상태 목록을 기반으로 개별 카드를 동적으로 렌더링합니다.
+   - 거래소별 수집 상태(RUNNING/STOPPED), 수집 종목 수, 누적 처리/드롭 카운트, 실시간 수신된 마지막 틱 정보(종목명, 시간, 가격), 최종 발생 에러 메시지를 일목요연하게 노출합니다.
+3. **비동기 제어 펜딩 & command_id 기반 ACK 처리**:
+   - 수집기 시작/중지 및 데몬 재기동 클릭 시 고유 UUID인 `command_id`를 발행하고, 로컬 펜딩 맵에 등록함과 동시에 API 호출을 전송합니다.
+   - 펜딩 기간 동안 UI 버튼에 `loading` 클래스를 활성화하고 클릭을 방지하여 더블 탭 오작동을 원천 예방합니다.
+   - 웹소켓으로 유입되는 ZMQ `collector_command_result`와 매칭 시 펜딩이 즉각 완결 및 토스트 성공/실패가 고지되며, 5초 타임아웃 지연 시 자동으로 롤백됩니다.
+4. **데몬 재기동 교차 검증**:
+   - `restart-daemon` 제어 시, 단순 제어 성공(ACK)이 아닌 데몬의 물리적 재생성을 확인하기 위해 이전 PID와 이전 기동 시각(`daemon_started_at`)을 저장합니다.
+   - 자가 재기동 후 새로 수신된 상세 정보에서 `source_pid`가 달라졌거나 `daemon_started_at`이 더 증가하였음을 교차 검증(OR 만족)하는 순간 로딩 오버레이를 해제하고 완결 처리합니다.
+5. **정합성 경고등 및 동기화 대기**:
+   - 3초 주기 감시 타이머를 통해 `daemon_detail` 하트비트 stale(6초 초과) 및 `active_symbols` stale(75초 초과), 또는 로컬-데몬 종목 버전 불일치를 상시 진단합니다.
+   - 버전 불일치나 만료가 감지되는 순간, 대시보드 상단에 경고 배너 및 거래소 내에 **"종목 동기화 대기 중..."** 로더 인디케이터가 활성화되며, ZMQ 재동기화 프로토콜에 의해 정합성이 맞춰질 때까지 쿨다운 상태로 대기합니다.
+

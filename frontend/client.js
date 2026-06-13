@@ -150,14 +150,23 @@ const APIClient = (() => {
         /**
          * 특정 거래소의 수집기 제어 (start / stop)
          */
-        controlCollector: (exchange, action) => 
-            _fetchAPI(`/collector/${action}/${exchange}`, { method: 'POST' }),
+        controlCollector: (exchange, action, commandId = '') => {
+            const url = `/collector/${action}/${exchange}${commandId ? `?command_id=${commandId}` : ''}`;
+            return _fetchAPI(url, { method: 'POST' });
+        },
 
         /**
          * 수집 데몬 프로세스 자체를 자가 재기동
          */
-        restartCollectorDaemon: () => 
-            _fetchAPI('/collector/restart-daemon', { method: 'POST' }),
+        restartCollectorDaemon: (commandId = '') => {
+            const url = `/collector/restart-daemon${commandId ? `?command_id=${commandId}` : ''}`;
+            return _fetchAPI(url, { method: 'POST' });
+        },
+
+        /**
+         * [NEW] 수집 데몬의 상세 모니터링 및 정합성 캐시 조회
+         */
+        fetchCollectorDaemonDetail: () => _fetchAPI('/collector/daemon-detail'),
 
         /**
          * 전략 데몬 프로세스 자체를 자가 재기동

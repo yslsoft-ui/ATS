@@ -72,6 +72,12 @@ class CollectorService(DaemonService):
         self._status_counter = 0
         self._tasks: List[asyncio.Task] = []
 
+        # [NEW] 수집기 종목 버전 및 메타데이터 동적 관리를 위한 변수 초기화
+        self.symbols_version: Dict[str, int] = {}
+        import os
+        self.source_pid = os.getpid()
+        self.daemon_started_at = int(time.time() * 1000)
+
     async def start(self):
         # 1. DB Writer 기동
         self.db_writer = DatabaseWriter(db_path=self.db_path)
@@ -157,11 +163,22 @@ class CollectorService(DaemonService):
                 logger.info(f"[CollectorService] 수집기 시작됨: {exchange_id}")
                 await self.record_exchange_event('COLLECTOR_START', exchange_id, f"{exchange_id.upper()} 수집기 초기 가동 시작")
 
+        # [NEW] symbols_version 명시적 초기화 (활성 수집기 목록 기반)
+        for exch_id in self.collectors.keys():
+            self.symbols_version[exch_id] = 1
+
+        # [NEW] 기동 직후 최초 1회 즉각 동기화 신호 전송
+        for exch_id in self.collectors.keys():
+            await self.publish_symbols_sync(exch_id)
+
+        # [NEW] 30초 주기 저빈도 동기화 루프 기동
+        self._tasks.append(asyncio.create_task(self._periodic_symbols_sync_loop()))
+
         # [V2] 시장 상태 요약 수집 루프 백그라운드 태스크 기동
         self._tasks.append(asyncio.create_task(self._periodic_market_regime_summarizer_loop()))
 
     async def stop(self):
-        # 0. 백그라운드 태스크 정리
+        # 0. 백그라운드 태스크 정리 (periodic_symbols_sync_loop 포함 안전하게 cancel & gather)
         for task in self._tasks:
             if not task.done():
                 task.cancel()
@@ -246,8 +263,31 @@ class CollectorService(DaemonService):
                 )
 
     async def handle_control_message(self, topic: str, data: dict) -> bool:
+        # [NEW] 공통 무효 거래소 검증 및 예외 없는 무시/SYSTEM_WARNING 감사 로그 적재
+        exchange = data.get('exchange')
+        if exchange is not None:
+            if exchange != "all" and exchange not in self.collectors:
+                logger.warning(f"[CollectorService] Received invalid exchange in control message: {exchange}")
+                await self.record_exchange_event(
+                    event_type="SYSTEM_WARNING",
+                    exch_id="system",
+                    message=f"Received control command with invalid exchange: {exchange}"
+                )
+                # command_id가 있다면 FAILED ACK 전송
+                command_id = data.get('command_id')
+                if command_id:
+                    result_payload = {
+                        "type": "collector_command_result",
+                        "command_id": command_id,
+                        "exchange": exchange,
+                        "status": "FAILED",
+                        "error": f"Invalid exchange: {exchange}",
+                        "timestamp": int(time.time() * 1000)
+                    }
+                    await self.event_bus.publish("collector_signal", result_payload)
+                return False
+
         if data.get('type') == 'update_symbols':
-            exchange = data.get('exchange')
             code = data.get('code')
             is_collected = data.get('is_collected')
             
@@ -263,25 +303,182 @@ class CollectorService(DaemonService):
                         processor = self.processors.get(col_id)
                         if processor:
                             await processor.reload_symbols(self.full_config, col_obj.available_symbols)
+                        # 버전 증가 및 1회성 동기화 전송
+                        self.symbols_version[col_id] = self.symbols_version.get(col_id, 1) + 1
+                        await self.publish_symbols_sync(col_id)
             else:
                 collector = self.collectors.get(exchange)
                 if collector and hasattr(collector, 'update_subscription'):
                     await collector.update_subscription(code, is_collected)
+                    # 버전 증가 및 1회성 동기화 전송
+                    self.symbols_version[exchange] = self.symbols_version.setdefault(exchange, 1) + 1
+                    await self.publish_symbols_sync(exchange)
             return True
+
+        # [NEW] 저빈도 동기화 보강용 강제 재동기화 신호 처리
+        elif data.get('type') == 'request_symbols_sync':
+            if exchange == "all":
+                for col_id in self.collectors.keys():
+                    await self.publish_symbols_sync(col_id)
+            else:
+                await self.publish_symbols_sync(exchange)
+            return True
+
+        # [NEW] command_id 기반 비동기 시작/정지 제어 명령 완결 처리
+        elif data.get('type') in ['collector_start', 'collector_stop']:
+            cmd_type = data.get('type')
+            command_id = data.get('command_id')
+            target_running = (cmd_type == 'collector_start')
+            
+            exchanges_to_check = self.collectors.keys() if exchange == "all" else [exchange]
+            
+            success = True
+            error_msg = None
+            
+            # 설정 감지 및 상태 기동/정지 대기 (최대 1.5초 대기)
+            for _ in range(15):
+                await asyncio.sleep(0.1)
+                all_matched = True
+                for exch in exchanges_to_check:
+                    col = self.collectors.get(exch)
+                    if col and col.is_running != target_running:
+                        all_matched = False
+                        break
+                if all_matched:
+                    break
+            else:
+                success = False
+                error_msg = "Timeout waiting for collector state change"
+                
+            # 결과 퍼블리싱
+            if command_id:
+                result_payload = {
+                    "type": "collector_command_result",
+                    "command_id": command_id,
+                    "exchange": exchange,
+                    "status": "SUCCESS" if success else "FAILED",
+                    "error": error_msg,
+                    "timestamp": int(time.time() * 1000)
+                }
+                await self.event_bus.publish("collector_signal", result_payload)
+            return True
+
+        # [NEW] restart_daemon 즉각 ACK 응답 전송 및 Supervisor로 위임
+        elif data.get('type') == 'restart_daemon':
+            command_id = data.get('command_id')
+            if command_id:
+                result_payload = {
+                    "type": "collector_command_result",
+                    "command_id": command_id,
+                    "exchange": "all",
+                    "status": "SUCCESS",
+                    "error": None,
+                    "timestamp": int(time.time() * 1000)
+                }
+                await self.event_bus.publish("collector_signal", result_payload)
+            return False # Supervisor가 실제 자가 재기동 처리를 하도록 False 리턴
+
         return False
 
     def get_status_payloads(self) -> List[tuple[str, dict]]:
         payloads = []
         
-        # 1. 1초 주기 큐 상태 취합
+        # 1. 큐 메트릭 동적 산출 (max_size 참조 및 usage_pct, level 계산)
+        # 1.1. Processing Queue
+        proc_qsize = sum(c.processing_queue.qsize() for c in self.collectors.values() if hasattr(c, 'processing_queue'))
+        proc_max_size = sum(c.processing_queue.maxsize if (hasattr(c, 'processing_queue') and getattr(c.processing_queue, 'maxsize', 0) > 0) else 5000 for c in self.collectors.values())
+        proc_usage = round((proc_qsize / proc_max_size * 100), 2) if proc_max_size > 0 else 0.0
+        proc_level = "CRITICAL" if proc_usage >= 85 else ("WARNING" if proc_usage >= 50 else "NORMAL")
+
+        # 1.2. Database Queue
+        db_qsize = self.db_writer.db_queue.qsize() if self.db_writer and hasattr(self.db_writer, 'db_queue') else 0
+        db_max_size = self.db_writer.db_queue.maxsize if (self.db_writer and hasattr(self.db_writer, 'db_queue') and getattr(self.db_writer.db_queue, 'maxsize', 0) > 0) else 1000
+        db_usage = round((db_qsize / db_max_size * 100), 2) if db_max_size > 0 else 0.0
+        db_level = "CRITICAL" if db_usage >= 85 else ("WARNING" if db_usage >= 50 else "NORMAL")
+
+        # 1.3. Candle Queue
+        cnd_qsize = self.db_writer.candle_queue.qsize() if self.db_writer and hasattr(self.db_writer, 'candle_queue') else 0
+        cnd_max_size = self.db_writer.candle_queue.maxsize if (self.db_writer and hasattr(self.db_writer, 'candle_queue') and getattr(self.db_writer.candle_queue, 'maxsize', 0) > 0) else 1000
+        cnd_usage = round((cnd_qsize / cnd_max_size * 100), 2) if cnd_max_size > 0 else 0.0
+        cnd_level = "CRITICAL" if cnd_usage >= 85 else ("WARNING" if cnd_usage >= 50 else "NORMAL")
+
+        total_processed = sum(getattr(c, 'total_processed_count', 0) for c in self.collectors.values())
+        total_dropped = sum(getattr(c, 'total_dropped_count', 0) for c in self.collectors.values())
+
         queue_status_payload = {
             "type": "queue_status",
-            "processing": sum(c.processing_queue.qsize() for c in self.collectors.values() if hasattr(c, 'processing_queue')),
-            "database": self.db_writer.db_queue.qsize() if self.db_writer and hasattr(self.db_writer, 'db_queue') else 0,
-            "candle": self.db_writer.candle_queue.qsize() if self.db_writer and hasattr(self.db_writer, 'candle_queue') else 0,
-            "total": sum(getattr(c, 'total_processed_count', 0) for c in self.collectors.values())
+            "processing": proc_qsize,
+            "database": db_qsize,
+            "candle": cnd_qsize,
+            "total": total_processed
         }
         payloads.append(("collector_signal", queue_status_payload))
+
+        # [NEW] 5초 주기 수집기 데몬 상세 정보 취합 및 브로드캐스트용 페이로드 생성
+        self._detail_status_counter = getattr(self, '_detail_status_counter', 0) + 1
+        if self._detail_status_counter >= 5:
+            self._detail_status_counter = 0
+            
+            from src.engine.utils.stock_mapper import stock_mapper
+            
+            exchanges_data = {}
+            for exch_id, collector in self.collectors.items():
+                err = getattr(collector, 'last_error', None)
+                if not err and hasattr(collector, 'cred_provider'):
+                    err = getattr(collector.cred_provider, 'last_error', None)
+                
+                # 거래소별 설정 및 운영 시간 가공
+                exch_config = self.config_manager.get(f"exchanges.{exch_id}", {})
+                if exch_id == 'kis':
+                    hours = exch_config.get('market_hours', {})
+                    op_hours = f"{hours.get('start_time', '08:30')} ~ {hours.get('end_time', '18:00')}"
+                    ws_url = exch_config.get('websocket_url', "ws://ops.koreainvestment.com:21000")
+                    api_url = exch_config.get('api_url', "https://openapi.koreainvestment.com:9443")
+                else:
+                    op_hours = "24시간 (연중무휴)"
+                    if exch_id == 'upbit':
+                        ws_url = exch_config.get('websocket_url', "wss://api.upbit.com/websocket/v1")
+                        api_url = "https://api.upbit.com"
+                    elif exch_id == 'bithumb':
+                        ws_url = exch_config.get('websocket_url', "wss://pubwss.bithumb.com/pub/ws")
+                        api_url = "https://api.bithumb.com"
+                    else:
+                        ws_url = exch_config.get('websocket_url', "")
+                        api_url = exch_config.get('api_url', "")
+
+                exchanges_data[exch_id] = {
+                    "is_running": collector.is_running,
+                    "status": getattr(collector, 'status', 'STOPPED'),
+                    "symbols_count": len(getattr(collector, 'available_symbols', [])),
+                    "processed_count": getattr(collector, 'total_processed_count', 0),
+                    "dropped_count": getattr(collector, 'total_dropped_count', 0),
+                    "last_tick": getattr(collector, 'last_tick', None),
+                    "last_raw": getattr(collector, 'last_raw', None),
+                    "last_error": err,
+                    "operating_hours": op_hours,
+                    "websocket_url": ws_url,
+                    "api_url": api_url
+                }
+
+            detail_payload = {
+                "type": "collector_daemon_detail",
+                "queues": {
+                    "processing": {"qsize": proc_qsize, "max_size": proc_max_size, "usage_pct": proc_usage, "level": proc_level},
+                    "database": {"qsize": db_qsize, "max_size": db_max_size, "usage_pct": db_usage, "level": db_level},
+                    "candle": {"qsize": cnd_qsize, "max_size": cnd_max_size, "usage_pct": cnd_usage, "level": cnd_level},
+                    "total_processed": total_processed,
+                    "total_dropped": total_dropped
+                },
+                "exchanges": exchanges_data,
+                "memory": {
+                    "rss_mb": self._get_rss_memory(),
+                    "stock_mapper_cache_count": len(getattr(stock_mapper, '_mapping', {}))
+                },
+                "symbols_version": dict(self.symbols_version),  # [NEW] defaultdict 방지 일반 dict 변환 리턴
+                "daemon_started_at": self.daemon_started_at,
+                "source_pid": self.source_pid
+            }
+            payloads.append(("collector_signal", detail_payload))
 
         # 2. 5초 주기 거래소 상태 알림
         self._status_counter += 1
@@ -322,6 +519,60 @@ class CollectorService(DaemonService):
                 payloads.append(("collector_signal", status_payload))
 
         return payloads
+
+    # --- [NEW] 저빈도/구독 변경 강제 동기화 헬퍼 및 비동기 루프 메서드 ---
+
+    async def publish_symbols_sync(self, exchange: str):
+        """특정 거래소의 실제 구독 종목 목록을 동기화하기 위한 ZMQ 이벤트를 퍼블리시합니다."""
+        collector = self.collectors.get(exchange)
+        if not collector:
+            return
+        
+        # 런타임에 동적으로 검증된 exchange 등록 처리 (setdefault)
+        version = self.symbols_version.setdefault(exchange, 1)
+        symbols = getattr(collector, 'available_symbols', [])
+        
+        sync_payload = {
+            "type": "collector_symbols_sync",
+            "exchange": exchange,
+            "symbols": list(symbols),
+            "symbols_version": version,
+            "source_pid": self.source_pid,
+            "daemon_started_at": self.daemon_started_at
+        }
+        try:
+            await self.event_bus.publish("collector_signal", sync_payload)
+            logger.debug(f"[CollectorService] {exchange} symbols sync published. (version: {version}, count: {len(symbols)})")
+        except Exception as e:
+            logger.error(f"[CollectorService] Failed to publish symbols sync for {exchange}: {e}")
+
+    async def _periodic_symbols_sync_loop(self):
+        """30초 주기로 모든 거래소의 종목 동기화 이벤트를 ZMQ로 저빈도 재전송합니다."""
+        try:
+            # 기동 초기 지연 (기동 시 즉각 발행은 start 메서드 하단에서 1회 수행됨)
+            await asyncio.sleep(30)
+            while True:
+                for exch_id in self.collectors.keys():
+                    await self.publish_symbols_sync(exch_id)
+                await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"[CollectorService] periodic symbols sync loop error: {e}")
+
+    def _get_rss_memory(self) -> float:
+        """/proc/self/status 파일에서 데몬 프로세스의 현재 RSS 메모리(MB)를 안전하게 파싱합니다."""
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            kb = float(parts[1])
+                            return round(kb / 1024.0, 2)
+        except Exception:
+            pass
+        return 0.0
 
     async def _detect_and_record_changes(self, exch_id: str, prev: dict, current_status: str, current_error: Optional[str], collector: Any):
         # 1) 서킷브레이크 진입/해제 감지

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 import os
+import time
 import json
 import asyncio
 from src.engine.system import TradingSystem
@@ -75,8 +76,46 @@ async def zmq_listener_loop():
                 if not topic:
                     continue
                 
+                # [NEW] 실시간 수집기 종목 동기화 패킷 수신 시 캐시 및 브로드캐스트
+                if data.get('type') == 'collector_symbols_sync':
+                    exch = data.get('exchange')
+                    if exch:
+                        system.collector_active_symbols[exch] = {
+                            "symbols": data.get("symbols", []),
+                            "synced_at": int(time.time() * 1000),
+                            "symbols_version": data.get("symbols_version", 1),
+                            "source_pid": data.get("source_pid"),
+                            "daemon_started_at": data.get("daemon_started_at")
+                        }
+                        logger.info(f"[Web ZMQ Listener] {exch} 종목 목록 동기화 캐시 갱신 완료 (버전: {data.get('symbols_version')})")
+                
+                elif data.get('type') == 'collector_daemon_detail':
+                    data["synced_at"] = int(time.time() * 1000)
+                    system.collector_daemon_detail = data.copy()
+                    
+                    # symbols_version 불일치 감지 및 10초 쿨다운 적용 자동 재동기화 트리거
+                    daemon_versions = data.get("symbols_version", {})
+                    for exch, daemon_ver in daemon_versions.items():
+                        cached_ver = system.collector_active_symbols.get(exch, {}).get("symbols_version")
+                        if cached_ver is not None and cached_ver != daemon_ver:
+                            now_ms = int(time.time() * 1000)
+                            # 동적으로 거래소 쿨다운 관리
+                            last_req_time = getattr(app.state, 'last_request_symbols_sync_time', {}).get(exch, 0)
+                            if now_ms - last_req_time > 10000:
+                                if not hasattr(app.state, 'last_request_symbols_sync_time'):
+                                    app.state.last_request_symbols_sync_time = {}
+                                app.state.last_request_symbols_sync_time[exch] = now_ms
+                                
+                                # collector_control 토픽으로 직접 request_symbols_sync 퍼블리싱
+                                if hasattr(app, 'state') and hasattr(app.state, 'control_publisher'):
+                                    logger.warning(f"[Web ZMQ Listener] {exch} 종목 버전 불일치 감지 (로컬: {cached_ver} vs 데몬: {daemon_ver}). 재동기화 요청 송출.")
+                                    await app.state.control_publisher.publish("collector_control", {
+                                        "type": "request_symbols_sync",
+                                        "exchange": exch
+                                    })
+                
                 # 실시간 수집기 상태 패킷 수신 시 캐시 업데이트
-                if data.get('type') == 'collector_status':
+                elif data.get('type') == 'collector_status':
                     exch = data.get('exchange')
                     if exch:
                         prev_status = system.collector_statuses.get(exch, {})
@@ -103,7 +142,8 @@ async def zmq_listener_loop():
                     }
 
                 # 실시간 상태 패킷 브로드캐스트 호출
-                if data.get('type') in ['collector_status', 'queue_status', 'system_event']:
+                # [NEW] collector_command_result, collector_symbols_sync, collector_daemon_detail 타입 추가 브로드캐스트
+                if data.get('type') in ['collector_status', 'queue_status', 'system_event', 'collector_command_result', 'collector_symbols_sync', 'collector_daemon_detail']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -226,6 +266,8 @@ async def startup_event():
         await system.repository.insert_system_event('DAEMON_START', 'web_server', '웹 API 서버 기동 완료')
     except Exception as e:
         logger.error(f"Failed to insert web server startup event: {e}")
+    # [NEW] 동적 재동기화 쿨다운 딕셔너리 초기화
+    app.state.last_request_symbols_sync_time = {}
     # ZMQ 제어 Publisher 생성
     app.state.control_publisher = EventBusPublisher("collector_control")
     app.state.strategy_control_publisher = EventBusPublisher("strategy_control")

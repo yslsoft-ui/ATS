@@ -597,7 +597,8 @@ class PortfolioManager:
                 "Accept": "application/json"
             }
             
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=5.0)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(f"{upbit_v1_url}/accounts", headers=headers) as resp:
                      if resp.status != 200:
                          logger.error(f"sync_live_portfolio_from_exchange: API error {resp.status}")
@@ -685,7 +686,8 @@ class PortfolioManager:
                     "Accept": "application/json"
                 }
                 
-                async with aiohttp.ClientSession() as session:
+                timeout = aiohttp.ClientTimeout(total=5.0)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
                     async with session.get(f"{bithumb_v1_url}/accounts", headers=headers) as resp:
                         if resp.status == 200:
                             b_accounts = await resp.json()
@@ -817,7 +819,8 @@ class PortfolioManager:
                         "CTX_AREA_NK100": ""
                     }
                     
-                    async with aiohttp.ClientSession() as session:
+                    timeout = aiohttp.ClientTimeout(total=5.0)
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
                         async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params) as resp:
                             if resp.status == 200:
                                 data = await resp.json()
@@ -1267,7 +1270,8 @@ class PortfolioManager:
                     # 업비트 전체 마켓 정보를 조회하여 지원 마켓 판별
                     all_markets = []
                     market_url = "https://api.upbit.com/v1/market/all"
-                    async with aiohttp.ClientSession() as session:
+                    timeout = aiohttp.ClientTimeout(total=3.0)
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
                         async with session.get(market_url) as m_resp:
                             if m_resp.status == 200:
                                 all_markets = await m_resp.json()
@@ -1286,13 +1290,20 @@ class PortfolioManager:
                     query_markets = list(set(query_markets))
                     
                     prices = {}
-                    url = f"https://api.upbit.com/v1/ticker?markets={','.join(query_markets)}"
-                    async with aiohttp.ClientSession() as session:
-                        async with session.get(url) as resp:
-                            if resp.status == 200:
-                                tickers = await resp.json()
-                                for t in tickers:
-                                    prices[t['market']] = float(t['trade_price'])
+                    # URI Too Long 방지를 위한 배치(Batch) 분할 조회 (최대 50개 단위)
+                    limit = 50
+                    chunks = [query_markets[i:i + limit] for i in range(0, len(query_markets), limit)]
+                    
+                    async with aiohttp.ClientSession(timeout=timeout) as session:
+                        for chunk in chunks:
+                            url = f"https://api.upbit.com/v1/ticker?markets={','.join(chunk)}"
+                            async with session.get(url) as resp:
+                                if resp.status == 200:
+                                    tickers = await resp.json()
+                                    for t in tickers:
+                                        prices[t['market']] = float(t['trade_price'])
+                            # 짧은 비동기 휴식으로 루프 블로킹 완화
+                            await asyncio.sleep(0.02)
                                     
                     btc_krw_price = prices.get("KRW-BTC", 0.0)
                     
