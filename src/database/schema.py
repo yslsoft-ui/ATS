@@ -143,6 +143,8 @@ async def _init_db_core(db_path: str = None):
                 symbol TEXT,
                 quantity REAL DEFAULT 0,
                 avg_price REAL DEFAULT 0,
+                entry_time REAL DEFAULT 0.0,
+                peak_price REAL DEFAULT 0.0,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 exchange TEXT,
                 PRIMARY KEY (portfolio_id, exchange, symbol),
@@ -150,6 +152,8 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
         await ensure_column(db, 'positions', 'exchange', 'TEXT')
+        await ensure_column(db, 'positions', 'entry_time', 'REAL DEFAULT 0.0')
+        await ensure_column(db, 'positions', 'peak_price', 'REAL DEFAULT 0.0')
 
         # 5. orders_history
         await db.execute('''

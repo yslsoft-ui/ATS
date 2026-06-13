@@ -1087,27 +1087,7 @@ td.secondary {
     animation: pulse-update 0.4s ease-out;
 }
 
-/* 긴급 손절 버튼 스타일 */
-.panic-btn {
-    padding: 8px 16px;
-    font-size: 0.9rem;
-    background: linear-gradient(135deg, #FF4B4B 0%, #8B0000 100%);
-    border: none;
-    box-shadow: 0 4px 15px rgba(255, 75, 75, 0.3);
-    animation: pulse-red 2s infinite;
-}
 
-.panic-btn:hover {
-    background: #FF4B4B;
-    transform: scale(1.05);
-    box-shadow: 0 6px 20px rgba(255, 75, 75, 0.5);
-}
-
-@keyframes pulse-red {
-    0% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0.7); }
-    70% { box-shadow: 0 0 0 10px rgba(255, 75, 75, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 75, 75, 0); }
-}
 
 /* 수동 주문 패널 관련 레거시 스타일 제거 (선택 사항: 파일 크기 줄이기 위함) */
 .order-panel { display: none; }

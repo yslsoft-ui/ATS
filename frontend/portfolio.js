@@ -256,16 +256,11 @@ async function loadPortfolio(force = false) {
         if (!portfolioId) {
             console.warn("No active or saved portfolio sessions found.");
             const typeBadge = document.getElementById('portfolio-type-badge');
-            const panicBtn = document.getElementById('btn-panic-sell');
             const backtestSummary = document.getElementById('portfolio-backtest-summary');
             const appliedStrategies = document.getElementById('portfolio-applied-strategies');
             const backtestAnalysisPanels = document.getElementById('portfolio-backtest-analysis-panels');
 
             if (typeBadge) typeBadge.style.display = 'none';
-            if (panicBtn) {
-                panicBtn.style.display = 'none';
-                panicBtn.disabled = true;
-            }
             if (backtestSummary) backtestSummary.style.display = 'none';
             if (appliedStrategies) appliedStrategies.style.display = 'none';
             if (backtestAnalysisPanels) backtestAnalysisPanels.style.display = 'flex';
@@ -312,7 +307,6 @@ async function loadPortfolio(force = false) {
 
         // UI 요소 캐시
         const typeBadge = document.getElementById('portfolio-type-badge');
-        const panicBtn = document.getElementById('btn-panic-sell');
         const backtestSummary = document.getElementById('portfolio-backtest-summary');
         const appliedStrategies = document.getElementById('portfolio-applied-strategies');
         const backtestAnalysisPanels = document.getElementById('portfolio-backtest-analysis-panels');
@@ -376,10 +370,6 @@ async function loadPortfolio(force = false) {
         // --- 화면 레이아웃 분기 제어 및 뱃지/메트릭 렌더링 ---
         if (data.type === 'none' || !data.id) {
             if (typeBadge) typeBadge.style.display = 'none';
-            if (panicBtn) {
-                panicBtn.style.display = 'none';
-                panicBtn.disabled = true;
-            }
             if (backtestSummary) backtestSummary.style.display = 'none';
             if (appliedStrategies) appliedStrategies.style.display = 'none';
             if (backtestAnalysisPanels) backtestAnalysisPanels.style.display = 'flex';
@@ -396,7 +386,6 @@ async function loadPortfolio(force = false) {
                 }
                 typeBadge.style.display = 'inline-block';
             }
-            if (panicBtn) panicBtn.style.display = 'none';
 
             if (backtestSummary) {
                 backtestSummary.style.display = 'grid';
@@ -419,10 +408,6 @@ async function loadPortfolio(force = false) {
                     typeBadge.style.background = '#3B82F6';
                 }
                 typeBadge.style.display = 'inline-block';
-            }
-            if (panicBtn) {
-                panicBtn.style.display = 'inline-block';
-                panicBtn.disabled = false;
             }
 
             if (backtestSummary) backtestSummary.style.display = 'none';
@@ -497,52 +482,7 @@ async function loadPortfolio(force = false) {
     }
 }
 
-/**
- * 현재 보유 중인 모든 종목을 시장가로 즉시 청산(매도)하고 시스템을 긴급 비상정지합니다.
- */
-async function executePanicSell() {
-    if (!confirm("🚨 정말로 모든 보유 종목을 시장가로 긴급 매도하시겠습니까?\n이 작업은 즉시 실행되며 취소할 수 없습니다.")) {
-        return;
-    }
 
-    const btn = document.getElementById('btn-panic-sell');
-    if (!btn) return;
-    const originalText = btn.innerText;
-    btn.disabled = true;
-    btn.innerText = "🚨 긴급 청산 중...";
-
-    try {
-        const result = await APIClient.panicSellPortfolio(state.currentPortfolioId);
-
-        if (result.status === 'success') {
-            showAlert(`전종목 긴급 청산 완료: ${result.message}`, "success");
-            
-            // 자동 매매도 중단 (안전 장치)
-            if (state.isAutoTrading) {
-                state.isAutoTrading = false;
-                const tradingStatus = document.getElementById('trading-status');
-                const btnTrading = document.getElementById('btn-toggle-trading');
-                if (tradingStatus) {
-                    tradingStatus.innerText = '비활성 (긴급 정지됨)';
-                    tradingStatus.style.color = '#FF4B4B';
-                }
-                if (btnTrading) {
-                    btnTrading.innerText = '▶️ 자동 매매 시작';
-                    btnTrading.className = 'btn primary';
-                }
-            }
-            await loadPortfolio(true);
-        } else {
-            showAlert(result.message || "청산 실패", "error");
-        }
-    } catch (e) {
-        showAlert("긴급 청산 중 오류가 발생했습니다.", "error");
-        console.error(e);
-    } finally {
-        btn.disabled = false;
-        btn.innerText = originalText;
-    }
-}
 
 /**
  * 개별 자산 종목에 대한 상세 모달 창을 엽니다.
@@ -1689,7 +1629,6 @@ async function endSimulationSession(portfolioId) {
 // 전역 window 바인딩으로 타 JS 파일 및 HTML 인라인 호출 지원
 window.loadPortfolioList = loadPortfolioHistoryList;
 window.loadPortfolio = loadPortfolio;
-window.executePanicSell = executePanicSell;
 window.showAssetDetails = showAssetDetails;
 window.closeAssetModal = closeAssetModal;
 window.loadRealAssets = loadRealAssets;

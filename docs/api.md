@@ -227,9 +227,6 @@
 - **`POST /api/portfolio/{portfolio_id}/end`**
   - **설명**: 실행 중인 특정 모의매매 시뮬레이션을 완전히 종료하고 최종 성과를 기록합니다.
 
-- **`POST /api/portfolio/{portfolio_id}/panic`**
-  - **설명**: 비상 긴급 상황 시 포트폴리오가 보유한 모든 포지션을 시장가로 즉시 강제 전량 매도하고 전략을 중지합니다.
-
 - **`GET /trades?portfolio_id={id}&limit={count}`**
   - **설명**: 특정 포트폴리오에서 발주된 주문들의 최근 체결 내역을 조회합니다.
 

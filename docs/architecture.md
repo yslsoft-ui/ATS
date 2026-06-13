@@ -127,19 +127,25 @@ sequenceDiagram
     participant DB as SQLite Database
 
     ZMQ->>TE: 실시간 틱 수신
-    TE->>TE: 틱 데이터를 캔들(OHLCV)로 합산
-    TE->>MDC: 완성된 캔들 추가 및 지표 캐시 무효화 (add_candle)
-    TE->>Host: 전략 실행 요청 (execute)
-    Host->>MDC: 필요한 지표 동적 계산/조회 (get_indicator)
-    MDC->>MDC: 캐시 확인 또는 numpy 기반 지표 연산 및 캐싱
-    Host->>Strat: StrategyContext 제공 및 판단 요청 (on_update)
-    Note over Strat: 예: RSI < 30 (과매도 진입)
-    Strat->>Host: 판단 결과 반환 (StrategyResult)
-    Host->>TE: 원시 판단 결과 전달
-    TE->>TE: 신호 유효성 검증 및 TradeSignal 빌드
-    TE->>TE: 실시간 상태/지표 스냅샷 브로드캐스트 (콜백)
-    TE->>PM: 매수 주문 신호 발행 (BUY, 수량, 사유)
-    PM->>Exec: 가상 주문 실행 요청
+    TE->>TE: 틱가 기준 포지션 peak_price 실시간 갱신 및 DB 저장
+    TE->>TE: 공통 청산 규칙(Stop Loss, Trailing Stop, Time Limit) 평가
+    alt 공통 청산 조건 충족 시
+        TE->>PM: 즉시 청산 신호 (SELL) 발송
+        PM->>Exec: 가상 주문 실행 요청
+    else 일반 캔들 마감 시
+        TE->>TE: 틱 데이터를 캔들(OHLCV)로 합산
+        TE->>MDC: 완성된 캔들 추가 및 지표 캐시 무효화 (add_candle)
+        TE->>Host: 전략 실행 요청 (execute)
+        Host->>MDC: 필요한 지표 동적 계산/조회 (get_indicator)
+        MDC->>MDC: 캐시 확인 또는 numpy 기반 지표 연산 및 캐싱
+        Host->>Strat: StrategyContext 제공 및 판단 요청 (on_update)
+        Strat->>Host: 판단 결과 반환 (StrategyResult)
+        Host->>TE: 원시 판단 결과 전달
+        TE->>TE: 신호 유효성 검증 및 TradeSignal 빌드
+        TE->>TE: 실시간 상태/지표 스냅샷 브로드캐스트 (콜백)
+        TE->>PM: 매수/매도 주문 신호 발행
+        PM->>Exec: 가상 주문 실행 요청
+    end
     Exec->>Exec: 호가창(Orderbook) 기반 슬리피지/체결가 산정
     Exec->>DB: 주문 이력(orders_history) 저장
     Exec->>DB: 보유 자산(positions) 및 잔고(cash) 갱신
@@ -174,6 +180,8 @@ sequenceDiagram
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
 - **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
 - **실시간 다중 인터벌 캔들 조립**: 전략 데몬([strategy_service.py](file:///home/simon/ATS/src/services/strategy_service.py))은 수집기 데몬이 발행한 실시간 틱 데이터를 구독하여, 탑재된 전략의 설정 주기(예: 3분, 5분, 15분 등)에 맞는 다양한 시간봉을 메모리 상에서 독립적으로 직접 조립하고 관리합니다.
+- **공통 청산 규칙 평가기 (Common Exit Evaluator)**: 개별 전략별로 산재해 있던 손절(Stop Loss), 트레일링 스탑(Trailing Stop), 시간 제한 탈출(Time-limit Exit) 로직을 통합 및 격리하여 `CommonExitEvaluator`로 구현했습니다. 틱 데이터가 수신될 때마다 실시간으로 포지션의 `peak_price`와 시간 및 수익률을 감시하여 즉시 시장가 청산을 수행하므로, 데몬 재시작 시에도 DB에 보존된 최고가와 진입 시각 상태에 기반하여 안전하고 신뢰도 높은 청산 동작을 보장합니다. 또한 매매비용(수수료, 세금, 슬리피지, 안전 마진)을 종합적으로 고려한 **비용 반영 본전이동(Breakeven Stop)** 규칙을 내장하고 있으며, 가격 기반 청산 후보 방어선(`stop_loss_floor`, `breakeven_floor`, `trailing_floor`) 중 가장 높은 방어선을 최우선 적용하여 일괄 청산함으로써 리스크 관리를 극대화합니다.
+- **매매 엔진의 단일화 및 전략 비활성 시 가드**: 전략 실행 호스트를 Entry/Exit 호스트로 쪼개어 돌리던 복잡한 아키텍처를 단일 `hosts` 루프로 일원화했습니다. 또한 전략이 비활성화(`enabled = False`)되어 있더라도 포지션을 보유 중인 상태라면 청산 로직은 정상 구동되어 안전하게 청산이 진행되도록 보증하며, 신규 진입(BUY) 신호만 필터링 차단합니다.
 - **파라미터 평가 및 스코어링 모듈 분리 (ParameterEvaluator Seam)**: 제안된 파라미터 후보군 평가 시 사용되던 파라미터 가중 거리 계산, 시장 국면별 적합도 가중치 산정, 다요소 신뢰도 점수(Confidence Score) 연산 등의 수학적 연산 정책들을 `ShadowBacktestEngine`으로부터 분리하여 무상태(Stateless) 전용 연산기인 `ParameterEvaluator`로 이관했습니다. 이를 통해 DB나 백테스트 엔진 구동 없이 계산 정책만을 독립적으로 단위 테스트하고 재사용할 수 있는 기반을 구축했습니다.
 - **단기상승흐름 전략 (Short-Term Trend Momentum)**: 룰 기반 파라미터 변이 및 머신러닝 데이터의 행동 공간(Action Space) 다양성 강화를 위해 기존 평균회귀(Mean-reversion) 계열과 대조되는 추세추종 속성의 전략입니다. 해당 전략은 이평 정배열, RSI 강세 & 기울기(Slope) 상승, 볼린저 밴드 상단(98%) 돌파 시 매수 진입하며, 2.0% 고정 손절선, 2.5% 트레일링 스탑, 이평 데드 크로스, RSI 극단 과매수(80.0) 감지 시 청산하여 단기 추세를 회수합니다.
 
@@ -185,7 +193,7 @@ sequenceDiagram
 
 ### 3.5. 사용자 명령 디스패처 및 감사 로그 (UserCommandDispatcher & Audit Log)
 - **느슨한 결합 (Loose Coupling)**: FastAPI 웹 라우터(프론트엔드 API 진입점)와 핵심 도메인 모델(포트폴리오 관리자, ZMQ 제어 버스 등) 간의 직접적인 결합을 해제하기 위해 커맨드 패턴 기반의 `UserCommandDispatcher`를 도입했습니다.
-- **단일 통제 진입점**: 모든 사용자 조작 액션(수집기 시작/중지, 전략 설정 갱신, 모의투자 세션 시작/종료/긴급 매도 등)은 `UserCommand` Enum 형태로 정의되며 `dispatch(command, payload)` 단일 메서드를 통해서만 전달됩니다.
+- **단일 통제 진입점**: 모든 사용자 조작 액션(수집기 시작/중지, 전략 설정 갱신, 모의투자 세션 시작/종료 등)은 `UserCommand` Enum 형태로 정의되며 `dispatch(command, payload)` 단일 메서드를 통해서만 전달됩니다.
 - **감사 로그 시퀀스**: 명령 실행 시 `_REQUEST` 감사 로그를 데이터베이스에 즉각 선행 기록하고, 매핑된 비즈니스 핸들러(`handlers` 테이블)를 거쳐 성공 시 `_SUCCESS`, 실패 시 `_FAILED` 감사 로그를 자동으로 연계 적재합니다.
 - **추적성 (Traceability)**: 개별 유저 액션이 기동될 때 생성되는 고유 `command_id`(UUID)를 `system_events` 테이블의 `context` 컬럼(JSON)에 박제하여, 하나의 요청으로 발생한 요청-성공-실패 생명주기 전체를 완벽히 역추적할 수 있습니다.
 

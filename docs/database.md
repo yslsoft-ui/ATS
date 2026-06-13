@@ -84,6 +84,8 @@
 | **symbol** (PK) | TEXT | - | 자산 심볼 |
 | **quantity** | REAL | DEFAULT 0 | 보유 수량 (실시간 매매 시 소수점 지원) |
 | **avg_price** | REAL | DEFAULT 0 | 평균 매수 단가 |
+| **entry_time** | REAL | DEFAULT 0.0 | 포지션 최초 진입 시각 (Unix Epoch, 초) |
+| **peak_price** | REAL | DEFAULT 0.0 | 포지션 진입 후 도달한 최고 가격 (트레일링 스탑용) |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 갱신 일시 |
 
 * **외래키 제약조건**:
@@ -191,7 +193,6 @@
   - `STRATEGY_UPDATE_PARAMS_REQUEST` / `STRATEGY_UPDATE_PARAMS_SUCCESS` / `STRATEGY_UPDATE_PARAMS_FAILED`: 전략 설정 파라미터 업데이트 제어
   - `STRATEGY_SESSION_START_REQUEST` / `STRATEGY_SESSION_START_SUCCESS` / `STRATEGY_SESSION_START_FAILED`: 모의투자 세션 시작 제어
   - `STRATEGY_SESSION_END_REQUEST` / `STRATEGY_SESSION_END_SUCCESS` / `STRATEGY_SESSION_END_FAILED`: 모의투자 세션 종료 제어
-  - `STRATEGY_SESSION_PANIC_REQUEST` / `STRATEGY_SESSION_PANIC_SUCCESS` / `STRATEGY_SESSION_PANIC_FAILED`: 포지션 긴급 전량 매도 및 비상 정지 제어
 - **데몬 자동/완료 상태**
   - `DAEMON_START`: 데몬 프로세스 기동 완료 (프로그램 수정/배포 재시작 포함)
   - `DAEMON_STOP`: 데몬 프로세스의 안전 종료 완료 (Graceful Shutdown)

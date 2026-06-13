@@ -1039,9 +1039,9 @@ class SqliteTradingRepository(BaseTradingRepository):
             for pos in portfolio.positions.values():
                 if pos.quantity > 0:
                     await db.execute('''
-                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, updated_at)
-                        VALUES (?, ?, ?, ?, ?, datetime('now'))
-                    ''', (portfolio.id, pos.exchange, pos.symbol, pos.quantity, pos.avg_price))
+                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, entry_time, peak_price, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                    ''', (portfolio.id, pos.exchange, pos.symbol, pos.quantity, pos.avg_price, getattr(pos, 'entry_time', 0.0), getattr(pos, 'peak_price', 0.0)))
             
             await db.commit()
 
@@ -1090,7 +1090,9 @@ class SqliteTradingRepository(BaseTradingRepository):
                              symbol=row['symbol'],
                              quantity=row['quantity'],
                              avg_price=row['avg_price'],
-                             updated_at=time.time() 
+                             updated_at=time.time(),
+                             entry_time=row['entry_time'] if 'entry_time' in row.keys() else 0.0,
+                             peak_price=row['peak_price'] if 'peak_price' in row.keys() else 0.0
                         )
                 
                 # 3. 최근 거래 내역 로드 (최근 100건)

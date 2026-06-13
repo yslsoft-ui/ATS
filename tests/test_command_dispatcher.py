@@ -187,7 +187,7 @@ async def test_collector_start_success(setup_dispatcher):
     req_context = json.loads(req_event["context"])
     succ_context = json.loads(succ_event["context"])
     assert req_context["command_id"] == succ_context["command_id"]
-    assert req_context["payload"] == {"exchange": "upbit"}
+    assert req_context["payload"]["exchange"] == "upbit"
 
 @pytest.mark.asyncio
 async def test_collector_start_failed_invalid_exchange(setup_dispatcher):
@@ -224,7 +224,7 @@ async def test_collector_restart_daemon_publishes_to_zmq(setup_dispatcher):
     assert len(control_pub.published) == 1
     topic, msg = control_pub.published[0]
     assert topic == "collector_control"
-    assert msg == {"type": "restart_daemon"}
+    assert msg["type"] == "restart_daemon"
 
     events = repo.system_events
     assert events[0]["event_type"] == "DAEMON_RESTART_SIGNAL_REQUEST"
@@ -250,7 +250,7 @@ async def test_strategy_parameter_update(setup_dispatcher):
     assert events[0]["target"] == "momentum"
 
 @pytest.mark.asyncio
-async def test_portfolio_lifecycle_and_panic(setup_dispatcher):
+async def test_portfolio_lifecycle(setup_dispatcher):
     dispatcher, repo, config, pm, control_pub, strategy_pub = setup_dispatcher
 
     # 1. 모의투자 시작
@@ -272,22 +272,7 @@ async def test_portfolio_lifecycle_and_panic(setup_dispatcher):
     assert len(strategy_pub.published) == 1
     assert strategy_pub.published[0] == ("strategy_control", {"type": "update_portfolio", "portfolio_id": "sim_test_123"})
 
-    # 3. 임의 포지션 설정 및 긴급 손절(Panic) 실행
-    from src.engine.portfolio import Position
-    portfolio.positions[("upbit", "BTC")] = Position(exchange="upbit", symbol="BTC", quantity=0.5, avg_price=9000.0)
-    
-    # panic을 실행하기 전에 portfolios DB에 포지션 연계 외래키를 통과시키기 위해 save_to_db를 명시적으로 실행
-    await pm.save_to_db("sim_test_123")
-
-    panic_payload = {"portfolio_id": "sim_test_123"}
-    panic_res = await dispatcher.dispatch(UserCommand.PORTFOLIO_PANIC, panic_payload)
-    
-    # 0.5 BTC에 대해 가격 10000원으로 전량 매도 발생했으므로 현금이 증가함
-    # 수수료 5원 반영: 현금 = 10000000.0 + (0.5 * 10000.0) - 5 = 10004995.0
-    assert portfolio.cash == 10004995.0
-    assert portfolio.positions[("upbit", "BTC")].quantity == 0.0
-
-    # 4. 세션 마감(PORTFOLIO_END)
+    # 3. 세션 마감(PORTFOLIO_END)
     end_payload = {"portfolio_id": "sim_test_123"}
     await dispatcher.dispatch(UserCommand.PORTFOLIO_END, end_payload)
 

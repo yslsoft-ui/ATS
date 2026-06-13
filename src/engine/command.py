@@ -18,7 +18,6 @@ class UserCommand(Enum):
     STRATEGY_RESTART_DAEMON = "strategy_restart_daemon"
     PORTFOLIO_START = "portfolio_start"
     PORTFOLIO_END = "portfolio_end"
-    PORTFOLIO_PANIC = "portfolio_panic"
     CLEANUP_START = "cleanup_start"
     CLEANUP_STOP = "cleanup_stop"
     CLEANUP_PREVIEW = "cleanup_preview"
@@ -41,7 +40,6 @@ class UserCommandDispatcher:
         UserCommand.STRATEGY_RESTART_DAEMON: "DAEMON_RESTART_SIGNAL",
         UserCommand.PORTFOLIO_START: "STRATEGY_SESSION_START",
         UserCommand.PORTFOLIO_END: "STRATEGY_SESSION_END",
-        UserCommand.PORTFOLIO_PANIC: "STRATEGY_SESSION_PANIC",
         UserCommand.CLEANUP_START: "CLEANUP_START",
         UserCommand.CLEANUP_STOP: "CLEANUP_STOP",
         UserCommand.CLEANUP_PREVIEW: "CLEANUP_PREVIEW",
@@ -76,7 +74,6 @@ class UserCommandDispatcher:
             UserCommand.STRATEGY_RESTART_DAEMON: self._handle_strategy_restart_daemon,
             UserCommand.PORTFOLIO_START: self._handle_portfolio_start,
             UserCommand.PORTFOLIO_END: self._handle_portfolio_end,
-            UserCommand.PORTFOLIO_PANIC: self._handle_portfolio_panic,
             UserCommand.CLEANUP_START: self._handle_cleanup_start,
             UserCommand.CLEANUP_STOP: self._handle_cleanup_stop,
             UserCommand.CLEANUP_PREVIEW: self._handle_cleanup_preview,
@@ -133,7 +130,7 @@ class UserCommandDispatcher:
             target_id = payload.get("target", "daemon")
         elif command in [UserCommand.STRATEGY_ENABLE, UserCommand.STRATEGY_DISABLE, UserCommand.STRATEGY_UPDATE_PARAMS]:
             target_id = payload.get("strategy_id", "all")
-        elif command in [UserCommand.PORTFOLIO_START, UserCommand.PORTFOLIO_END, UserCommand.PORTFOLIO_PANIC]:
+        elif command in [UserCommand.PORTFOLIO_START, UserCommand.PORTFOLIO_END]:
             target_id = payload.get("portfolio_id", "default")
         elif command in [UserCommand.CLEANUP_START, UserCommand.CLEANUP_STOP, UserCommand.CLEANUP_PREVIEW, UserCommand.CLEANUP_RUN_ONCE]:
             target_id = "market_cleanup"
@@ -150,7 +147,6 @@ class UserCommandDispatcher:
             UserCommand.STRATEGY_RESTART_DAEMON: "전략 데몬 재기동 신호 송신",
             UserCommand.PORTFOLIO_START: "모의투자 세션 시작",
             UserCommand.PORTFOLIO_END: "모의투자 세션 종료",
-            UserCommand.PORTFOLIO_PANIC: "긴급 전량 매도 및 비상 정지",
             UserCommand.CLEANUP_START: "클린업 자동정리 시작",
             UserCommand.CLEANUP_STOP: "클린업 자동정리 일시중지",
             UserCommand.CLEANUP_PREVIEW: "클린업 대상 미리보기 조회",
@@ -469,158 +465,7 @@ class UserCommandDispatcher:
             except Exception as e:
                 logger.error(f"[Dispatcher] Failed to publish ZMQ message: {e}")
 
-    async def _handle_portfolio_panic(self, command_id: str, payload: Dict[str, Any]):
-        portfolio_id = payload.get("portfolio_id")
-        if not portfolio_id:
-            raise ValueError("Portfolio ID parameter is missing")
-            
-        portfolio = self.portfolio_manager.portfolios.get(portfolio_id)
-        if not portfolio:
-            raise ValueError(f"Portfolio {portfolio_id} not found")
 
-        # 1. 청산할 종목들 추출
-        positions_to_sell = [(pos.exchange, pos.symbol, pos.quantity) 
-                             for pos in portfolio.positions.values() if pos.quantity > 0]
-        if not positions_to_sell:
-            return {"message": "청산할 포지션이 없습니다.", "data": []}
-
-        # 2. 가격 구성
-        prices = {}
-        upbit_symbols = [sym for ex, sym, qty in positions_to_sell if ex.lower() == 'upbit']
-        
-        # Upbit 가격 조회
-        if upbit_symbols:
-            import aiohttp
-            try:
-                formatted = [f"KRW-{s}" if not s.startswith("KRW-") else s for s in upbit_symbols]
-                url = f"https://api.upbit.com/v1/ticker?markets={','.join(formatted)}"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        if resp.status == 200:
-                            tickers = await resp.json()
-                            for t in tickers:
-                                clean_sym = t['market'].replace("KRW-", "")
-                                prices[('upbit', clean_sym)] = float(t['trade_price'])
-            except Exception as e:
-                logger.error(f"Failed to fetch upbit tickers for panic sell: {e}")
-
-        # KIS 및 기타 가격 조회 (DB 캔들 조회)
-        from src.database.connection import get_db_conn
-        async with get_db_conn(self.portfolio_manager.db_path) as db:
-            for ex, sym, qty in positions_to_sell:
-                ex_key = ex.lower()
-                if ex_key != 'upbit':
-                    try:
-                        async with db.execute(
-                            "SELECT close FROM candles WHERE exchange = ? AND symbol = ? ORDER BY timestamp DESC LIMIT 1",
-                            (ex_key, sym)
-                        ) as cursor:
-                            row = await cursor.fetchone()
-                            if row:
-                                prices[(ex_key, sym)] = row['close']
-                            else:
-                                pos_key = (ex_key, sym)
-                                prices[(ex_key, sym)] = portfolio.positions[pos_key].avg_price
-                    except Exception as e:
-                        logger.error(f"Failed to query panic sell price for {ex_key}:{sym}: {e}")
-                        pos_key = (ex_key, sym)
-                        prices[(ex_key, sym)] = portfolio.positions[pos_key].avg_price
-                else:
-                    if ('upbit', sym) not in prices:
-                        prices[('upbit', sym)] = portfolio.positions[('upbit', sym)].avg_price
-
-        # 3. 각 종목별 청산 실행
-        results = []
-        executor = self.portfolio_manager.executors.get('simulation')
-        for ex, symbol, qty in positions_to_sell:
-            ex_key = ex.lower()
-            price = prices.get((ex_key, symbol), 0)
-            if price == 0:
-                continue
-            
-            res = await executor.execute_order(
-                exchange=ex,
-                symbol=symbol,
-                side='SELL',
-                quantity=qty,
-                trade_price=price
-            )
-            if res:
-                results.append(res)
-                # 1. 포트폴리오 상태 갱신
-                portfolio.update_position(
-                    exchange=res['exchange'],
-                    symbol=res['symbol'],
-                    side=res['side'],
-                    price=res['price'],
-                    quantity=res['quantity'],
-                    fee=res['fee'],
-                    strategy_id="panic_sell",
-                    reason="긴급 손절 (Panic Sell)"
-                )
-                
-                # 2. DB 거래 내역 저장
-                from src.database.connection import get_db_conn
-                async with get_db_conn(self.portfolio_manager.db_path) as db:
-                    await db.execute('''
-                        INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        portfolio_id, 
-                        res['exchange'],
-                        "panic_sell", 
-                        res['symbol'], 
-                        res['side'], 
-                        res['price'], 
-                        res['quantity'], 
-                        res['fee'], 
-                        int(time.time()), 
-                        "긴급 손절 (Panic Sell)", 
-                        "{}"
-                    ))
-                    await db.commit()
-
-                # 3. 긴급 알림 브로드캐스트
-                alert = {
-                    "type": "alert",
-                    "alert_type": "panic",
-                    "exchange": ex,
-                    "code": symbol,
-                    "price": price,
-                    "msg": f"🚨 [긴급손절] {symbol} ({ex}) 전량 매도 완료"
-                }
-                
-                # WS Manager 임포트 & 브로드캐스트 (WS 기동 여부 상관없이 예외 가드 처리)
-                try:
-                    from src.server.websocket import manager as ws_manager
-                    await ws_manager.broadcast_global(alert)
-                except Exception as ws_err:
-                    logger.debug(f"Websocket broadcast skipped in non-web context: {ws_err}")
-                
-                # DB Alert 및 System Event 추가 적재
-                await self.repository.insert_system_event(
-                    event_type='ALERT_PANIC',
-                    target=symbol,
-                    message=alert["msg"],
-                    context=json.dumps(alert)
-                )
-
-        # 4. 변경된 포트폴리오 상태 DB 영구 저장
-        await self.portfolio_manager.save_to_db(portfolio_id)
-
-        # ZMQ IPC 메시지 발행
-        if self.strategy_control_publisher:
-            try:
-                msg = {
-                    "type": "update_portfolio",
-                    "portfolio_id": portfolio_id
-                }
-                await self.strategy_control_publisher.publish("strategy_control", msg)
-                logger.info(f"[Dispatcher] ZMQ strategy control message published: {msg}")
-            except Exception as e:
-                logger.error(f"[Dispatcher] Failed to publish ZMQ message: {e}")
-
-        return {"message": f"{len(results)}개 종목 청산 완료", "data": results}
 
     # --- 헬퍼 메서드 ---
 

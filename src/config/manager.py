@@ -86,7 +86,8 @@ class ConfigManager:
                         "Emergency halt to prevent accidental live trade execution."
                     )
             
-            self.config = new_config
+            self.config.clear()
+            self.config.update(new_config)
             self.last_mtime = os.path.getmtime(self.config_path)
             self.config_sha256 = sha256_val
             

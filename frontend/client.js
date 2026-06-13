@@ -102,11 +102,7 @@ const APIClient = (() => {
          */
         fetchPortfolio: (portfolioId) => _fetchAPI(`/api/portfolio?portfolio_id=${portfolioId}`),
 
-        /**
-         * 특정 포트폴리오 내 모든 종목 긴급 청산
-         */
-        panicSellPortfolio: (portfolioId) => 
-            _fetchAPI(`/api/portfolio/${portfolioId}/panic`, { method: 'POST' }),
+
 
         fetchRealAssets: (exchange = 'upbit', mode = 'active', sync = false) => 
             _fetchAPI(`/api/exchanges/${exchange}/assets?mode=${mode}&sync=${sync}`),

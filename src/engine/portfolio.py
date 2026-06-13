@@ -18,6 +18,8 @@ class Position:
     quantity: float = 0.0
     avg_price: float = 0.0
     updated_at: float = 0.0
+    entry_time: float = 0.0
+    peak_price: float = 0.0
 
 class Portfolio:
     """
@@ -50,6 +52,10 @@ class Portfolio:
         
         if side == 'BUY':
             # 매수: 평균 단가 갱신 및 수량 증가
+            if pos.quantity == 0:
+                pos.entry_time = time.time()
+                pos.peak_price = price
+            
             total_cost = (pos.avg_price * pos.quantity) + (price * quantity)
             pos.quantity += quantity
             if pos.quantity > 0:
@@ -66,6 +72,8 @@ class Portfolio:
             if pos.quantity <= 0:
                 pos.quantity = 0
                 pos.avg_price = 0
+                pos.entry_time = 0.0
+                pos.peak_price = 0.0
         
         pos.updated_at = time.time()
         

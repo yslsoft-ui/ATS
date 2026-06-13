@@ -86,19 +86,7 @@ async def end_portfolio_session(portfolio_id: str, request: Request):
         logger.error(f"End portfolio session error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/api/portfolio/{portfolio_id}/panic")
-async def panic_sell(portfolio_id: str, request: Request):
-    """모든 포지션을 즉시 시장가 청산하고 비상 정지합니다."""
-    system = request.app.state.system
-    try:
-        res = await system.dispatcher.dispatch(
-            UserCommand.PORTFOLIO_PANIC,
-            {"portfolio_id": portfolio_id}
-        )
-        return {"status": "success", "message": res.get("message", "청산 완료"), "data": res.get("data", [])}
-    except Exception as e:
-        logger.error(f"Panic Sell Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.delete("/api/portfolio/history/{portfolio_id}")
 async def delete_portfolio_history(portfolio_id: str, request: Request):
