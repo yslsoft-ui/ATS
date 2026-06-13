@@ -48,6 +48,7 @@
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
 - **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
 - **[collector.js](file:///home/simon/ATS/frontend/collector.js)**: [NEW] 수집 데몬 프로세스의 실시간 리소스(메모리, 큐 사용률)와 거래소별 틱 수신 정보를 시각화하고, 기동/중지/데몬 자가재기동 등 라이프사이클 제어와 비동기 command_id 펜딩/ACK 처리를 주관합니다.
+- **[cleanup.js](file:///home/simon/ATS/frontend/cleanup.js)**: [NEW] 시장 데이터 정리 데몬의 라이프사이클 제어와 4개 카드 통합 실시간 텔레메트리 렌더링, 수동 정리 날짜 피커 변경 시 틱(Trades) 예상 삭제량 실시간 자동 쿼리, command_id 기반 비동기 대기 및 타임아웃(3초/5초/30초), 중복 실행 방지(Mutex), 그리고 최근 10건의 감사 이력 타임라인을 렌더링하는 클린업 관리 전용 뷰입니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.
 

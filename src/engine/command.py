@@ -19,6 +19,11 @@ class UserCommand(Enum):
     PORTFOLIO_START = "portfolio_start"
     PORTFOLIO_END = "portfolio_end"
     PORTFOLIO_PANIC = "portfolio_panic"
+    CLEANUP_START = "cleanup_start"
+    CLEANUP_STOP = "cleanup_stop"
+    CLEANUP_PREVIEW = "cleanup_preview"
+    CLEANUP_RUN_ONCE = "cleanup_run_once"
+    CLEANUP_RESTART_DAEMON = "cleanup_restart_daemon"
 
 class UserCommandDispatcher:
     """
@@ -37,6 +42,11 @@ class UserCommandDispatcher:
         UserCommand.PORTFOLIO_START: "STRATEGY_SESSION_START",
         UserCommand.PORTFOLIO_END: "STRATEGY_SESSION_END",
         UserCommand.PORTFOLIO_PANIC: "STRATEGY_SESSION_PANIC",
+        UserCommand.CLEANUP_START: "CLEANUP_START",
+        UserCommand.CLEANUP_STOP: "CLEANUP_STOP",
+        UserCommand.CLEANUP_PREVIEW: "CLEANUP_PREVIEW",
+        UserCommand.CLEANUP_RUN_ONCE: "CLEANUP_RUN_ONCE",
+        UserCommand.CLEANUP_RESTART_DAEMON: "DAEMON_RESTART_SIGNAL",
     }
 
     def __init__(
@@ -45,13 +55,15 @@ class UserCommandDispatcher:
         config_manager,
         portfolio_manager,
         control_publisher=None,
-        strategy_control_publisher=None
+        strategy_control_publisher=None,
+        cleanup_control_publisher=None
     ):
         self.repository = repository
         self.config_manager = config_manager
         self.portfolio_manager = portfolio_manager
         self.control_publisher = control_publisher
         self.strategy_control_publisher = strategy_control_publisher
+        self.cleanup_control_publisher = cleanup_control_publisher
 
         # handlers 매핑 테이블
         self.handlers: Dict[UserCommand, Callable[[str, Dict[str, Any]], Any]] = {
@@ -65,12 +77,18 @@ class UserCommandDispatcher:
             UserCommand.PORTFOLIO_START: self._handle_portfolio_start,
             UserCommand.PORTFOLIO_END: self._handle_portfolio_end,
             UserCommand.PORTFOLIO_PANIC: self._handle_portfolio_panic,
+            UserCommand.CLEANUP_START: self._handle_cleanup_start,
+            UserCommand.CLEANUP_STOP: self._handle_cleanup_stop,
+            UserCommand.CLEANUP_PREVIEW: self._handle_cleanup_preview,
+            UserCommand.CLEANUP_RUN_ONCE: self._handle_cleanup_run_once,
+            UserCommand.CLEANUP_RESTART_DAEMON: self._handle_cleanup_restart_daemon,
         }
 
-    def set_publishers(self, control_publisher, strategy_control_publisher):
+    def set_publishers(self, control_publisher, strategy_control_publisher, cleanup_control_publisher=None):
         """웹서버 기동 시 ZMQ 퍼블리셔 의존성을 주입합니다."""
         self.control_publisher = control_publisher
         self.strategy_control_publisher = strategy_control_publisher
+        self.cleanup_control_publisher = cleanup_control_publisher
 
     async def dispatch(self, command: UserCommand, payload: Dict[str, Any]) -> Any:
         """
@@ -111,12 +129,14 @@ class UserCommandDispatcher:
         target_id = "system"
         if command in [UserCommand.COLLECTOR_START, UserCommand.COLLECTOR_STOP]:
             target_id = payload.get("exchange", "all")
-        elif command in [UserCommand.COLLECTOR_RESTART_DAEMON, UserCommand.STRATEGY_RESTART_DAEMON]:
+        elif command in [UserCommand.COLLECTOR_RESTART_DAEMON, UserCommand.STRATEGY_RESTART_DAEMON, UserCommand.CLEANUP_RESTART_DAEMON]:
             target_id = payload.get("target", "daemon")
         elif command in [UserCommand.STRATEGY_ENABLE, UserCommand.STRATEGY_DISABLE, UserCommand.STRATEGY_UPDATE_PARAMS]:
             target_id = payload.get("strategy_id", "all")
         elif command in [UserCommand.PORTFOLIO_START, UserCommand.PORTFOLIO_END, UserCommand.PORTFOLIO_PANIC]:
             target_id = payload.get("portfolio_id", "default")
+        elif command in [UserCommand.CLEANUP_START, UserCommand.CLEANUP_STOP, UserCommand.CLEANUP_PREVIEW, UserCommand.CLEANUP_RUN_ONCE]:
+            target_id = "market_cleanup"
             
         # 가독성 높은 한국어 설명 메시지 구성
         status_kr = "요청" if status == "REQUEST" else ("성공" if status == "SUCCESS" else "실패")
@@ -130,7 +150,12 @@ class UserCommandDispatcher:
             UserCommand.STRATEGY_RESTART_DAEMON: "전략 데몬 재기동 신호 송신",
             UserCommand.PORTFOLIO_START: "모의투자 세션 시작",
             UserCommand.PORTFOLIO_END: "모의투자 세션 종료",
-            UserCommand.PORTFOLIO_PANIC: "긴급 전량 매도 및 비상 정지"
+            UserCommand.PORTFOLIO_PANIC: "긴급 전량 매도 및 비상 정지",
+            UserCommand.CLEANUP_START: "클린업 자동정리 시작",
+            UserCommand.CLEANUP_STOP: "클린업 자동정리 일시중지",
+            UserCommand.CLEANUP_PREVIEW: "클린업 대상 미리보기 조회",
+            UserCommand.CLEANUP_RUN_ONCE: "클린업 즉시 실행",
+            UserCommand.CLEANUP_RESTART_DAEMON: "클린업 데몬 재기동 신호 송신"
         }.get(command, command.value)
 
         msg = f"사용자 요청으로 {cmd_kr} {status_kr} (대상: {target_id.upper()})"
@@ -644,3 +669,53 @@ class UserCommandDispatcher:
         
         # DB 영구 저장
         await self.portfolio_manager.save_to_db(portfolio_id)
+
+    async def _handle_cleanup_start(self, command_id: str, payload: Dict[str, Any]):
+        if not self.cleanup_control_publisher:
+            raise RuntimeError("ZMQ Cleanup Control Publisher is not initialized")
+        await self.cleanup_control_publisher.publish("market_cleanup_control", {
+            "type": "cleanup_start",
+            "command_id": command_id
+        })
+
+    async def _handle_cleanup_stop(self, command_id: str, payload: Dict[str, Any]):
+        if not self.cleanup_control_publisher:
+            raise RuntimeError("ZMQ Cleanup Control Publisher is not initialized")
+        await self.cleanup_control_publisher.publish("market_cleanup_control", {
+            "type": "cleanup_stop",
+            "command_id": command_id
+        })
+
+    async def _handle_cleanup_preview(self, command_id: str, payload: Dict[str, Any]):
+        if not self.cleanup_control_publisher:
+            raise RuntimeError("ZMQ Cleanup Control Publisher is not initialized")
+        date = payload.get("date")
+        if not date:
+            raise ValueError("date parameter is missing for cleanup_preview")
+        await self.cleanup_control_publisher.publish("market_cleanup_control", {
+            "type": "cleanup_preview",
+            "date": date,
+            "command_id": command_id
+        })
+
+    async def _handle_cleanup_run_once(self, command_id: str, payload: Dict[str, Any]):
+        if not self.cleanup_control_publisher:
+            raise RuntimeError("ZMQ Cleanup Control Publisher is not initialized")
+        date = payload.get("date")
+        if not date:
+            raise ValueError("date parameter is missing for cleanup_run_once")
+        limit = payload.get("limit", 20000)
+        await self.cleanup_control_publisher.publish("market_cleanup_control", {
+            "type": "cleanup_run_once",
+            "date": date,
+            "limit": limit,
+            "command_id": command_id
+        })
+
+    async def _handle_cleanup_restart_daemon(self, command_id: str, payload: Dict[str, Any]):
+        if not self.cleanup_control_publisher:
+            raise RuntimeError("ZMQ Cleanup Control Publisher is not initialized")
+        await self.cleanup_control_publisher.publish("market_cleanup_control", {
+            "type": "restart_daemon",
+            "command_id": command_id
+        })

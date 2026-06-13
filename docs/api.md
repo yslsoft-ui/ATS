@@ -293,11 +293,58 @@
 - **`GET /test-status?strategy_id={id}`**
   - **설명**: UI 연동 테스트를 위해 특정 매매 전략의 가상 동작 지표 상태 데이터를 강제 발생 및 전송합니다.
 
-- **`GET /data/cleanup/preview?date={date_iso}`**
-  - **설명**: 지정된 날짜(예: `2026-05-01`) 이전에 해당하는 삭제 대상 데이터(체결 틱 및 캔들) 건수를 미리 조회합니다.
+### 1.8. 데이터 클린업 제어 API (Cleanup Router)
 
-- **`POST /data/cleanup?date={date_iso}`**
-  - **설명**: 지정된 날짜 이전의 체결 데이터 및 캔들 데이터를 DB에서 완전히 삭제하여 디스크 용량을 최적화합니다.
+- **`GET /api/cleanup/status`**
+  - **설명**: 클린업 데몬의 실시간 제어 상태, 글로벌 보존 설정(TTL), 마지막 실행 시간 및 통계 요약을 조회합니다.
+
+- **`POST /api/cleanup/start`**
+  - **설명**: 클린업 자동 정리 스케줄러를 가동(`ACTIVE`) 시킵니다.
+  - **Request Body**:
+    ```json
+    {
+      "command_id": "UUID-STRING"
+    }
+    ```
+
+- **`POST /api/cleanup/stop`**
+  - **설명**: 클린업 자동 정리 스케줄러를 일시 중지(`PAUSED`) 시킵니다.
+  - **Request Body**:
+    ```json
+    {
+      "command_id": "UUID-STRING"
+    }
+    ```
+
+- **`POST /api/cleanup/restart-daemon`**
+  - **설명**: 클린업 데몬 프로세스를 즉시 자가 재기동 신호를 보내 자원을 초기화합니다.
+  - **Request Body**:
+    ```json
+    {
+      "command_id": "UUID-STRING"
+    }
+    ```
+
+- **`POST /api/cleanup/preview`**
+  - **설명**: 지정된 날짜 이전의 삭제 대상 틱(Trades) 건수를 조회하도록 데몬에 요청합니다.
+  - **Request Body**:
+    ```json
+    {
+      "date": "YYYY-MM-DD",
+      "command_id": "UUID-STRING"
+    }
+    ```
+
+- **`POST /api/cleanup/run`**
+  - **설명**: 지정된 날짜 이전 데이터를 지정 청크 한도(limit) 내에서 영구 삭제하도록 데몬에 요청합니다.
+  - **Request Body**:
+    ```json
+    {
+      "date": "YYYY-MM-DD",
+      "limit": 20000,
+      "command_id": "UUID-STRING"
+    }
+    ```
 
 ---
 

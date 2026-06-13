@@ -15,6 +15,7 @@ from src.server.routers.collector import router as collector_router
 from src.server.routers.strategy import router as strategy_router
 from src.server.routers.portfolio import router as portfolio_router
 from src.server.routers.telemetry import router as telemetry_router
+from src.server.routers.cleanup import router as cleanup_router
 from src.server.routers.intelligence import router as intelligence_router
 from src.server.routers.decision_console import router as decision_console_router
 
@@ -42,6 +43,7 @@ app.include_router(collector_router)
 app.include_router(strategy_router)
 app.include_router(portfolio_router)
 app.include_router(telemetry_router)
+app.include_router(cleanup_router)
 app.include_router(intelligence_router)
 app.include_router(decision_console_router)
 
@@ -161,7 +163,13 @@ async def zmq_listener_loop():
                 topic, data = await cleanup_sub.receive()
                 if not topic:
                     continue
-                if data.get('type') in ['market_cleanup_status', 'system_event']:
+                
+                # 실시간 상태 패킷 수신 시 캐시 업데이트
+                if data.get('type') == 'market_cleanup_status':
+                    system.cleanup_status = data.copy()
+
+                # 브로드캐스트 대상 이벤트 확장
+                if data.get('type') in ['market_cleanup_status', 'system_event', 'cleanup_command_result']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -272,9 +280,11 @@ async def startup_event():
     # ZMQ 제어 Publisher 생성
     app.state.control_publisher = EventBusPublisher("collector_control")
     app.state.strategy_control_publisher = EventBusPublisher("strategy_control")
+    app.state.cleanup_control_publisher = EventBusPublisher("market_cleanup_control")
     system.dispatcher.set_publishers(
         control_publisher=app.state.control_publisher,
-        strategy_control_publisher=app.state.strategy_control_publisher
+        strategy_control_publisher=app.state.strategy_control_publisher,
+        cleanup_control_publisher=app.state.cleanup_control_publisher
     )
     # ZMQ 구독 비동기 루프 기동
     app.state.zmq_loop_task = asyncio.create_task(zmq_listener_loop())
@@ -315,6 +325,9 @@ async def shutdown_event():
     if hasattr(app.state, 'strategy_control_publisher'):
         app.state.strategy_control_publisher.close()
         logger.info("[Web Server] ZMQ strategy control publisher closed.")
+    if hasattr(app.state, 'cleanup_control_publisher'):
+        app.state.cleanup_control_publisher.close()
+        logger.info("[Web Server] ZMQ cleanup control publisher closed.")
     # 웹서버 종료 이력 적재
     try:
         await system.repository.insert_system_event('DAEMON_STOP', 'web_server', '웹 API 서버 안전 종료 완료')

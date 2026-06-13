@@ -294,7 +294,13 @@ Pareto 랭킹 연산의 병목 및 진동을 차단하기 위해, 국면 확률 
 모의투자(실계좌) 포트폴리오 구동 시작 시 사용자가 적용할 전략을 별도로 선택하지 않았을 경우, DB 내에 존재하는 최신 챔피언 전략(`strategy_versions`)을 탐색하여 자동으로 기용하는 시스템 흐름. 만약 DB 내에 유효한 챔피언 전략 정보가 전무하다면, 사전에 약속된 기본 템플릿(Fallback Strategy)을 조립하여 모의투자를 가동합니다.
 
 **Exchange-specific Strategy Overrides (거래소별 전략 동적 오버라이드 및 병합)**:
-각 거래소(`Exchange`)의 규격과 자산 특성(예: 수수료율, 거래단위, 특정 interval 제약 등)에 맞추어 맞춤형 전략 운용이 가능하도록, 설정 파일(`settings.yaml`)의 `overrides.[exchange_id]` 영역에 명시된 전략 활성화 여부(`enabled`) 및 파라미터(`params`) 구성을 `reload_trade_engines` 시점에 실시간 포트폴리오에 동적으로 병합 및 오버라이드하여 적용하는 기능.
+각 거래소(`Exchange`)의 규격과 자산 특성(예: 수수료율, 거래단위, 특정 interval 제약 등)에 맞추어 맞춤형 전략 운용이 가능하도록, 설정 파일(`settings.yaml`)의 `overrides.[exchange_id]` 영역에 명시된 전략 활성화 여부(`enabled`) 및 파라미터를 `reload_trade_engines` 시점에 실시간 포트폴리오에 동적으로 병합 및 오버라이드하여 적용하는 기능.
+
+**Market Data Cleanup Daemon (시장 데이터 정리 데몬)**:
+데이터베이스의 비대화를 방지하기 위해 틱(Tick) 및 분봉(Candle) 데이터의 생명주기를 감시하고, 설정된 보존 기간(TTL)을 초과한 오래된 데이터를 백그라운드에서 주기적으로 영구 삭제 및 다운샘플링하는 상시 실행 프로세스.
+
+**Cleanup State (클린업 데몬 상태)**:
+시장 데이터 정리 데몬의 실시간 제어 상태를 나타내는 지표. 자동 정리 스케줄러가 정상 동작 중인 `ACTIVE`, 대기 중인 `PAUSED`, 수동 즉시 삭제를 단독 처리 중인 `RUNNING_ONCE`, 내부 예외에 의해 정지된 `ERROR` 상태로 정의됨.
 
 ## Flagged ambiguities
 

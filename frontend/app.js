@@ -135,6 +135,12 @@ function processTick(tick) {
                 CollectorView.loadEvents();
             }
         }
+        // [NEW] 클린업 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
+        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'cleanup-view') {
+            if (typeof CleanupView !== 'undefined' && typeof CleanupView.loadEvents === 'function') {
+                CleanupView.loadEvents();
+            }
+        }
         return;
     }
 
@@ -158,6 +164,22 @@ function processTick(tick) {
     if (tick.type === 'collector_command_result') {
         if (typeof CollectorView !== 'undefined' && typeof CollectorView.handleCommandResult === 'function') {
             CollectorView.handleCommandResult(tick);
+        }
+        return;
+    }
+
+    // [NEW] 실시간 클린업 데몬 상태 정보 수신 시 라우팅
+    if (tick.type === 'market_cleanup_status') {
+        if (typeof CleanupView !== 'undefined' && typeof CleanupView.handleStatusUpdate === 'function') {
+            CleanupView.handleStatusUpdate(tick);
+        }
+        return;
+    }
+
+    // [NEW] 실시간 클린업 제어 명령 완료 ACK 수신 시 라우팅
+    if (tick.type === 'cleanup_command_result') {
+        if (typeof CleanupView !== 'undefined' && typeof CleanupView.handleCommandResult === 'function') {
+            CleanupView.handleCommandResult(tick);
         }
         return;
     }
@@ -484,6 +506,12 @@ function initViewNavigation() {
     ViewRouter.registerRoute('monitoring-view', () => {
         if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
             setTimeout(() => ChartEngine.resize(), 0);
+        }
+    });
+
+    ViewRouter.registerRoute('cleanup-view', () => {
+        if (typeof CleanupView !== 'undefined' && typeof CleanupView.init === 'function') {
+            CleanupView.init();
         }
     });
 

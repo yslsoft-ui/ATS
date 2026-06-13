@@ -47,15 +47,15 @@ async def test_market_cleanup_and_idempotency():
     # 오래된 시간 (35일 전, 정각 1시간 배수로 맞추어 정밀 비교)
     old_time = (now - (35 * 24 * 3600)) // 3600 * 3600
     old_time_ms = old_time * 1000
-    hour_bucket_ms = old_time_ms
+    hour_bucket_sec = old_time
     
     # 1. 테스트용 분봉 데이터 주입 (35일 전 데이터)
     test_candles = [
         # exchange, symbol, interval, timestamp, open, high, low, close, volume
-        ('upbit', 'BTC', 60, hour_bucket_ms, 50000.0, 51000.0, 49000.0, 50500.0, 1.5),
-        ('upbit', 'BTC', 60, hour_bucket_ms + 60000, 50500.0, 52000.0, 50000.0, 51500.0, 2.0),
+        ('upbit', 'BTC', 60, hour_bucket_sec, 50000.0, 51000.0, 49000.0, 50500.0, 1.5),
+        ('upbit', 'BTC', 60, hour_bucket_sec + 60, 50500.0, 52000.0, 50000.0, 51500.0, 2.0),
         # 보존해야 할 최근 캔들 (현재 시점)
-        ('upbit', 'BTC', 60, now_ms, 60000.0, 61000.0, 59000.0, 60500.0, 1.0)
+        ('upbit', 'BTC', 60, now, 60000.0, 61000.0, 59000.0, 60500.0, 1.0)
     ]
     
     async with get_db_conn(db_path) as db:
@@ -92,7 +92,7 @@ async def test_market_cleanup_and_idempotency():
     # 다운샘플링된 1시간봉 검증
     async with get_db_conn(db_path) as db:
         async with db.execute(
-            "SELECT * FROM candles WHERE interval = 3600 AND timestamp = ?", (hour_bucket_ms,)
+            "SELECT * FROM candles WHERE interval = 3600 AND timestamp = ?", (hour_bucket_sec,)
         ) as cur:
             row = await cur.fetchone()
             assert row is not None, "다운샘플링된 1시간봉이 생성되어야 합니다."
@@ -116,7 +116,7 @@ async def test_market_cleanup_and_idempotency():
     # 중복 저장 여부 검증
     async with get_db_conn(db_path) as db:
         async with db.execute(
-            "SELECT COUNT(*) FROM candles WHERE interval = 3600 AND timestamp = ?", (hour_bucket_ms,)
+            "SELECT COUNT(*) FROM candles WHERE interval = 3600 AND timestamp = ?", (hour_bucket_sec,)
         ) as cur:
             cnt = (await cur.fetchone())[0]
             assert cnt == 1, "멱등성이 깨져 중복 생성되었습니다."
@@ -174,7 +174,7 @@ async def test_market_cleanup_and_idempotency():
     
     async with get_db_conn(db_path) as db:
         # 35일 전 분봉 2건 + 1시간봉 1건이 삭제되지 않고 그대로 존재해야 함!
-        async with db.execute("SELECT COUNT(*) FROM candles WHERE timestamp BETWEEN ? AND ?", (hour_bucket_ms, hour_bucket_ms + 60000)) as cur:
+        async with db.execute("SELECT COUNT(*) FROM candles WHERE timestamp BETWEEN ? AND ?", (hour_bucket_sec, hour_bucket_sec + 60)) as cur:
             cnt_protected = (await cur.fetchone())[0]
             # 1분봉 2개 + 1시간봉 1개 = 총 3개 존재해야 함
             assert cnt_protected == 3, f"Expected 3 candles protected, got {cnt_protected}"

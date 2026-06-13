@@ -176,14 +176,43 @@ const APIClient = (() => {
 
 
         /**
-         * 데이터 정리(Cleanup) 실행 전 예상 데이터 수 소거 미리보기
+         * 클린업 데몬 상태 및 설정 조회
          */
-        fetchCleanupPreview: (date) => _fetchAPI(`/data/cleanup/preview?date=${date}`),
+        fetchCleanupStatus: () => _fetchAPI('/api/cleanup/status'),
+
+
 
         /**
-         * 특정 기준 시간 이전의 과거 데이터 정리 실행
+         * 클린업 데몬 프로세스 자가 재기동
          */
-        runCleanup: (date, limit = 20000) => _fetchAPI(`/data/cleanup?date=${date}&limit=${limit}`, { method: 'POST' }),
+        restartCleanupDaemon: (commandId) => 
+            _fetchAPI('/api/cleanup/restart-daemon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ command_id: commandId })
+            }),
+
+
+
+        /**
+         * 데이터 정리(Cleanup) 실행 전 예상 데이터 수 소거 미리보기 (틱 전용)
+         */
+        fetchCleanupPreview: (date, commandId) => 
+            _fetchAPI('/api/cleanup/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date, command_id: commandId })
+            }),
+
+        /**
+         * 특정 기준 시간 이전의 과거 데이터 즉시 정리 실행
+         */
+        runCleanup: (date, limit = 20000, commandId) => 
+            _fetchAPI('/api/cleanup/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ date, limit, command_id: commandId })
+            }),
 
         /**
          * 백엔드 내부 지연 대기열 큐 모니터링 현황 조회
