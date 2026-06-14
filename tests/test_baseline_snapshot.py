@@ -139,17 +139,17 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
     async with get_db_conn(TEST_DB_PATH) as db:
         # 1) 시작 캔들 (가격: 50000.0)
         await db.execute("""
-            INSERT INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+            INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 50000.0, 50000.0, 50000.0, 50000.0, 1.0)
         """, (now * 1000,))
         # 2) 만기 시점 캔들 (가격: 52500.0, ROI 5.0% 상승)
         await db.execute("""
-            INSERT INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+            INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 52500.0, 52500.0, 52500.0, 52500.0, 1.0)
         """, (due_at * 1000,))
         # 3) 미래 캔들 (timestamp = due_at + 120, 가격: 60000.0) -> 만기 이후 데이터라 평가에 참조되면 안 됨!
         await db.execute("""
-            INSERT INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+            INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 60000.0, 60000.0, 60000.0, 60000.0, 1.0)
         """, ((due_at + 120) * 1000,))
         await db.commit()
@@ -160,7 +160,7 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
         price_features={"close": 50000.0},
         liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 5000.0},
         regime_features={"regime_index": 0.0},
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         market_type="crypto"
     )

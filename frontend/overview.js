@@ -16,6 +16,7 @@ const OverviewEngine = (() => {
 
     let cachedPortfolio = null;
     let activityEvents = []; // 최근 5건 거래/이벤트 저장용
+    let allocationBarHoverStates = { upbit: false, bithumb: false, kis: false }; // [NEW] 호버 상태 추적용 변수
 
     /**
      * 초기화 함수
@@ -33,7 +34,7 @@ const OverviewEngine = (() => {
                     activityEvents = sorted.slice(0, 5).map(tx => ({
                         type: 'trade',
                         timestamp: tx.timestamp * 1000,
-                        exchange: tx.exchange,
+                        exchange: tx.exchange_id,
                         symbol: tx.symbol,
                         side: tx.side,
                         price: tx.price,
@@ -46,8 +47,8 @@ const OverviewEngine = (() => {
         } catch (e) {
             console.error("[OverviewEngine] Failed to load initial activity feed:", e);
         }
-        // [NEW] 토글 버튼 바인딩
-        bindToggleButtons();
+        // [NEW] 세션 선택 드롭다운 바인딩
+        bindSessionSelect();
     }
 
     /**
@@ -79,12 +80,8 @@ const OverviewEngine = (() => {
     function renderMetrics() {
         if (!cachedPortfolio) return;
 
-        // [NEW] 토글 UI 상태를 현재 세션 타입과 양방향 연동
-        if (cachedPortfolio.type === 'live') {
-            updateToggleUI('live');
-        } else {
-            updateToggleUI('simulation');
-        }
+        // [NEW] 드롭다운 UI 상태를 현재 세션 정보와 동기화
+        updateSessionSelectUI(cachedPortfolio.id, cachedPortfolio.type);
 
         const sessionInfoEl = document.getElementById('overview-session-info');
         if (sessionInfoEl) {
@@ -141,16 +138,23 @@ const OverviewEngine = (() => {
             assetsRatioEl.innerText = `비중: ${ratio.toFixed(1)}%`;
         }
 
-        // AI 판단 확신도 및 활성 엔진
-        const aiScoreEl = document.getElementById('overview-ai-score');
-        if (aiScoreEl) {
-            const gnnScore = Store.get('gnnScore') || 85.0;
-            aiScoreEl.innerText = `${gnnScore.toFixed(1)} 점`;
+        // [NEW] 투자 원금 및 누적 수수료 렌더링
+        let initial = cachedPortfolio.initial_cash || 10000000.0;
+        if (typeof initial === 'object') {
+            initial = Object.values(initial).reduce((a, b) => a + b, 0);
+        } else {
+            initial = parseFloat(initial) || 0;
         }
-        const engineCountEl = document.getElementById('overview-engine-count');
-        if (engineCountEl) {
-            const activeEngines = Store.get('collectorStatuses')?.strategy?.active_engines || 0;
-            engineCountEl.innerText = `활성 엔진: ${activeEngines}개 종목`;
+
+        const initialCashEl = document.getElementById('overview-initial-cash');
+        if (initialCashEl) {
+            updateValueWithFlash(initialCashEl, Math.round(initial).toLocaleString() + ' 원');
+        }
+
+        const fee = summary.fee !== undefined ? summary.fee : 0.0;
+        const totalFeeEl = document.getElementById('overview-total-fee');
+        if (totalFeeEl) {
+            updateValueWithFlash(totalFeeEl, Math.round(fee).toLocaleString() + ' 원');
         }
     }
 
@@ -168,14 +172,30 @@ const OverviewEngine = (() => {
         const exchanges = ['upbit', 'bithumb', 'kis'];
 
         exchanges.forEach(ex => {
+            // [NEW] 마우스 호버 중일 때는 렌더링을 일시 보류하여 툴팁이 끊어지는 현상 방지
+            if (allocationBarHoverStates[ex]) return;
+
             const barContainer = document.getElementById(`overview-allocation-bar-${ex}`);
-            const legendContainer = document.getElementById(`overview-allocation-legend-${ex}`);
             const totalEl = document.getElementById(`overview-allocation-total-${ex}`);
 
-            if (!barContainer || !legendContainer) return;
+            if (!barContainer) return;
+
+            // [NEW] 호버 상태 감지 리스너 바인딩 (최초 1회)
+            if (!barContainer.dataset.hoverBound) {
+                barContainer.dataset.hoverBound = 'true';
+                barContainer.addEventListener('mouseenter', () => {
+                    allocationBarHoverStates[ex] = true;
+                });
+                barContainer.addEventListener('mouseleave', () => {
+                    allocationBarHoverStates[ex] = false;
+                    // 호버가 풀리면 즉시 최신 데이터로 업데이트 렌더링
+                    setTimeout(() => {
+                        renderAllocationBar();
+                    }, 50);
+                });
+            }
 
             barContainer.innerHTML = '';
-            legendContainer.innerHTML = '';
 
             // 2.1. 해당 거래소의 현금 분류
             let exCash = 0.0;
@@ -191,7 +211,7 @@ const OverviewEngine = (() => {
 
             // 2.2. 해당 거래소의 보유종목 필터링 및 평가액 계산
             const exPositions = positions.filter(pos => {
-                const posEx = (pos.exchange || '').toLowerCase();
+                const posEx = (pos.exchange_id || '').toLowerCase();
                 return posEx === ex && pos.quantity > 0;
             });
 
@@ -205,7 +225,7 @@ const OverviewEngine = (() => {
 
             // 총액 및 현금 라벨 헤더 한 줄 반영 (상세 자산 메트릭 주입)
             if (totalEl) {
-                const exSummary = (cachedPortfolio.exchanges || []).find(e => e.exchange_id.toLowerCase() === ex);
+                const exSummary = (cachedPortfolio.exchanges || []).find(e => e && e.exchange_id && e.exchange_id.toLowerCase() === ex);
                 const initCash = exSummary ? exSummary.initial_cash : 0.0;
                 
                 // 실시간 ROI 계산 (투자 원금 대비 실시간 평가액 변동률)
@@ -255,7 +275,6 @@ const OverviewEngine = (() => {
             }
             
             // 종목 추가 (종목명 포맷: 한글명(종목명))
-            let itemSegs = [];
             exPositions.forEach((pos, idx) => {
                 const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
                 const ratio = (evalValue / totalVal) * 100;
@@ -263,7 +282,7 @@ const OverviewEngine = (() => {
                 const korName = pos.korean_name;
                 const displayName = (korName && korName !== pos.symbol) ? `${korName}(${pos.symbol})` : pos.symbol;
 
-                itemSegs.push({
+                segments.push({
                     name: displayName,
                     value: evalValue,
                     ratio: ratio,
@@ -271,30 +290,7 @@ const OverviewEngine = (() => {
                 });
             });
 
-            // 상위 N=10개 병합 로직
-            const N = 10;
-            if (itemSegs.length > N) {
-                itemSegs.sort((a, b) => b.value - a.value);
-                const topSegs = itemSegs.slice(0, N);
-                const otherSegs = itemSegs.slice(N);
-
-                let otherTotal = 0;
-                otherSegs.forEach(s => otherTotal += s.value);
-                const otherRatio = (otherTotal / totalVal) * 100;
-
-                segments = [...segments, ...topSegs];
-                if (otherTotal > 0) {
-                    segments.push({
-                        name: '기타',
-                        value: otherTotal,
-                        ratio: otherRatio,
-                        color: '#334155'
-                    });
-                }
-            } else {
-                itemSegs.sort((a, b) => b.value - a.value);
-                segments = [...segments, ...itemSegs];
-            }
+            segments.sort((a, b) => b.value - a.value);
 
             // 2.4. DOM 렌더링
             segments.forEach(seg => {
@@ -304,7 +300,9 @@ const OverviewEngine = (() => {
                 segEl.className = 'bar-segment';
                 segEl.style.width = `${seg.ratio}%`;
                 segEl.style.backgroundColor = seg.color;
-                segEl.title = `${seg.name}: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)`;
+                
+                const tooltipText = `${seg.name}: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)`;
+                segEl.setAttribute('data-tooltip', tooltipText);
 
                 // 표시폭 8% 이상 텍스트 노출
                 if (seg.ratio >= 8.0) {
@@ -313,15 +311,6 @@ const OverviewEngine = (() => {
                     segEl.appendChild(labelSpan);
                 }
                 barContainer.appendChild(segEl);
-
-                // 범례 추가
-                const legEl = document.createElement('div');
-                legEl.className = 'legend-item';
-                legEl.innerHTML = `
-                    <div class="legend-color-box" style="background-color: ${seg.color}"></div>
-                    <span><strong>${seg.name}</strong>: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)</span>
-                `;
-                legendContainer.appendChild(legEl);
             });
         });
     }
@@ -503,47 +492,24 @@ const OverviewEngine = (() => {
     }
 
     /**
-     * [NEW] 실투자/모의투자 토글 버튼 핸들러 및 상태 동기화 함수
+     * [NEW] 세션 선택 드롭다운 핸들러 및 상태 동기화 함수
      */
-    function bindToggleButtons() {
-        const btnLive = document.getElementById('btn-toggle-live');
-        const btnSim = document.getElementById('btn-toggle-sim');
-        
-        if (!btnLive || !btnSim) return;
+    function bindSessionSelect() {
+        const selectEl = document.getElementById('overview-session-select');
+        if (!selectEl) return;
         
         // 중복 이벤트 바인딩 방지 (클론하여 교체)
-        const newLive = btnLive.cloneNode(true);
-        const newSim = btnSim.cloneNode(true);
-        btnLive.parentNode.replaceChild(newLive, btnLive);
-        btnSim.parentNode.replaceChild(newSim, btnSim);
+        const newSelect = selectEl.cloneNode(true);
+        selectEl.parentNode.replaceChild(newSelect, selectEl);
 
-        newLive.addEventListener('click', async () => {
-            if (state.currentPortfolioId === 'live') return;
+        newSelect.addEventListener('change', async (e) => {
+            const selectedId = e.target.value;
+            if (!selectedId) return;
             
-            state.currentPortfolioId = 'live';
-            updateToggleUI('live');
-            syncSidebarHighlight('live');
+            if (state.currentPortfolioId === selectedId) return;
             
-            if (typeof loadPortfolio === 'function') {
-                await loadPortfolio(true);
-            }
-            await refreshData();
-        });
-        
-        newSim.addEventListener('click', async () => {
-            if (state.currentPortfolioId !== 'live' && state.currentPortfolioId) return;
-
-            let targetSimId = 'default';
-            if (state.portfoliosCache && state.portfoliosCache.length > 0) {
-                const sims = state.portfoliosCache.filter(p => p.id !== 'live' && p.id !== 'default');
-                if (sims.length > 0) {
-                    targetSimId = sims[0].id;
-                }
-            }
-            
-            state.currentPortfolioId = targetSimId;
-            updateToggleUI('simulation');
-            syncSidebarHighlight(targetSimId);
+            state.currentPortfolioId = selectedId;
+            syncSidebarHighlight(selectedId);
             
             if (typeof loadPortfolio === 'function') {
                 await loadPortfolio(true);
@@ -552,28 +518,20 @@ const OverviewEngine = (() => {
         });
     }
 
-    function updateToggleUI(mode) {
-        const btnLive = document.getElementById('btn-toggle-live');
-        const btnSim = document.getElementById('btn-toggle-sim');
-        
-        if (!btnLive || !btnSim) return;
-        
-        if (mode === 'live') {
-            btnLive.classList.add('active');
-            btnLive.style.background = '#FF4B4B';
-            btnLive.style.color = '#F8FAFC';
-            
-            btnSim.classList.remove('active');
-            btnSim.style.background = 'transparent';
-            btnSim.style.color = '#94A3B8';
-        } else {
-            btnSim.classList.add('active');
-            btnSim.style.background = '#3B82F6';
-            btnSim.style.color = '#F8FAFC';
-            
-            btnLive.classList.remove('active');
-            btnLive.style.background = 'transparent';
-            btnLive.style.color = '#94A3B8';
+    function updateSessionSelectUI(portfolioId, type) {
+        const selectEl = document.getElementById('overview-session-select');
+        if (selectEl && selectEl.value !== portfolioId) {
+            selectEl.value = portfolioId;
+        }
+
+        if (selectEl) {
+            if (type === 'live') {
+                selectEl.style.borderColor = '#FF4B4B'; // 실거래: Red
+            } else if (type === 'simulation') {
+                selectEl.style.borderColor = '#10B981'; // 진행중: Emerald
+            } else {
+                selectEl.style.borderColor = 'rgba(148, 163, 184, 0.2)'; // 기본 회색
+            }
         }
     }
 

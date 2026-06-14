@@ -86,27 +86,32 @@
                             활성 세션: 로딩 중...
                         </div>
                     </div>
-                    <!-- 실투자 / 모의투자 토글 스위치 -->
-                    <div class="mode-toggle-container"
-                        style="display: flex; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 4px; gap: 4px;">
-                        <button id="btn-toggle-live" class="toggle-btn active"
-                            style="background: #FF4B4B; color: #F8FAFC; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">실거래</button>
-                        <button id="btn-toggle-sim" class="toggle-btn"
-                            style="background: transparent; color: #94A3B8; border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: bold; cursor: pointer; transition: all 0.2s;">모의투자</button>
+                    <!-- 세션 선택 드롭다운 -->
+                    <div class="session-select-container" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: max-content; white-space: nowrap;">
+                        <label for="overview-session-select" style="font-size: 0.82rem; color: #94A3B8; font-weight: bold; white-space: nowrap; display: inline-block; min-width: max-content; flex-shrink: 0;">세션 선택:</label>
+                        <select id="overview-session-select" class="dark-input"
+                            style="background: #1E293B; color: #F8FAFC; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 8px; padding: 6px 12px; font-size: 0.82rem; font-weight: bold; cursor: pointer; outline: none; transition: border-color 0.2s; width: auto !important; margin-top: 0 !important;">
+                            <!-- JS에서 동적으로 채워짐 -->
+                        </select>
                     </div>
                 </header>
 
                 <!-- 1. 핵심 성과 메트릭 (그라데이션 카드) -->
                 <div class="overview-metrics-grid">
-                    <div class="overview-card metric-card grad-value">
-                        <div class="card-label">💰 총 평가 자산</div>
-                        <div class="card-value" id="overview-total-value">0</div>
-                        <div class="card-sub-label">현금 + 보유종목 평가액</div>
-                    </div>
                     <div class="overview-card metric-card grad-roi">
                         <div class="card-label">📈 누적 수익률 (ROI)</div>
                         <div class="card-value" id="overview-roi">0.00%</div>
                         <div class="card-sub-label" id="overview-roi-diff">원금 대비 변동</div>
+                    </div>
+                    <div class="overview-card metric-card grad-initial-cash">
+                        <div class="card-label">🏦 투자 원금</div>
+                        <div class="card-value" id="overview-initial-cash">0</div>
+                        <div class="card-sub-label">시작 시 자산 규모</div>
+                    </div>
+                    <div class="overview-card metric-card grad-value">
+                        <div class="card-label">💰 총 평가 자산</div>
+                        <div class="card-value" id="overview-total-value">0</div>
+                        <div class="card-sub-label">현금 + 보유종목 평가액</div>
                     </div>
                     <div class="overview-card metric-card grad-cash">
                         <div class="card-label">💵 보유 현금</div>
@@ -118,10 +123,10 @@
                         <div class="card-value" id="overview-assets-value">0</div>
                         <div class="card-sub-label" id="overview-assets-ratio">비중: 0.0%</div>
                     </div>
-                    <div class="overview-card metric-card grad-ai">
-                        <div class="card-label">🧠 AI 판단 확신도</div>
-                        <div class="card-value" id="overview-ai-score">—</div>
-                        <div class="card-sub-label" id="overview-engine-count">활성 엔진: 0개</div>
+                    <div class="overview-card metric-card grad-fee">
+                        <div class="card-label">🧾 누적 수수료</div>
+                        <div class="card-value" id="overview-total-fee">0</div>
+                        <div class="card-sub-label">누적 거래 체결 비용</div>
                     </div>
                 </div>
 
@@ -141,8 +146,6 @@
                                 <!-- JS에서 동적 생성 -->
                             </div>
                         </div>
-                        <div id="overview-allocation-legend-upbit" class="allocation-legend-grid"
-                            style="margin-top: 8px;"></div>
                     </div>
 
                     <!-- 2.2. 빗썸 (BITHUMB) -->
@@ -157,8 +160,6 @@
                                 <!-- JS에서 동적 생성 -->
                             </div>
                         </div>
-                        <div id="overview-allocation-legend-bithumb" class="allocation-legend-grid"
-                            style="margin-top: 8px;"></div>
                     </div>
 
                     <!-- 2.3. 한국투자증권 (KIS) -->
@@ -173,8 +174,6 @@
                                 <!-- JS에서 동적 생성 -->
                             </div>
                         </div>
-                        <div id="overview-allocation-legend-kis" class="allocation-legend-grid"
-                            style="margin-top: 8px;"></div>
                     </div>
                 </div>
 

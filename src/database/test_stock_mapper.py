@@ -34,7 +34,7 @@ async def test_stock_mapper_db_flow(db_path):
             ("ETH", "이더리움", "crypto")
         )
         await db.execute(
-            "INSERT INTO exchange_assets (exchange, symbol, is_active, is_delisted) VALUES (?, ?, 1, 0)",
+            "INSERT INTO exchange_assets (exchange_id, symbol, is_active, is_delisted) VALUES (?, ?, 1, 0)",
             ("upbit", "ETH")
         )
         await db.commit()

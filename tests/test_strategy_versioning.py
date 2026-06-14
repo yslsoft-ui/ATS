@@ -225,14 +225,14 @@ async def test_database_versioning_and_proposals():
 async def test_calculate_performance_metrics():
     # 8. 성과 계산(calculate_performance_metrics) 유틸리티 단위 검증
     history = [
-        {"exchange": "upbit", "symbol": "BTC", "side": "BUY", "price": 100.0, "quantity": 10.0, "fee": 0.5, "timestamp": 1000},
-        {"exchange": "upbit", "symbol": "BTC", "side": "SELL", "price": 120.0, "quantity": 5.0, "fee": 0.6, "timestamp": 2000},
-        {"exchange": "upbit", "symbol": "BTC", "side": "SELL", "price": 90.0, "quantity": 5.0, "fee": 0.45, "timestamp": 3000},
+        {"exchange_id": "upbit", "symbol": "BTC", "side": "BUY", "price": 100.0, "quantity": 10.0, "fee": 0.5, "timestamp": 1000},
+        {"exchange_id": "upbit", "symbol": "BTC", "side": "SELL", "price": 120.0, "quantity": 5.0, "fee": 0.6, "timestamp": 2000},
+        {"exchange_id": "upbit", "symbol": "BTC", "side": "SELL", "price": 90.0, "quantity": 5.0, "fee": 0.45, "timestamp": 3000},
     ]
     
     class MockPosition:
-        def __init__(self, exchange, symbol, quantity, avg_price):
-            self.exchange = exchange
+        def __init__(self, exchange_id, symbol, quantity, avg_price):
+            self.exchange_id = exchange_id
             self.symbol = symbol
             self.quantity = quantity
             self.avg_price = avg_price
@@ -280,10 +280,14 @@ async def test_analyzer_and_shadow_backtest_with_regime():
     # exchange_assets 활성 종목 등록
     async with get_db_conn(TEST_DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type) VALUES ('BTC', '비트코인', 'crypto')")
-        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
+        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
         await db.execute(
-            "INSERT OR IGNORE INTO portfolios (id, name, type, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?, ?, ?)",
-            (portfolio_id, "테스트 모의투자", "simulation", "upbit", 10000000.0, 10000000.0)
+            "INSERT OR IGNORE INTO portfolios (id, name, type, duration, strategy_info) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "테스트 모의투자", "simulation", 0.0, "")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
         )
         await db.commit()
 
@@ -314,7 +318,7 @@ async def test_analyzer_and_shadow_backtest_with_regime():
             ts = now_ms - (50 - i) * 60000
             price = 50000.0 - (i % 2) * 500.0
             await db.execute('''
-                INSERT INTO trades (exchange, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id)
+                INSERT INTO trades (exchange_id, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id)
                 VALUES ('upbit', 'KRW', 'BTC', ?, 1.0, 'ASK', ?, ?)
             ''', (price, ts, 1000 + i))
             
@@ -323,29 +327,29 @@ async def test_analyzer_and_shadow_backtest_with_regime():
             ts = int((now_ms - (30 - i) * 60000) / 1000 // 60) * 60
             price = 50000.0
             await db.execute('''
-                INSERT INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+                INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
                 VALUES ('upbit', 'BTC', 60, ?, ?, ?, ?, ?, 1.0)
             ''', (ts, price, price, price, price))
 
         # orders_history에 손실 유발 거래 주입
         # BUY 평단 50000 -> SELL 45000 (손실)
         await db.execute('''
-            INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp)
+            INSERT INTO orders_history (portfolio_id, exchange_id, strategy_id, symbol, side, price, quantity, fee, timestamp)
             VALUES (?, 'upbit', ?, 'BTC', 'BUY', 50000.0, 1.0, 2.5, ?)
         ''', (portfolio_id, strategy_id, int(now_ms/1000 - 100)))
         await db.execute('''
-            INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp)
+            INSERT INTO orders_history (portfolio_id, exchange_id, strategy_id, symbol, side, price, quantity, fee, timestamp)
             VALUES (?, 'upbit', ?, 'BTC', 'SELL', 45000.0, 1.0, 2.25, ?)
         ''', (portfolio_id, strategy_id, int(now_ms/1000)))
         
         # 5건 채우기용 가상 무손실 거래들 주입
         for i in range(4):
             await db.execute('''
-                INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES (?, 'upbit', ?, 'BTC', 'BUY', 40000.0, 1.0, 2.0, ?)
             ''', (portfolio_id, strategy_id, int(now_ms/1000 - 500 - i * 100)))
             await db.execute('''
-                INSERT INTO orders_history (portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES (?, 'upbit', ?, 'BTC', 'SELL', 41000.0, 1.0, 2.05, ?)
             ''', (portfolio_id, strategy_id, int(now_ms/1000 - 400 - i * 100)))
 
@@ -539,10 +543,14 @@ async def test_strategy_execution_full_loop():
     # 1. 테스트용 포트폴리오를 DB 및 자산 마스터에 등록
     async with get_db_conn(TEST_DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type) VALUES ('BTC', '비트코인', 'crypto')")
-        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
+        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
         await db.execute(
-            "INSERT OR IGNORE INTO portfolios (id, name, type, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?, ?, ?)",
-            (portfolio_id, "루프 테스트 포트", "simulation", "upbit", 10000000.0, 10000000.0)
+            "INSERT OR IGNORE INTO portfolios (id, name, type, duration, strategy_info) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "루프 테스트 포트", "simulation", 0.0, "")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
         )
         await db.commit()
         
@@ -588,11 +596,11 @@ async def test_strategy_execution_full_loop():
     
     # 3. 버전 1 상태에서 거래 발생 (수익 획득 시나리오)
     # BUY 1 BTC @ 50,000, fee = 25
-    port.update_position(exchange='upbit', symbol='BTC', side='BUY', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='BUY', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # SELL 1 BTC @ 52,000, fee = 26 (수익 = 2000 - 51 = 1949)
-    port.update_position(exchange='upbit', symbol='BTC', side='SELL', price=52000.0, quantity=1.0, fee=26.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='SELL', price=52000.0, quantity=1.0, fee=26.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # 버전 1의 최종 성능 계산
@@ -665,11 +673,11 @@ async def test_strategy_execution_full_loop():
     
     # 5. 버전 2 상태에서 다시 거래 발생 (손실 유발 시나리오)
     # BUY 1 BTC @ 52,000, fee = 26
-    port.update_position(exchange='upbit', symbol='BTC', side='BUY', price=52000.0, quantity=1.0, fee=26.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='BUY', price=52000.0, quantity=1.0, fee=26.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # SELL 1 BTC @ 48,000, fee = 24 (손실 = -4000 - 50 = -4050)
-    port.update_position(exchange='upbit', symbol='BTC', side='SELL', price=48000.0, quantity=1.0, fee=24.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='SELL', price=48000.0, quantity=1.0, fee=24.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # 버전 2의 최종 성능 계산 (버전 1의 수익과 버전 2의 손실이 누적 반영됨)
@@ -724,11 +732,11 @@ async def test_strategy_execution_full_loop():
     
     # 7. 버전 3 상태(복구된 버전 1 파라미터)에서 추가 거래 발생 (다시 수익 시나리오)
     # BUY 1 BTC @ 48,000, fee = 24
-    port.update_position(exchange='upbit', symbol='BTC', side='BUY', price=48000.0, quantity=1.0, fee=24.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='BUY', price=48000.0, quantity=1.0, fee=24.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # SELL 1 BTC @ 50,000, fee = 25 (수익 = 2000 - 49 = 1951)
-    port.update_position(exchange='upbit', symbol='BTC', side='SELL', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='SELL', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     
     # 최종 버전 3 성능 계산
@@ -836,10 +844,14 @@ async def test_atomic_mutations_and_async_enrichment():
     # 1. 자산 마스터 및 포트폴리오 등록
     async with get_db_conn(TEST_DB_PATH) as db:
         await db.execute("INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type) VALUES ('BTC', '비트코인', 'crypto')")
-        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
+        await db.execute("INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active) VALUES ('upbit', 'BTC', 1)")
         await db.execute(
-            "INSERT OR IGNORE INTO portfolios (id, name, type, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?, ?, ?)",
-            (portfolio_id, "원자적 테스트 포트", "simulation", "upbit", 10000000.0, 10000000.0)
+            "INSERT OR IGNORE INTO portfolios (id, name, type, duration, strategy_info) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "원자적 테스트 포트", "simulation", 0.0, "")
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
         )
         await db.commit()
 
@@ -910,9 +922,9 @@ async def test_atomic_mutations_and_async_enrichment():
     loaded_ports = await pm.repository.load_portfolios()
     pm.portfolios = loaded_ports
     port = pm.portfolios[portfolio_id]
-    port.update_position(exchange='upbit', symbol='BTC', side='BUY', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='BUY', price=50000.0, quantity=1.0, fee=25.0, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
-    port.update_position(exchange='upbit', symbol='BTC', side='SELL', price=55000.0, quantity=1.0, fee=27.5, strategy_id=strategy_id)
+    port.update_position(exchange_id='upbit', symbol='BTC', side='SELL', price=55000.0, quantity=1.0, fee=27.5, strategy_id=strategy_id)
     await pm.repository.insert_order_history(portfolio_id, port.history[-1])
     await pm.repository.save_portfolio(port)
     

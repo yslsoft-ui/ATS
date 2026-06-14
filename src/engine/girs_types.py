@@ -18,7 +18,7 @@ class FeatureSnapshot:
     generated_at: float = field(default_factory=time.time)
     
     # 확장 시장 메타데이터
-    exchange: str = ""
+    exchange_id: str = ""
     symbol: str = ""
     market_type: str = ""
     session_state: str = ""

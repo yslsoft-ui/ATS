@@ -263,22 +263,22 @@ class MarketDataCleanupService(DaemonService):
             # interval이 3600 미만인 분봉 데이터들을 대상으로 1시간봉 취합하여 INSERT OR REPLACE
             # 각 hour_bucket 내에서 최초의 open 가격과 최후의 close 가격을 정확히 쿼리하기 위해 서브쿼리 사용
             cursor = await db.execute("""
-                INSERT OR REPLACE INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+                INSERT OR REPLACE INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
                 SELECT 
-                    t.exchange,
+                    t.exchange_id,
                     t.symbol,
                     3600 as interval,
                     t.hour_bucket,
                     (SELECT c.open FROM candles c 
-                     WHERE c.exchange = t.exchange AND c.symbol = t.symbol AND c.interval < 3600 AND c.timestamp = t.min_ts LIMIT 1) as open,
+                     WHERE c.exchange_id = t.exchange_id AND c.symbol = t.symbol AND c.interval < 3600 AND c.timestamp = t.min_ts LIMIT 1) as open,
                     t.high,
                     t.low,
                     (SELECT c.close FROM candles c 
-                     WHERE c.exchange = t.exchange AND c.symbol = t.symbol AND c.interval < 3600 AND c.timestamp = t.max_ts LIMIT 1) as close,
+                     WHERE c.exchange_id = t.exchange_id AND c.symbol = t.symbol AND c.interval < 3600 AND c.timestamp = t.max_ts LIMIT 1) as close,
                     t.volume
                 FROM (
                     SELECT 
-                        exchange,
+                        exchange_id,
                         symbol,
                         (timestamp / 3600) * 3600 as hour_bucket,
                         MIN(timestamp) as min_ts,
@@ -288,7 +288,7 @@ class MarketDataCleanupService(DaemonService):
                         SUM(volume) as volume
                     FROM candles
                     WHERE timestamp < ? AND interval < 3600
-                    GROUP BY exchange, symbol, hour_bucket
+                    GROUP BY exchange_id, symbol, hour_bucket
                 ) t
             """, (cutoff_ts,))
             
@@ -533,7 +533,7 @@ class MarketDataCleanupService(DaemonService):
                     SELECT COUNT(*) FROM (
                         SELECT 1 FROM candles 
                         WHERE timestamp < ? AND interval < 3600
-                        GROUP BY exchange, symbol, (timestamp / 3600) * 3600
+                        GROUP BY exchange_id, symbol, (timestamp / 3600) * 3600
                     )
                 """, (candles_cutoff,)) as cursor:
                     self.next_cleanup_target_downsample = (await cursor.fetchone())[0]

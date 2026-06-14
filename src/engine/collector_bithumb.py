@@ -16,7 +16,7 @@ class BithumbCollector(BaseCollector):
     빗썸 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다.
     """
     @property
-    def exchange(self) -> str:
+    def exchange_id(self) -> str:
         return 'bithumb'
 
     def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
@@ -40,7 +40,7 @@ class BithumbCollector(BaseCollector):
             
             # --- 2. DB에 활성 종목이 없을 경우 API를 통해 전체 KRW 마켓 종목 자동 로드 (Fallback) ---
             if not symbols:
-                logger.warning(f"[{self.exchange.upper()}] DB에 활성화된 종목이 없습니다. API에서 전체 KRW 종목 로드를 시도합니다.")
+                logger.warning(f"[{self.exchange_id.upper()}] DB에 활성화된 종목이 없습니다. API에서 전체 KRW 종목 로드를 시도합니다.")
                 try:
                     async with self.session.get(f"{api_url}/market/all") as resp:
                         if resp.status == 200:
@@ -51,11 +51,11 @@ class BithumbCollector(BaseCollector):
                                     if isinstance(m, dict) and m.get('market', '').startswith('KRW-')
                                 ])
                 except Exception as ex:
-                    logger.error(f"[{self.exchange.upper()}] Fallback API 전체 종목 조회 실패: {ex}")
+                    logger.error(f"[{self.exchange_id.upper()}] Fallback API 전체 종목 조회 실패: {ex}")
                     
                 if not symbols:
                     symbols = ["BTC", "ETH"]
-                    logger.info(f"[{self.exchange.upper()}] 최종 Fallback 기본 종목 적용: {symbols}")
+                    logger.info(f"[{self.exchange_id.upper()}] 최종 Fallback 기본 종목 적용: {symbols}")
             
             # --- 3. 초기 시세 정보 주입 ---
             if self.on_data_callback:
@@ -72,7 +72,7 @@ class BithumbCollector(BaseCollector):
                                     try:
                                         initial_data = {
                                             'type': 'tick',
-                                            'exchange': 'bithumb',
+                                            'exchange_id': 'bithumb',
                                             'code': symbol,
                                             'trade_price': float(t.get('trade_price', 0)),
                                             'signed_change_rate': float(t.get('signed_change_rate', 0)),
@@ -85,10 +85,10 @@ class BithumbCollector(BaseCollector):
                                     except:
                                         continue
                     except Exception as ex:
-                        logger.warning(f"[{self.exchange.upper()}] 초기 Ticker 배치 로드 실패: {ex}")
+                        logger.warning(f"[{self.exchange_id.upper()}] 초기 Ticker 배치 로드 실패: {ex}")
             return symbols
         except Exception as e:
-            logger.error(f"[{self.exchange.upper()}] 종목 조회 치명적 실패: {e}")
+            logger.error(f"[{self.exchange_id.upper()}] 종목 조회 치명적 실패: {e}")
             return ["BTC", "ETH"]
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
@@ -129,7 +129,7 @@ class BithumbCollector(BaseCollector):
                     change_price = trade_price - prev_close
                     tick_data = {
                         'type': 'tick',
-                        'exchange': 'bithumb',
+                        'exchange_id': 'bithumb',
                         'code': symbol,
                         'trade_price': trade_price,
                         'trade_volume': float(data.get('trade_volume', 0)),
@@ -141,7 +141,7 @@ class BithumbCollector(BaseCollector):
                     }
                     return tick_data
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] Msg Parse Error: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] Msg Parse Error: {e}")
         return None
 
     async def _fetch_historical_candles(self, symbol: str, start_time: int, end_time: int) -> List[Candle]:
@@ -180,17 +180,17 @@ class BithumbCollector(BaseCollector):
                 async with self.session.get(url, params=params) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
+                        logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
                         break
                     
                     data = await resp.json()
                     if not data or not isinstance(data, list):
                         if isinstance(data, dict) and "error" in data:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 오류: {data['error']}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 오류: {data['error']}")
                         elif isinstance(data, dict) and "message" in data:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 오류 메시지: {data['message']}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 오류 메시지: {data['message']}")
                         else:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 알 수 없는 응답 포맷: {data}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 알 수 없는 응답 포맷: {data}")
                         break
                     
                     batch_candles = []
@@ -209,7 +209,7 @@ class BithumbCollector(BaseCollector):
                             continue
                             
                         candle = Candle(
-                            exchange=self.exchange,
+                            exchange_id=self.exchange_id,
                             symbol=symbol,
                             interval=60,
                             timestamp=ts,
@@ -232,7 +232,7 @@ class BithumbCollector(BaseCollector):
                     to_time = min_ts - 60
                     
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
                 break
 
             # 페이지네이션 간 안전 딜레이 적용 (설정 파일의 딜레이 연동)

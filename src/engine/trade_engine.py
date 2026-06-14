@@ -20,8 +20,8 @@ from src.engine.feature_builder import FeatureBuilder, FeatureBuildRequest
 from src.engine import strategies
 
 class TradeEngine:
-    def __init__(self, exchange: str, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None, market_data_repo: Optional[BaseMarketDataRepository] = None):
-        self.exchange = exchange
+    def __init__(self, exchange_id: str, symbol: str, strategies: List[BaseStrategy], on_status_callback: Optional[Any] = None, market_data_repo: Optional[BaseMarketDataRepository] = None):
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.strategies = strategies
         self.on_status_callback = on_status_callback
@@ -30,7 +30,7 @@ class TradeEngine:
         self.config_manager = ConfigManager("config/settings.yaml")
         
         # 전략들을 호스트로 래핑
-        self.hosts = [StrategyHost(s, exchange, symbol, s.params.get('interval', 60)) for s in strategies]
+        self.hosts = [StrategyHost(s, exchange_id, symbol, s.params.get('interval', 60)) for s in strategies]
         
         # 공통 청산 평가기 초기화
         from src.engine.exit_evaluator import CommonExitEvaluator
@@ -42,7 +42,7 @@ class TradeEngine:
             self.intervals = [60] # 기본값
             
         self.contexts: Dict[int, MarketDataContext] = {
-            interval: MarketDataContext(exchange, symbol, interval) for interval in self.intervals
+            interval: MarketDataContext(exchange_id, symbol, interval) for interval in self.intervals
         }
         self.candle_gen = CandleGenerator(intervals=self.intervals)
         self.feature_builder = FeatureBuilder(self.market_data_repo, self.config_manager)
@@ -55,7 +55,7 @@ class TradeEngine:
             for interval in self.intervals:
                 # get_candles 메서드를 사용해 이미 지표 연산까지 처리된 캔들 데이터를 획득
                 candles_data = await self.market_data_repo.get_candles(
-                    exchange=self.exchange,
+                    exchange_id=self.exchange_id,
                     symbol=self.symbol,
                     interval=interval,
                     limit=lookback_candles
@@ -67,7 +67,7 @@ class TradeEngine:
                     for j, row in enumerate(candles_data):
                         # DB에서 반환한 딕셔너리를 Candle 객체로 변환
                         candle = Candle(
-                            exchange=self.exchange,
+                            exchange_id=self.exchange_id,
                             symbol=self.symbol,
                             interval=interval,
                             timestamp=row['timestamp'],
@@ -88,7 +88,7 @@ class TradeEngine:
             # 2. 캔들 데이터가 없는 경우에만 틱 데이터로 워밍업 (Fallback)
             if not has_candle_data:
                 trades_data = await self.market_data_repo.get_recent_trades(
-                    exchange=self.exchange,
+                    exchange_id=self.exchange_id,
                     symbol=self.symbol,
                     limit=lookback_ticks
                 )
@@ -131,7 +131,7 @@ class TradeEngine:
         # 1. 틱 가격 기준으로 포지션의 peak_price 갱신 및 공통 청산 규칙 평가 (웜업 단계 제외)
         if portfolio_manager and not is_warmup:
             for pid, portfolio in target_portfolios.items():
-                pos_key = (self.exchange.lower(), self.symbol)
+                pos_key = (self.exchange_id.lower(), self.symbol)
                 if pos_key in portfolio.positions:
                     pos = portfolio.positions[pos_key]
                     if pos.quantity > 0:
@@ -149,7 +149,7 @@ class TradeEngine:
                         if exit_triggered:
                             # 즉시 시장가 SELL 신호 생성 (공통 청산)
                             signals.append(TradeSignal(
-                                exchange=self.exchange,
+                                exchange_id=self.exchange_id,
                                 symbol=self.symbol,
                                 action="SELL",
                                 price=tick_price,
@@ -160,7 +160,7 @@ class TradeEngine:
                             ))
 
         closed_candles = self.candle_gen.process_tick(
-            self.exchange,
+            self.exchange_id,
             self.symbol, 
             tick['trade_price'], 
             tick['trade_volume'], 
@@ -184,7 +184,7 @@ class TradeEngine:
                 # 포지션 보유 상태 확인
                 has_position = False
                 for portfolio in target_portfolios.values():
-                    pos_key = (self.exchange.lower(), self.symbol)
+                    pos_key = (self.exchange_id.lower(), self.symbol)
                     if pos_key in portfolio.positions and portfolio.positions[pos_key].quantity > 0:
                         has_position = True
                         break
@@ -223,7 +223,7 @@ class TradeEngine:
             status_info = {
                 "type": "strategy_status",
                 "strategy_id": host.strategy.id,
-                "exchange": self.exchange,
+                "exchange_id": self.exchange_id,
                 "symbol": self.symbol,
                 "indicators": indicators_data,
                 "last_action": action_result.action if hasattr(action_result, 'action') else str(action_result),
@@ -235,7 +235,7 @@ class TradeEngine:
         if isinstance(action_result, StrategyResult):
             if action_result.action in ['BUY', 'SELL']:
                 signals.append(TradeSignal(
-                    exchange=self.exchange,
+                    exchange_id=self.exchange_id,
                     symbol=self.symbol,
                     action=action_result.action,
                     price=action_result.price or candle.close,
@@ -246,7 +246,7 @@ class TradeEngine:
                 ))
         elif action_result in ['BUY', 'SELL']:
             signals.append(TradeSignal(
-                exchange=self.exchange,
+                exchange_id=self.exchange_id,
                 symbol=self.symbol,
                 action=action_result,
                 price=candle.close,
@@ -261,7 +261,7 @@ class TradeEngine:
             if strategy.__class__.__name__.lower() == strategy_id.lower():
                 strategy.update_params(params)
 
-    async def capture_feature_snapshot(self, proposal_id: str, strategy_id: str, exchange: str, symbol: str, proposal_type: str) -> FeatureSnapshot:
+    async def capture_feature_snapshot(self, proposal_id: str, strategy_id: str, exchange_id: str, symbol: str, proposal_type: str) -> FeatureSnapshot:
         """
         현재 시점의 실시간 시세 데이터, 지표 데이터 및 거래소 시장 특성을 취합하여 FeatureSnapshot DTO를 생성합니다.
         """
@@ -273,10 +273,8 @@ class TradeEngine:
         return await self.feature_builder.capture_feature_snapshot(
             proposal_id=proposal_id,
             strategy_id=strategy_id,
-            exchange=exchange,
+            exchange_id=exchange_id,
             symbol=symbol,
             proposal_type=proposal_type,
             request=req
         )
-
-

@@ -138,10 +138,10 @@ async def test_hybrid_auto_apply_scheduler():
     
     scheduler = HybridAutoApplyScheduler(
         db_path=TEST_DB_PATH,
-        debounce_seconds=0.5,
+        debounce_seconds=1.0,
         champion_cooldown_days_override=0.0,
         champion_cooldown_trades_override=0
-    ) # 테스트를 위해 debounce 시간을 0.5초 및 쿨다운 무력화 세팅
+    ) # 테스트를 위해 debounce 시간을 1.0초 및 쿨다운 무력화 세팅
     
     # 2. 80점 이상 제안 추가 (자동 승인 대상)
     proposal_id = await repo.insert_strategy_proposal({
@@ -167,7 +167,7 @@ async def test_hybrid_auto_apply_scheduler():
     
     # 이벤트 발생 통보 및 디바운스 대기
     await scheduler.notify_proposal_created(proposal_id)
-    await asyncio.sleep(0.8) # debounce(0.5s) + 처리 시간 여유
+    await asyncio.sleep(2.5) # debounce(1.0s) + 처리 시간 여유
     
     # V2 갱신 확인
     ver = await repo.get_strategy_version(strategy_id)
@@ -198,7 +198,7 @@ async def test_hybrid_auto_apply_scheduler():
     })
     
     await scheduler.notify_proposal_created(proposal_id_cd)
-    await asyncio.sleep(0.8)
+    await asyncio.sleep(2.0)
     
     # 여전히 버전 2여야 하고 상태는 PENDING 유지
     ver_cd = await repo.get_strategy_version(strategy_id)

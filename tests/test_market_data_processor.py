@@ -30,7 +30,7 @@ async def test_processor_tick_processing_and_candle_generation():
 
     # 프로세서 인스턴스화
     processor = MarketDataProcessor(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         processing_queue=processing_queue,
         db_queue=db_queue,
         candle_queue=candle_queue
@@ -52,7 +52,7 @@ async def test_processor_tick_processing_and_candle_generation():
 
     # 첫 번째 틱 주입
     tick1 = {
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1000.0,
         'trade_volume': 1.0,
@@ -67,7 +67,7 @@ async def test_processor_tick_processing_and_candle_generation():
 
     # 1분 뒤 새로운 분 틱 주입 -> 첫 번째 캔들 완성 유도
     tick2 = {
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1010.0,
         'trade_volume': 2.0,
@@ -143,7 +143,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
         signals_received.append(signal)
 
     processor = MarketDataProcessor(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         processing_queue=processing_queue,
         db_queue=db_queue,
         candle_queue=candle_queue,
@@ -164,7 +164,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
 
     # 1050 이상의 종가 틱 주입 (첫 틱 1050)
     await processing_queue.put({
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1060.0,
         'trade_volume': 1.0,
@@ -174,7 +174,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
     
     # 1분 경과 틱 주입 -> 1060 종가의 1분봉 캔들 완성 유도
     await processing_queue.put({
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 990.0,
         'trade_volume': 1.0,
@@ -208,7 +208,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
         signals_received_2.append(signal)
 
     processor_disabled = MarketDataProcessor(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         processing_queue=processing_queue_2,
         db_queue=db_queue_2,
         candle_queue=candle_queue_2,
@@ -229,7 +229,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
 
     # 동일하게 1050 이상의 틱 주입
     await processing_queue_2.put({
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1060.0,
         'trade_volume': 1.0,
@@ -238,7 +238,7 @@ async def test_processor_trade_engine_integration_both_enabled_and_disabled():
     })
     # 1분 경과 틱 주입
     await processing_queue_2.put({
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 990.0,
         'trade_volume': 1.0,

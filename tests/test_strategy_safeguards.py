@@ -60,15 +60,21 @@ async def test_adaptive_diversity():
         
         # trades 테이블에 대상 종목 시드 생성
         await db.execute('''
-            INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
+            INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', ("upbit", "BTC", 50000000.0, 0.1, "BID", int(time.time()*1000)))
         
         # portfolios 테이블에 대상 포트폴리오 시드 생성
         await db.execute('''
-            INSERT INTO portfolios (id, name, exchange_id, type, cash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        ''', ("port_test", "Test Portfolio", "upbit", "simulated", 10000000.0))
+            INSERT INTO portfolios (id, name, type)
+            VALUES (?, ?, ?)
+        ''', ("port_test", "Test Portfolio", "simulated"))
+        
+        # portfolio_exchanges 테이블에 자금 시드 생성
+        await db.execute('''
+            INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
+            VALUES (?, ?, ?, ?)
+        ''', ("port_test", "upbit", 10000000.0, 10000000.0))
         
         # 30건 이상의 거래가 백테스트에서 수행되도록 가격이 요동치고 시간이 흘러가는 500건의 틱 데이터를 시드
         for i in range(500):
@@ -80,7 +86,7 @@ async def test_adaptive_diversity():
                 price = 50000000.0 - 15 * 500000.0 + (cycle - 15) * 500000.0
             ask_bid = "BID" if i % 2 == 0 else "ASK"
             await db.execute('''
-                INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
+                INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
                 VALUES (?, ?, ?, ?, ?, ?)
             ''', ("upbit", "BTC", price, 0.1, ask_bid, ts))
         await db.commit()
@@ -188,11 +194,16 @@ async def test_counterfactual_sampling_tracker():
     from src.database.connection import get_db_conn
     async with get_db_conn(TEST_DB_PATH) as db:
         await db.execute('''
-            INSERT OR IGNORE INTO portfolios (id, name, exchange_id, type, cash, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-        ''', ("port_test", "Test Portfolio", "upbit", "simulated", 10000000.0))
+            INSERT OR IGNORE INTO portfolios (id, name, type)
+            VALUES (?, ?, ?)
+        ''', ("port_test", "Test Portfolio", "simulated"))
         await db.execute('''
-            INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
+            INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
+            VALUES (?, ?, ?, ?)
+        ''', ("port_test", "upbit", 10000000.0, 10000000.0))
+        
+        await db.execute('''
+            INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
             VALUES (?, ?, ?, ?, ?, ?)
         ''', ("upbit", "BTC", 50000000.0, 0.1, "BID", now))
         await db.commit()

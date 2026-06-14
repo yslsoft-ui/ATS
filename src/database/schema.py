@@ -1,5 +1,7 @@
 import asyncio
 import os
+import shutil
+import time
 from src.database.connection import get_db_conn, DB_PATH
 from src.engine.utils.telemetry import get_logger
 
@@ -14,13 +16,73 @@ async def ensure_column(db, table, column, definition):
 
 async def init_db(db_path: str = None):
     import sqlite3
+    target_path = db_path if db_path is not None else DB_PATH
     
     max_retries = 10
     retry_delay = 0.5
     
+    # 1. 구형 스키마 감지 및 파괴적 리셋 (Destructive Reset)
+    try:
+        db_dir = os.path.dirname(target_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+            
+        if os.path.exists(target_path):
+            conn = sqlite3.connect(target_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            try:
+                cursor.execute("PRAGMA table_info(portfolios)")
+                p_cols = [r[1] for r in cursor.fetchall()]
+                
+                cursor.execute("PRAGMA table_info(orders_history)")
+                oh_cols = [r[1] for r in cursor.fetchall()]
+
+                cursor.execute("PRAGMA table_info(exchange_assets)")
+                ea_cols = [r[1] for r in cursor.fetchall()]
+                
+                # 구형 스키마 조건: portfolios에 exchange_id가 있거나 orders_history에 exchange가 있는 경우, 또는 exchange_assets에 exchange가 있는 경우
+                has_old_p_schema = p_cols and ("exchange_id" in p_cols or "cash" in p_cols or "initial_cash" in p_cols)
+                has_old_oh_schema = oh_cols and "exchange" in oh_cols
+                has_old_ea_schema = ea_cols and "exchange" in ea_cols
+                
+                if has_old_p_schema or has_old_oh_schema or has_old_ea_schema:
+                    logger.warning("[Destructive Reset] 구형 오염된 DB 스키마가 감지되었습니다. 파괴적 스키마 리셋을 개시합니다.")
+                    conn.close()
+                    
+                    # 1) 안전 복사 백업
+                    backup_filename = f"trading_backup_{int(time.time())}.db"
+                    backup_path = os.path.join(db_dir or ".", backup_filename)
+                    shutil.copy2(target_path, backup_path)
+                    logger.warning(f"[Destructive Reset] 기존 DB 파일을 {backup_path} 경로에 안전 백업하였습니다.")
+                    
+                    # 2) 관련 모든 테이블 Drop
+                    conn = sqlite3.connect(target_path)
+                    cursor = conn.cursor()
+                    tables_to_drop = [
+                        "portfolios", "portfolio_exchanges", "positions", 
+                        "orders_history", "real_orders", "girs_shadow_metrics", 
+                        "universe_guard_state", "proposal_evaluations", "proposal_evaluation_runs",
+                        "proposal_reevaluation_jobs", "promotion_event_log", "strategy_versions", 
+                        "strategy_parameter_history", "strategy_performance_snapshots", "alerts", "candles", "trades",
+                        "exchange_assets"
+                    ]
+                    for tbl in tables_to_drop:
+                        cursor.execute(f"DROP TABLE IF EXISTS {tbl}")
+                    cursor.execute("VACUUM")
+                    conn.commit()
+                    logger.warning("[Destructive Reset] 구형 오염 테이블들의 DROP 처리를 성공적으로 완료했습니다.")
+            except Exception as e:
+                logger.error(f"[Destructive Reset] 스키마 검사 중 오류 발생: {e}")
+            finally:
+                conn.close()
+    except Exception as e:
+        logger.error(f"[Destructive Reset] 외부 백업 및 초기화 루프 예외: {e}")
+
+    # 2. 신규 정규 스키마 구축 기동
     for attempt in range(max_retries):
         try:
-            await _init_db_core(db_path)
+            await _init_db_core(target_path)
             return
         except sqlite3.OperationalError as e:
             if "locked" in str(e) and attempt < max_retries - 1:
@@ -31,14 +93,9 @@ async def init_db(db_path: str = None):
                 logger.error(f"Critical operational error during init_db: {e}")
                 raise e
 
-async def _init_db_core(db_path: str = None):
-    target_path = db_path if db_path is not None else DB_PATH
+async def _init_db_core(target_path: str):
     logger.info(f"Initializing database at {target_path}")
     
-    db_dir = os.path.dirname(target_path)
-    if db_dir and not os.path.exists(db_dir):
-        os.makedirs(db_dir)
-
     async with get_db_conn(target_path) as db:
         # 1. exchanges
         await db.execute('''
@@ -59,7 +116,7 @@ async def _init_db_core(db_path: str = None):
         await db.execute('''
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT,
+                exchange_id TEXT,
                 market TEXT,
                 symbol TEXT,
                 trade_price REAL,
@@ -70,34 +127,28 @@ async def _init_db_core(db_path: str = None):
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        await ensure_column(db, 'trades', 'exchange', 'TEXT')
-        await ensure_column(db, 'trades', 'market', 'TEXT')
-        await ensure_column(db, 'trades', 'sequential_id', 'INTEGER')
 
-
-        # 3. portfolios
+        # 3. portfolios (정규화 완료)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS portfolios (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                exchange_id TEXT DEFAULT 'upbit',
                 type TEXT NOT NULL,
-                initial_cash REAL DEFAULT 1000000,
-                cash REAL DEFAULT 0,
+                duration REAL DEFAULT 0.0,
+                strategy_info TEXT DEFAULT '',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        await ensure_column(db, 'portfolios', 'duration', 'REAL DEFAULT 0.0')
-        await ensure_column(db, 'portfolios', 'strategy_info', 'TEXT DEFAULT \'\'')
 
-        # 3.5. portfolio_exchanges (중간 테이블)
+        # 3.5. portfolio_exchanges
         await db.execute('''
             CREATE TABLE IF NOT EXISTS portfolio_exchanges (
                 portfolio_id TEXT,
                 exchange_id TEXT,
                 initial_cash REAL DEFAULT 0.0,
                 cash REAL DEFAULT 0.0,
+                is_primary INTEGER DEFAULT 0,
                 metrics TEXT DEFAULT '{}',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -106,37 +157,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 기존 portfolios를 기반으로 portfolio_exchanges 초기 레코드 동기화
-        async with db.execute("SELECT id, exchange_id, initial_cash, cash FROM portfolios") as cursor:
-            p_rows = await cursor.fetchall()
-        for p_row in p_rows:
-            p_id = p_row['id']
-            p_ex = p_row['exchange_id'] or 'upbit'
-            p_init = p_row['initial_cash']
-            p_cash = p_row['cash']
-            if p_ex != 'all':
-                await db.execute('''
-                    INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
-                    VALUES (?, ?, ?, ?)
-                ''', (p_id, p_ex, p_init, p_cash))
-
-        # 기존 가상 'all' 거래소 잔고 정보 정제
-        await db.execute("DELETE FROM portfolio_exchanges WHERE exchange_id = 'all'")
-
-        # 기존 positions 테이블에 존재하는 실제 (portfolio_id, exchange) 쌍도 동기화 보장 (FK 제약 에러 방지)
-        try:
-            async with db.execute("SELECT DISTINCT portfolio_id, COALESCE(exchange, 'upbit') as ex FROM positions") as cursor:
-                pos_pairs = await cursor.fetchall()
-            for pair in pos_pairs:
-                if pair['ex'] != 'all':
-                    await db.execute('''
-                        INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
-                        VALUES (?, ?, 10000000.0, 10000000.0)
-                    ''', (pair['portfolio_id'], pair['ex']))
-        except Exception:
-            pass
-
-        # 4. positions
+        # 4. positions (명칭 통일 및 FK 제약)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS positions (
                 portfolio_id TEXT,
@@ -146,21 +167,18 @@ async def _init_db_core(db_path: str = None):
                 entry_time REAL DEFAULT 0.0,
                 peak_price REAL DEFAULT 0.0,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                exchange TEXT,
-                PRIMARY KEY (portfolio_id, exchange, symbol),
-                FOREIGN KEY (portfolio_id, exchange) REFERENCES portfolio_exchanges(portfolio_id, exchange_id) ON UPDATE CASCADE ON DELETE CASCADE
+                exchange_id TEXT,
+                PRIMARY KEY (portfolio_id, exchange_id, symbol),
+                FOREIGN KEY (portfolio_id, exchange_id) REFERENCES portfolio_exchanges(portfolio_id, exchange_id) ON UPDATE CASCADE ON DELETE CASCADE
             )
         ''')
-        await ensure_column(db, 'positions', 'exchange', 'TEXT')
-        await ensure_column(db, 'positions', 'entry_time', 'REAL DEFAULT 0.0')
-        await ensure_column(db, 'positions', 'peak_price', 'REAL DEFAULT 0.0')
 
-        # 5. orders_history
+        # 5. orders_history (exchange_id 명칭 통일)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS orders_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 portfolio_id TEXT,
-                exchange TEXT,
+                exchange_id TEXT,
                 market TEXT,
                 strategy_id TEXT,
                 symbol TEXT,
@@ -174,171 +192,23 @@ async def _init_db_core(db_path: str = None):
                 FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
             )
         ''')
-        await ensure_column(db, 'orders_history', 'exchange', 'TEXT')
-        await ensure_column(db, 'orders_history', 'market', 'TEXT')
 
-        # 6. alerts (알림 내역)
+        # 6. alerts
         await db.execute('''
             CREATE TABLE IF NOT EXISTS alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT,
+                exchange_id TEXT,
                 symbol TEXT,
                 price REAL,
                 msg TEXT,
                 timestamp INTEGER
             )
         ''')
-        await ensure_column(db, 'alerts', 'exchange', 'TEXT')
 
-        # 7. candles PK 마이그레이션 검사 (exchange가 PK에 누락된 구 버전 대응)
-        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='candles'")
-        row = await cursor.fetchone()
-        if row:
-            sql = row[0]
-            if "PRIMARY KEY" in sql and "exchange" not in sql.split("PRIMARY KEY")[1]:
-                logger.info("[Migration] candles 테이블 Primary Key 구조 마이그레이션 시작 (exchange 컬럼 PK 편입)")
-                # 백업본 생성
-                await db.execute("CREATE TABLE candles_backup AS SELECT * FROM candles")
-                # 구형 테이블 삭제
-                await db.execute("DROP TABLE candles")
-                # 신규 스키마 테이블 생성
-                await db.execute('''
-                    CREATE TABLE candles (
-                        exchange TEXT,
-                        symbol TEXT,
-                        interval INTEGER,
-                        timestamp INTEGER,
-                        open REAL,
-                        high REAL,
-                        low REAL,
-                        close REAL,
-                        volume REAL,
-                        is_closed INTEGER DEFAULT 1,
-                        PRIMARY KEY (exchange, symbol, interval, timestamp)
-                    )
-                ''')
-                # 데이터 복원
-                await db.execute('''
-                    INSERT OR IGNORE INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume, is_closed)
-                    SELECT COALESCE(exchange, 'upbit'), symbol, interval, timestamp, open, high, low, close, volume, COALESCE(is_closed, 1)
-                    FROM candles_backup
-                ''')
-                # 백업 삭제
-                await db.execute("DROP TABLE candles_backup")
-                # 인덱스 드랍 후 하단에서 재생성 유도
-                await db.execute('DROP INDEX IF EXISTS idx_candles_exch_sym_time')
-                logger.info("[Migration] candles 테이블 Primary Key 구조 마이그레이션 완수")
-
-        # [Migration] portfolio_exchanges 테이블 Foreign Key 제약조건 마이그레이션 (ON UPDATE CASCADE 추가)
-        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='portfolio_exchanges'")
-        row = await cursor.fetchone()
-        if row:
-            sql = row[0]
-            if "FOREIGN KEY" not in sql or "ON UPDATE CASCADE" not in sql:
-                logger.info("[Migration] portfolio_exchanges 테이블 Foreign Key 및 CASCADE 제약조건 마이그레이션 시작")
-                await db.execute("CREATE TABLE portfolio_exchanges_backup AS SELECT * FROM portfolio_exchanges")
-                await db.execute("DROP TABLE portfolio_exchanges")
-                await db.execute('''
-                    CREATE TABLE portfolio_exchanges (
-                        portfolio_id TEXT,
-                        exchange_id TEXT,
-                        initial_cash REAL DEFAULT 0.0,
-                        cash REAL DEFAULT 0.0,
-                        metrics TEXT DEFAULT '{}',
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (portfolio_id, exchange_id),
-                        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
-                    )
-                ''')
-                await db.execute('''
-                    INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, metrics, created_at, updated_at)
-                    SELECT portfolio_id, exchange_id, initial_cash, cash, metrics, created_at, updated_at
-                    FROM portfolio_exchanges_backup
-                    WHERE portfolio_id IN (SELECT id FROM portfolios)
-                ''')
-                await db.execute("DROP TABLE portfolio_exchanges_backup")
-                logger.info("[Migration] portfolio_exchanges 테이블 마이그레이션 완료")
-
-        # [Migration] positions 테이블의 portfolio_exchanges 참조 및 PK/FK 통합 마이그레이션
-        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'")
-        row = await cursor.fetchone()
-        if row:
-            sql = row[0]
-            if "portfolio_exchanges" not in sql:
-                logger.info("[Migration] positions 테이블의 Foreign Key를 portfolio_exchanges 참조로 마이그레이션 시작")
-                await db.execute("CREATE TABLE positions_backup AS SELECT * FROM positions")
-                await db.execute("DROP TABLE positions")
-                await db.execute('''
-                    CREATE TABLE positions (
-                        portfolio_id TEXT,
-                        symbol TEXT,
-                        quantity REAL DEFAULT 0,
-                        avg_price REAL DEFAULT 0,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        exchange TEXT,
-                        PRIMARY KEY (portfolio_id, exchange, symbol),
-                        FOREIGN KEY (portfolio_id, exchange) REFERENCES portfolio_exchanges(portfolio_id, exchange_id) ON UPDATE CASCADE ON DELETE CASCADE
-                    )
-                ''')
-                # 백업 테이블의 실제 포지션을 기준으로 portfolio_exchanges 쌍 미리 삽입 (FK 제약 에러 차단)
-                async with db.execute("SELECT DISTINCT portfolio_id, COALESCE(exchange, 'upbit') as ex FROM positions_backup") as c:
-                    backup_pairs = await c.fetchall()
-                for pair in backup_pairs:
-                    await db.execute('''
-                        INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
-                        VALUES (?, ?, 10000000.0, 10000000.0)
-                    ''', (pair['portfolio_id'], pair['ex']))
-
-                await db.execute('''
-                    INSERT OR IGNORE INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, updated_at)
-                    SELECT portfolio_id, COALESCE(exchange, 'upbit'), symbol, quantity, avg_price, updated_at
-                    FROM positions_backup
-                    WHERE portfolio_id IN (SELECT id FROM portfolios)
-                ''')
-                await db.execute("DROP TABLE positions_backup")
-                await db.execute('DROP INDEX IF EXISTS idx_positions_portfolio_id')
-                logger.info("[Migration] positions 테이블 portfolio_exchanges 참조 마이그레이션 완료")
-
-        # [Migration] orders_history 테이블 Foreign Key 추가 마이그레이션
-        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders_history'")
-        row = await cursor.fetchone()
-        if row:
-            sql = row[0]
-            if "FOREIGN KEY" not in sql or "ON UPDATE CASCADE" not in sql:
-                logger.info("[Migration] orders_history 테이블 Foreign Key 및 CASCADE 제약조건 마이그레이션 시작")
-                await db.execute("CREATE TABLE orders_history_backup AS SELECT * FROM orders_history")
-                await db.execute("DROP TABLE orders_history")
-                await db.execute('''
-                    CREATE TABLE orders_history (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        portfolio_id TEXT,
-                        exchange TEXT,
-                        strategy_id TEXT,
-                        symbol TEXT,
-                        side TEXT,
-                        price REAL,
-                        quantity REAL,
-                        fee REAL,
-                        timestamp INTEGER,
-                        reason TEXT,
-                        context TEXT,
-                        FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
-                    )
-                ''')
-                await db.execute('''
-                    INSERT OR IGNORE INTO orders_history (id, portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                    SELECT id, portfolio_id, exchange, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context
-                    FROM orders_history_backup
-                    WHERE portfolio_id IN (SELECT id FROM portfolios)
-                ''')
-                await db.execute("DROP TABLE orders_history_backup")
-                await db.execute('DROP INDEX IF EXISTS idx_orders_history_portfolio_id')
-                logger.info("[Migration] orders_history 테이블 마이그레이션 완료")
-
+        # 7. candles
         await db.execute('''
             CREATE TABLE IF NOT EXISTS candles (
-                exchange TEXT,
+                exchange_id TEXT,
                 symbol TEXT,
                 interval INTEGER,
                 timestamp INTEGER,
@@ -348,11 +218,9 @@ async def _init_db_core(db_path: str = None):
                 close REAL,
                 volume REAL,
                 is_closed INTEGER DEFAULT 1,
-                PRIMARY KEY (exchange, symbol, interval, timestamp)
+                PRIMARY KEY (exchange_id, symbol, interval, timestamp)
             )
         ''')
-        await ensure_column(db, 'candles', 'exchange', 'TEXT')
-        await ensure_column(db, 'candles', 'is_closed', 'INTEGER DEFAULT 1')
 
         # 8. asset_master
         await db.execute('''
@@ -368,22 +236,22 @@ async def _init_db_core(db_path: str = None):
         # 9. exchange_assets
         await db.execute('''
             CREATE TABLE IF NOT EXISTS exchange_assets (
-                exchange TEXT,
+                exchange_id TEXT,
                 symbol TEXT,
                 is_active INTEGER DEFAULT 1,
                 is_delisted INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY (exchange, symbol),
+                PRIMARY KEY (exchange_id, symbol),
                 FOREIGN KEY (symbol) REFERENCES asset_master(symbol) ON UPDATE CASCADE
             )
         ''')
 
-        # 10. real_orders (실계좌 거래 내역 영구 보관용)
+        # 10. real_orders
         await db.execute('''
             CREATE TABLE IF NOT EXISTS real_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 uuid TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -408,9 +276,8 @@ async def _init_db_core(db_path: str = None):
                 context TEXT
             )
         ''')
-        await ensure_column(db, 'system_events', 'context', 'TEXT')
 
-        # 12. strategy_versions [NEW - V1]
+        # 12. strategy_versions
         await db.execute('''
             CREATE TABLE IF NOT EXISTS strategy_versions (
                 strategy_id TEXT PRIMARY KEY,
@@ -422,7 +289,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 13. strategy_parameter_history [NEW - V1]
+        # 13. strategy_parameter_history
         await db.execute('''
             CREATE TABLE IF NOT EXISTS strategy_parameter_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -439,7 +306,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 14. strategy_performance_snapshots [NEW - V1]
+        # 14. strategy_performance_snapshots
         await db.execute('''
             CREATE TABLE IF NOT EXISTS strategy_performance_snapshots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -457,7 +324,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 15. market_regime_summaries [NEW - V2]
+        # 15. market_regime_summaries
         await db.execute('''
             CREATE TABLE IF NOT EXISTS market_regime_summaries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -472,7 +339,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 16. strategy_insights [NEW - V2]
+        # 16. strategy_insights
         await db.execute('''
             CREATE TABLE IF NOT EXISTS strategy_insights (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -485,7 +352,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 17. strategy_proposals [NEW - V1.5 / V2 / V3.5]
+        # 17. strategy_proposals
         await db.execute('''
             CREATE TABLE IF NOT EXISTS strategy_proposals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -514,7 +381,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 18. proposal_evaluations [NEW - V3.5 1:N Horizon 구조]
+        # 18. proposal_evaluations
         await db.execute('''
             CREATE TABLE IF NOT EXISTS proposal_evaluations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -545,17 +412,16 @@ async def _init_db_core(db_path: str = None):
                 policy_version TEXT,
                 scorer_version TEXT,
                 predicted_risk_score REAL,
+                baseline_value REAL,
+                baseline_timestamp INTEGER,
+                baseline_volume INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE,
                 UNIQUE (proposal_id, horizon_name)
             )
         ''')
-        await ensure_column(db, 'proposal_evaluations', 'baseline_value', 'REAL')
-        await ensure_column(db, 'proposal_evaluations', 'baseline_timestamp', 'INTEGER')
-        await ensure_column(db, 'proposal_evaluations', 'baseline_volume', 'INTEGER')
 
-
-        # 19. girs_shadow_metrics [NEW]
+        # 19. girs_shadow_metrics
         await db.execute('''
             CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -588,7 +454,7 @@ async def _init_db_core(db_path: str = None):
                 session_state TEXT,
                 volatility_regime TEXT,
                 liquidity_regime TEXT,
-                exchange TEXT,
+                exchange_id TEXT,
                 tps REAL,
                 trade_count INTEGER,
                 volume REAL,
@@ -596,7 +462,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 20. promotion_event_log [NEW]
+        # 20. promotion_event_log
         await db.execute('''
             CREATE TABLE IF NOT EXISTS promotion_event_log (
                 global_sequence_no INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -614,10 +480,10 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 21. universe_guard_state [NEW]
+        # 21. universe_guard_state (exchange_id 명칭 통일)
         await db.execute('''
             CREATE TABLE IF NOT EXISTS universe_guard_state (
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 market_type TEXT NOT NULL,
                 symbol TEXT NOT NULL,
                 status TEXT,
@@ -625,11 +491,11 @@ async def _init_db_core(db_path: str = None):
                 blocked_count INTEGER DEFAULT 0,
                 last_blocked_at REAL,
                 last_event_logged_reason TEXT,
-                PRIMARY KEY (exchange, market_type, symbol)
+                PRIMARY KEY (exchange_id, market_type, symbol)
             )
         ''')
 
-        # 22. proposal_reevaluation_jobs [NEW]
+        # 22. proposal_reevaluation_jobs
         await db.execute('''
             CREATE TABLE IF NOT EXISTS proposal_reevaluation_jobs (
                 job_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -647,7 +513,7 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # 23. proposal_evaluation_runs [NEW]
+        # 23. proposal_evaluation_runs
         await db.execute('''
             CREATE TABLE IF NOT EXISTS proposal_evaluation_runs (
                 evaluation_run_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -668,81 +534,13 @@ async def _init_db_core(db_path: str = None):
             )
         ''')
 
-        # [Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 감지 및 실행
-        cursor = await db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='proposal_evaluations'")
-        row = await cursor.fetchone()
-        if row:
-            sql = row[0]
-            if "UNIQUE (proposal_id)" in sql or "proposal_id INTEGER UNIQUE" in sql or "horizon_name" not in sql:
-                logger.info("[Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 시작")
-                
-                await db.execute("DROP TABLE IF EXISTS proposal_evaluations_backup")
-                await db.execute("CREATE TABLE proposal_evaluations_backup AS SELECT * FROM proposal_evaluations")
-                await db.execute("DROP TABLE proposal_evaluations")
-                
-                await db.execute('''
-                    CREATE TABLE proposal_evaluations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        proposal_id INTEGER NOT NULL,
-                        horizon_name TEXT NOT NULL,
-                        predicted_roi_7d REAL,
-                        actual_roi_7d REAL,
-                        roi_divergence REAL,
-                        predicted_trade_count_7d INTEGER,
-                        actual_trade_count_7d INTEGER,
-                        trade_count_divergence INTEGER,
-                        candidate_roi REAL,
-                        champion_roi REAL,
-                        roi_gap REAL,
-                        candidate_mdd REAL,
-                        champion_mdd REAL,
-                        virtual_rollback INTEGER DEFAULT 0,
-                        actual_label TEXT,
-                        actual_label_source TEXT,
-                        due_at INTEGER NOT NULL DEFAULT 0,
-                        evaluated_at INTEGER,
-                        locked_at INTEGER,
-                        retry_count INTEGER DEFAULT 0,
-                        last_error TEXT,
-                        evaluation_status TEXT NOT NULL DEFAULT 'PENDING',
-                        horizon_type TEXT,
-                        horizon_value INTEGER,
-                        policy_version TEXT,
-                        scorer_version TEXT,
-                        predicted_risk_score REAL,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (proposal_id) REFERENCES strategy_proposals(id) ON UPDATE CASCADE ON DELETE CASCADE,
-                        UNIQUE (proposal_id, horizon_name)
-                    )
-                ''')
-                
-                try:
-                    await db.execute('''
-                        INSERT OR IGNORE INTO proposal_evaluations (
-                            proposal_id, horizon_name, predicted_roi_7d, actual_roi_7d, roi_divergence,
-                            predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence,
-                            due_at, evaluation_status, horizon_type, horizon_value, policy_version, scorer_version
-                        )
-                        SELECT 
-                            proposal_id, '7d', predicted_roi_7d, actual_roi_7d, roi_divergence,
-                            predicted_trade_count_7d, actual_trade_count_7d, trade_count_divergence,
-                            0, 'COMPLETED', 'elapsed', 604800, 'v1', 'mock_v1'
-                        FROM proposal_evaluations_backup
-                    ''')
-                    logger.info("[Migration] proposal_evaluations 기존 데이터 이관 완료")
-                except Exception as e:
-                    logger.error(f"[Migration] proposal_evaluations 복원 중 예외: {e}")
-                    
-                await db.execute("DROP TABLE IF EXISTS proposal_evaluations_backup")
-                logger.info("[Migration] proposal_evaluations 테이블 1:N Horizon 구조 마이그레이션 완수")
-
-        # 인덱스
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange, symbol, trade_timestamp DESC)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange, symbol, interval, timestamp DESC)')
+        # 인덱스 생성
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange_id, symbol, trade_timestamp DESC)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange_id, symbol, interval, timestamp DESC)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_orders_history_portfolio_id ON orders_history (portfolio_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_positions_portfolio_id ON positions (portfolio_id)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_assets_active ON exchange_assets (exchange, is_active)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_real_orders_exch_sym ON real_orders (exchange, symbol)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_exchange_assets_active ON exchange_assets (exchange_id, is_active)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_real_orders_exch_sym ON real_orders (exchange_id, symbol)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades (trade_timestamp)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_candles_timestamp ON candles (timestamp)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_system_events_timestamp ON system_events (timestamp DESC)')
@@ -757,174 +555,18 @@ async def _init_db_core(db_path: str = None):
         await db.execute('CREATE INDEX IF NOT EXISTS idx_promotion_event_log_prop ON promotion_event_log (proposal_id)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_proposal_reeval_jobs_prop ON proposal_reevaluation_jobs (proposal_id, status)')
         await db.execute('CREATE INDEX IF NOT EXISTS idx_proposal_eval_runs_prop ON proposal_evaluation_runs (proposal_id)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange_id, market_type, status)')
+        
         await db.commit()
     
-    await migrate_data(target_path)
     await seed_initial_assets(target_path)
-    logger.info("Database initialization and migration complete.")
-
-async def migrate_data(db_path: str = None):
-    async with get_db_conn(db_path) as db:
-        # universe_guard_state 테이블 생성 및 마이그레이션 보장
-        cursor = await db.execute("PRAGMA table_info(universe_guard_state)")
-        columns = await cursor.fetchall()
-        if columns:
-            has_exchange = any(col['name'] == 'exchange' for col in columns)
-            if not has_exchange:
-                logger.info("[Migration] universe_guard_state 테이블 복합 기본키 구조 마이그레이션 감지")
-                
-                # 1. 기존 데이터가 Upbit crypto 전용인지 검증
-                cursor_old = await db.execute("SELECT symbol FROM universe_guard_state")
-                old_rows = await cursor_old.fetchall()
-                
-                upbit_symbols = set()
-                try:
-                    async with db.execute("SELECT symbol FROM exchange_assets WHERE exchange = 'upbit'") as cur_ea:
-                        ea_rows = await cur_ea.fetchall()
-                        for r in ea_rows:
-                            upbit_symbols.add(r['symbol'])
-                except Exception:
-                    pass
-                
-                crypto_symbols = {"BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "DOT", "TRX", "LINK"}
-                
-                for row in old_rows:
-                    sym = row['symbol']
-                    if sym.isdigit() and len(sym) == 6:
-                        raise ValueError(f"CRITICAL Migration Failure: Existing universe_guard_state symbol '{sym}' looks like a stock code. Migration halted for safety.")
-                    
-                    is_valid_crypto = sym in crypto_symbols or sym in upbit_symbols
-                    if not is_valid_crypto:
-                        import re
-                        if not re.match(r"^[A-Z0-9]+$", sym):
-                            raise ValueError(f"CRITICAL Migration Failure: Existing universe_guard_state symbol '{sym}' is not a valid crypto symbol. Migration halted.")
-                
-                logger.info("[Migration] Existing universe_guard_state data validation passed (Upbit crypto confirmed).")
-                
-                # 2. RENAME 및 신규 생성 후 백필
-                await db.execute("DROP TABLE IF EXISTS universe_guard_state_old")
-                await db.execute("ALTER TABLE universe_guard_state RENAME TO universe_guard_state_old")
-                
-                await db.execute('''
-                    CREATE TABLE universe_guard_state (
-                        exchange TEXT NOT NULL,
-                        market_type TEXT NOT NULL,
-                        symbol TEXT NOT NULL,
-                        status TEXT,
-                        blocked_reason TEXT,
-                        blocked_count INTEGER DEFAULT 0,
-                        last_blocked_at REAL,
-                        last_event_logged_reason TEXT,
-                        PRIMARY KEY (exchange, market_type, symbol)
-                    )
-                ''')
-                
-                await db.execute('''
-                    INSERT INTO universe_guard_state (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
-                    SELECT 'upbit', 'crypto', symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason
-                    FROM universe_guard_state_old
-                ''')
-                
-                await db.execute("DROP TABLE IF EXISTS universe_guard_state_old")
-                logger.info("[Migration] universe_guard_state 복합 기본키 마이그레이션 및 backfill 완료")
-        else:
-            # 테이블이 아예 없는 경우 신규 생성
-            await db.execute('''
-                CREATE TABLE IF NOT EXISTS universe_guard_state (
-                    exchange TEXT NOT NULL,
-                    market_type TEXT NOT NULL,
-                    symbol TEXT NOT NULL,
-                    status TEXT,
-                    blocked_reason TEXT,
-                    blocked_count INTEGER DEFAULT 0,
-                    last_blocked_at REAL,
-                    last_event_logged_reason TEXT,
-                    PRIMARY KEY (exchange, market_type, symbol)
-                )
-            ''')
-        # 인덱스 추가 보장 (lookup 및 status 인덱스)
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status)')
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange, market_type, status)')
-        # exchange_assets 테이블에 is_delisted 컬럼이 없으면 마이그레이션 수행
-        await ensure_column(db, 'exchange_assets', 'is_delisted', 'INTEGER DEFAULT 0')
-
-        # strategy_proposals 신규 필드 마이그레이션
-        await ensure_column(db, 'strategy_proposals', 'decision_path_hash', 'TEXT')
-        await ensure_column(db, 'strategy_proposals', 'audit_log_json', 'TEXT')
-        await ensure_column(db, 'strategy_proposals', 'counterfactual_roi', 'REAL DEFAULT 0.0')
-        await ensure_column(db, 'strategy_proposals', 'counterfactual_mdd', 'REAL DEFAULT 0.0')
-        await ensure_column(db, 'strategy_proposals', 'is_counterfactual_tracked', 'INTEGER DEFAULT 0')
-
-        # girs_shadow_metrics 신규 필드 마이그레이션
-        await ensure_column(db, 'girs_shadow_metrics', 'trade_age_ms', 'INTEGER')
-        await ensure_column(db, 'girs_shadow_metrics', 'orderbook_age_ms', 'INTEGER')
-        await ensure_column(db, 'girs_shadow_metrics', 'indicator_age_ms', 'INTEGER')
-        await ensure_column(db, 'girs_shadow_metrics', 'is_fresh', 'INTEGER DEFAULT 1')
-        await ensure_column(db, 'girs_shadow_metrics', 'stale_reason', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'snapshot_version', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'snapshot_hash', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'feature_vector_hash', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'orderbook_available', 'INTEGER DEFAULT 0')
-        await ensure_column(db, 'girs_shadow_metrics', 'market_type', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'session_state', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'volatility_regime', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'liquidity_regime', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'exchange', 'TEXT')
-        await ensure_column(db, 'girs_shadow_metrics', 'tps', 'REAL')
-        await ensure_column(db, 'girs_shadow_metrics', 'trade_count', 'INTEGER')
-        await ensure_column(db, 'girs_shadow_metrics', 'volume', 'REAL')
-        await ensure_column(db, 'girs_shadow_metrics', 'idle_time', 'REAL')
-
-        tables = ['trades', 'candles', 'positions', 'orders_history']
-        for table in tables:
-            try:
-                await db.execute(f"UPDATE {table} SET exchange = 'upbit', symbol = REPLACE(symbol, 'UPB-', '') WHERE symbol LIKE 'UPB-%'")
-                await db.execute(f"UPDATE {table} SET exchange = 'upbit', symbol = REPLACE(symbol, 'KRW-', '') WHERE symbol LIKE 'KRW-%'")
-                await db.execute(f"UPDATE {table} SET exchange = 'kis', symbol = REPLACE(symbol, 'KIS-', '') WHERE symbol LIKE 'KIS-%'")
-                await db.execute(f"UPDATE {table} SET exchange = 'upbit' WHERE exchange IS NULL")
-            except Exception as e:
-                logger.error(f"Migration error for {table}: {e}")
-
-        # KIS is_active 오염 복구 (더 이상 신규 종목 추가를 방해하지 않도록 비활성화)
-        # try:
-        #     # candles 또는 trades 테이블에 실제 데이터(수집 이력)가 전혀 없는 KIS 종목은 is_active를 0으로 원복시킵니다.
-        #     await db.execute('''
-        #         UPDATE exchange_assets
-        #         SET is_active = 0, updated_at = datetime('now')
-        #         WHERE exchange = 'kis'
-        #           AND is_active = 1
-        #           AND symbol NOT IN (
-        #               SELECT DISTINCT symbol FROM candles WHERE exchange = 'kis'
-        #               UNION
-        #               SELECT DISTINCT symbol FROM trades WHERE exchange = 'kis'
-        #           )
-        #     ''')
-        #     logger.info("Successfully cleaned up contaminated KIS assets: restored is_active to 0 for uncollected symbols.")
-        # except Exception as e:
-        #     logger.error(f"Failed to restore KIS assets is_active: {e}")
-
-        # 7. orders_history 중복 저장 이력 클리닝 (백테스트 체결 내역 2중 저장 버그 소거 대응)
-        try:
-            await db.execute('''
-                DELETE FROM orders_history
-                WHERE rowid NOT IN (
-                    SELECT MIN(rowid)
-                    FROM orders_history
-                    GROUP BY portfolio_id, exchange, symbol, side, price, quantity, fee, timestamp, reason, context
-                )
-            ''')
-            logger.info("Cleaned up duplicate orders_history records.")
-        except Exception as e:
-            logger.error(f"Failed to clean duplicate orders: {e}")
-
-        await db.commit()
+    logger.info("Database initialization and schema reset complete.")
 
 async def seed_initial_assets(db_path: str = None):
-    """기존 stock_master.json 파일이 존재하면 DB의 asset_master 및 exchange_assets 테이블로 Seeding을 1회 수행합니다."""
     target_path = db_path if db_path is not None else DB_PATH
     import json
     
-    # data/stock_master.json 경로 획득
     json_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'stock_master.json')
     if not os.path.exists(json_path):
         logger.info(f"Seed file not found at {json_path}. Skipping initial seeding.")
@@ -939,15 +581,13 @@ async def seed_initial_assets(db_path: str = None):
             for exchange, symbols in data.items():
                 asset_type = 'crypto' if exchange in ('upbit', 'bithumb') else 'stock'
                 for symbol, name in symbols.items():
-                    # 1. asset_master에 삽입
                     await db.execute('''
                         INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type)
                         VALUES (?, ?, ?)
                     ''', (symbol, name, asset_type))
 
-                    # 2. exchange_assets에 삽입 (기존 마스터 종목들은 모두 기본 활성 상태로 이식)
                     await db.execute('''
-                        INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active)
+                        INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active)
                         VALUES (?, ?, 1)
                     ''', (exchange, symbol))
             await db.commit()

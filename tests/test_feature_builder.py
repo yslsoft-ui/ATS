@@ -72,7 +72,7 @@ async def test_clock_and_freshness_ttl():
     snapshot_empty = await builder.capture_feature_snapshot(
         proposal_id="p-1",
         strategy_id="dummy_strat",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO",
         request=req_empty
@@ -93,7 +93,7 @@ async def test_clock_and_freshness_ttl():
     # 캔들 추가
     candle_time_s = int(base_time - 5)
     candle = Candle(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         interval=60,
         timestamp=candle_time_s,
@@ -109,7 +109,7 @@ async def test_clock_and_freshness_ttl():
     snapshot_fresh = await builder.capture_feature_snapshot(
         proposal_id="p-2",
         strategy_id="dummy_strat",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO",
         request=req_empty
@@ -122,7 +122,7 @@ async def test_clock_and_freshness_ttl():
     snapshot_stale_tick = await builder.capture_feature_snapshot(
         proposal_id="p-3",
         strategy_id="dummy_strat",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO",
         request=req_empty
@@ -145,7 +145,7 @@ async def test_clock_and_freshness_ttl():
     snapshot_stale_indicator = await builder.capture_feature_snapshot(
         proposal_id="p-4",
         strategy_id="dummy_strat",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO",
         request=req_empty
@@ -176,7 +176,7 @@ async def test_liquidity_proxy_calculation():
     host = DummyHost("dummy_strat", interval=60)
     context = MarketDataContext("mock_exchange", "BTC", 60)
     # 캔들도 추가하여 NO_CANDLES 방지
-    context.add_candle(Candle("mock_exchange", "BTC", 60, int(base_time - 10), 100.0, 101.0, 99.0, 100.0, 10.0, True))
+    context.add_candle(Candle(exchange_id="mock_exchange", symbol="BTC", interval=60, timestamp=int(base_time - 10), open=100.0, high=101.0, low=99.0, close=100.0, volume=10.0, is_closed=True))
 
     builder = FeatureBuilder(market_data_repo=repo, clock=clock)
     req = FeatureBuildRequest(hosts=[host], contexts={60: context})
@@ -184,7 +184,7 @@ async def test_liquidity_proxy_calculation():
     snapshot = await builder.capture_feature_snapshot(
         proposal_id="p-5",
         strategy_id="dummy_strat",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO",
         request=req
@@ -211,7 +211,7 @@ async def test_hash_determinism():
     repo1 = InMemoryMarketDataRepository()
     repo1.add_trade("mock_exchange", "BTC", {"trade_price": 500.0, "trade_volume": 1.5, "ask_bid": "ASK", "trade_timestamp": int((base_time - 10) * 1000)})
     context1 = MarketDataContext("mock_exchange", "BTC", 60)
-    context1.add_candle(Candle("mock_exchange", "BTC", 60, int(base_time - 10), 490.0, 510.0, 485.0, 500.0, 15.0, True))
+    context1.add_candle(Candle(exchange_id="mock_exchange", symbol="BTC", interval=60, timestamp=int(base_time - 10), open=490.0, high=510.0, low=485.0, close=500.0, volume=15.0, is_closed=True))
     
     builder1 = FeatureBuilder(market_data_repo=repo1, clock=clock)
     req1 = FeatureBuildRequest(hosts=[DummyHost("dummy_strat")], contexts={60: context1})
@@ -220,7 +220,7 @@ async def test_hash_determinism():
     repo2 = InMemoryMarketDataRepository()
     repo2.add_trade("mock_exchange", "BTC", {"trade_price": 500.0, "trade_volume": 1.5, "ask_bid": "ASK", "trade_timestamp": int((base_time - 10) * 1000)})
     context2 = MarketDataContext("mock_exchange", "BTC", 60)
-    context2.add_candle(Candle("mock_exchange", "BTC", 60, int(base_time - 10), 490.0, 510.0, 485.0, 500.0, 15.0, True))
+    context2.add_candle(Candle(exchange_id="mock_exchange", symbol="BTC", interval=60, timestamp=int(base_time - 10), open=490.0, high=510.0, low=485.0, close=500.0, volume=15.0, is_closed=True))
     
     builder2 = FeatureBuilder(market_data_repo=repo2, clock=clock)
     req2 = FeatureBuildRequest(hosts=[DummyHost("dummy_strat")], contexts={60: context2})
@@ -261,7 +261,7 @@ async def test_trade_engine_delegation_integration():
     
     # 3. TradeEngine 초기화
     engine = TradeEngine(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         strategies=[strategy],
         market_data_repo=repo
@@ -269,7 +269,7 @@ async def test_trade_engine_delegation_integration():
     
     # 캔들 1개 주입 (TradeEngine의 context에 캔들 존재해야 Fresh로 판정됨)
     candle = Candle(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         interval=60,
         timestamp=int(now_ms // 1000 - 5),
@@ -293,12 +293,12 @@ async def test_trade_engine_delegation_integration():
     snapshot = await engine.capture_feature_snapshot(
         proposal_id="proposal-xyz",
         strategy_id="mockengineteststrategy",
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         symbol="BTC",
         proposal_type="CRYPTO"
     )
 
     # 5. 위임된 결과 검증
-    assert snapshot.exchange == "mock_exchange"
+    assert snapshot.exchange_id == "mock_exchange"
     assert snapshot.price_features["close"] == 1000.0
     assert snapshot.is_fresh is True

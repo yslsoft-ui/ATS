@@ -10,8 +10,8 @@ TEST_DB_PATH = "test_temp_database.db"
 
 # 캔들 오브젝트를 흉내 내는 Mock 클래스 (결합 최소화)
 class MockCandle:
-    def __init__(self, exchange, symbol, interval, timestamp, open_val, high, low, close, volume):
-        self.exchange = exchange
+    def __init__(self, exchange_id, symbol, interval, timestamp, open_val, high, low, close, volume):
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.interval = interval
         self.timestamp = timestamp
@@ -37,7 +37,7 @@ async def setup_test_db(db_path: str):
         await db.execute('''
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT,
+                exchange_id TEXT,
                 market TEXT,
                 symbol TEXT,
                 trade_price REAL,
@@ -51,7 +51,7 @@ async def setup_test_db(db_path: str):
         # 2. candles 테이블 생성
         await db.execute('''
             CREATE TABLE IF NOT EXISTS candles (
-                exchange TEXT,
+                exchange_id TEXT,
                 symbol TEXT,
                 interval INTEGER,
                 timestamp INTEGER,
@@ -60,7 +60,7 @@ async def setup_test_db(db_path: str):
                 low REAL,
                 close REAL,
                 volume REAL,
-                PRIMARY KEY (exchange, symbol, interval, timestamp)
+                PRIMARY KEY (exchange_id, symbol, interval, timestamp)
             )
         ''')
         await db.commit()
@@ -89,7 +89,7 @@ async def test_database_writer_flow():
         # 3. 모의 틱(Trades) 데이터 5개 삽입
         for i in range(5):
             writer.enqueue_tick({
-                "exchange": "upbit",
+                "exchange_id": "upbit",
                 "code": "BTC",
                 "trade_price": 100000.0 + i,
                 "trade_volume": 0.1 * (i + 1),
@@ -100,7 +100,7 @@ async def test_database_writer_flow():
         # 4. 모의 캔들(Candles) 데이터 3개 삽입
         for i in range(3):
             writer.enqueue_candle(MockCandle(
-                exchange="kis",
+                exchange_id="kis",
                 symbol="005930",
                 interval=60,
                 timestamp=1716000000 + i * 60,

@@ -12,10 +12,10 @@ from src.engine.auto_scheduler import HybridAutoApplyScheduler
 from scratch.generate_shadow_report import generate_report
 
 class DummySignal:
-    def __init__(self, symbol="BTC", action="BUY", exchange="upbit", strategy_id="strat_1"):
+    def __init__(self, symbol="BTC", action="BUY", exchange_id="upbit", strategy_id="strat_1"):
         self.symbol = symbol
         self.action = action
-        self.exchange = exchange
+        self.exchange_id = exchange_id
         self.strategy_id = strategy_id
         self.market = "KRW"
         self.reason = "Test Signal"
@@ -43,10 +43,10 @@ async def test_live_trading_blocked_and_events(temp_db_path):
     live_portfolio = Portfolio(
         portfolio_id="live_port_1",
         name="Live Portfolio",
-        initial_cash=1000000.0,
-        exchange_id="upbit",
         portfolio_type="live"
     )
+    live_portfolio.exchange_cash = {"upbit": 1000000.0}
+    live_portfolio.exchange_initial_cash = {"upbit": 1000000.0}
     pm.add_portfolio(live_portfolio)
     await repo.save_portfolio(live_portfolio)
     
@@ -82,10 +82,10 @@ async def test_simulation_trading_allowed(temp_db_path):
     sim_portfolio = Portfolio(
         portfolio_id="sim_port_1",
         name="Sim Portfolio",
-        initial_cash=1000000.0,
-        exchange_id="upbit",
         portfolio_type="simulation"
     )
+    sim_portfolio.exchange_cash = {"upbit": 1000000.0}
+    sim_portfolio.exchange_initial_cash = {"upbit": 1000000.0}
     pm.add_portfolio(sim_portfolio)
     await repo.save_portfolio(sim_portfolio)
     
@@ -192,7 +192,7 @@ def test_report_generation_definitions(temp_db_path):
     c.execute("""
         CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
             timestamp REAL, proposal_id TEXT, strategy_id TEXT, blocked_reason TEXT,
-            market_type TEXT, session_state TEXT, volatility_regime TEXT, liquidity_regime TEXT, exchange TEXT,
+            market_type TEXT, session_state TEXT, volatility_regime TEXT, liquidity_regime TEXT, exchange_id TEXT,
             correction_active INTEGER
         )
     """)
@@ -211,7 +211,7 @@ def test_report_generation_definitions(temp_db_path):
         VALUES (1, '10m', 0.05, 0.02, 0.03, 0.01, 0.02, 0, 'GOOD', 'NORMAL', 0.6, 'elapsed', 600, 'COMPLETED')
     """)
     c.execute("""
-        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange)
+        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange_id)
         VALUES (1000.0, '1', 'rsi', 'crypto', 'upbit')
     """)
     
@@ -229,7 +229,7 @@ def test_report_generation_definitions(temp_db_path):
         VALUES (2, '10m', 0.01, 0.04, -0.03, 0.05, 0.02, 1, 'BAD', 'NORMAL', 0.3, 'elapsed', 600, 'COMPLETED')
     """)
     c.execute("""
-        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange)
+        INSERT INTO girs_shadow_metrics (timestamp, proposal_id, strategy_id, market_type, exchange_id)
         VALUES (1000.0, '2', 'rsi', 'crypto', 'upbit')
     """)
     

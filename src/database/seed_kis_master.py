@@ -91,7 +91,7 @@ async def seed_master_db():
                 
                 # 2. exchange_assets 에 저장 (기본적으로 비활성 is_active=0 상태)
                 await db.execute('''
-                    INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active)
+                    INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active)
                     VALUES ('kis', ?, 0)
                 ''', (symbol,))
                 success_count += 1

@@ -21,8 +21,8 @@ def plot_backtest_result(candle_history: List[Any], trades: List[Dict[str, Any]]
     plt.plot(df['dt'], df['close'], label='Close Price', color='skyblue', alpha=0.7)
     
     # 2. 매매 타점 표시
-    buy_trades = [t for t in trades if t['type'] == 'BUY']
-    sell_trades = [t for t in trades if t['type'] == 'SELL']
+    buy_trades = [t for t in trades if (t.get('type') or t.get('side')) == 'BUY']
+    sell_trades = [t for t in trades if (t.get('type') or t.get('side')) == 'SELL']
     
     if buy_trades:
         buy_dt = pd.to_datetime([t['timestamp'] // 1000 for t in buy_trades], unit='s')

@@ -23,7 +23,7 @@ class KisCollector(BaseCollector):
         self.rank_task: Optional[asyncio.Task] = None
 
     @property
-    def exchange(self) -> str:
+    def exchange_id(self) -> str:
         return 'kis'
 
     def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
@@ -42,7 +42,7 @@ class KisCollector(BaseCollector):
         if not symbols:
             # DB 조회 실패 혹은 비어있을 때 기본 폴백 종목 지정 (예: 삼성전자 '005930')
             symbols = ["005930"]
-            logger.info(f"[{self.exchange.upper()}] DB에 활성 종목이 없어 기본 종목으로 폴백합니다: {symbols}")
+            logger.info(f"[{self.exchange_id.upper()}] DB에 활성 종목이 없어 기본 종목으로 폴백합니다: {symbols}")
         return symbols
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
@@ -208,7 +208,7 @@ class KisCollector(BaseCollector):
 
                     tick_data = {
                         'type': 'tick',
-                        'exchange': 'kis',
+                        'exchange_id': 'kis',
                         'market': market,
                         'code': symbol_code,
                         'trade_price': price,
@@ -254,10 +254,10 @@ class KisCollector(BaseCollector):
     async def _handle_connection_error(self, error: Exception):
         if isinstance(error, ValueError):
             self.last_error = f"설정 오류: {error}"
-            logger.critical(f"[{self.exchange.upper()}] 치명적 설정 오류 감지. 수집기를 정지합니다. Error: {error}")
+            logger.critical(f"[{self.exchange_id.upper()}] 치명적 설정 오류 감지. 수집기를 정지합니다. Error: {error}")
             await self.stop()
         elif getattr(self.cred_provider, 'last_status', 0) not in [401, 403]:
-            logger.error(f"[{self.exchange.upper()}] Collector Runtime Error: {error}. Reconnecting in 10s...")
+            logger.error(f"[{self.exchange_id.upper()}] Collector Runtime Error: {error}. Reconnecting in 10s...")
             await asyncio.sleep(10)
         else:
             await self.stop()
@@ -353,7 +353,7 @@ class KisCollector(BaseCollector):
 
             token = await self.cred_provider.get_kis_access_token()
             if not token:
-                logger.error(f"[{self.exchange.upper()}] 백필을 위한 KIS 접근 토큰 발급 실패")
+                logger.error(f"[{self.exchange_id.upper()}] 백필을 위한 KIS 접근 토큰 발급 실패")
                 break
 
             app_key = kis_config.get('app_key')
@@ -380,7 +380,7 @@ class KisCollector(BaseCollector):
                 async with self.session.get(url, headers=headers, params=params) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
+                        logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
                         break
                     
                     data = await resp.json()
@@ -405,7 +405,7 @@ class KisCollector(BaseCollector):
                             dt = datetime.strptime(dt_str, '%Y%m%d%H%M%S').replace(tzinfo=kst)
                             ts = int(dt.timestamp())
                         except Exception as parse_err:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 캔들 시간 파싱 에러 ({dt_str}): {parse_err}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 캔들 시간 파싱 에러 ({dt_str}): {parse_err}")
                             continue
 
                         min_ts = min(min_ts, ts)
@@ -430,7 +430,7 @@ class KisCollector(BaseCollector):
                             close_p = float(item.get('stck_prpr', 0))
                             vol = float(item.get('cntg_vol', 0))
                         except ValueError as val_err:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 캔들 수치 변환 실패: {val_err}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 캔들 수치 변환 실패: {val_err}")
                             continue
 
                         # 거래량이 0인 캔들은 백필 수집 대상에서 제외
@@ -438,7 +438,7 @@ class KisCollector(BaseCollector):
                             continue
 
                         candle = Candle(
-                            exchange=self.exchange,
+                            exchange_id=self.exchange_id,
                             symbol=symbol,
                             interval=60,
                             timestamp=ts,
@@ -461,7 +461,7 @@ class KisCollector(BaseCollector):
                     to_time = min_ts - 60
                     
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
                 break
 
             # Rate Limit 준수를 위한 딜레이 적용

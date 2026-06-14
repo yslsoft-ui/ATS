@@ -167,6 +167,35 @@ async function loadPortfolioHistoryList(force = false) {
             tbody.appendChild(tr);
         });
 
+        // [NEW] 대시보드 세션 선택 드롭다운 옵션 동적 바인딩 (백테스트 제외)
+        const selectEl = document.getElementById('overview-session-select');
+        if (selectEl) {
+            selectEl.innerHTML = '';
+            items.forEach(item => {
+                if (item.type === 'backtest') return;
+                
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                
+                let prefix = '';
+                if (item.type === 'live') {
+                    prefix = '🔴 [실거래]';
+                } else if (item.type === 'simulation') {
+                    prefix = '🟢 [진행중]';
+                } else if (item.type === 'simulation_ended') {
+                    prefix = '⚪ [종료됨]';
+                } else {
+                    return; // 백테스트 또는 정의되지 않은 타입 차단
+                }
+                
+                opt.innerText = `${prefix} ${item.name || item.id}`;
+                if (item.id === state.currentPortfolioId) {
+                    opt.selected = true;
+                }
+                selectEl.appendChild(opt);
+            });
+        }
+
         updateSessionControlUI();
         lastPortfolioListFetchedAt = new Date();
     } catch (e) {

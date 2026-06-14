@@ -4,7 +4,7 @@ import time
 
 @dataclass
 class Candle:
-    exchange: str
+    exchange_id: str
     symbol: str
     interval: int  # in seconds
     timestamp: int  # start timestamp of the candle
@@ -27,7 +27,7 @@ class CandleGenerator:
         # timeframe -> symbol -> current_candle
         self.current_candles: Dict[int, Dict[str, Candle]] = {interval: {} for interval in intervals}
 
-    def process_tick(self, exchange: str, symbol: str, price: float, volume: float, side: str, timestamp_ms: int) -> List[Candle]:
+    def process_tick(self, exchange_id: str, symbol: str, price: float, volume: float, side: str, timestamp_ms: int) -> List[Candle]:
         """
         새로운 틱 데이터를 처리하고, 완성된(Closed) 캔들이 있다면 반환합니다.
         
@@ -44,7 +44,7 @@ class CandleGenerator:
             if symbol not in self.current_candles[interval]:
                 # 새 캔들 시작
                 self.current_candles[interval][symbol] = Candle(
-                    exchange=exchange,
+                    exchange_id=exchange_id,
                     symbol=symbol,
                     interval=interval,
                     timestamp=candle_start_time,
@@ -67,7 +67,7 @@ class CandleGenerator:
                     
                     # 새로운 캔들 생성
                     self.current_candles[interval][symbol] = Candle(
-                        exchange=exchange,
+                        exchange_id=exchange_id,
                         symbol=symbol,
                         interval=interval,
                         timestamp=candle_start_time,

@@ -110,7 +110,7 @@ function addAlertToTable(alert, prepend = true) {
 
     tr.addEventListener('click', () => {
         const symbol = alert.symbol || alert.code;
-        const exchange = alert.exchange || 'upbit';
+        const exchange = alert.exchange_id || 'upbit';
         
         // 1. 상태 변경 전 마커 설정 (loadHistory에서 활용하도록)
         state.alertMarkerTs = (alert.timestamp || Date.now()) / 1000;
@@ -200,7 +200,7 @@ function showAlert(alert) {
 
         // 2. 스토어 상태 변경 -> 반응형 구독에 의해 자동 리로드 실행됨
         Store.update({
-            currentExchange: alert.exchange || 'upbit',
+            currentExchange: alert.exchange_id || 'upbit',
             currentSymbol: alert.code || ''
         });
 

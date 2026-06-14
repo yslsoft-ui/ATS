@@ -71,13 +71,13 @@ class StockMapper:
                 
                 # 2. exchange_assets에서 is_active = 1 AND is_delisted = 0 인 활성 종목 로드 (메모리 B)
                 async with db.execute(
-                    "SELECT exchange, symbol FROM exchange_assets WHERE is_active = 1 AND is_delisted = 0"
+                    "SELECT exchange_id, symbol FROM exchange_assets WHERE is_active = 1 AND is_delisted = 0"
                 ) as cursor:
                     exch_rows = await cursor.fetchall()
                 
                 self._active_symbols = {}
                 for row in exch_rows:
-                    exch = row['exchange']
+                    exch = row['exchange_id']
                     sym = row['symbol']
                     self._active_symbols.setdefault(exch, set()).add(sym)
                 

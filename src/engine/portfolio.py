@@ -13,7 +13,7 @@ from src.config.manager import ConfigManager
 
 @dataclass
 class Position:
-    exchange: str
+    exchange_id: str
     symbol: str
     quantity: float = 0.0
     avg_price: float = 0.0
@@ -25,30 +25,44 @@ class Portfolio:
     """
     개별 포트폴리오의 자산 상태(현금, 포지션)를 관리합니다.
     """
-    def __init__(self, portfolio_id: str, name: str, initial_cash: float = 1000000.0, exchange_id: str = 'upbit', portfolio_type: str = 'simulation', strategy_info: str = ""):
+    def __init__(self, portfolio_id: str, name: str, portfolio_type: str = 'simulation', strategy_info: str = ""):
         self.id = portfolio_id
         self.name = name
         self.portfolio_type = portfolio_type
-        self.exchange_id = exchange_id # [NEW]
-        self.initial_cash = initial_cash
-        self.cash = initial_cash
-        self.positions: Dict[Tuple[str, str], Position] = {} # Key is (exchange.lower(), symbol)
-        self.exchange_cash: Dict[str, float] = {} # [NEW] 거래소별 가용 자금 격리 관리
+        self.positions: Dict[Tuple[str, str], Position] = {} # Key is (exchange_id.lower(), symbol)
+        self.exchange_cash: Dict[str, float] = {} # 거래소별 가용 자금 격리 관리 (Source of Truth)
+        self.exchange_initial_cash: Dict[str, float] = {} # 거래소별 초기 설정 자금
         self.history: List[Dict] = []
         self.strategy_info = strategy_info
+        self.status = "ACTIVE" # 포트폴리오 상태: ACTIVE, PAUSED, ERROR
 
-    def update_position(self, exchange: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None, market: str = None):
+    @property
+    def cash(self) -> float:
+        """모든 거래소의 가용 현금 합산 값을 실시간 연산하는 읽기 전용 프로퍼티입니다."""
+        return sum(self.exchange_cash.values()) if self.exchange_cash else 0.0
+
+    @property
+    def initial_cash(self) -> float:
+        """모든 거래소의 초기 자금 합산 값을 실시간 연산하는 읽기 전용 프로퍼티입니다."""
+        return sum(self.exchange_initial_cash.values()) if self.exchange_initial_cash else 0.0
+
+    def update_position(self, exchange_id: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None, market: str = None):
         """체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다."""
-        ex_key = exchange.lower()
+        if not exchange_id:
+            self.status = "ERROR"
+            raise ValueError("체결 포지션 업데이트 중 exchange_id 누락이 감지되어 포트폴리오를 ERROR 상태로 잠금 처리했습니다.")
+            
+        ex_key = exchange_id.lower()
         pos_key = (ex_key, symbol)
         if pos_key not in self.positions:
-            self.positions[pos_key] = Position(exchange=exchange, symbol=symbol)
+            self.positions[pos_key] = Position(exchange_id=exchange_id, symbol=symbol)
         
         pos = self.positions[pos_key]
         
-        # exchange_cash 맵 초기화 fallback
-        if self.exchange_cash is not None and ex_key not in self.exchange_cash:
-            self.exchange_cash[ex_key] = 10000000.0  # 기본 거래소 가용자산은 1,000만 원 설정
+        # exchange_cash 맵 초기화 fallback 배제 (Fail-Fast 적용)
+        if ex_key not in self.exchange_cash:
+            self.status = "ERROR"
+            raise KeyError(f"포트폴리오에 등록되지 않은 거래소 '{exchange_id}'의 포지션 업데이트 시도로 포트폴리오가 ERROR 상태로 고정되었습니다.")
         
         if side == 'BUY':
             # 매수: 평균 단가 갱신 및 수량 증가
@@ -60,15 +74,11 @@ class Portfolio:
             pos.quantity += quantity
             if pos.quantity > 0:
                 pos.avg_price = total_cost / pos.quantity
-            self.cash -= (price * quantity) + fee
-            if self.exchange_cash:
-                self.exchange_cash[ex_key] -= (price * quantity) + fee
+            self.exchange_cash[ex_key] -= (price * quantity) + fee
         else:
             # 매도: 수량 감소
             pos.quantity -= quantity
-            self.cash += (price * quantity) - fee
-            if self.exchange_cash:
-                self.exchange_cash[ex_key] += (price * quantity) - fee
+            self.exchange_cash[ex_key] += (price * quantity) - fee
             if pos.quantity <= 0:
                 pos.quantity = 0
                 pos.avg_price = 0
@@ -76,14 +86,10 @@ class Portfolio:
                 pos.peak_price = 0.0
         
         pos.updated_at = time.time()
-        
-        # 거래소별 격리가 수행 중이라면, 전체 현금 잔액은 개별 잔액의 합산으로 최종 정렬함
-        if self.exchange_cash:
-            self.cash = sum(self.exchange_cash.values())
 
         # 히스토리 기록
         self.history.append({
-            'exchange': exchange,
+            'exchange_id': exchange_id,
             'market': market,
             'symbol': symbol,
             'side': side,
@@ -108,7 +114,7 @@ class OrderExecutor(ABC):
     주문 실행 인터페이스입니다. (가상/실제 공통)
     """
     @abstractmethod
-    async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+    async def execute_order(self, exchange_id: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         pass
 
 class VirtualOrderExecutorAdapter(OrderExecutor):
@@ -118,7 +124,7 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
     def __init__(self, fee_rate: float = 0.0005):
         self.matching_engine = OrderbookMatchingEngine(fee_rate=fee_rate)
 
-    async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+    async def execute_order(self, exchange_id: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         orderbook = kwargs.get('orderbook')
         trade_price = kwargs.get('trade_price')
         market = kwargs.get('market', 'KRW')
@@ -152,7 +158,7 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
             return None
         
         return {
-            'exchange': exchange,
+            'exchange_id': exchange_id,
             'market': market,
             'symbol': symbol,
             'side': side,
@@ -230,7 +236,7 @@ class RealOrderExecutorAdapter(OrderExecutor):
     def __init__(self, config_manager: ConfigManager):
         self.config_manager = config_manager
 
-    async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
+    async def execute_order(self, exchange_id: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         import os
         import hashlib
         import json
@@ -239,9 +245,9 @@ class RealOrderExecutorAdapter(OrderExecutor):
         import time
         from pathlib import Path
         
-        exchange_lower = exchange.lower()
+        exchange_lower = exchange_id.lower()
         if exchange_lower not in ('upbit', 'bithumb', 'kis'):
-            logger.error(f"RealOrderExecutorAdapter: Unsupported exchange '{exchange}'")
+            logger.error(f"RealOrderExecutorAdapter: Unsupported exchange '{exchange_id}'")
             return None
             
         root_dir = Path(__file__).resolve().parents[2]
@@ -327,7 +333,7 @@ class RealOrderExecutorAdapter(OrderExecutor):
                             executed_value = executed_price * executed_qty
                         
                         return {
-                            'exchange': exchange,
+                            'exchange_id': exchange_id,
                             'market': market,
                             'symbol': clean_symbol,
                             'side': side.upper(),
@@ -412,7 +418,7 @@ class RealOrderExecutorAdapter(OrderExecutor):
                             executed_value = executed_price * executed_qty
                         
                         return {
-                            'exchange': exchange,
+                            'exchange_id': exchange_id,
                             'market': market,
                             'symbol': clean_symbol,
                             'side': side.upper(),
@@ -512,7 +518,7 @@ class RealOrderExecutorAdapter(OrderExecutor):
                         executed_price = float(trade_price) if trade_price is not None else 0.0
                         
                         return {
-                            'exchange': exchange,
+                            'exchange_id': exchange_id,
                             'market': market,
                             'symbol': clean_symbol,
                             'side': side.upper(),
@@ -561,8 +567,6 @@ class PortfolioManager:
             portfolio = Portfolio(
                 portfolio_id='live',
                 name='실계좌 자동매매',
-                initial_cash=0.0,
-                exchange_id='upbit',
                 portfolio_type='live'
             )
             self.add_portfolio(portfolio)
@@ -639,7 +643,6 @@ class PortfolioManager:
                     
                 if currency == 'KRW':
                     balance = int(balance)
-                    portfolio.cash = balance
                     if portfolio.exchange_cash is None:
                         portfolio.exchange_cash = {}
                     portfolio.exchange_cash['upbit'] = balance
@@ -647,7 +650,7 @@ class PortfolioManager:
                     symbol = currency.upper()
                     pos_key = ('upbit', symbol)
                     new_positions[pos_key] = Position(
-                        exchange='upbit',
+                        exchange_id='upbit',
                         symbol=symbol,
                         quantity=balance,
                         avg_price=avg_buy_price,
@@ -655,8 +658,8 @@ class PortfolioManager:
                     )
             
             # 최초 동기화 시 현재의 총자산 가치로 초기 자본을 계산하되, 상장폐지/거래불가 종목은 제외합니다.
-            if portfolio.initial_cash <= 0.0:
-                tot_val = portfolio.cash
+            if not portfolio.exchange_initial_cash.get('upbit'):
+                tot_val = portfolio.exchange_cash.get('upbit', 0.0)
                 for a in accounts:
                     curr = a['currency']
                     if curr != 'KRW':
@@ -666,10 +669,10 @@ class PortfolioManager:
                         avg_p = float(a['avg_buy_price'])
                         tot_val += bal * avg_p
                 if tot_val > 0.0:
-                    portfolio.initial_cash = tot_val
+                    portfolio.exchange_initial_cash['upbit'] = tot_val
 
             # 실거래(live) 포트폴리오의 초기 투자금을 0원으로 강제 고정합니다.
-            portfolio.initial_cash = 0.0
+            portfolio.exchange_initial_cash['upbit'] = 0.0
             
         except Exception as e:
             logger.error(f"sync_live_portfolio_from_exchange (Upbit): Exception occurred: {e}")
@@ -761,7 +764,7 @@ class PortfolioManager:
                                         }
                                         
                                     new_positions[pos_key] = Position(
-                                        exchange='bithumb',
+                                        exchange_id='bithumb',
                                         symbol=symbol,
                                         quantity=balance,
                                         avg_price=avg_buy_price,
@@ -858,7 +861,7 @@ class PortfolioManager:
                                         
                                         pos_key = ('kis', pdno)
                                         new_positions[pos_key] = Position(
-                                            exchange='kis',
+                                            exchange_id='kis',
                                             symbol=pdno,
                                             quantity=qty,
                                             avg_price=avg_price,
@@ -877,8 +880,6 @@ class PortfolioManager:
 
         # 최종 통합 갱신 및 DB 저장
         portfolio.positions = new_positions
-        if portfolio.exchange_cash:
-            portfolio.cash = sum(portfolio.exchange_cash.values())
             
         # 실거래(live) 거래소별 초기 원금 동적 세팅
         if not hasattr(portfolio, 'exchange_initial_cash') or portfolio.exchange_initial_cash is None:
@@ -903,10 +904,6 @@ class PortfolioManager:
                     portfolio.exchange_initial_cash[ex_id] = total_ex_val
                     logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for {ex_id} to {total_ex_val}")
                     
-        # live 포트폴리오의 전체 initial_cash는 각 거래소별 initial_cash의 합산으로 갱신
-        if portfolio.exchange_initial_cash:
-            portfolio.initial_cash = sum(portfolio.exchange_initial_cash.values())
-            
         try:
             await self.save_to_db('live')
         except Exception as e:
@@ -920,10 +917,13 @@ class PortfolioManager:
         sim_ports.sort(key=lambda x: x.id, reverse=True)
         return sim_ports[0]
 
-    def get_portfolio_summary(self, symbol: str, portfolio_id: str = "default", exchange: Optional[str] = None) -> Dict[str, Any]:
+    def get_portfolio_summary(self, symbol: str, portfolio_id: str = "default", exchange_id: Optional[str] = None) -> Dict[str, Any]:
         """
         특정 포트폴리오의 현재 현금 및 특정 종목의 포지션 요약을 반환합니다.
         """
+        if not exchange_id:
+            raise ValueError("get_portfolio_summary 호출 시 exchange_id가 제공되지 않았습니다.")
+            
         portfolio = None
         if portfolio_id == "default" or not portfolio_id:
             portfolio = self.get_active_simulation_portfolio()
@@ -933,10 +933,10 @@ class PortfolioManager:
         if not portfolio:
             return {"cash": 0.0, "quantity": 0.0, "avg_price": 0.0}
             
-        ex_key = (exchange or portfolio.exchange_id or 'upbit').lower()
+        ex_key = exchange_id.lower()
         pos = portfolio.positions.get((ex_key, symbol))
         
-        cash_val = portfolio.exchange_cash.get(ex_key, portfolio.cash)
+        cash_val = portfolio.exchange_cash.get(ex_key, 0.0)
         
         return {
             "cash": cash_val,
@@ -969,10 +969,14 @@ class PortfolioManager:
             # 브로드캐스트 알림
             if self.broadcast_callback:
                 try:
+                    ex_id = getattr(signal, 'exchange_id', None)
+                    if not ex_id:
+                        portfolio.status = "ERROR"
+                        raise ValueError("실거래 주문 차단 검사 중 exchange_id 누락")
                     await self.broadcast_callback({
                         "type": "order_blocked",
                         "portfolio_id": portfolio.id,
-                        "exchange": getattr(signal, 'exchange', portfolio.exchange_id),
+                        "exchange_id": ex_id,
                         "symbol": symbol,
                         "side": side,
                         "reason": "실계좌 거래 비활성화 (live_trading_enabled: false)"
@@ -997,11 +1001,11 @@ class PortfolioManager:
         results = []
         executor = self.executors.get('simulation')
         
-        positions_to_sell = [(pos.exchange, pos.symbol, pos.quantity) for pos in portfolio.positions.values() if pos.quantity > 0]
+        positions_to_sell = [(pos.exchange_id, pos.symbol, pos.quantity) for pos in portfolio.positions.values() if pos.quantity > 0]
         
-        for ex, symbol, qty in positions_to_sell:
+        for ex_id, symbol, qty in positions_to_sell:
             result = await executor.execute_order(
-                exchange=ex,
+                exchange_id=ex_id,
                 symbol=symbol,
                 side='SELL',
                 quantity=qty,
@@ -1009,7 +1013,7 @@ class PortfolioManager:
             )
             if result:
                 portfolio.update_position(
-                    exchange=result['exchange'],
+                    exchange_id=result['exchange_id'],
                     symbol=result['symbol'],
                     side=result['side'],
                     price=result['price'],
@@ -1023,17 +1027,17 @@ class PortfolioManager:
                 
         return results
 
-    async def cancel_all_orders(self, exchange: str):
+    async def cancel_all_orders(self, exchange_id: str):
         """거래소 정지 상태 진입 시, 해당 거래소의 모든 미체결 주문을 일괄 취소합니다."""
-        logger.warning(f"[PortfolioManager] 거래소 {exchange} 정지 상태 감지: 미체결 주문 일괄 취소를 요청합니다.")
+        logger.warning(f"[PortfolioManager] 거래소 {exchange_id} 정지 상태 감지: 미체결 주문 일괄 취소를 요청합니다.")
         
         live_trading_enabled = self.config_manager.get("system.live_trading_enabled", False)
         if not live_trading_enabled:
-            live_portfolios = [p for p in self.portfolios.values() if p.portfolio_type == 'live' and p.exchange_id.lower() == exchange.lower()]
+            live_portfolios = [p for p in self.portfolios.values() if p.portfolio_type == 'live' and exchange_id.lower() in [k.lower() for k in p.exchange_cash.keys()]]
             if live_portfolios:
                 for lp in live_portfolios:
                     logger.warning(f"[PortfolioManager] 실거래 주문 취소 차단: live_trading_enabled가 false입니다. (Portfolio: {lp.id})")
-                    msg = f"Live order cancel blocked: live_trading_enabled is False. (Portfolio: {lp.id}, Exchange: {exchange})"
+                    msg = f"Live order cancel blocked: live_trading_enabled is False. (Portfolio: {lp.id}, Exchange: {exchange_id})"
                     await self.repository.insert_system_event(
                         event_type='BLOCKED_LIVE_ORDER',
                         target=lp.id,
@@ -1056,17 +1060,45 @@ class PortfolioManager:
             logger.error(f"Portfolio {portfolio_id} not found for executing pipeline order.")
             return None
 
+        # 1. 포트폴리오 ERROR 또는 PAUSED 상태 Fail-Stop 검사
+        if portfolio.status in ("ERROR", "PAUSED"):
+            logger.warning(f"[PortfolioManager] 주문 차단: 포트폴리오 {portfolio.id}가 현재 {portfolio.status} 상태입니다. (신호 처리 불가)")
+            return None
+
+        # 2. 거래소 식별자 명시성 검증 (Fail-Fast)
+        exchange_key = getattr(signal, 'exchange_id', None)
+        if not exchange_key:
+            portfolio.status = "ERROR"
+            msg = f"주문 집행 중 exchange_id 누락이 감지되어 포트폴리오 {portfolio.id}가 ERROR 상태로 강제 전환되었습니다. (Symbol: {signal.symbol})"
+            logger.critical(f"[PortfolioManager] {msg}")
+            
+            # system_events 감사 로그 기록
+            await self.repository.insert_system_event(
+                event_type='PORTFOLIO_CRITICAL_ERROR',
+                target=portfolio.id,
+                message=msg,
+                timestamp=int(time.time() * 1000)
+            )
+            
+            # 대시보드 브로드캐스트
+            if self.broadcast_callback:
+                try:
+                    await self.broadcast_callback({
+                        "type": "portfolio_status",
+                        "portfolio_id": portfolio.id,
+                        "status": "ERROR",
+                        "msg": msg
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to broadcast portfolio status alert: {e}")
+                    
+            raise ValueError(msg)
+
         # 실거래 주문 차단 가드 체크
         blocked_result = await self.check_live_trading_blocked(portfolio, signal)
         if blocked_result:
             return blocked_result
-
-        # 거래소 수수료율 적용 (다중 종목 대응을 위해 signal.exchange 우선 고려)
-        exchange_key = getattr(signal, 'exchange', portfolio.exchange_id)
-        if not exchange_key or exchange_key == 'all':
-            exchange_key = portfolio.exchange_id
-
-        # 거래소 정지 상태(SUSPENDED) 여부 체크 및 주문 차단
+            
         status_info = self.collector_statuses.get(exchange_key.lower(), {})
         if status_info.get('status') == 'SUSPENDED':
             reason = status_info.get('status_reason', '정지 사유 미지정')
@@ -1075,7 +1107,7 @@ class PortfolioManager:
                 await self.broadcast_callback({
                     "type": "order_blocked",
                     "portfolio_id": portfolio_id,
-                    "exchange": exchange_key,
+                    "exchange_id": exchange_key,
                     "symbol": signal.symbol,
                     "side": signal.action,
                     "reason": f"거래소 정지 상태 (사유: {reason})"
@@ -1085,7 +1117,7 @@ class PortfolioManager:
         exchange_config = self.exchange_configs.get(exchange_key, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         
-        # [방안 B] 거래소 설정별로 주입된 어댑터 캐싱 및 다형적 호출
+        # 실거래 및 가상 거래소 어댑터 캐싱
         if portfolio.portfolio_type == 'live':
             executor_key = f"live_{exchange_key.lower()}"
             if executor_key not in self.executors:
@@ -1104,7 +1136,7 @@ class PortfolioManager:
                 market_val = 'KRW'
 
         result = await executor.execute_order(
-            exchange=signal.exchange,
+            exchange_id=exchange_key,
             market=market_val,
             symbol=signal.symbol,
             side=signal.action,
@@ -1116,7 +1148,7 @@ class PortfolioManager:
         if result:
             # 포트폴리오 상태 갱신
             portfolio.update_position(
-                exchange=result['exchange'],
+                exchange_id=result['exchange_id'],
                 symbol=result['symbol'],
                 side=result['side'],
                 price=result['price'],
@@ -1131,7 +1163,7 @@ class PortfolioManager:
             logger.info(f"TRADE EXECUTION: {portfolio.name}: {result['side']} {result['symbol']} @ {result['price']:.2f} (Qty: {result['quantity']:.4f})")
             
             order_data = {
-                'exchange': result['exchange'],
+                'exchange_id': result['exchange_id'],
                 'market': result.get('market', market_val),
                 'strategy_id': getattr(signal, 'strategy_id', ""),
                 'symbol': result['symbol'],
@@ -1162,12 +1194,15 @@ class PortfolioManager:
         if not portfolio:
             return None
 
+        ex_key = getattr(signal, 'exchange_id', None)
+        if not ex_key:
+            raise ValueError("handle_signal: exchange_id가 누락되었습니다.")
+
         # 고정 수량 계산
         if signal.action == 'BUY':
-            quantity = (portfolio.cash * 0.1) / trade_price
+            quantity = (portfolio.exchange_cash.get(ex_key.lower(), 0.0) * 0.1) / trade_price
         elif signal.action == 'SELL':
-            ex_key = (signal.exchange or portfolio.exchange_id or 'upbit').lower()
-            pos = portfolio.positions.get((ex_key, signal.symbol))
+            pos = portfolio.positions.get((ex_key.lower(), signal.symbol))
             if not pos or pos.quantity <= 0: return None
             quantity = pos.quantity
         else:
@@ -1260,7 +1295,7 @@ class PortfolioManager:
                 
                 try:
                     async with db.execute(
-                        "SELECT close FROM candles WHERE exchange = ? AND symbol = ? ORDER BY timestamp DESC LIMIT 1",
+                        "SELECT close FROM candles WHERE exchange_id = ? AND symbol = ? ORDER BY timestamp DESC LIMIT 1",
                         (ex_key.lower(), sym)
                     ) as cursor:
                         row = await cursor.fetchone()

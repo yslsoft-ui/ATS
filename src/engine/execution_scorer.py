@@ -37,15 +37,23 @@ class ExecutionScorer:
             if not (0.0 < ratio <= 1.0):
                 ratio = 0.1
                 
-            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-            available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
+            ex_id = getattr(signal, 'exchange_id', None)
+            if not ex_id:
+                raise ValueError("주문 수량 계산 중 신호의 exchange_id가 누락되었습니다.")
+            ex_key = ex_id.lower()
+            if ex_key not in portfolio.exchange_cash:
+                raise KeyError(f"포트폴리오에 '{ex_id}' 거래소 현금이 등록되어 있지 않습니다.")
+            available_cash = portfolio.exchange_cash[ex_key]
             
             target_value = available_cash * ratio
             quantity = target_value / price
             return quantity, target_value
             
         elif action == 'SELL':
-            ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
+            ex_id = getattr(signal, 'exchange_id', None)
+            if not ex_id:
+                raise ValueError("주문 수량 계산 중 신호의 exchange_id가 누락되었습니다.")
+            ex_key = ex_id.lower()
             pos = portfolio.positions.get((ex_key, signal.symbol))
             if not pos or pos.quantity <= 0:
                 return 0.0, 0.0
@@ -83,8 +91,13 @@ class ExecutionScorer:
         if qty <= 0 or target_value <= 0:
             return False, "유효하지 않은 주문 수량"
 
-        ex_key = (getattr(signal, 'exchange', None) or portfolio.exchange_id or 'upbit').lower()
-        available_cash = portfolio.exchange_cash.get(ex_key, portfolio.cash) if getattr(portfolio, 'exchange_cash', None) else portfolio.cash
+        ex_id = getattr(signal, 'exchange_id', None)
+        if not ex_id:
+            raise ValueError("리스크 검증 중 신호의 exchange_id가 누락되었습니다.")
+        ex_key = ex_id.lower()
+        if ex_key not in portfolio.exchange_cash:
+            raise KeyError(f"포트폴리오에 '{ex_id}' 거래소 현금이 등록되어 있지 않습니다.")
+        available_cash = portfolio.exchange_cash[ex_key]
 
         # 1. 사용 가능 현금 검사 (수수료 포함)
         total_cost = target_value * (1 + fee_rate)

@@ -52,7 +52,7 @@ class BaseMarketDataRepository(abc.ABC):
     @abc.abstractmethod
     async def get_candles(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         interval: int = 60,
         limit: int = 500,
@@ -68,7 +68,7 @@ class BaseMarketDataRepository(abc.ABC):
     @abc.abstractmethod
     async def get_recent_trades(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
@@ -80,7 +80,7 @@ class BaseMarketDataRepository(abc.ABC):
     @abc.abstractmethod
     async def get_restored_candles(
         self,
-        exchange: Optional[str] = None,
+        exchange_id: Optional[str] = None,
         symbol: Optional[str] = None,
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
@@ -100,7 +100,7 @@ class BaseMarketDataRepository(abc.ABC):
     async def get_latest_closed_candle_close(
         self, 
         symbol: str, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
@@ -112,7 +112,7 @@ class BaseMarketDataRepository(abc.ABC):
         self, 
         symbol: str, 
         timestamp_ms: int, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
@@ -132,7 +132,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
 
     async def get_candles(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         interval: int = 60,
         limit: int = 500,
@@ -147,8 +147,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             if interval >= 60 and interval % 60 == 0:
                 if interval == 60:
                     # 1분봉 요청 시에는 조립 루프 없이 그대로 다이렉트 반환 (데이터 왜곡 방지 및 성능 극대화)
-                    query = "SELECT * FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60"
-                    params = [exchange, symbol]
+                    query = "SELECT * FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60"
+                    params = [exchange_id, symbol]
                     if start_ts and end_ts:
                         query += " AND timestamp BETWEEN ? AND ?"
                         params.extend([start_ts, end_ts])
@@ -173,7 +173,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                             if system_app_state_system:
                                 target_collector = None
                                 for col in getattr(system_app_state_system, 'collectors', []):
-                                    if getattr(col, 'exchange', '') == exchange:
+                                    if getattr(col, 'exchange_id', '') == exchange_id:
                                         target_collector = col
                                         break
                                 
@@ -193,8 +193,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                             if len(all_candles) < limit:
                                 start_time_ms = int((time.time() - (limit * interval * 1.5)) * 1000)
                                 
-                                tick_query = "SELECT * FROM trades WHERE exchange = ? AND symbol = ? AND trade_timestamp >= ?"
-                                tick_params = [exchange, symbol, start_time_ms]
+                                tick_query = "SELECT * FROM trades WHERE exchange_id = ? AND symbol = ? AND trade_timestamp >= ?"
+                                tick_params = [exchange_id, symbol, start_time_ms]
                                 
                                 tick_query += " ORDER BY trade_timestamp DESC LIMIT ?"
                                 tick_params.append(30000) # 최대 30,000틱까지 안전 수용
@@ -206,7 +206,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                                         temp_generator = CandleGenerator(intervals=[interval])
                                         restored_candles = []
                                         for row in ticks:
-                                            closed = temp_generator.process_tick(exchange, symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
+                                            closed = temp_generator.process_tick(exchange_id, symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
                                             for c in closed:
                                                 restored_candles.append({
                                                     'timestamp': c.timestamp,
@@ -230,8 +230,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                                             all_candles = restored_candles + all_candles
                 else:
                     # 3분봉, 5분봉 등 상위 고분봉에 대해서만 1분봉을 징검다리로 삼아 정밀 병합 조립 (OHLCV 보존)
-                    query = "SELECT * FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60"
-                    params = [exchange, symbol]
+                    query = "SELECT * FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60"
+                    params = [exchange_id, symbol]
                     if start_ts and end_ts:
                         query += " AND timestamp BETWEEN ? AND ?"
                         params.extend([start_ts, end_ts])
@@ -273,7 +273,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                             if system_app_state_system:
                                 target_collector = None
                                 for col in getattr(system_app_state_system, 'collectors', []):
-                                    if getattr(col, 'exchange', '') == exchange:
+                                    if getattr(col, 'exchange_id', '') == exchange_id:
                                         target_collector = col
                                         break
                                 
@@ -304,8 +304,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             # 2. 저분봉(60초 미만) 또는 데이터 부족 시 틱 데이터 활용
             if not all_candles:
                 needed_ticks = limit * 2 if interval < 10 else limit * 10
-                query = "SELECT * FROM trades WHERE exchange = ? AND symbol = ? "
-                params = [exchange, symbol]
+                query = "SELECT * FROM trades WHERE exchange_id = ? AND symbol = ? "
+                params = [exchange_id, symbol]
                 if start_ts and end_ts:
                     query += " AND trade_timestamp BETWEEN ? AND ?"
                     params.extend([start_ts * 1000, end_ts * 1000])
@@ -314,8 +314,8 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                     latest_ts_ms = None
                     try:
                         async with db.execute(
-                            "SELECT MAX(trade_timestamp) FROM trades WHERE exchange = ? AND symbol = ?",
-                            (exchange, symbol)
+                            "SELECT MAX(trade_timestamp) FROM trades WHERE exchange_id = ? AND symbol = ?",
+                            (exchange_id, symbol)
                         ) as cur:
                             row = await cur.fetchone()
                             if row and row[0]:
@@ -339,7 +339,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                         ticks = sorted([dict(r) for r in rows], key=lambda x: x['trade_timestamp'])
                         generator = CandleGenerator(intervals=[interval])
                         for row in ticks:
-                            closed = generator.process_tick(exchange, symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
+                            closed = generator.process_tick(exchange_id, symbol, row['trade_price'], row['trade_volume'], row['ask_bid'], row['trade_timestamp'])
                             for c in closed:
                                 all_candles.append({'timestamp': c.timestamp, 'open': c.open, 'high': c.high, 'low': c.low, 'close': c.close, 'volume': c.volume})
                         
@@ -364,19 +364,19 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
 
     async def get_recent_trades(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
         async with get_db_conn() as db:
-            query = "SELECT * FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?"
-            async with db.execute(query, [exchange, symbol, limit]) as cursor:
+            query = "SELECT * FROM trades WHERE exchange_id = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?"
+            async with db.execute(query, [exchange_id, symbol, limit]) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
     async def get_restored_candles(
         self,
-        exchange: Optional[str] = None,
+        exchange_id: Optional[str] = None,
         symbol: Optional[str] = None,
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
@@ -386,11 +386,11 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
         
         async with get_db_conn() as db:
             # 1. DB에 존재하는 1분봉 타임스탬프 조회
-            query_candles = "SELECT exchange, symbol, timestamp FROM candles WHERE interval = 60 AND timestamp BETWEEN ? AND ?"
+            query_candles = "SELECT exchange_id, symbol, timestamp FROM candles WHERE interval = 60 AND timestamp BETWEEN ? AND ?"
             params_candles = [start_time, end_time]
-            if exchange:
-                query_candles += " AND exchange = ?"
-                params_candles.append(exchange)
+            if exchange_id:
+                query_candles += " AND exchange_id = ?"
+                params_candles.append(exchange_id)
             if symbol:
                 query_candles += " AND symbol = ?"
                 params_candles.append(symbol)
@@ -401,13 +401,13 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                 
             # 2. 동일 시간대의 trades 조회
             query_trades = """
-                SELECT exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp FROM trades
+                SELECT exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp FROM trades
                 WHERE trade_timestamp BETWEEN ? AND ?
             """
             params_trades = [start_time * 1000, end_time * 1000]
-            if exchange:
-                query_trades += " AND exchange = ?"
-                params_trades.append(exchange)
+            if exchange_id:
+                query_trades += " AND exchange_id = ?"
+                params_trades.append(exchange_id)
             if symbol:
                 query_trades += " AND symbol = ?"
                 params_trades.append(symbol)
@@ -437,7 +437,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                 key = (ex, sym, bucket)
                 if key not in restored:
                     restored[key] = {
-                        'exchange': ex,
+                        'exchange_id': ex,
                         'symbol': sym,
                         'timestamp': bucket,
                         'open': price,
@@ -471,7 +471,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             async with get_db_conn() as db:
                 # 1. trades에서 최근 체결가 조회
                 async with db.execute(
-                    "SELECT trade_price FROM trades WHERE exchange = 'kis' AND symbol = ? ORDER BY trade_timestamp DESC LIMIT 1",
+                    "SELECT trade_price FROM trades WHERE exchange_id = 'kis' AND symbol = ? ORDER BY trade_timestamp DESC LIMIT 1",
                     (symbol,)
                 ) as cursor:
                     row = await cursor.fetchone()
@@ -480,7 +480,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                 
                 # 2. candles(1분봉)에서 오늘 혹은 마지막 캔들 지표 획득
                 async with db.execute(
-                    "SELECT close, high, low, volume FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 ORDER BY timestamp DESC LIMIT 1",
+                    "SELECT close, high, low, volume FROM candles WHERE exchange_id = 'kis' AND symbol = ? AND interval = 60 ORDER BY timestamp DESC LIMIT 1",
                     (symbol,)
                 ) as cursor:
                     row = await cursor.fetchone()
@@ -493,7 +493,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                         
                 # 3. 전일 종가와 비교하여 24h 변동률 근사치 추정
                 async with db.execute(
-                    "SELECT close FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60 AND timestamp < (SELECT COALESCE(MAX(timestamp), 0) FROM candles WHERE exchange = 'kis' AND symbol = ? AND interval = 60) - 24*3600 ORDER BY timestamp DESC LIMIT 1",
+                    "SELECT close FROM candles WHERE exchange_id = 'kis' AND symbol = ? AND interval = 60 AND timestamp < (SELECT COALESCE(MAX(timestamp), 0) FROM candles WHERE exchange_id = 'kis' AND symbol = ? AND interval = 60) - 24*3600 ORDER BY timestamp DESC LIMIT 1",
                     (symbol, symbol)
                 ) as cursor:
                     row = await cursor.fetchone()
@@ -516,7 +516,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
     async def get_latest_closed_candle_close(
         self, 
         symbol: str, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
@@ -536,9 +536,9 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
 
         query = "SELECT close FROM candles WHERE symbol = ? AND is_closed = 1"
         params = [symbol]
-        if exchange:
-            query += " AND exchange = ?"
-            params.append(exchange.lower())
+        if exchange_id:
+            query += " AND exchange_id = ?"
+            params.append(exchange_id.lower())
         if interval_val is not None:
             query += " AND interval = ?"
             params.append(interval_val)
@@ -558,7 +558,7 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
         self, 
         symbol: str, 
         timestamp_ms: int, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
@@ -580,9 +580,9 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
 
         query = "SELECT close FROM candles WHERE symbol = ? AND timestamp <= ? AND is_closed = 1"
         params = [symbol, ts_s]
-        if exchange:
-            query += " AND exchange = ?"
-            params.append(exchange.lower())
+        if exchange_id:
+            query += " AND exchange_id = ?"
+            params.append(exchange_id.lower())
         if interval_val is not None:
             query += " AND interval = ?"
             params.append(interval_val)
@@ -610,24 +610,24 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
         self.candles_store: Dict[str, List[Dict[str, Any]]] = {}
         self.trades_store: Dict[str, List[Dict[str, Any]]] = {}
 
-    def _get_key(self, exchange: str, symbol: str) -> str:
-        return f"{exchange}:{symbol}"
+    def _get_key(self, exchange_id: str, symbol: str) -> str:
+        return f"{exchange_id}:{symbol}"
 
-    def add_candle(self, exchange: str, symbol: str, candle: Dict[str, Any]):
-        key = self._get_key(exchange, symbol)
+    def add_candle(self, exchange_id: str, symbol: str, candle: Dict[str, Any]):
+        key = self._get_key(exchange_id, symbol)
         if key not in self.candles_store:
             self.candles_store[key] = []
         self.candles_store[key].append(candle)
 
-    def add_trade(self, exchange: str, symbol: str, trade: Dict[str, Any]):
-        key = self._get_key(exchange, symbol)
+    def add_trade(self, exchange_id: str, symbol: str, trade: Dict[str, Any]):
+        key = self._get_key(exchange_id, symbol)
         if key not in self.trades_store:
             self.trades_store[key] = []
         self.trades_store[key].append(trade)
 
     async def get_candles(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         interval: int = 60,
         limit: int = 500,
@@ -635,7 +635,7 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
         end_ts: Optional[int] = None,
         system_app_state_system: Optional[Any] = None
     ) -> List[Dict[str, Any]]:
-        key = self._get_key(exchange, symbol)
+        key = self._get_key(exchange_id, symbol)
         candles = self.candles_store.get(key, [])
         
         # 필터링
@@ -660,18 +660,18 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
 
     async def get_recent_trades(
         self,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         limit: int = 100
     ) -> List[Dict[str, Any]]:
-        key = self._get_key(exchange, symbol)
+        key = self._get_key(exchange_id, symbol)
         trades = self.trades_store.get(key, [])
         sorted_trades = sorted(trades, key=lambda x: x.get('trade_timestamp', 0), reverse=True)
         return sorted_trades[:limit]
 
     async def get_restored_candles(
         self,
-        exchange: Optional[str] = None,
+        exchange_id: Optional[str] = None,
         symbol: Optional[str] = None,
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
@@ -683,13 +683,13 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
     async def get_latest_closed_candle_close(
         self, 
         symbol: str, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
         keys_to_search = []
-        if exchange:
-            keys_to_search.append(self._get_key(exchange, symbol))
+        if exchange_id:
+            keys_to_search.append(self._get_key(exchange_id, symbol))
         else:
             for key in self.candles_store.keys():
                 if key.endswith(f":{symbol}"):
@@ -729,13 +729,13 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
         self, 
         symbol: str, 
         timestamp_ms: int, 
-        exchange: Optional[str] = None, 
+        exchange_id: Optional[str] = None, 
         market_type: Optional[str] = None, 
         timeframe: Optional[str] = None
     ) -> Optional[float]:
         keys_to_search = []
-        if exchange:
-            keys_to_search.append(self._get_key(exchange, symbol))
+        if exchange_id:
+            keys_to_search.append(self._get_key(exchange_id, symbol))
         else:
             for key in self.candles_store.keys():
                 if key.endswith(f":{symbol}"):
@@ -816,11 +816,11 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+    async def upsert_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
         pass
 
     @abc.abstractmethod
-    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
+    async def get_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
         pass
 
     @abc.abstractmethod
@@ -994,14 +994,11 @@ class SqliteTradingRepository(BaseTradingRepository):
         async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 기본 정보 저장
             await db.execute('''
-                INSERT INTO portfolios (id, name, type, exchange_id, initial_cash, cash, strategy_info, duration, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     type = excluded.type,
-                    exchange_id = excluded.exchange_id,
-                    initial_cash = excluded.initial_cash,
-                    cash = excluded.cash,
                     strategy_info = excluded.strategy_info,
                     duration = COALESCE(excluded.duration, portfolios.duration),
                     updated_at = datetime('now')
@@ -1009,9 +1006,6 @@ class SqliteTradingRepository(BaseTradingRepository):
                 portfolio.id,
                 portfolio.name,
                 portfolio.portfolio_type,
-                portfolio.exchange_id,
-                portfolio.initial_cash,
-                portfolio.cash,
                 getattr(portfolio, 'strategy_info', ''),
                 getattr(portfolio, 'duration', None)
             ))
@@ -1019,7 +1013,7 @@ class SqliteTradingRepository(BaseTradingRepository):
             # 1.5. 거래소별 격리 자금 정보 저장 (portfolio_exchanges)
             if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
                 for ex_id, ex_cash in portfolio.exchange_cash.items():
-                    init_cash = 10000000.0
+                    init_cash = 0.0
                     if hasattr(portfolio, 'exchange_initial_cash') and portfolio.exchange_initial_cash and ex_id in portfolio.exchange_initial_cash:
                         init_cash = float(portfolio.exchange_initial_cash[ex_id])
                     else:
@@ -1028,20 +1022,22 @@ class SqliteTradingRepository(BaseTradingRepository):
                             portfolio.exchange_initial_cash = {}
                         portfolio.exchange_initial_cash[ex_id] = init_cash
 
+                    is_primary = 1 if ex_id.lower() == 'upbit' else 0
+
                     await db.execute('''
-                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
-                        VALUES (?, ?, ?, ?, datetime('now'))
-                        ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, updated_at = datetime('now')
-                    ''', (portfolio.id, ex_id, init_cash, ex_cash, ex_cash))
+                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary, updated_at)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                        ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, initial_cash = ?, updated_at = datetime('now')
+                    ''', (portfolio.id, ex_id, init_cash, ex_cash, is_primary, ex_cash, init_cash))
 
             # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
             await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (portfolio.id,))
             for pos in portfolio.positions.values():
                 if pos.quantity > 0:
                     await db.execute('''
-                        INSERT INTO positions (portfolio_id, exchange, symbol, quantity, avg_price, entry_time, peak_price, updated_at)
+                        INSERT INTO positions (portfolio_id, exchange_id, symbol, quantity, avg_price, entry_time, peak_price, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                    ''', (portfolio.id, pos.exchange, pos.symbol, pos.quantity, pos.avg_price, getattr(pos, 'entry_time', 0.0), getattr(pos, 'peak_price', 0.0)))
+                    ''', (portfolio.id, pos.exchange_id, pos.symbol, pos.quantity, pos.avg_price, getattr(pos, 'entry_time', 0.0), getattr(pos, 'peak_price', 0.0)))
             
             await db.commit()
 
@@ -1063,12 +1059,9 @@ class SqliteTradingRepository(BaseTradingRepository):
                     p = Portfolio(
                         portfolio_id=row['id'], 
                         name=row['name'], 
-                        initial_cash=row['initial_cash'], 
-                        exchange_id=row['exchange_id'],
                         portfolio_type=row['type'],
                         strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
                     )
-                    p.cash = row['cash']
                     loaded_portfolios[p.id] = p
             
             # 2. 각 포트폴리오의 포지션 및 거래소 격리 자금 로드
@@ -1084,9 +1077,9 @@ class SqliteTradingRepository(BaseTradingRepository):
                 # 2.2. positions 로드
                 async with db.execute("SELECT * FROM positions WHERE portfolio_id = ?", (pid,)) as cursor:
                     async for row in cursor:
-                        ex_val = row['exchange'] if row['exchange'] else 'upbit'
+                        ex_val = row['exchange_id'] if row['exchange_id'] else 'upbit'
                         p.positions[(ex_val.lower(), row['symbol'])] = Position(
-                             exchange=ex_val,
+                             exchange_id=ex_val,
                              symbol=row['symbol'],
                              quantity=row['quantity'],
                              avg_price=row['avg_price'],
@@ -1105,11 +1098,11 @@ class SqliteTradingRepository(BaseTradingRepository):
         async with get_db_conn(self.db_path) as db:
             import json
             await db.execute('''
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 portfolio_id, 
-                order['exchange'],
+                order['exchange_id'],
                 order.get('market', 'KRW'),
                 order.get('strategy_id', ""),
                 order['symbol'], 
@@ -1128,7 +1121,7 @@ class SqliteTradingRepository(BaseTradingRepository):
             async with get_db_conn(self.db_path) as db:
                 query = """
                     SELECT * FROM real_orders
-                    WHERE exchange = 'upbit'
+                    WHERE exchange_id = 'upbit'
                     ORDER BY created_at DESC
                 """
                 if limit is not None and limit > 0:
@@ -1149,7 +1142,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                         
                         orders.append({
                             'portfolio_id': 'live',
-                            'exchange': r['exchange'],
+                            'exchange_id': r['exchange_id'],
                             'market': 'KRW',
                             'strategy_id': 'live_auto',
                             'symbol': r['symbol'],
@@ -1267,8 +1260,8 @@ class SqliteTradingRepository(BaseTradingRepository):
 
         async with get_db_conn(self.db_path) as db:
             await db.execute(
-                "INSERT INTO alerts (exchange, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
-                (alert['exchange'], alert['code'], alert['price'], alert['msg'], alert['timestamp'])
+                "INSERT INTO alerts (exchange_id, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
+                (alert['exchange_id'], alert['code'], alert['price'], alert['msg'], alert['timestamp'])
             )
             await db.commit()
 
@@ -1321,13 +1314,13 @@ class SqliteTradingRepository(BaseTradingRepository):
             await db.commit()
             logger.info(f"[Repository] 시스템 감사 로그를 정리하였습니다. (차단/요약 7일 기준: {cutoff_ts_short}, 전환 90일 기준: {cutoff_ts_long})")
 
-    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+    async def upsert_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
         async with get_db_conn(self.db_path) as db:
             await db.execute('''
                 INSERT INTO universe_guard_state 
-                (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
+                (exchange_id, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(exchange, market_type, symbol) DO UPDATE SET
+                ON CONFLICT(exchange_id, market_type, symbol) DO UPDATE SET
                     status = excluded.status,
                     blocked_reason = excluded.blocked_reason,
                     blocked_count = CASE WHEN COALESCE(universe_guard_state.blocked_reason, '') = COALESCE(excluded.blocked_reason, '') 
@@ -1335,12 +1328,12 @@ class SqliteTradingRepository(BaseTradingRepository):
                                          ELSE excluded.blocked_count END,
                     last_blocked_at = excluded.last_blocked_at,
                     last_event_logged_reason = excluded.last_event_logged_reason
-            ''', (exchange, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason))
+            ''', (exchange_id, market_type, symbol, status, blocked_reason, blocked_count, last_blocked_at, last_event_logged_reason))
             await db.commit()
 
-    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
+    async def get_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
-            async with db.execute("SELECT * FROM universe_guard_state WHERE exchange = ? AND market_type = ? AND symbol = ?", (exchange, market_type, symbol)) as cursor:
+            async with db.execute("SELECT * FROM universe_guard_state WHERE exchange_id = ? AND market_type = ? AND symbol = ?", (exchange_id, market_type, symbol)) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row else None
 
@@ -2133,7 +2126,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                  simulation_session_id, decision_type, blocked_reason,
                  trade_age_ms, orderbook_age_ms, indicator_age_ms, is_fresh, stale_reason,
                  snapshot_version, snapshot_hash, feature_vector_hash, orderbook_available,
-                 market_type, session_state, volatility_regime, liquidity_regime, exchange,
+                 market_type, session_state, volatility_regime, liquidity_regime, exchange_id,
                  tps, trade_count, volume, idle_time)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
@@ -2166,7 +2159,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 metric_data.get("session_state"),
                 metric_data.get("volatility_regime"),
                 metric_data.get("liquidity_regime"),
-                metric_data.get("exchange"),
+                metric_data.get("exchange_id") or metric_data.get("exchange"),
                 metric_data.get("tps"),
                 metric_data.get("trade_count"),
                 metric_data.get("volume"),
@@ -2280,8 +2273,8 @@ class InMemoryTradingRepository(BaseTradingRepository):
                 filtered.append(e)
         self.system_events = filtered
 
-    async def upsert_universe_guard_state(self, exchange: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
-        key = (exchange, market_type, symbol)
+    async def upsert_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str, status: str, blocked_reason: Optional[str], blocked_count: int, last_blocked_at: Optional[float], last_event_logged_reason: Optional[str]):
+        key = (exchange_id, market_type, symbol)
         existing = self.universe_guard_states.get(key, {})
         prev_reason = existing.get("blocked_reason")
         
@@ -2291,7 +2284,7 @@ class InMemoryTradingRepository(BaseTradingRepository):
             new_count = blocked_count
             
         self.universe_guard_states[key] = {
-            "exchange": exchange,
+            "exchange_id": exchange_id,
             "market_type": market_type,
             "symbol": symbol,
             "status": status,
@@ -2301,8 +2294,8 @@ class InMemoryTradingRepository(BaseTradingRepository):
             "last_event_logged_reason": last_event_logged_reason
         }
 
-    async def get_universe_guard_state(self, exchange: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
-        key = (exchange, market_type, symbol)
+    async def get_universe_guard_state(self, exchange_id: str, market_type: str, symbol: str) -> Optional[Dict[str, Any]]:
+        key = (exchange_id, market_type, symbol)
         return self.universe_guard_states.get(key)
 
     async def get_all_universe_guard_states(self) -> List[Dict[str, Any]]:

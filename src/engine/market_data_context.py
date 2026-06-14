@@ -14,8 +14,8 @@ class MarketDataContext:
     특정 자산 및 인터벌 단위로 시세(Candle)를 관리하고,
     기술 지표를 동적으로 연산하여 캐싱하는 데이터 관리 컨텍스트 모듈입니다.
     """
-    def __init__(self, exchange: str, symbol: str, interval: int, max_len: int = 200):
-        self.exchange = exchange
+    def __init__(self, exchange_id: str, symbol: str, interval: int, max_len: int = 200):
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.interval = interval
         self.max_len = max_len

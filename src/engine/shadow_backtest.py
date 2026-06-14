@@ -107,7 +107,7 @@ class ShadowBacktestEngine:
             
             async with get_db_conn(self.db_path) as db:
                 async with db.execute(
-                    "SELECT exchange_id FROM portfolios WHERE id = ?", (portfolio_id,)
+                    "SELECT exchange_id FROM portfolio_exchanges WHERE portfolio_id = ? LIMIT 1", (portfolio_id,)
                 ) as cursor:
                     row = await cursor.fetchone()
                     if row:
@@ -118,7 +118,7 @@ class ShadowBacktestEngine:
             # DB trades 테이블에서 최근 거래가 발생한 종목 하나를 획득하여 테스트 대상으로 삼음
             async with get_db_conn(self.db_path) as db:
                 async with db.execute(
-                    "SELECT symbol FROM trades WHERE exchange = ? ORDER BY trade_timestamp DESC LIMIT 1",
+                    "SELECT symbol FROM trades WHERE exchange_id = ? ORDER BY trade_timestamp DESC LIMIT 1",
                     (exchange,)
                 ) as cursor:
                     row = await cursor.fetchone()
@@ -140,7 +140,7 @@ class ShadowBacktestEngine:
             
             logger.info(f"[ShadowBacktest] {strategy_id} 전략 중기(7일) 백테스트 개시 ({symbol})")
             res_7d = await self.backtest_engine.run(
-                exchange=exchange,
+                exchange_id=exchange,
                 symbol=symbol,
                 start_date=start_7d,
                 end_date=end_time,
@@ -169,7 +169,7 @@ class ShadowBacktestEngine:
             start_1d = now_ms - one_day_ms
             logger.info(f"[ShadowBacktest] {strategy_id} 전략 단기(1일) 백테스트 개시 ({symbol})")
             res_1d = await self.backtest_engine.run(
-                exchange=exchange,
+                exchange_id=exchange,
                 symbol=symbol,
                 start_date=start_1d,
                 end_date=end_time,
@@ -401,7 +401,7 @@ class ShadowBacktestEngine:
                         price_features={"close": 50000.0, "returns": roi_1d / 100.0, "volatility": atr_ratio},
                         liquidity_features={"spread": 0.002, "volume": float(summary_7d.get("volume", 5000.0)), "depth": 10000.0},
                         regime_features={"regime_index": float(adx > 25.0)},
-                        exchange=exchange,
+                        exchange_id=exchange,
                         symbol=symbol,
                         market_type=market_type
                     )

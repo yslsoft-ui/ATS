@@ -14,7 +14,7 @@ class UpbitCollector(BaseCollector):
     업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다.
     """
     @property
-    def exchange(self) -> str:
+    def exchange_id(self) -> str:
         return 'upbit'
 
     def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
@@ -32,7 +32,7 @@ class UpbitCollector(BaseCollector):
             
             # 2. DB에 활성 종목이 전혀 없을 경우 API를 통해 전체 KRW 마켓 종목 자동 로드 (Fallback)
             if not symbols:
-                logger.warning(f"[{self.exchange.upper()}] DB에 활성화된 종목이 없습니다. API에서 전체 KRW 종목 로드를 시도합니다.")
+                logger.warning(f"[{self.exchange_id.upper()}] DB에 활성화된 종목이 없습니다. API에서 전체 KRW 종목 로드를 시도합니다.")
                 if not self.session or self.session.closed:
                     self.session = aiohttp.ClientSession()
                 
@@ -42,10 +42,10 @@ class UpbitCollector(BaseCollector):
                     
                 if not symbols:
                     symbols = ["BTC", "ETH", "XRP"]
-                    logger.info(f"[{self.exchange.upper()}] 최종 Fallback 기본 종목 적용: {symbols}")
+                    logger.info(f"[{self.exchange_id.upper()}] 최종 Fallback 기본 종목 적용: {symbols}")
             return symbols
         except Exception as e:
-            logger.error(f"[{self.exchange.upper()}] 종목 조회 치명적 실패: {e}")
+            logger.error(f"[{self.exchange_id.upper()}] 종목 조회 치명적 실패: {e}")
             return ["BTC", "ETH", "XRP"]
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
@@ -60,11 +60,11 @@ class UpbitCollector(BaseCollector):
         if msg.type == aiohttp.WSMsgType.BINARY:
             try:
                 data = json.loads(msg.data.decode('utf-8'))
-                data['exchange'] = 'upbit'
+                data['exchange_id'] = 'upbit'
                 data['code'] = data['code'].replace('KRW-', '')
                 return data
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] Msg Parse Error: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] Msg Parse Error: {e}")
         return None
 
     async def _fetch_historical_candles(self, symbol: str, start_time: int, end_time: int) -> List[Candle]:
@@ -99,17 +99,17 @@ class UpbitCollector(BaseCollector):
                 async with self.session.get(url, params=params) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
+                        logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 조회 실패 (HTTP {resp.status}): {body}")
                         break
                     
                     data = await resp.json()
                     if not data or not isinstance(data, list):
                         if isinstance(data, dict) and "error" in data:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 오류: {data['error']}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 오류: {data['error']}")
                         elif isinstance(data, dict) and "message" in data:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 오류 메시지: {data['message']}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 오류 메시지: {data['message']}")
                         else:
-                            logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 알 수 없는 응답 포맷: {data}")
+                            logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 알 수 없는 응답 포맷: {data}")
                         break
                     
                     batch_candles = []
@@ -134,7 +134,7 @@ class UpbitCollector(BaseCollector):
                                 continue
                                 
                             candle = Candle(
-                                exchange=self.exchange,
+                                exchange_id=self.exchange_id,
                                 symbol=symbol,
                                 interval=60,
                                 timestamp=ts,
@@ -147,7 +147,7 @@ class UpbitCollector(BaseCollector):
                             )
                             batch_candles.append(candle)
                         except (ValueError, KeyError, TypeError) as val_err:
-                            logger.warning(f"[{self.exchange.upper()}] {symbol} 캔들 데이터 파싱 예외 스킵: {val_err}")
+                            logger.warning(f"[{self.exchange_id.upper()}] {symbol} 캔들 데이터 파싱 예외 스킵: {val_err}")
                             continue
                     
                     candles.extend(batch_candles)
@@ -160,7 +160,7 @@ class UpbitCollector(BaseCollector):
                     to_time = min_ts - 60
                     
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 과거 캔들 API 호출 예외: {e}")
                 break
 
             # 페이지네이션 간 안전 딜레이 적용 (설정 파일의 딜레이 연동)

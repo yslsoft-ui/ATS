@@ -27,7 +27,10 @@ class ExecutionPipeline:
 
     def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float, risk_limits_enabled: bool = True) -> Tuple[bool, str]:
         """포지션 진입 전에 리스크 한도 필터를 실행합니다. (ExecutionScorer로 위임)"""
-        exchange_config = self.portfolio_manager.exchange_configs.get(portfolio.exchange_id, {})
+        ex_id = getattr(signal, 'exchange_id', None)
+        if not ex_id:
+            raise ValueError("리스크 검증 중 신호의 exchange_id가 누락되었습니다.")
+        exchange_config = self.portfolio_manager.exchange_configs.get(ex_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         return self.scorer.check_risk_limits(
             portfolio=portfolio,
@@ -49,9 +52,12 @@ class ExecutionPipeline:
         """
         symbol = signal.symbol
         action = signal.action
-        exchange = getattr(signal, 'exchange', 'upbit')
         
-        logger.info(f"Processing {action} signal for {symbol} (Strategy: {getattr(signal, 'strategy_id', 'unknown')})")
+        exchange_id = getattr(signal, 'exchange_id', None)
+        if not exchange_id:
+            raise ValueError("process_signal: 신호에 exchange_id가 제공되지 않았습니다.")
+        
+        logger.info(f"Processing {action} signal for {symbol} (Strategy: {getattr(signal, 'strategy_id', 'unknown')}, Exchange: {exchange_id})")
 
         # 1. 신호 액션 검증
         if action not in ['BUY', 'SELL']:
@@ -70,6 +76,11 @@ class ExecutionPipeline:
             if not portfolio:
                 logger.error(f"Portfolio {portfolio_id} not found.")
                 return None
+
+        # [Fail-Stop] 포트폴리오 비정상 상태 체크
+        if portfolio.status in ("ERROR", "PAUSED"):
+            logger.warning(f"[Pipeline] 주문 전송 차단: 포트폴리오 {portfolio.id}가 현재 {portfolio.status} 상태입니다.")
+            return None
 
         # 3. 정밀 포지션 사이징 계산
         qty, target_value = self.calculate_position_size(portfolio, signal, price, size_ratio=size_ratio)
@@ -114,13 +125,15 @@ class ExecutionPipeline:
     async def _broadcast_skip(self, signal: Any, reason: str):
         """리스크 및 규칙 위반으로 거래가 취소(Skip)되었음을 UI에 공유합니다."""
         symbol = signal.symbol
-        exchange = getattr(signal, 'exchange', 'upbit')
+        exchange_id = getattr(signal, 'exchange_id', None)
+        if not exchange_id:
+            raise ValueError("_broadcast_skip: exchange_id가 누락되었습니다.")
         
         msg = f"⚠️ [매매보류] {symbol} 주문 보류 ({reason})"
         alert = {
             "type": "alert",
             "alert_type": "skip",
-            "exchange": exchange,
+            "exchange_id": exchange_id,
             "code": symbol,
             "price": 0.0,
             "msg": msg,
@@ -137,7 +150,7 @@ class ExecutionPipeline:
     async def _handle_notifications(self, result: Dict, signal: Any):
         """거래 발생 알림을 생성하고 저장/전송합니다."""
         symbol = result['symbol']
-        exchange = result['exchange']
+        exchange_id = result['exchange_id']
         action = result['side']
         price = result['price']
         reason = getattr(signal, 'reason', '')
@@ -147,7 +160,7 @@ class ExecutionPipeline:
         alert = {
             "type": "alert",
             "alert_type": "trade",
-            "exchange": exchange,
+            "exchange_id": exchange_id,
             "code": symbol,
             "price": price,
             "msg": msg,

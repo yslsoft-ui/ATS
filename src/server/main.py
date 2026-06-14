@@ -114,7 +114,7 @@ async def zmq_listener_loop():
                                     logger.warning(f"[Web ZMQ Listener] {exch} 종목 버전 불일치 감지 (로컬: {cached_ver} vs 데몬: {daemon_ver}). 재동기화 요청 송출.")
                                     await app.state.control_publisher.publish("collector_control", {
                                         "type": "request_symbols_sync",
-                                        "exchange": exch
+                                        "exchange_id": exch
                                     })
                 
                 # 실시간 수집기 상태 패킷 수신 시 캐시 업데이트
@@ -346,8 +346,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 msg = json.loads(text)
                 # 클라이언트가 구독할 종목을 지정
                 if 'subscribe' in msg:
-                    # {"subscribe": "BTC", "exchange": "upbit"}
-                    manager.subscribe(websocket, msg.get('exchange', 'upbit'), msg['subscribe'])
+                    # {"subscribe": "BTC", "exchange_id": "upbit"}
+                    manager.subscribe(websocket, msg.get('exchange_id', msg.get('exchange', 'upbit')), msg['subscribe'])
             except json.JSONDecodeError:
                 pass
     except WebSocketDisconnect:

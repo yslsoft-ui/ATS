@@ -5,9 +5,9 @@ from src.engine.exceptions import IndicatorNotReady
 
 class StrategyContext:
     """전략 실행 시점에 전달되는 풍부한 데이터 컨텍스트입니다."""
-    def __init__(self, exchange: str, symbol: str, interval: int, 
+    def __init__(self, exchange_id: str, symbol: str, interval: int, 
                  market_data_context: Any, params: Dict[str, Any], portfolio: Dict[str, Any]):
-        self.exchange = exchange
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.interval = interval
         self.market_data_context = market_data_context
@@ -36,9 +36,9 @@ class StrategyHost:
     각 전략(Strategy)을 래핑하여 실행하는 얇은 추상화 Runner 모듈입니다.
     데이터 보관, 로깅, 신호 가공 등 인프라스트럭처 책임을 배제한 순수 실행 단위입니다.
     """
-    def __init__(self, strategy: BaseStrategy, exchange: str, symbol: str, interval: int):
+    def __init__(self, strategy: BaseStrategy, exchange_id: str, symbol: str, interval: int):
         self.strategy = strategy
-        self.exchange = exchange
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.interval = interval
         
@@ -52,11 +52,11 @@ class StrategyHost:
         # 1. 포트폴리오 상태 구성
         portfolio_status = {}
         if portfolio_manager:
-            portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol, exchange=self.exchange)
+            portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol, exchange_id=self.exchange_id)
 
         # 2. 컨텍스트 생성
         context = StrategyContext(
-            exchange=self.exchange,
+            exchange_id=self.exchange_id,
             symbol=self.symbol,
             interval=self.interval,
             market_data_context=market_data_context,
@@ -74,4 +74,3 @@ class StrategyHost:
             )
 
         return action_result
-

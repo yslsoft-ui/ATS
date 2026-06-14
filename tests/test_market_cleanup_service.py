@@ -51,7 +51,7 @@ async def test_market_cleanup_and_idempotency():
     
     # 1. 테스트용 분봉 데이터 주입 (35일 전 데이터)
     test_candles = [
-        # exchange, symbol, interval, timestamp, open, high, low, close, volume
+        # exchange_id, symbol, interval, timestamp, open, high, low, close, volume
         ('upbit', 'BTC', 60, hour_bucket_sec, 50000.0, 51000.0, 49000.0, 50500.0, 1.5),
         ('upbit', 'BTC', 60, hour_bucket_sec + 60, 50500.0, 52000.0, 50000.0, 51500.0, 2.0),
         # 보존해야 할 최근 캔들 (현재 시점)
@@ -61,7 +61,7 @@ async def test_market_cleanup_and_idempotency():
     async with get_db_conn(db_path) as db:
         for c in test_candles:
             await db.execute("""
-                INSERT INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+                INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, c)
         
@@ -69,13 +69,13 @@ async def test_market_cleanup_and_idempotency():
         # 1) 4일 전 오래된 틱 (72시간 경과) -> 삭제 대상
         old_trade_time_ms = (now - (4 * 24 * 3600)) * 1000
         await db.execute("""
-            INSERT INTO trades (exchange, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
+            INSERT INTO trades (exchange_id, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
             VALUES ('upbit', 'KRW', 'BTC', 49500.0, 0.5, 'ASK', ?)
         """, (old_trade_time_ms,))
         
         # 2) 최근 틱 -> 보존 대상
         await db.execute("""
-            INSERT INTO trades (exchange, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
+            INSERT INTO trades (exchange_id, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)
             VALUES ('upbit', 'KRW', 'BTC', 60500.0, 0.2, 'BID', ?)
         """, (now_ms,))
         
@@ -162,7 +162,7 @@ async def test_market_cleanup_and_idempotency():
         # 다시 35일 전 분봉 복구 주입
         for c in test_candles[:2]:
             await db.execute("""
-                INSERT OR REPLACE INTO candles (exchange, symbol, interval, timestamp, open, high, low, close, volume)
+                INSERT OR REPLACE INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, c)
         await db.commit()

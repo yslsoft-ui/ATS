@@ -79,7 +79,7 @@ async def test_champion_cooldown_sqlite():
     async with aiosqlite.connect(DB_FILE) as db:
         for i in range(5):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
         await db.commit()
@@ -101,14 +101,14 @@ async def test_champion_cooldown_sqlite():
         # 타 포트폴리오 p2의 주문 10건 추가
         for i in range(10):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p2', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
             
         # target 포트폴리오 p1에 price가 0.0인 주문 2건 추가
         for i in range(2):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
             
@@ -123,7 +123,7 @@ async def test_champion_cooldown_sqlite():
     async with aiosqlite.connect(DB_FILE) as db:
         for i in range(5):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (int(now_ms / 1000.0) + 1 + i,))
         await db.commit()
@@ -169,9 +169,9 @@ async def test_champion_cooldown_safety_features_unblocked():
     
     # VirtualOrderExecutorAdapter가 0원 시세를 거부하므로 MockExecutor로 덮어씌움
     class MockExecutor(OrderExecutor):
-        async def execute_order(self, exchange: str, symbol: str, side: str, quantity: float, **kwargs) -> dict:
+        async def execute_order(self, exchange_id: str, symbol: str, side: str, quantity: float, **kwargs) -> dict:
             return {
-                'exchange': exchange,
+                'exchange_id': exchange_id,
                 'market': 'KRW',
                 'symbol': symbol,
                 'side': side,
@@ -183,7 +183,9 @@ async def test_champion_cooldown_safety_features_unblocked():
     pm.executors['simulation'] = MockExecutor()
     
     # 모의 포트폴리오 추가
-    p = Portfolio(portfolio_id="p1", name="Test Simulation", initial_cash=10000000.0, portfolio_type="simulation")
+    p = Portfolio(portfolio_id="p1", name="Test Simulation", portfolio_type="simulation")
+    p.exchange_cash = {"upbit": 10000000.0}
+    p.exchange_initial_cash = {"upbit": 10000000.0}
     p.update_position("upbit", "BTC", "BUY", 50000000.0, 0.1, 2500.0, strategy_id="RSIStrategy")
     pm.add_portfolio(p)
     
@@ -195,14 +197,16 @@ async def test_champion_cooldown_safety_features_unblocked():
     
     # 4. Live Trading Block 검증
     # live_trading_enabled = False 인 포트폴리오의 실거래 시 차단 동작이 정상 수행되는지 검증 (쿨다운 유무에 영향 없음)
-    p_live = Portfolio(portfolio_id="p_live", name="Test Live", initial_cash=10000000.0, portfolio_type="live")
+    p_live = Portfolio(portfolio_id="p_live", name="Test Live", portfolio_type="live")
+    p_live.exchange_cash = {"upbit": 10000000.0}
+    p_live.exchange_initial_cash = {"upbit": 10000000.0}
     pm.add_portfolio(p_live)
     
     # live_trading_enabled = False 설정 반영
     pm.config_manager.config["system"]["live_trading_enabled"] = False
     
     class FakeSignal:
-        exchange = "upbit"
+        exchange_id = "upbit"
         symbol = "BTC"
         action = "BUY"
         strategy_id = "RSIStrategy"
@@ -308,28 +312,28 @@ async def test_champion_cooldown_detailed_filtering():
         # 3.1. 과거 주문 (applied_at_sec보다 과거 시점)
         for i in range(10):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (applied_at_sec - 1 - i,))
             
         # 3.2. 타 전략 주문 ('other_strategy' - 기존 champion strategy_id와 불일치)
         for i in range(10):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'other_strategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (applied_at_sec + 1 + i,))
             
         # 3.3. price <= 0 인 주문
         for i in range(10):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 0.0, 0.1, 0, ?)
             """, (applied_at_sec + 1 + i,))
             
         # 3.4. quantity <= 0 인 주문
         for i in range(10):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.0, 0, ?)
             """, (applied_at_sec + 1 + i,))
             
@@ -357,14 +361,14 @@ async def test_champion_cooldown_detailed_filtering():
     # 5건 중 1건을 정확히 경계값 시점으로 적재하여 카운팅에 포함되는지 확인
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
-            INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+            INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
             VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
         """, (applied_at_sec,))
         
         # 나머지 유효 주문 4건 적재 (applied_at_sec 시점 이후)
         for i in range(4):
             await db.execute("""
-                INSERT INTO orders_history (portfolio_id, exchange, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp)
                 VALUES ('p1', 'upbit', 'KRW', 'RSIStrategy', 'BTC', 'BUY', 50000000, 0.1, 2500, ?)
             """, (applied_at_sec + 1 + i,))
             

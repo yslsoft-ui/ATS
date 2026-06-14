@@ -51,7 +51,7 @@ class FeatureBuilder:
         self,
         proposal_id: str,
         strategy_id: str,
-        exchange: str,
+        exchange_id: str,
         symbol: str,
         proposal_type: str,
         request: FeatureBuildRequest
@@ -77,7 +77,7 @@ class FeatureBuilder:
         recent_ticks = []
         try:
             recent_ticks = await self.market_data_repo.get_recent_trades(
-                exchange=exchange,
+                exchange_id=exchange_id,
                 symbol=symbol,
                 limit=1000
             )
@@ -186,7 +186,7 @@ class FeatureBuilder:
                 pass
 
         # 5. Freshness 가드 판정
-        market_type = 'stock' if exchange.lower() in ('kis', 'shinhan') else 'crypto'
+        market_type = 'stock' if exchange_id.lower() in ('kis', 'shinhan') else 'crypto'
         ttl_settings = freshness_ttl_config.get(market_type, {})
         trade_ttl = ttl_settings.get('trade', 10)
         indicator_ttl = ttl_settings.get('indicator', 60)
@@ -295,7 +295,7 @@ class FeatureBuilder:
             "liquidity_features": liquidity_features,
             "regime_features": regime_features,
             "schema_version": "1.0",
-            "exchange": exchange,
+            "exchange_id": exchange_id,
             "market_type": market_type,
             "session_state": session_state,
             "volatility_regime": volatility_regime,
@@ -322,7 +322,7 @@ class FeatureBuilder:
             schema_version="1.0",
             feature_hash=snapshot_hash,
             generated_at=self.clock.now(),
-            exchange=exchange,
+            exchange_id=exchange_id,
             market_type=market_type,
             session_state=session_state,
             volatility_regime=volatility_regime,

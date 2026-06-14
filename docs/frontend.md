@@ -30,7 +30,7 @@
 ## 2. 핵심 프론트엔드 모듈
 
 ### 2.1. 진입점 및 제어 (Entrypoint & Routing)
-- **[index.html](file:///home/simon/ATS/frontend/index.html)**: 대시보드 UI 레이아웃, 실시간 차트 및 테이블 영역 정의.
+- **[index.html](file:///home/simon/ATS/frontend/index.html)**: 대시보드 UI 레이아웃, 세션 선택 드롭다운, 실시간 차트 및 테이블 영역 정의.
 - **[app.js](file:///home/simon/ATS/frontend/app.js)**: 애플리케이션 메인 초기화 루프를 수행하고 이벤트를 연동합니다.
 - **[router.js](file:///home/simon/ATS/frontend/router.js)**: `ViewRouter` 클래스를 구동하여 해시 라우팅(`#dashboard`, `#settings` 등)에 의거해 알맞은 화면 섹션을 동적으로 온/오프시킵니다.
 
@@ -43,6 +43,7 @@
 
 ### 2.3. 컴포넌트 & 뷰 레이어 (Views & Visualization)
 - **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Lightweight Charts를 사용하여 Candlestick 차트를 그리며, SMA/볼린저 밴드 오버레이 및 RSI 보조 지표를 별도 서브 차트에 고속 렌더링합니다.
+- **[overview.js](file:///home/simon/ATS/frontend/overview.js)**: 실시간 운용 대시보드(Overview) 뷰 렌더러로, 6대 성과 메트릭 카드(ROI, 원금, 총 자산, 현금, 종목 평가액, 누적 수수료)를 한 줄로 렌더링하고, 거래소별 자산 배분 비중 바를 커스텀 CSS 툴팁 정보와 함께 렌더링합니다.
 - **[portfolio-view.js](file:///home/simon/ATS/frontend/portfolio-view.js)**: 포트폴리오의 실물 보유 현황 및 가상 투자 운용 상태를 표와 폼으로 렌더링합니다.
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
@@ -59,8 +60,10 @@
 1. **소켓 수신**: `stream.js`가 WebSocket을 통해 신규 `tick` 패킷을 받음.
 2. **상태 업데이트**: 수신한 데이터를 `store.js` 내의 특정 배열에 누적(Push) 및 캐시 데이터 갱신.
 3. **그래프 리트레이싱**: `chart.js`는 데이터 누적 이벤트를 받아 Lightweight Charts의 `setData()` 및 `update()` 메서드를 사용해 브라우저 렌더링 부하를 최소화하며 차트를 동적으로 갱신합니다.
-4. **대시보드 실시간 자산 동기화**: `overview.js`는 실시간 시세 틱(`tick`)이 오면 `cachedPortfolio.positions`에 시세를 동기화하고, 포지션 목록의 현재가/수익률을 즉각 리렌더링할 뿐만 아니라 대시보드의 총 평가 자산 및 거래소별 자산 비중 바(상세 메트릭인 총 평가, ROI, 현금, 평가액 포함)를 실시간으로 재계산하여 화면을 갱신합니다.
+4. **대시보드 실시간 자산 동기화**: `overview.js`는 실시간 시세 틱(`tick`)이 오면 `cachedPortfolio.positions`에 시세를 동기화하고, 포지션 목록의 현재가/수익률을 즉각 리렌더링할 뿐만 아니라 대시보드의 총 평가 자산 및 거래소별 자산 비중 바(상세 메트릭인 총 평가, ROI, 현금, 평가액 포함)를 실시간으로 재계산하여 화면을 갱신합니다. 특히, 사용자가 자산 비중 바를 관찰(마우스 호버) 중일 때는 툴팁이 깨지지 않도록 DOM 갱신을 일시적으로 지연(skip)시키고, 마우스가 이탈하는 즉시 최신 데이터로 업데이트를 반영하는 지연 렌더링 방식이 적용되어 있습니다.
 5. **인터벌 전환**: 상단 시간 주기(Interval) 선택 시, 백엔드로부터 새로운 주기의 역사적 캔들 셋을 `client.js`로 호출하여 스토어를 전면 교체한 후 차트를 다시 로딩합니다.
+6. **세션 드롭다운 및 포트폴리오 양방향 동기화**: 대시보드 상단의 세션 선택 드롭다운(`#overview-session-select`)을 변경하면 `state.currentPortfolioId`가 변경되고 포트폴리오 데이터가 새로고침되며, 포트폴리오 뷰 사이드바의 이력 하이라이트 행도 동기화됩니다. 반대로 포트폴리오 뷰 이력을 클릭해도 대시보드의 드롭다운 선택값이 즉각적으로 일치됩니다.
+7. **컴팩트 자산 비중 시각화**: 자산 비중 바의 낭비 공간을 최소화하기 위해 범주(Legend) 텍스트 영역을 생략하였으며, '기타' 병합 처리 없이 보유한 전 종목 자산 세그먼트를 100% 스택 바에 표현하고 마우스 호버 시에만 커스텀 CSS 툴팁으로 상세 정보를 제공합니다.
 
 ---
 

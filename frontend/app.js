@@ -629,6 +629,13 @@ function initTradingControls() {
         
         if (key === 'currentPortfolioId') {
             console.log(`[Reactive Load] Portfolio ID changed: ${val}`);
+            
+            // [NEW] 대시보드 드롭다운 동기화
+            const selectEl = document.getElementById('overview-session-select');
+            if (selectEl && selectEl.value !== val) {
+                selectEl.value = val;
+            }
+            
             loadPortfolio();
         }
     });

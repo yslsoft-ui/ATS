@@ -221,7 +221,7 @@ class StrategyService(DaemonService):
                     
                 key = f"{exchange_id}:{symbol}"
                 engine = TradeEngine(
-                    exchange=exchange_id,
+                    exchange_id=exchange_id,
                     symbol=symbol,
                     strategies=instances,
                     on_status_callback=on_strategy_status
@@ -532,7 +532,7 @@ class StrategyService(DaemonService):
             temp_positions = {}
             temp_cash = 10000000.0  # 가상 시작 자금 (1천만원)
             for tx in trades:
-                ex = tx.get('exchange', '').lower()
+                ex = tx.get('exchange_id', '').lower()
                 sym = tx.get('symbol', '')
                 side = tx.get('side', '')
                 price = tx.get('price', 0.0)
@@ -541,7 +541,7 @@ class StrategyService(DaemonService):
                 
                 pos_key = (ex, sym)
                 if pos_key not in temp_positions:
-                    temp_positions[pos_key] = Position(exchange=ex, symbol=sym, quantity=0.0, avg_price=0.0)
+                    temp_positions[pos_key] = Position(exchange_id=ex, symbol=sym, quantity=0.0, avg_price=0.0)
                     
                 pos = temp_positions[pos_key]
                 if side == 'BUY':
@@ -704,7 +704,7 @@ class StrategyService(DaemonService):
                         temp_positions = {}
                         temp_cash = 10000000.0
                         for tx in trades:
-                            ex = tx.get('exchange', '').lower()
+                            ex = tx.get('exchange_id', '').lower()
                             sym = tx.get('symbol', '')
                             side = tx.get('side', '')
                             price = tx.get('price', 0.0)
@@ -713,7 +713,7 @@ class StrategyService(DaemonService):
                             
                             pos_key = (ex, sym)
                             if pos_key not in temp_positions:
-                                temp_positions[pos_key] = Position(exchange=ex, symbol=sym, quantity=0.0, avg_price=0.0)
+                                temp_positions[pos_key] = Position(exchange_id=ex, symbol=sym, quantity=0.0, avg_price=0.0)
                                 
                             pos = temp_positions[pos_key]
                             if side == 'BUY':
@@ -862,7 +862,7 @@ class StrategyService(DaemonService):
                                             schema_version=feat_dict.get("schema_version", "1.0"),
                                             feature_hash=feat_dict.get("feature_hash", ""),
                                             generated_at=feat_dict.get("generated_at", time.time()),
-                                            exchange=feat_dict.get("exchange", "upbit"),
+                                            exchange_id=feat_dict.get("exchange_id", feat_dict.get("exchange", "upbit")),
                                             symbol=feat_dict.get("symbol", "BTC"),
                                             market_type=feat_dict.get("market_type", "crypto")
                                         )
@@ -874,7 +874,7 @@ class StrategyService(DaemonService):
                                             price_features={"close": 50000.0, "returns": 0.0, "volatility": 0.1},
                                             liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 1000.0},
                                             regime_features={"regime_index": 1.0},
-                                            exchange="upbit",
+                                            exchange_id="upbit",
                                             symbol="BTC",
                                             market_type="crypto"
                                         )
@@ -978,7 +978,7 @@ class StrategyService(DaemonService):
                                         "session_state": snapshot.session_state,
                                         "volatility_regime": snapshot.volatility_regime,
                                         "liquidity_regime": snapshot.liquidity_regime,
-                                        "exchange": snapshot.exchange,
+                                        "exchange_id": snapshot.exchange_id,
                                         "tps": tps,
                                         "trade_count": int(volume),
                                         "volume": volume,
@@ -1006,7 +1006,7 @@ class StrategyService(DaemonService):
                                                 "UNIVERSE_DEMOTION", snapshot.symbol, msg
                                             )
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                                exchange=snapshot.exchange,
+                                                exchange_id=snapshot.exchange_id,
                                                 market_type=snapshot.market_type,
                                                 symbol=snapshot.symbol,
                                                 status="WATCHED",
@@ -1020,7 +1020,7 @@ class StrategyService(DaemonService):
                             # 7. 거래소별 Quota & Cooldown 랭킹 기반 승격/유지 관리
                             by_exchange = {}
                             for sym, (val, snap) in passed_symbols_dict.items():
-                                ex = snap.exchange.lower()
+                                ex = snap.exchange_id.lower()
                                 by_exchange.setdefault(ex, []).append((sym, val, snap))
 
                             for ex, items in by_exchange.items():
@@ -1039,7 +1039,7 @@ class StrategyService(DaemonService):
                                         msg = "Quota 초과 및 순위 밀림 강등"
                                         await self.portfolio_manager.repository.insert_system_event("UNIVERSE_DEMOTION", sym, msg)
                                         await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                            exchange=snap.exchange,
+                                            exchange_id=snap.exchange_id,
                                             market_type=snap.market_type,
                                             symbol=sym,
                                             status="WATCHED",
@@ -1052,7 +1052,7 @@ class StrategyService(DaemonService):
                                     else:
                                         self.quota_blocked_count += 1
                                         prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
-                                            exchange=snap.exchange,
+                                            exchange_id=snap.exchange_id,
                                             market_type=snap.market_type,
                                             symbol=sym
                                         )
@@ -1066,7 +1066,7 @@ class StrategyService(DaemonService):
                                             )
                                             
                                         await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                            exchange=snap.exchange,
+                                            exchange_id=snap.exchange_id,
                                             market_type=snap.market_type,
                                             symbol=sym,
                                             status="WATCHED",
@@ -1088,7 +1088,7 @@ class StrategyService(DaemonService):
                                         if current_time_s - last_cand_time < symbol_cooldown_seconds:
                                             self.cooldown_blocked_count += 1
                                             prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
-                                                exchange=snap.exchange,
+                                                exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,
                                                 symbol=sym
                                             )
@@ -1101,7 +1101,7 @@ class StrategyService(DaemonService):
                                                 )
                                                 
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                                exchange=snap.exchange,
+                                                exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="WATCHED",
@@ -1115,7 +1115,7 @@ class StrategyService(DaemonService):
                                         elif self.daily_proposal_count >= daily_proposal_limit:
                                             self.limit_blocked_count += 1
                                             prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
-                                                exchange=snap.exchange,
+                                                exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,
                                                 symbol=sym
                                             )
@@ -1127,7 +1127,7 @@ class StrategyService(DaemonService):
                                                 )
                                                 
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                                exchange=snap.exchange,
+                                                exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="WATCHED",
@@ -1148,7 +1148,7 @@ class StrategyService(DaemonService):
                                             msg = f"WATCHED -> CANDIDATE 승격 (거래대금={val:,.0f}원)"
                                             await self.portfolio_manager.repository.insert_system_event("UNIVERSE_PROMOTION", sym, msg)
                                             await self.portfolio_manager.repository.upsert_universe_guard_state(
-                                                exchange=snap.exchange,
+                                                exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,
                                                 symbol=sym,
                                                 status="CANDIDATE",

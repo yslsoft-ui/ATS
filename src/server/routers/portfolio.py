@@ -125,11 +125,11 @@ async def delete_all_portfolio_history(request: Request):
 
 
 @router.get("/trades")
-async def get_trades(request: Request, exchange: str = "upbit", symbol: str = "BTC", limit: int = 10):
+async def get_trades(request: Request, exchange_id: str = "upbit", symbol: str = "BTC", limit: int = 10):
     """최근 체결 데이터를 DB에서 조회하여 반환합니다."""
     system = request.app.state.system
     async with get_db_conn(system.portfolio_manager.db_path) as db:
-        async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (exchange, symbol, limit)) as cursor:
+        async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange_id = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (exchange_id, symbol, limit)) as cursor:
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]
 
@@ -209,11 +209,11 @@ async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, forc
     has_records = False
     has_pending = False
     async with get_db_conn() as db:
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'upbit' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'upbit' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_records = True
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'upbit' AND state = 'wait' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'upbit' AND state = 'wait' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_pending = True
@@ -278,7 +278,7 @@ async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, forc
                                 # SQLite의 ON CONFLICT DO UPDATE 문법을 사용해 이미 Ignore 된 가격이 0.0인 레코드도 올바르게 보정
                                 await db.execute('''
                                     INSERT INTO real_orders 
-                                    (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     ON CONFLICT(uuid) DO UPDATE SET
                                         price = excluded.price,
@@ -375,7 +375,7 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                 sell_info = {}
                 async with get_db_conn() as db:
                     async with db.execute(
-                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'upbit' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'upbit' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
                     ) as cursor:
                         rows = await cursor.fetchall()
                         traded_coins = [r['symbol'].upper() for r in rows]
@@ -387,10 +387,10 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                         INNER JOIN (
                             SELECT symbol, MAX(created_at) as max_created_at
                             FROM real_orders
-                            WHERE exchange = 'upbit' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                            WHERE exchange_id = 'upbit' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
                             GROUP BY symbol
                         ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                        WHERE r.exchange = 'upbit' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                        WHERE r.exchange_id = 'upbit' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
                     """
                     async with db.execute(query) as cursor:
                         rows = await cursor.fetchall()
@@ -439,7 +439,8 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                         "current_price": current_price,
                         "eval_value": sell_value,
                         "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
-                        "percent": 0.0
+                        "percent": 0.0,
+                        "exchange_id": "upbit"
                     })
                 
                 return {
@@ -522,7 +523,8 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                         "avg_buy_price": avg_buy_price,
                         "current_price": current_price,
                         "eval_value": eval_value,
-                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}"
+                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
+                        "exchange_id": "upbit"
                     })
                     
                 for asset in asset_list:
@@ -546,11 +548,11 @@ async def _sync_real_bithumb_orders(access_key: str, secret_key: str, api_url: s
     has_records = False
     has_pending = False
     async with get_db_conn() as db:
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'bithumb' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'bithumb' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_records = True
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'bithumb' AND state = 'wait' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'bithumb' AND state = 'wait' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_pending = True
@@ -610,7 +612,7 @@ async def _sync_real_bithumb_orders(access_key: str, secret_key: str, api_url: s
                                 
                                 await db.execute('''
                                     INSERT INTO real_orders 
-                                    (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     ON CONFLICT(uuid) DO UPDATE SET
                                         price = excluded.price,
@@ -654,11 +656,11 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
     has_records = False
     has_pending = False
     async with get_db_conn() as db:
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'kis' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'kis' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_records = True
-        async with db.execute("SELECT 1 FROM real_orders WHERE exchange = 'kis' AND state = 'wait' LIMIT 1") as cursor:
+        async with db.execute("SELECT 1 FROM real_orders WHERE exchange_id = 'kis' AND state = 'wait' LIMIT 1") as cursor:
             row = await cursor.fetchone()
             if row:
                 has_pending = True
@@ -756,7 +758,7 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
                         
                         await db.execute('''
                             INSERT INTO real_orders 
-                            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(uuid) DO UPDATE SET
                                 price = excluded.price,
@@ -825,7 +827,7 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                 sell_info = {}
                 async with get_db_conn() as db:
                     async with db.execute(
-                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'bithumb' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                        "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'bithumb' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
                     ) as cursor:
                         rows = await cursor.fetchall()
                         traded_coins = [r['symbol'].upper() for r in rows]
@@ -836,10 +838,10 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                         INNER JOIN (
                             SELECT symbol, MAX(created_at) as max_created_at
                             FROM real_orders
-                            WHERE exchange = 'bithumb' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                            WHERE exchange_id = 'bithumb' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
                             GROUP BY symbol
                         ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                        WHERE r.exchange = 'bithumb' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                        WHERE r.exchange_id = 'bithumb' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
                     """
                     async with db.execute(query) as cursor:
                         rows = await cursor.fetchall()
@@ -885,7 +887,7 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                         "eval_value": sell_value,
                         "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
                         "percent": 0.0,
-                        "exchange": "bithumb"
+                        "exchange_id": "bithumb"
                     })
                 
                 return {
@@ -966,7 +968,7 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                         "current_price": current_price,
                         "eval_value": eval_value,
                         "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
-                        "exchange": "bithumb"
+                        "exchange_id": "bithumb"
                     })
                     
                 for asset in asset_list:
@@ -1069,7 +1071,7 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
             sell_info = {}
             async with get_db_conn() as db:
                 async with db.execute(
-                    "SELECT DISTINCT symbol FROM real_orders WHERE exchange = 'kis' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
+                    "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'kis' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
                 ) as cursor:
                     rows = await cursor.fetchall()
                     traded_stocks = [r['symbol'].upper() for r in rows]
@@ -1080,10 +1082,10 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                     INNER JOIN (
                         SELECT symbol, MAX(created_at) as max_created_at
                         FROM real_orders
-                        WHERE exchange = 'kis' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                        WHERE exchange_id = 'kis' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
                         GROUP BY symbol
                     ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                    WHERE r.exchange = 'kis' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
+                    WHERE r.exchange_id = 'kis' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
                 """
                 async with db.execute(query) as cursor:
                     rows = await cursor.fetchall()
@@ -1111,7 +1113,7 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                     "eval_value": sell_value,
                     "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
                     "percent": 0.0,
-                    "exchange": "kis"
+                    "exchange_id": "kis"
                 })
             return {
                 "total_eval_value": 0.0,
@@ -1128,7 +1130,7 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                 "current_price": 1.0,
                 "eval_value": float(kis_cash),
                 "formatted_eval_value": f"{kis_cash:,}",
-                "exchange": "kis"
+                "exchange_id": "kis"
             })
             
             for item in output1:
@@ -1151,7 +1153,7 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                     "current_price": current_price,
                     "eval_value": eval_amt,
                     "formatted_eval_value": f"{int(eval_amt):,}",
-                    "exchange": "kis"
+                    "exchange_id": "kis"
                 })
                 
             for asset in asset_list:

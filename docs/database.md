@@ -48,10 +48,7 @@
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | TEXT | NOT NULL | 포트폴리오 고유 ID (예: 백테스트 UUID) |
 | **name** | TEXT | NOT NULL | 포트폴리오 식별 이름 |
-| **exchange_id** | TEXT | DEFAULT 'upbit' | 기본 대상 거래소 ID |
 | **type** | TEXT | NOT NULL | 운용 타입 (`backtest`, `paper`, `live`) |
-| **initial_cash** | REAL | DEFAULT 1000000 | 최초 운용 가능 현금 자산 |
-| **cash** | REAL | DEFAULT 0 | 현재 운용 가능 현금 자산 (통합) |
 | **duration** | REAL | DEFAULT 0.0 | 백테스트 소요 시간 등 운용 경과 시간 (초) |
 | **strategy_info** | TEXT | DEFAULT '' | 연결된 매매 전략 설정 정보 (JSON 스트링 등) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
@@ -68,6 +65,7 @@
 | **exchange_id** (PK) | TEXT | - | 해당 자산이 귀속된 거래소 ID |
 | **initial_cash** | REAL | DEFAULT 0.0 | 해당 거래소용 초기 설정 현금 |
 | **cash** | REAL | DEFAULT 0.0 | 해당 거래소에서 운용 가능한 현재 현금 |
+| **is_primary** | INTEGER | DEFAULT 0 | 포트폴리오의 대표 거래소 여부 (0: 일반, 1: 대표) |
 | **metrics** | TEXT | DEFAULT '{}' | 포트폴리오 성과 지표 (MDD, 승률, 누적수익률 등 JSON 포맷) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 변경 일시 |
@@ -80,7 +78,7 @@
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
 | **portfolio_id** (PK, FK) | TEXT | - | 소속 포트폴리오 ID |
-| **exchange** (PK, FK) | TEXT | - | 보유 자산의 거래소 |
+| **exchange_id** (PK, FK) | TEXT | - | 보유 자산의 거래소 ID |
 | **symbol** (PK) | TEXT | - | 자산 심볼 |
 | **quantity** | REAL | DEFAULT 0 | 보유 수량 (실시간 매매 시 소수점 지원) |
 | **avg_price** | REAL | DEFAULT 0 | 평균 매수 단가 |
@@ -89,7 +87,7 @@
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 갱신 일시 |
 
 * **외래키 제약조건**:
-  - `(portfolio_id, exchange)`는 `portfolio_exchanges(portfolio_id, exchange_id)`를 참조하며, 부모 레코드 수정 시 `ON UPDATE CASCADE`, 삭제 시 `ON DELETE CASCADE` 처리됩니다.
+  - `(portfolio_id, exchange_id)`는 `portfolio_exchanges(portfolio_id, exchange_id)`를 참조하며, 부모 레코드 수정 시 `ON UPDATE CASCADE`, 삭제 시 `ON DELETE CASCADE` 처리됩니다.
 
 ---
 
@@ -100,7 +98,7 @@
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 주문 번호 (자동 증가) |
 | **portfolio_id** (FK) | TEXT | REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE | 발주한 포트폴리오 ID |
-| **exchange** | TEXT | - | 주문 거래소 |
+| **exchange_id** | TEXT | - | 주문 거래소 ID |
 | **market** | TEXT | - | 주문 및 실제 체결된 세부 시장 (예: `KRW` / `KRX`, `NXT`, `SOR`) |
 | **strategy_id** | TEXT | - | 발주를 유도한 매매 전략 ID |
 | **symbol** | TEXT | - | 주문 대상 자산 심볼 |
@@ -120,7 +118,7 @@
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 알림 고유 번호 |
-| **exchange** | TEXT | - | 감지 대상 거래소 |
+| **exchange_id** | TEXT | - | 감지 대상 거래소 ID |
 | **symbol** | TEXT | - | 자산 심볼 |
 | **price** | REAL | - | 감지 시점의 체결가 |
 | **msg** | TEXT | - | 사용자 경고 메시지 내용 (예: `[Spike] BTC 가격 3.5% 급등!`) |
@@ -133,7 +131,7 @@
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
-| **exchange** (PK) | TEXT | - | 대상 거래소 |
+| **exchange_id** (PK) | TEXT | - | 대상 거래소 ID |
 | **symbol** (PK) | TEXT | - | 자산 심볼 |
 | **interval** (PK) | INTEGER | - | 캔들 주기(초 단위, 예: 1, 3, 5, 10, 60 등) |
 | **timestamp** (PK) | INTEGER | - | 캔들 시작 타임스탬프 (ms, 정규화된 시점) |
@@ -416,7 +414,7 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 | **session_state** | TEXT | - | 세션 운영 레짐 (`regular_trading`, `24h` 등) |
 | **volatility_regime**| TEXT | - | 변동성 상태 분류 (`low`, `high` 등) |
 | **liquidity_regime**| TEXT | - | 유동성 상태 분류 (`low`, `high` 등) |
-| **exchange** | TEXT | - | 거래소 코드 (`upbit`, `kis` 등) |
+| **exchange_id** | TEXT | - | 거래소 ID (`upbit`, `kis` 등) |
 
 ---
 
@@ -425,7 +423,9 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
-| **symbol** (PK) | TEXT | PRIMARY KEY | 대상 종목 심볼 (예: `BTC`) |
+| **exchange_id** (PK) | TEXT | NOT NULL | 대상 거래소 ID |
+| **market_type** (PK) | TEXT | NOT NULL | 자산군 분류 (`crypto`, `stock`) |
+| **symbol** (PK) | TEXT | NOT NULL | 대상 종목 심볼 (예: `BTC`) |
 | **status** | TEXT | - | 현재 가드 감시 상태 (`WATCHED`, `CANDIDATE` 등) |
 | **blocked_reason** | TEXT | - | 현재 차단 사유 (`COOLDOWN`, `LIMIT`, `QUOTA` 등) |
 | **blocked_count** | INTEGER | DEFAULT 0 | 동일 차단 사유 발생 횟수 누적 카운트 |

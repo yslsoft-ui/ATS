@@ -9,8 +9,8 @@ class StrategyType(Enum):
     BOTH = "BOTH"    # 매수/매도 공용
 
 class TradeSignal:
-    def __init__(self, exchange: str, symbol: str, action: str, price: float, reason: str, interval: int, strategy_id: str = "", context: Dict = None):
-        self.exchange = exchange
+    def __init__(self, exchange_id: str, symbol: str, action: str, price: float, reason: str, interval: int, strategy_id: str = "", context: Dict = None):
+        self.exchange_id = exchange_id
         self.symbol = symbol
         self.action = action
         self.price = price

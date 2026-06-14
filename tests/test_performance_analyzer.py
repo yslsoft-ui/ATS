@@ -10,10 +10,10 @@ def test_performance_analyzer_empty_portfolio():
     portfolio = Portfolio(
         portfolio_id="test_empty",
         name="Empty Test Portfolio",
-        initial_cash=10000000.0,
-        exchange_id="upbit",
         portfolio_type="simulation"
     )
+    portfolio.exchange_cash = {"upbit": 10000000.0}
+    portfolio.exchange_initial_cash = {"upbit": 10000000.0}
 
     trades = []
     current_prices = {}
@@ -52,13 +52,12 @@ def test_performance_analyzer_single_exchange_with_trades():
     portfolio = Portfolio(
         portfolio_id="test_single",
         name="Single Exchange Test Portfolio",
-        initial_cash=10000000.0,
-        exchange_id="upbit",
         portfolio_type="simulation"
     )
-    portfolio.cash = 9000000.0
+    portfolio.exchange_cash = {"upbit": 9000000.0}
+    portfolio.exchange_initial_cash = {"upbit": 10000000.0}
     portfolio.positions[("upbit", "BTC")] = Position(
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         quantity=0.02,
         avg_price=50000000.0,
@@ -102,23 +101,21 @@ def test_performance_analyzer_multi_exchange_isolation():
     portfolio = Portfolio(
         portfolio_id="test_multi",
         name="Multi Exchange Test Portfolio",
-        initial_cash=20000000.0,
-        exchange_id="all",
         portfolio_type="simulation",
         strategy_info='{"initial_cash": {"upbit": 10000000.0, "kis": 10000000.0}}'
     )
     portfolio.exchange_cash = {"upbit": 9000000.0, "kis": 8000000.0}
-    portfolio.cash = 17000000.0
+    portfolio.exchange_initial_cash = {"upbit": 10000000.0, "kis": 10000000.0}
 
     portfolio.positions[("upbit", "BTC")] = Position(
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         quantity=0.02,
         avg_price=50000000.0,
         updated_at=1000.0
     )
     portfolio.positions[("kis", "005930")] = Position(
-        exchange="kis",
+        exchange_id="kis",
         symbol="005930",
         quantity=20.0,
         avg_price=100000.0,
@@ -178,3 +175,4 @@ def test_performance_analyzer_multi_exchange_isolation():
     # roi = -1500 / 20,000,000 * 100 = -0.0075 => round(..., 2) = -0.01
     assert report["summary"]["profit"] == -1500.0
     assert report["roi"] == -0.01
+

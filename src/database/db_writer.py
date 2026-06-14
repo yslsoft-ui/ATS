@@ -69,14 +69,14 @@ class DBWriter:
         try:
             if self.trade_buffer:
                 await db.executemany('''
-                    INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id)
+                    INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', self.trade_buffer)
                 self.trade_buffer.clear()
             
             if self.orderbook_buffer:
                 await db.executemany('''
-                    INSERT INTO orderbooks (exchange, symbol, timestamp, bids, asks)
+                    INSERT INTO orderbooks (exchange_id, symbol, timestamp, bids, asks)
                     VALUES (?, ?, ?, ?, ?)
                 ''', self.orderbook_buffer)
                 self.orderbook_buffer.clear()

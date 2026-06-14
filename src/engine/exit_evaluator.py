@@ -141,7 +141,7 @@ class CommonExitEvaluator:
         now = current_time if current_time is not None else time.time()
         
         # 비용 및 가격 계산 모델 호출
-        cost_info = self.calculate_costs(pos.exchange, pos.avg_price, current_price)
+        cost_info = self.calculate_costs(pos.exchange_id, pos.avg_price, current_price)
         
         buy_fee_pct = cost_info["buy_fee_pct"]
         sell_fee_pct = cost_info["sell_fee_pct"]
@@ -210,7 +210,7 @@ class CommonExitEvaluator:
         if triggered:
             logger.info(
                 f"[Common Exit Triggered] "
-                f"exchange={pos.exchange}, avg_price={pos.avg_price}, current_price={current_price}, peak_price={pos.peak_price}, "
+                f"exchange_id={pos.exchange_id}, avg_price={pos.avg_price}, current_price={current_price}, peak_price={pos.peak_price}, "
                 f"entry_cost_price={entry_cost_price:.2f}, exit_net_price={exit_net_price:.2f}, "
                 f"breakeven_price_with_cost={breakeven_price_with_cost:.2f}, "
                 f"net_pnl_pct={net_pnl_pct:.4f}%, peak_net_pnl_pct={peak_net_pnl_pct:.4f}%, "

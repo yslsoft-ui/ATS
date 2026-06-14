@@ -7,7 +7,7 @@ from src.engine.candles import Candle
 
 class MockCollector(BaseCollector):
     @property
-    def exchange(self) -> str:
+    def exchange_id(self) -> str:
         return "mock_exchange"
 
     def get_connection_metadata(self, config: Dict[str, Any]) -> ConnectionMetadata:
@@ -50,7 +50,7 @@ async def test_legacy_collector_tick_processing_and_candle_generation():
     collector.is_running = True
 
     processor = MarketDataProcessor(
-        exchange="mock_exchange",
+        exchange_id="mock_exchange",
         processing_queue=processing_queue,
         db_queue=db_queue,
         candle_queue=candle_queue
@@ -69,7 +69,7 @@ async def test_legacy_collector_tick_processing_and_candle_generation():
 
     # 4. 첫 번째 틱 주입
     tick1 = {
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1000.0,
         'trade_volume': 1.0,
@@ -91,7 +91,7 @@ async def test_legacy_collector_tick_processing_and_candle_generation():
 
     # 5. 두 번째 틱 주입 (1분 경과하여 새로운 분으로 넘어가 캔들 완성을 유도)
     tick2 = {
-        'exchange': 'mock_exchange',
+        'exchange_id': 'mock_exchange',
         'code': 'BTC',
         'trade_price': 1010.0,
         'trade_volume': 2.0,
@@ -112,7 +112,7 @@ async def test_legacy_collector_tick_processing_and_candle_generation():
     completed_candle = await candle_queue.get()
     
     # 캔들 속성 검증
-    assert completed_candle.exchange == 'mock_exchange'
+    assert completed_candle.exchange_id == 'mock_exchange'
     assert completed_candle.symbol == 'BTC'
     assert completed_candle.open == 1000.0
     assert completed_candle.high == 1000.0

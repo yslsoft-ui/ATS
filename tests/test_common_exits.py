@@ -43,7 +43,7 @@ def test_exit_evaluator_stop_loss():
     evaluator = CommonExitEvaluator(config)
     
     # 평단가 10,000원인 포지션
-    pos = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
+    pos = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
     
     # 9,900원 (1% 하락) -> 청산 미발생
     triggered, reason = evaluator.evaluate(pos, 9900.0)
@@ -73,7 +73,7 @@ def test_exit_evaluator_trailing_stop():
     evaluator = CommonExitEvaluator(config)
     
     # 최고가 10,000원인 포지션
-    pos = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10000.0)
+    pos = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10000.0)
     
     # 9,900원 (1% 하락) -> 청산 미발생
     triggered, reason = evaluator.evaluate(pos, 9900.0)
@@ -98,7 +98,7 @@ def test_exit_evaluator_time_limit():
     evaluator = CommonExitEvaluator(config)
     
     entry_time = time.time()
-    pos = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, entry_time=entry_time)
+    pos = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, entry_time=entry_time)
     
     # 5초 경과 -> 청산 미발생
     triggered, reason = evaluator.evaluate(pos, 10000.0, current_time=entry_time + 5.0)
@@ -112,7 +112,7 @@ def test_exit_evaluator_time_limit():
 @pytest.mark.asyncio
 async def test_trade_engine_tick_exit():
     strategy = MockStrategy()
-    engine = TradeEngine(exchange="upbit", symbol="BTC", strategies=[strategy])
+    engine = TradeEngine(exchange_id="upbit", symbol="BTC", strategies=[strategy])
     
     # exit_rules 임의 오버라이드
     engine.exit_evaluator.stop_loss_pct = 2.0
@@ -120,7 +120,9 @@ async def test_trade_engine_tick_exit():
     engine.exit_evaluator.time_limit_seconds = 10.0
     
     pm = MockPortfolioManager()
-    portfolio = Portfolio("port_sim", "Simulated Portfolio", initial_cash=1000000.0, exchange_id="upbit")
+    portfolio = Portfolio("port_sim", "Simulated Portfolio")
+    portfolio.exchange_cash = {"upbit": 1000000.0}
+    portfolio.exchange_initial_cash = {"upbit": 1000000.0}
     
     # 평단가 10,000원에 매수 진입 상태 시뮬레이션
     portfolio.update_position("upbit", "BTC", "BUY", 10000.0, 1.0, fee=0.0)
@@ -246,7 +248,7 @@ def test_stop_loss_basis_net_pnl():
     
     # 평단가 10,000원 -> 진입 원가: 10010.0원. 2% 손절 한도는 순수령액 기준 10010.0 * 0.98 = 9809.8원.
     # exit_net_price = current_price * 0.999 이므로, 9809.8 / 0.999 = 9819.62원이 손절 경계 가격.
-    pos = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
+    pos = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
     
     # 9820.0원 -> exit_net = 9810.18 > 9809.8 (순손익률 약 -1.996%) -> 청산 미발생
     triggered, reason = evaluator.evaluate(pos, 9820.0)
@@ -281,7 +283,7 @@ def test_stop_loss_basis_price():
     evaluator = CommonExitEvaluator(config)
     
     # 평단가 10,000원 -> 단순 가격 기준 2% 손절 가격은 9800.0원. 수수료 설정 무관.
-    pos = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
+    pos = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0)
     
     # 9801.0원 -> 청산 미발생
     triggered, reason = evaluator.evaluate(pos, 9801.0)
@@ -328,7 +330,7 @@ def test_multiple_floors_priority():
     # 가장 높은 방어선은 trailing_floor(10290.0)
     # current_price = 10000.0 으로 급락하면 세 방어선 모두의 아래에 도달함.
     # 청산 사유는 가장 높은 방어선이었던 TRAILING_STOP이어야 함.
-    pos_a = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10500.0)
+    pos_a = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10500.0)
     triggered, reason = evaluator.evaluate(pos_a, 10000.0)
     assert triggered
     assert reason == "TRAILING_STOP"
@@ -353,7 +355,7 @@ def test_multiple_floors_priority():
         }
     }
     evaluator_b = CommonExitEvaluator(config_b)
-    pos_b = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10100.0)
+    pos_b = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10100.0)
     triggered, reason = evaluator_b.evaluate(pos_b, 10000.0)
     assert triggered
     assert reason == "BREAKEVEN_STOP"
@@ -385,7 +387,7 @@ def test_db_reload_breakeven_recalculation():
     # DB에서 갓 로드된 것으로 가정된 Position 객체 (활성화 상태 플래그 등은 전혀 없음)
     # avg_price = 10000.0 -> entry_cost = 10010.0
     # peak_price = 10100.0 -> peak_exit_net = 10100 * 0.999 = 10089.9 -> peak_net_pnl = 0.798% >= 0.5% (활성화 만족)
-    pos_reloaded = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10100.0)
+    pos_reloaded = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10100.0)
     
     # breakeven_floor = 10010.0 / 0.999 = 10020.02
     # current_price = 10020.0 -> breakeven_floor 이하이므로 즉시 본전이동 청산 발동
@@ -395,7 +397,7 @@ def test_db_reload_breakeven_recalculation():
     
     # peak_price가 낮아서 breakeven 조건 미달인 포지션이 로드된 경우
     # peak_price = 10050.0 -> peak_exit_net = 10039.95 -> peak_net_pnl = 0.299% < 0.5% (활성화 불만족)
-    pos_not_activated = Position(exchange="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10050.0)
+    pos_not_activated = Position(exchange_id="upbit", symbol="BTC", quantity=1.0, avg_price=10000.0, peak_price=10050.0)
     
     # 10020.0원으로 하락해도 본전이동 비활성화 상태이므로 청산 미발생
     triggered, reason = evaluator.evaluate(pos_not_activated, 10020.0)

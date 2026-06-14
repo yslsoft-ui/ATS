@@ -49,7 +49,7 @@ class PerformanceAnalyzer:
         elif initial_cash_map:
             ex_initial_cash_map = {ex.lower(): float(val) for ex, val in initial_cash_map.items()}
         else:
-            ex_set = set(t["exchange"].lower() for t in trades) if trades else set()
+            ex_set = set((t.get("exchange_id") or t.get("exchange") or "upbit").lower() for t in trades) if trades else set()
             for pos_key in portfolio.positions.keys():
                 ex_set.add(pos_key[0].lower())
             if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
@@ -59,7 +59,9 @@ class PerformanceAnalyzer:
                 each_cash = portfolio.initial_cash / len(ex_set)
                 ex_initial_cash_map = {ex.lower(): each_cash for ex in ex_set}
             else:
-                ex_id = portfolio.exchange_id if portfolio.exchange_id else "upbit"
+                ex_id = "upbit"
+                if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
+                    ex_id = list(portfolio.exchange_cash.keys())[0]
                 ex_initial_cash_map = {ex_id.lower(): portfolio.initial_cash}
 
         # 1.2. 거래소별 현금 복원
@@ -71,7 +73,7 @@ class PerformanceAnalyzer:
                 if ex_lower not in ex_initial_cash_map:
                     ex_initial_cash_map[ex_lower] = val
         else:
-            ex_id = (portfolio.exchange_id or 'upbit').lower()
+            ex_id = 'upbit'
             exchange_cash_map[ex_id] = portfolio.cash
             if ex_id not in ex_initial_cash_map:
                 ex_initial_cash_map[ex_id] = portfolio.cash
@@ -79,7 +81,7 @@ class PerformanceAnalyzer:
         # 2. 종목별 성과 상세 분석 결과(results) 생성
         trades_by_ex_sym = {}
         for t in trades:
-            ex_lower = t["exchange"].lower()
+            ex_lower = (t.get("exchange_id") or t.get("exchange") or "upbit").lower()
             sym = t["symbol"]
             key = (ex_lower, sym)
             if key not in trades_by_ex_sym:
@@ -244,12 +246,12 @@ class PerformanceAnalyzer:
             },
             "positions": [
                 {
-                    "exchange": pos.exchange,
+                    "exchange_id": pos.exchange_id,
                     "symbol": pos.symbol,
                     "quantity": pos.quantity,
                     "avg_price": pos.avg_price,
                     "current_price": current_prices.get(pos.symbol, pos.avg_price),
-                    "korean_name": stock_mapper.get_name(pos.exchange.lower(), pos.symbol),
+                    "korean_name": stock_mapper.get_name(pos.exchange_id.lower(), pos.symbol),
                     "updated_at": pos.updated_at
                 }
                 for pos in portfolio.positions.values() if pos.quantity > 0

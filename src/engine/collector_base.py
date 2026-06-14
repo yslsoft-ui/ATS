@@ -78,7 +78,7 @@ class BaseCollector(ABC):
         
     @property
     @abstractmethod
-    def exchange(self) -> str:
+    def exchange_id(self) -> str:
         """거래소 식별 ID (예: 'upbit', 'bithumb', 'kis')"""
         pass
 
@@ -115,7 +115,7 @@ class BaseCollector(ABC):
     async def _fetch_active_symbols_from_db(self, config: Dict[str, Any]) -> List[str]:
         """
         데이터베이스의 exchange_assets 테이블에서
-        해당 거래소(self.exchange)의 활성화된(is_active = 1) 종목 목록을 조회합니다.
+        해당 거래소(self.exchange_id)의 활성화된(is_active = 1) 종목 목록을 조회합니다.
         """
         db_path = config.get('db_path', 'data/backtest.db') if config else 'data/backtest.db'
         from src.database.connection import get_db_conn
@@ -124,14 +124,14 @@ class BaseCollector(ABC):
         try:
             async with get_db_conn(db_path) as db:
                 async with db.execute(
-                    "SELECT symbol FROM exchange_assets WHERE exchange = ? AND is_active = 1",
-                    (self.exchange,)
+                    "SELECT symbol FROM exchange_assets WHERE exchange_id = ? AND is_active = 1",
+                    (self.exchange_id,)
                 ) as cursor:
                     rows = await cursor.fetchall()
                     active_symbols = sorted([row['symbol'] for row in rows])
-            logger.info(f"[{self.exchange.upper()}] DB exchange_assets에서 {len(active_symbols)}개 활성 종목 로드 완료")
+            logger.info(f"[{self.exchange_id.upper()}] DB exchange_assets에서 {len(active_symbols)}개 활성 종목 로드 완료")
         except Exception as e:
-            logger.error(f"[{self.exchange.upper()}] DB 활성 종목 조회 실패: {e}")
+            logger.error(f"[{self.exchange_id.upper()}] DB 활성 종목 조회 실패: {e}")
             
         return active_symbols
 
@@ -145,9 +145,9 @@ class BaseCollector(ABC):
         if self.ws and not self.ws.closed:
             try:
                 await self._subscribe(self.ws, config or self.config)
-                logger.info(f"[{self.exchange.upper()}] 활성 구독 목록 실시간 리로드 완료: {len(self.available_symbols)}개 종목")
+                logger.info(f"[{self.exchange_id.upper()}] 활성 구독 목록 실시간 리로드 완료: {len(self.available_symbols)}개 종목")
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] 실시간 구독 리로드 실패: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] 실시간 구독 리로드 실패: {e}")
 
     def _group_consecutive_timestamps(self, timestamps: List[int], interval=60) -> List[tuple]:
         """연속된 타임스탬프들을 시작과 끝 시각의 튜플 리스트로 그룹화합니다."""
@@ -181,7 +181,7 @@ class BaseCollector(ABC):
         """로컬 DB의 누락된 빈 틈(gap)들을 탐색하여 누락된 분봉을 수집하고 백필합니다."""
         bf_config = config.get('collector', {}).get('backfill', {})
         if not bf_config.get('enabled', True):
-            logger.info(f"[{self.exchange.upper()}] 백필 기능이 비활성화되어 있습니다.")
+            logger.info(f"[{self.exchange_id.upper()}] 백필 기능이 비활성화되어 있습니다.")
             return
 
         db_path = config.get('db_path', 'data/backtest.db')
@@ -189,9 +189,9 @@ class BaseCollector(ABC):
         
         # 거래소별 Throttling 딜레이 추출
         delays = bf_config.get('delays', {})
-        delay = delays.get(self.exchange, 0.2)
+        delay = delays.get(self.exchange_id, 0.2)
 
-        logger.info(f"[{self.exchange.upper()}] 백필 작업 기동. 대상 종목: {self.available_symbols}, 최대 복구: {max_hours}시간, API 딜레이: {delay}초")
+        logger.info(f"[{self.exchange_id.upper()}] 백필 작업 기동. 대상 종목: {self.available_symbols}, 최대 복구: {max_hours}시간, API 딜레이: {delay}초")
 
         from src.database.connection import get_db_conn
         
@@ -208,14 +208,14 @@ class BaseCollector(ABC):
                 try:
                     async with get_db_conn(db_path) as db:
                         cursor = await db.execute(
-                            "SELECT MAX(timestamp) FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60",
-                            (self.exchange, symbol)
+                            "SELECT MAX(timestamp) FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60",
+                            (self.exchange_id, symbol)
                         )
                         row = await cursor.fetchone()
                         if row and row[0]:
                             last_db_time = row[0]
                 except Exception as e:
-                    logger.error(f"[{self.exchange.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
+                    logger.error(f"[{self.exchange_id.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
 
                 # 중간에 뚫린 구멍(Gap)을 완벽하게 메우기 위해 백필 룩백의 시작점은 항상 기본 최대 탐색 시각(예: 24시간 전)으로 고정합니다.
                 max_lookback = default_max_lookback
@@ -224,7 +224,7 @@ class BaseCollector(ABC):
                 end_time = current_time - 60
                 raw_expected = range(max_lookback, end_time + 60, 60)
 
-                if self.exchange == 'kis':
+                if self.exchange_id == 'kis':
                     from zoneinfo import ZoneInfo
                     from datetime import datetime
                     kst = ZoneInfo('Asia/Seoul')
@@ -249,26 +249,26 @@ class BaseCollector(ABC):
                 try:
                     async with get_db_conn(db_path) as db:
                         cursor = await db.execute(
-                            "SELECT timestamp FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
-                            (self.exchange, symbol, max_lookback, end_time)
+                            "SELECT timestamp FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
+                            (self.exchange_id, symbol, max_lookback, end_time)
                         )
                         rows = await cursor.fetchall()
                         existing_timestamps = {r[0] for r in rows}
                 except Exception as e:
-                    logger.error(f"[{self.exchange.upper()}] {symbol} DB 조회 실패: {e}")
+                    logger.error(f"[{self.exchange_id.upper()}] {symbol} DB 조회 실패: {e}")
                     continue
 
                 # 3. 누락된 타임스탬프 추출
                 missing_timestamps = [ts for ts in expected_timestamps if ts not in existing_timestamps]
                 if not missing_timestamps:
-                    logger.debug(f"[{self.exchange.upper()}] {symbol} 백필 불필요 (누락된 구간 없음)")
+                    logger.debug(f"[{self.exchange_id.upper()}] {symbol} 백필 불필요 (누락된 구간 없음)")
                     continue
 
                 # 4. 전체 누락 구간의 최소값과 최대값 추출 (잘게 쪼개지 않고 전체 범위를 한 번에 벌크 호출)
                 start_t = min(missing_timestamps)
                 end_t = max(missing_timestamps)
 
-                logger.info(f"[{self.exchange.upper()}] {symbol} 백필 수행 구간: "
+                logger.info(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 구간: "
                             f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_t))} ~ "
                             f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_t))} (누락 캔들수: {len(missing_timestamps)}개)")
 
@@ -276,7 +276,7 @@ class BaseCollector(ABC):
                     # 거래소별 REST API 호출
                     candles = await self._fetch_historical_candles(symbol, start_t, end_t)
                     if not candles:
-                        logger.debug(f"[{self.exchange.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다. (구간: {start_t} ~ {end_t})")
+                        logger.debug(f"[{self.exchange_id.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다. (구간: {start_t} ~ {end_t})")
                         continue
 
                     # 시간 순서로 정렬
@@ -287,13 +287,13 @@ class BaseCollector(ABC):
                     try:
                         async with get_db_conn(db_path) as db:
                             cursor = await db.execute(
-                                "SELECT timestamp FROM candles WHERE exchange = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
-                                (self.exchange, symbol, start_t, end_t)
+                                "SELECT timestamp FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
+                                (self.exchange_id, symbol, start_t, end_t)
                             )
                             rows = await cursor.fetchall()
                             existing_segment_timestamps = {r[0] for r in rows}
                     except Exception as e:
-                        logger.error(f"[{self.exchange.upper()}] {symbol} 중복 검사용 DB 조회 실패: {e}")
+                        logger.error(f"[{self.exchange_id.upper()}] {symbol} 중복 검사용 DB 조회 실패: {e}")
 
                     # 캔들 발행 큐에 적재 (중복 필터링)
                     count = 0
@@ -303,13 +303,13 @@ class BaseCollector(ABC):
                                 await self.candle_queue.put(candle)
                                 count += 1
                     
-                    logger.info(f"[{self.exchange.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
+                    logger.info(f"[{self.exchange_id.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
 
                 except Exception as e:
-                    logger.error(f"[{self.exchange.upper()}] {symbol} 백필 수행 중 에러 발생: {e}")
+                    logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 중 에러 발생: {e}")
 
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
             finally:
                 # 종목 간 Throttling 딜레이 적용
                 await asyncio.sleep(delay)
@@ -344,7 +344,7 @@ class BaseCollector(ABC):
         
     async def _handle_connection_error(self, error: Exception):
         """연결 중 에러 처리"""
-        logger.error(f"[{self.exchange.upper()}] Collector Connection Error: {error}. Reconnecting in 5s...")
+        logger.error(f"[{self.exchange_id.upper()}] Collector Connection Error: {error}. Reconnecting in 5s...")
         await asyncio.sleep(5)
 
     async def run(self, config: Dict[str, Any] = None):
@@ -363,7 +363,7 @@ class BaseCollector(ABC):
         try:
             asyncio.create_task(self.backfill_candles(config))
         except Exception as e:
-            logger.error(f"[{self.exchange.upper()}] 백필 중 치명적 오류 발생: {e}")
+            logger.error(f"[{self.exchange_id.upper()}] 백필 중 치명적 오류 발생: {e}")
 
         # 4. WebSocket 연결 및 수신 루프 기동
         await self._connect_and_listen(config)
@@ -396,10 +396,10 @@ class BaseCollector(ABC):
                     # 그 사이 해제(uncheck)된 종목이 재구독되는 버그 방지
                     latest_symbols = await self._fetch_symbols(config)
                     if latest_symbols != self.available_symbols:
-                        logger.info(f"[{self.exchange.upper()}] ws 재연결: 종목 목록 갱신 {len(self.available_symbols)} → {len(latest_symbols)}개")
+                        logger.info(f"[{self.exchange_id.upper()}] ws 재연결: 종목 목록 갱신 {len(self.available_symbols)} → {len(latest_symbols)}개")
                         self.available_symbols = latest_symbols
                     await self._subscribe(ws, config)
-                    logger.info(f"[{self.exchange.upper()}] Collector Connected - {len(self.available_symbols)} symbols")
+                    logger.info(f"[{self.exchange_id.upper()}] Collector Connected - {len(self.available_symbols)} symbols")
 
                     async for msg in ws:
                         if not self.is_running: break
@@ -430,7 +430,7 @@ class BaseCollector(ABC):
                 self.ws = None
                 # 정상적으로 소켓 루프가 종료(끊김)되었을 때도 즉각 재연결 폭주를 방지하기 위해 5초 대기 적용
                 if self.is_running:
-                    logger.warning(f"[{self.exchange.upper()}] WebSocket connection closed. Reconnecting in 5s...")
+                    logger.warning(f"[{self.exchange_id.upper()}] WebSocket connection closed. Reconnecting in 5s...")
                     await asyncio.sleep(5)
 
             except Exception as e:

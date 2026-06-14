@@ -128,9 +128,9 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
             db_asset_master = {r['symbol']: r['korean_name'] for r in rows}
 
         # 2.2 exchange_assets 전체 로드 (메모리 B)
-        async with db.execute("SELECT exchange, symbol, is_active, is_delisted FROM exchange_assets") as cursor:
+        async with db.execute("SELECT exchange_id, symbol, is_active, is_delisted FROM exchange_assets") as cursor:
             rows = await cursor.fetchall()
-            db_exchange_assets = {(r['exchange'], r['symbol']): (r['is_active'], r['is_delisted']) for r in rows}
+            db_exchange_assets = {(r['exchange_id'], r['symbol']): (r['is_active'], r['is_delisted']) for r in rows}
 
         logger.info(f"DB 로드 완료: asset_master={len(db_asset_master)}개, exchange_assets={len(db_exchange_assets)}개")
 
@@ -168,7 +168,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
                 key = (exchange, sym)
                 if key not in db_exchange_assets:
                     await db.execute('''
-                        INSERT OR IGNORE INTO exchange_assets (exchange, symbol, is_active, is_delisted)
+                        INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active, is_delisted)
                         VALUES (?, ?, ?, 0)
                     ''', (exchange, sym, default_active))
                     db_exchange_assets[key] = (default_active, 0)
@@ -182,7 +182,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
                         await db.execute('''
                             UPDATE exchange_assets
                             SET is_delisted = 0, updated_at = datetime('now')
-                            WHERE exchange = ? AND symbol = ?
+                            WHERE exchange_id = ? AND symbol = ?
                         ''', (exchange, sym))
                         db_exchange_assets[key] = (is_active, 0)
                         logger.info(f"[{exchange.upper()}] 재상장 감지: {sym} ({name}) 상장폐지 마크 해제")
@@ -200,7 +200,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
                     await db.execute('''
                         UPDATE exchange_assets
                         SET is_active = 0, is_delisted = 1, updated_at = datetime('now')
-                        WHERE exchange = ? AND symbol = ?
+                        WHERE exchange_id = ? AND symbol = ?
                     ''', (exchange, sym))
                     db_exchange_assets[key] = (0, 1)
                     delisted_count += 1
@@ -220,7 +220,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
                     await db.execute('''
                         UPDATE exchange_assets
                         SET is_active = 1, is_delisted = 0, updated_at = datetime('now')
-                        WHERE exchange = ? AND symbol = ?
+                        WHERE exchange_id = ? AND symbol = ?
                     ''', (exchange, sym))
         
         await db.commit()
@@ -230,7 +230,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
             # 수신 종목 수 (is_active=1, is_delisted=0)
             async with db.execute('''
                 SELECT count(*) FROM exchange_assets
-                WHERE exchange = ? AND is_active = 1 AND is_delisted = 0
+                WHERE exchange_id = ? AND is_active = 1 AND is_delisted = 0
             ''', (exchange,)) as cursor:
                 row = await cursor.fetchone()
                 sync_results[exchange]["total_active"] = row[0] if row else 0
@@ -238,7 +238,7 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
             # 전체 등록 종목 수 (is_delisted=0)
             async with db.execute('''
                 SELECT count(*) FROM exchange_assets
-                WHERE exchange = ? AND is_delisted = 0
+                WHERE exchange_id = ? AND is_delisted = 0
             ''', (exchange,)) as cursor:
                 row = await cursor.fetchone()
                 sync_results[exchange]["total_registered"] = row[0] if row else 0

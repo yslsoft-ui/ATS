@@ -2426,10 +2426,27 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* 핵심 성과 메트릭 그리드 */
+/* [NEW] 세션 선택 레이아웃 한 줄 정렬 고정 */
+.session-select-container {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    flex-shrink: 0 !important;
+    min-width: max-content !important;
+    white-space: nowrap !important;
+}
+
+.session-select-container label {
+    display: inline-block !important;
+    white-space: nowrap !important;
+    min-width: max-content !important;
+    flex-shrink: 0 !important;
+}
+
+/* 핵심 성과 메트릭 그리드 (6단 한 줄 고정) */
 .overview-metrics-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(6, 1fr);
     gap: 20px;
     margin-top: 15px;
 }
@@ -2469,8 +2486,9 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
 .grad-value::before { background: linear-gradient(90deg, #6366F1, #8B5CF6); }
 .grad-roi::before { background: linear-gradient(90deg, #10B981, #059669); }
 .grad-cash::before { background: linear-gradient(90deg, #F59E0B, #D97706); }
-.grad-ai::before { background: linear-gradient(90deg, #D946EF, #A21CAF); }
+.grad-initial-cash::before { background: linear-gradient(90deg, #D946EF, #A21CAF); }
 .grad-assets-val::before { background: linear-gradient(90deg, #14B8A6, #06B6D4); }
+.grad-fee::before { background: linear-gradient(90deg, #64748B, #475569); }
 
 .card-label {
     font-size: 0.75rem;
@@ -2503,13 +2521,14 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     padding: 6px;
     border: 1px solid #334155;
     margin: 15px 0;
+    overflow: visible !important;
 }
 
 .stacked-bar-container {
     display: flex;
     height: 32px;
     border-radius: 6px;
-    overflow: hidden;
+    overflow: visible !important;
     background: #1E293B;
 }
 
@@ -2527,10 +2546,65 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     position: relative;
     cursor: pointer;
     min-width: 0;
+    overflow: visible !important;
+}
+
+.bar-segment:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.bar-segment:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
 }
 
 .bar-segment:hover {
     filter: brightness(1.15);
+    z-index: 999 !important;
+}
+
+/* [NEW] 커스텀 CSS 툴팁 구현 */
+.bar-segment::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #0F172A; /* Deep Navy */
+    color: #F8FAFC;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 9999 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    display: none;
+}
+
+.bar-segment::before {
+    content: '';
+    position: absolute;
+    bottom: 110%;
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 6px;
+    border-style: solid;
+    border-color: #0F172A transparent transparent transparent;
+    pointer-events: none;
+    z-index: 9999 !important;
+    display: none;
+}
+
+.bar-segment:hover::after {
+    display: block;
+}
+
+.bar-segment:hover::before {
+    display: block;
 }
 
 .bar-segment span {
@@ -2538,6 +2612,7 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     overflow: hidden;
     text-overflow: ellipsis;
     padding: 0 6px;
+    pointer-events: none;
 }
 
 /* 범례 레이아웃 */

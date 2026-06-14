@@ -74,7 +74,7 @@ async def test_feature_snapshot_hash_and_freshness():
         from src.database.repository import SqliteMarketDataRepository
         repo = SqliteMarketDataRepository()
         
-        engine = TradeEngine(exchange="upbit", symbol="BTC", strategies=[], market_data_repo=repo)
+        engine = TradeEngine(exchange_id="upbit", symbol="BTC", strategies=[], market_data_repo=repo)
         engine.last_tick = {
             "trade_price": 50000.0,
             "trade_volume": 1.5,
@@ -86,16 +86,16 @@ async def test_feature_snapshot_hash_and_freshness():
         from src.engine.candles import Candle
         context = engine.contexts[60]
         context.add_candle(Candle(
-            exchange="upbit", symbol="BTC", interval=60,
+            exchange_id="upbit", symbol="BTC", interval=60,
             timestamp=int(time.time()) - 30, open=50000.0, high=50100.0, low=49900.0, close=50000.0, volume=10.0, is_closed=True
         ))
 
         # capture_feature_snapshot 실행
         snap = await engine.capture_feature_snapshot(
-            proposal_id="test_prop", strategy_id="rsi_strategy", exchange="upbit", symbol="BTC", proposal_type="MUTATION"
+            proposal_id="test_prop", strategy_id="rsi_strategy", exchange_id="upbit", symbol="BTC", proposal_type="MUTATION"
         )
         
-        assert snap.exchange == "upbit"
+        assert snap.exchange_id == "upbit"
         assert snap.is_fresh is True
         assert snap.snapshot_hash != ""
         assert snap.feature_vector_hash != ""
@@ -104,7 +104,7 @@ async def test_feature_snapshot_hash_and_freshness():
         # Stale 발생 유도
         engine.last_tick["trade_timestamp"] = int(time.time() * 1000) - 50000 # 50초 전 (crypto trade freshness 한도 10초 초과)
         snap_stale = await engine.capture_feature_snapshot(
-            proposal_id="test_prop", strategy_id="rsi_strategy", exchange="upbit", symbol="BTC", proposal_type="MUTATION"
+            proposal_id="test_prop", strategy_id="rsi_strategy", exchange_id="upbit", symbol="BTC", proposal_type="MUTATION"
         )
         assert snap_stale.is_fresh is False
         assert "TICK_TTL_EXCEEDED" in snap_stale.stale_reason
@@ -222,7 +222,7 @@ async def test_universe_watched_candidate_control():
         # TradeEngine 등록 및 모킹
         from src.database.repository import SqliteMarketDataRepository
         repo = SqliteMarketDataRepository()
-        engine = TradeEngine(exchange="upbit", symbol="BTC", strategies=[], market_data_repo=repo)
+        engine = TradeEngine(exchange_id="upbit", symbol="BTC", strategies=[], market_data_repo=repo)
         
         # 20분 이내 유동성이 매우 좋은 mock tick들로 채움
         engine.last_tick = {
@@ -236,7 +236,7 @@ async def test_universe_watched_candidate_control():
         from src.engine.candles import Candle
         context = engine.contexts[60]
         context.add_candle(Candle(
-            exchange="upbit", symbol="BTC", interval=60,
+            exchange_id="upbit", symbol="BTC", interval=60,
             timestamp=int(time.time()) - 30, open=50000.0, high=50100.0, low=49900.0, close=50000.0, volume=100.0, is_closed=True
         ))
         
@@ -248,7 +248,7 @@ async def test_universe_watched_candidate_control():
             # 20분 동안 250건의 거래 (TPS >= 0.2 기준 만족용)
             for i in range(250):
                 await db.execute(
-                    "INSERT INTO trades (exchange, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES ('upbit', 'BTC', 50000.0, 10.0, 'BID', ?)",
+                    "INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp) VALUES ('upbit', 'BTC', 50000.0, 10.0, 'BID', ?)",
                     (now_ms - i * 1000,)
                 )
             await db.commit()
@@ -259,7 +259,7 @@ async def test_universe_watched_candidate_control():
         
         for key, eng in list(service.trade_engines.items()):
             snap = await eng.capture_feature_snapshot(
-                proposal_id="", strategy_id="rsi_strategy", exchange=eng.exchange, symbol=eng.symbol, proposal_type="UNIVERSE"
+                proposal_id="", strategy_id="rsi_strategy", exchange_id=eng.exchange_id, symbol=eng.symbol, proposal_type="UNIVERSE"
             )
             tps = snap.liquidity_features.get("tps", 0.0)
             idle_time = snap.liquidity_features.get("idle_time", 9999.0)
@@ -317,7 +317,7 @@ async def test_report_generation():
             """
             INSERT INTO girs_shadow_metrics (
                 timestamp, proposal_id, strategy_id, blocked_reason,
-                market_type, session_state, volatility_regime, liquidity_regime, exchange,
+                market_type, session_state, volatility_regime, liquidity_regime, exchange_id,
                 correction_active
             )
             VALUES (1000.0, '1', 'rsi_strategy', NULL, 'crypto', '24h', 'low', 'high', 'upbit', 0)

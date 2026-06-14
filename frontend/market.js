@@ -46,11 +46,11 @@ function renderMarketTable(data) {
     tbody.innerHTML = '';
     
     // 현재 선택된 탭에 맞는 거래소 데이터만 필터링
-    const filteredByExch = data.filter(c => c.exchange === state.currentMarketTab);
+    const filteredByExch = data.filter(c => c.exchange_id === state.currentMarketTab);
     
     filteredByExch.forEach((coin, idx) => {
         const ticker = coin.market;
-        const exchange = coin.exchange || 'upbit';
+        const exchange = coin.exchange_id || 'upbit';
         const symbolLower = ticker.toLowerCase();
         let iconUrl = '';
         let fallbackUrl = '';
@@ -106,7 +106,7 @@ function renderMarketTable(data) {
         // 클릭 시 모니터링 페이지로 전환
         tr.addEventListener('click', () => {
             Store.update({
-                currentExchange: coin.exchange || 'upbit',
+                currentExchange: coin.exchange_id || 'upbit',
                 currentSymbol: coin.market
             });
 
@@ -185,7 +185,7 @@ async function loadSymbols() {
         symbols.forEach(symObj => {
             if (window.state) {
                 if (!window.state.symbolNames) window.state.symbolNames = {};
-                window.state.symbolNames[`${symObj.exchange}:${symObj.symbol}`] = symObj.name;
+                window.state.symbolNames[`${symObj.exchange_id}:${symObj.symbol}`] = symObj.name;
             }
         });
 
@@ -194,9 +194,9 @@ async function loadSymbols() {
             select.innerHTML = '';
             symbols.forEach(symObj => {
                 const opt = document.createElement('option');
-                opt.value = `${symObj.exchange}:${symObj.symbol}`;
+                opt.value = `${symObj.exchange_id}:${symObj.symbol}`;
                 opt.textContent = symObj.name || symObj.symbol;
-                if (symObj.symbol === state.currentSymbol && symObj.exchange === state.currentExchange) opt.selected = true;
+                if (symObj.symbol === state.currentSymbol && symObj.exchange_id === state.currentExchange) opt.selected = true;
                 select.appendChild(opt);
             });
         }

@@ -15,7 +15,7 @@ class MarketDataProcessor:
     """
     def __init__(
         self,
-        exchange: str,
+        exchange_id: str,
         processing_queue: asyncio.Queue,
         db_queue: Optional[Any] = None,
         candle_queue: Optional[Any] = None,
@@ -23,7 +23,7 @@ class MarketDataProcessor:
         on_signal_callback: Optional[Callable] = None,
         on_status_callback: Optional[Callable] = None,
     ):
-        self.exchange = exchange
+        self.exchange_id = exchange_id
         self.processing_queue = processing_queue
         self.db_queue = db_queue
         self.candle_queue = candle_queue
@@ -51,7 +51,7 @@ class MarketDataProcessor:
         self._init_trade_engines(config)
 
         # 2. 백그라운드 워밍업 기동
-        warmup_enabled = config.get('exchanges', {}).get(self.exchange, {}).get('warmup_enabled', config.get('warmup_enabled', True))
+        warmup_enabled = config.get('exchanges', {}).get(self.exchange_id, {}).get('warmup_enabled', config.get('warmup_enabled', True))
         if warmup_enabled:
             db_path = config.get('db_path', 'data/backtest.db')
             asyncio.create_task(self.background_warmup(db_path))
@@ -63,7 +63,7 @@ class MarketDataProcessor:
         # 4. 분 경계 캔들 강제 flush 태스크 기동
         self._flush_task = asyncio.create_task(self._candle_flush_loop())
         
-        logger.info(f"[{self.exchange.upper()}] MarketDataProcessor started with {worker_count} workers.")
+        logger.info(f"[{self.exchange_id.upper()}] MarketDataProcessor started with {worker_count} workers.")
 
     async def stop(self):
         self.is_running = False
@@ -81,31 +81,31 @@ class MarketDataProcessor:
         if self.processor_tasks:
             await asyncio.gather(*self.processor_tasks, return_exceptions=True)
             self.processor_tasks.clear()
-        logger.info(f"[{self.exchange.upper()}] MarketDataProcessor stopped.")
+        logger.info(f"[{self.exchange_id.upper()}] MarketDataProcessor stopped.")
 
     async def background_warmup(self, db_path: str = "data/backtest.db"):
         engines = list(self.trade_engines.values())
         if not engines:
             return
 
-        logger.info(f"[{self.exchange.upper()}] {len(engines)}개 종목 전략 호스트 백그라운드 워밍업 시작 (Processor)")
+        logger.info(f"[{self.exchange_id.upper()}] {len(engines)}개 종목 전략 호스트 백그라운드 워밍업 시작 (Processor)")
         for i, engine in enumerate(engines):
             if not self.is_running:
                 break
             try:
                 await engine.warm_up(db_path)
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] Warmup failed for {engine.symbol}: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] Warmup failed for {engine.symbol}: {e}")
             await asyncio.sleep(0.05)
             if (i + 1) % 100 == 0:
-                logger.info(f"[{self.exchange.upper()}] 전략 워밍업 진행 중... ({i + 1}/{len(engines)})")
-        logger.info(f"[{self.exchange.upper()}] 전체 {len(engines)}개 종목 전략 호스트 백그라운드 워밍업 완료")
+                logger.info(f"[{self.exchange_id.upper()}] 전략 워밍업 진행 중... ({i + 1}/{len(engines)})")
+        logger.info(f"[{self.exchange_id.upper()}] 전체 {len(engines)}개 종목 전략 호스트 백그라운드 워밍업 완료")
 
     async def data_processor_worker(self):
         while self.is_running:
             try:
                 data = await self.processing_queue.get()
-                if data.get('exchange') != self.exchange:
+                if data.get('exchange_id') != self.exchange_id:
                     self.processing_queue.task_done()
                     continue
 
@@ -115,7 +115,7 @@ class MarketDataProcessor:
                 # 1. 1분봉 실시간 캔들 조립 처리 (동시성 락 적용)
                 async with self.candle_lock:
                     closed_candles = self.candle_generator.process_tick(
-                        exchange=self.exchange,
+                        exchange_id=self.exchange_id,
                         symbol=symbol,
                         price=data['trade_price'],
                         volume=data['trade_volume'],
@@ -128,7 +128,7 @@ class MarketDataProcessor:
                     if self.candle_queue:
                         await self.candle_queue.put(candle)
                     else:
-                        logger.warning(f"[{self.exchange.upper()}] candle_queue is None! Cannot enqueue candle for {symbol}")
+                        logger.warning(f"[{self.exchange_id.upper()}] candle_queue is None! Cannot enqueue candle for {symbol}")
 
                 # 3. 데이터 브로드캐스트 콜백 실행 및 DB 적재 큐 주입
                 if self.on_data_callback:
@@ -150,7 +150,7 @@ class MarketDataProcessor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] Processor Worker Error: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] Processor Worker Error: {e}")
                 await asyncio.sleep(0.1)
 
     def _init_trade_engines(self, config: Dict[str, Any]):
@@ -159,7 +159,7 @@ class MarketDataProcessor:
         for s_id, s_conf in strategy_configs.items():
             if s_conf.get('enabled', False):
                 params = s_conf.get('params', {}).copy()
-                overrides = s_conf.get('overrides', {}).get(self.exchange, {}).get('params', {})
+                overrides = s_conf.get('overrides', {}).get(self.exchange_id, {}).get('params', {})
                 params.update(overrides)
                 enabled_strategies.append((s_id, params))
 
@@ -178,9 +178,9 @@ class MarketDataProcessor:
                     if strat:
                         instances.append(strat)
                 self.trade_engines[symbol] = TradeEngine(
-                    self.exchange, 
-                    symbol, 
-                    instances, 
+                    exchange_id=self.exchange_id, 
+                    symbol=symbol, 
+                    strategies=instances, 
                     on_status_callback=self.on_status_callback
                 )
 
@@ -188,7 +188,7 @@ class MarketDataProcessor:
         self.config = config
         self.available_symbols = new_symbols
         self._init_trade_engines(config)
-        logger.info(f"[{self.exchange.upper()}] Processor reloaded with {len(new_symbols)} symbols.")
+        logger.info(f"[{self.exchange_id.upper()}] Processor reloaded with {len(new_symbols)} symbols.")
 
     async def _candle_flush_loop(self):
         """매 분 경계(xx:01초)에 CandleGenerator의 미마감 캔들을 강제 close하여 candle_queue에 적재합니다."""
@@ -222,10 +222,10 @@ class MarketDataProcessor:
                             del symbols_dict[symbol]
 
                 if flushed > 0:
-                    logger.info(f"[{self.exchange.upper()}] 분 경계 flush: 미마감 캔들 {flushed}개 강제 close 및 DB 큐 적재")
+                    logger.info(f"[{self.exchange_id.upper()}] 분 경계 flush: 미마감 캔들 {flushed}개 강제 close 및 DB 큐 적재")
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[{self.exchange.upper()}] 캔들 flush 루프 예외: {e}")
+                logger.error(f"[{self.exchange_id.upper()}] 캔들 flush 루프 예외: {e}")
                 await asyncio.sleep(5)

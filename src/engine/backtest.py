@@ -19,8 +19,8 @@ class BacktestPortfolioManagerProxy:
         self.manager = manager
         self.portfolio_id = portfolio_id
         
-    def get_portfolio_summary(self, symbol: str, exchange: Optional[str] = None) -> Dict[str, Any]:
-        return self.manager.get_portfolio_summary(symbol, self.portfolio_id, exchange)
+    def get_portfolio_summary(self, symbol: str, exchange_id: Optional[str] = None) -> Dict[str, Any]:
+        return self.manager.get_portfolio_summary(symbol, self.portfolio_id, exchange_id)
 
 class BacktestEngine:
     def __init__(self, db_path: str = None):
@@ -32,7 +32,7 @@ class BacktestEngine:
         
     async def run(
         self, 
-        exchange: str,
+        exchange_id: str,
         symbol: str, 
         start_date: int,  # timestamp ms
         end_date: int,    # timestamp ms
@@ -49,9 +49,9 @@ class BacktestEngine:
             cursor = await db.execute(
                 "SELECT trade_timestamp, trade_price, trade_volume, ask_bid "
                 "FROM trades "
-                "WHERE exchange = ? AND symbol = ? AND trade_timestamp BETWEEN ? AND ? "
+                "WHERE exchange_id = ? AND symbol = ? AND trade_timestamp BETWEEN ? AND ? "
                 "ORDER BY trade_timestamp ASC",
-                (exchange, symbol, start_date, end_date)
+                (exchange_id, symbol, start_date, end_date)
             )
             rows = await cursor.fetchall()
             
@@ -60,30 +60,29 @@ class BacktestEngine:
 
         # 2. 거래소 수수료 설정 로드 및 주입된 어댑터 바인딩
         await self.portfolio_manager.load_exchange_configs()
-        exchange_config = self.portfolio_manager.exchange_configs.get(exchange, {})
+        exchange_config = self.portfolio_manager.exchange_configs.get(exchange_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
         
         self.virtual_executor = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
         self.portfolio_manager.executors['simulation'] = self.virtual_executor
-        self.portfolio_manager.executors[f"simulation_{exchange.lower()}"] = self.virtual_executor
+        self.portfolio_manager.executors[f"simulation_{exchange_id.lower()}"] = self.virtual_executor
 
         # 3. 백테스트용 임시 포트폴리오 생성
-        # ID 예: backtest_upbit_BTC_1716382103
         timestamp_sec = int(time.time())
-        portfolio_id = f"backtest_{exchange}_{symbol}_{timestamp_sec}"
+        portfolio_id = f"backtest_{exchange_id}_{symbol}_{timestamp_sec}"
         
         # 전략 메타데이터를 백테스트 포트폴리오 명칭에 포함
         strategies_used = [name for name, cfg in strategy_configs.items() if cfg.get('enabled', False)]
         strategies_str = ", ".join(strategies_used) if strategies_used else "No Active Strategy"
-        portfolio_name = f"백테스트: {exchange}-{symbol} ({strategies_str})"
+        portfolio_name = f"백테스트: {exchange_id}-{symbol} ({strategies_str})"
         
         portfolio = Portfolio(
             portfolio_id=portfolio_id, 
             name=portfolio_name, 
-            initial_cash=initial_cash, 
-            exchange_id=exchange,
             portfolio_type='simulationR'
         )
+        portfolio.exchange_cash[exchange_id.lower()] = float(initial_cash)
+        portfolio.exchange_initial_cash[exchange_id.lower()] = float(initial_cash)
         self.portfolio_manager.add_portfolio(portfolio)
         # 백테스트 틱 리플레이 도중 발생하는 주문의 외래 키(orders_history -> portfolios) 제약 충족을 위해 사전 저장
         await self.portfolio_manager.save_to_db(portfolio_id)
@@ -101,7 +100,7 @@ class BacktestEngine:
             return {"status": "error", "message": "활성화된 전략이 설정되어 있지 않습니다."}
 
         # 5. TradeEngine 가동
-        engine = TradeEngine(exchange, symbol, active_strategies)
+        engine = TradeEngine(exchange_id, symbol, active_strategies)
         proxy_manager = BacktestPortfolioManagerProxy(self.portfolio_manager, portfolio_id)
 
         # 6. 리플레이 루프 구동
@@ -187,7 +186,7 @@ class BacktestEngine:
 
     async def run_multi(
         self,
-        exchange: str,
+        exchange_id: str,
         symbols: List[str],
         start_date: int,  # timestamp ms
         end_date: int,    # timestamp ms
@@ -202,15 +201,15 @@ class BacktestEngine:
         """
         # 1. 대상 틱 데이터를 데이터베이스에서 일괄 조회하고 시간 순서대로 정렬
         query = (
-            "SELECT exchange, symbol, trade_timestamp, trade_price, trade_volume, ask_bid "
+            "SELECT exchange_id, symbol, trade_timestamp, trade_price, trade_volume, ask_bid "
             "FROM trades "
             "WHERE trade_timestamp BETWEEN ? AND ?"
         )
         params = [start_date, end_date]
         
-        if exchange and exchange != "all":
-            query += " AND exchange = ?"
-            params.append(exchange)
+        if exchange_id and exchange_id != "all":
+            query += " AND exchange_id = ?"
+            params.append(exchange_id)
             
         if symbols:
             placeholders = ",".join(["?"] * len(symbols))
@@ -235,8 +234,8 @@ class BacktestEngine:
         # 3. 조회된 틱 데이터로부터 실제 데이터가 존재하는 종목 조합(pairs) 추출
         seen_pairs = {}
         for row in rows:
-            seen_pairs[(row["exchange"], row["symbol"])] = True
-        pairs = [{"exchange": ex, "symbol": sym} for ex, sym in seen_pairs.keys()]
+            seen_pairs[(row["exchange_id"], row["symbol"])] = True
+        pairs = [{"exchange_id": ex, "symbol": sym} for ex, sym in seen_pairs.keys()]
 
         # 4. 백테스트용 통합 임시 포트폴리오 생성
         timestamp_sec = int(time.time())
@@ -256,8 +255,6 @@ class BacktestEngine:
         portfolio = Portfolio(
             portfolio_id=portfolio_id,
             name=portfolio_name,
-            initial_cash=total_initial_cash,
-            exchange_id="all",
             portfolio_type='simulationR'
         )
         self.portfolio_manager.add_portfolio(portfolio)
@@ -269,21 +266,22 @@ class BacktestEngine:
         if isinstance(initial_cash, dict):
             exchange_cash = {ex.lower(): float(val) for ex, val in initial_cash.items()}
         else:
-            ex_set = set(p["exchange"] for p in pairs)
+            ex_set = set(p["exchange_id"] for p in pairs)
             if ex_set:
                 each_cash = initial_cash / len(ex_set)
                 exchange_cash = {ex.lower(): each_cash for ex in ex_set}
             else:
-                ex_name = exchange if exchange != "all" else "upbit"
+                ex_name = exchange_id if exchange_id != "all" else "upbit"
                 exchange_cash = {ex_name.lower(): initial_cash}
         
         portfolio.exchange_cash = exchange_cash.copy()
+        portfolio.exchange_initial_cash = exchange_cash.copy()
 
         # 5. 각 종목별 TradeEngine 구성
         engines = {}
         
-        def get_or_create_engine(exchange: str, symbol: str):
-            key = f"{exchange}_{symbol}"
+        def get_or_create_engine(ex_id: str, symbol: str):
+            key = f"{ex_id}_{symbol}"
             if key not in engines:
                 # 활성 전략들을 이 종목 전용으로 독립 인스턴스화
                 active_strategies = []
@@ -292,19 +290,19 @@ class BacktestEngine:
                         strat_inst = StrategyRegistry.create_strategy(strat_name, cfg.get('params', {}))
                         if strat_inst:
                             active_strategies.append(strat_inst)
-                engines[key] = TradeEngine(exchange, symbol, active_strategies)
+                engines[key] = TradeEngine(ex_id, symbol, active_strategies)
             return engines[key]
 
         proxy_manager = BacktestPortfolioManagerProxy(self.portfolio_manager, portfolio_id)
         
         # 6. 종목별 캔들 히스토리 수집용 맵
-        candle_histories = {f"{p['exchange']}_{p['symbol']}": [] for p in pairs}
+        candle_histories = {f"{p['exchange_id']}_{p['symbol']}": [] for p in pairs}
         
         # 6. 리플레이 루프 구동 (시간 정렬된 단일 스트림)
         last_prices = {}
         
         for row in rows:
-            ex = row["exchange"]
+            ex = row["exchange_id"]
             sym = row["symbol"]
             last_prices[sym] = row["trade_price"]
             
@@ -352,8 +350,6 @@ class BacktestEngine:
         # 8. 백테스트 결과를 portfolios, positions, orders_history에 영구 적재
         await self.portfolio_manager.save_to_db(portfolio_id)
 
-        # orders_history 저장은 process_signal 실행 중 자동으로 수행됩니다.
-
         # 적용전략과 사용 파라미터 요약 생성
         applied_info = []
         if engines:
@@ -367,7 +363,7 @@ class BacktestEngine:
         # 9. 각 종목별 개별 상세 결과 빌드
         results_by_symbol = []
         for p in pairs:
-            ex = p["exchange"]
+            ex = p["exchange_id"]
             sym = p["symbol"]
             key = f"{ex}_{sym}"
             
@@ -381,7 +377,7 @@ class BacktestEngine:
                     "timestamp": h["timestamp"],
                     "reason": h.get("reason", "")
                 }
-                for h in portfolio.history if h["symbol"] == sym and h["exchange"].lower() == ex.lower()
+                for h in portfolio.history if h["symbol"] == sym and h["exchange_id"].lower() == ex.lower()
             ]
             
             trade_count = len(symbol_trades)
@@ -430,14 +426,14 @@ class BacktestEngine:
                 if isinstance(initial_cash, dict):
                     symbol_init_cash = initial_cash.get(ex_lower, 0.0)
                 else:
-                    ex_set = set(item["exchange"] for item in pairs)
+                    ex_set = set(item["exchange_id"] for item in pairs)
                     symbol_init_cash = initial_cash / len(ex_set) if ex_set else initial_cash
 
                 from src.engine.utils.stock_mapper import stock_mapper
                 kor_name = stock_mapper.get_name(ex_lower, sym)
 
                 results_by_symbol.append({
-                    "exchange": ex,
+                    "exchange_id": ex,
                     "symbol": sym,
                     "korean_name": kor_name,
                     "portfolio_id": portfolio_id,
@@ -457,12 +453,12 @@ class BacktestEngine:
         if isinstance(initial_cash, dict):
             ex_initial_cash_map = {ex.lower(): float(val) for ex, val in initial_cash.items()}
         else:
-            ex_set = set(p["exchange"] for p in pairs)
+            ex_set = set(p["exchange_id"] for p in pairs)
             if ex_set:
                 each_cash = initial_cash / len(ex_set)
                 ex_initial_cash_map = {ex.lower(): each_cash for ex in ex_set}
             else:
-                ex_name = exchange if exchange != "all" else "upbit"
+                ex_name = exchange_id if exchange_id != "all" else "upbit"
                 ex_initial_cash_map = {ex_name.lower(): initial_cash}
 
         # 10. 거래소별/전체 요약 지표 정밀 집계
@@ -472,7 +468,7 @@ class BacktestEngine:
         ex_trade_counts = {ex.lower(): 0 for ex in ex_initial_cash_map.keys()}
         
         for r in results_by_symbol:
-            ex_lower = r["exchange"].lower()
+            ex_lower = r["exchange_id"].lower()
             if ex_lower not in ex_profit_sums:
                 ex_profit_sums[ex_lower] = 0.0
                 ex_fee_sums[ex_lower] = 0.0
@@ -516,5 +512,3 @@ class BacktestEngine:
             },
             "results": results_by_symbol
         }
-
-

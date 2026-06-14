@@ -14,6 +14,13 @@ class MomentumSpikeStrategy(BaseStrategy):
         self.in_position = False
         self.peak_price = 0.0
         self.buy_price = 0.0
+        # 파라미터 매핑 및 안전한 Fallback 기본값 지정
+        self.lookback_periods = int(self.params.get('lookback_periods', 20))
+        self.vol_multiplier = float(self.params.get('vol_multiplier', 3.0))
+        self.freq_multiplier = float(self.params.get('freq_multiplier', 2.0))
+        self.buy_ratio_threshold = float(self.params.get('buy_ratio_threshold', 0.7))
+        self.price_change_threshold = float(self.params.get('price_change_threshold', 0.3))
+        self.trailing_stop_pct = float(self.params.get('trailing_stop_pct', 1.5))
 
     @classmethod
     def get_metadata(cls) -> Dict:
@@ -55,7 +62,7 @@ class MomentumSpikeStrategy(BaseStrategy):
             return StrategyResult("HOLD")
 
         # 2. 매수 로직 (포지션이 없는 경우)
-        lookback = int(self.params.get('lookback_periods', 20))
+        lookback = self.lookback_periods
         if len(candles) < lookback:
             raise IndicatorNotReady(f"Insufficient candles for MomentumSpikeStrategy. Required: {lookback}, Got: {len(candles)}")
 

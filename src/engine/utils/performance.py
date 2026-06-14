@@ -30,7 +30,7 @@ def calculate_performance_metrics(history: List[Dict[str, Any]], initial_cash: f
     sorted_history = sorted(history, key=lambda x: x.get('timestamp', 0))
     
     for tx in sorted_history:
-        ex = tx.get('exchange', '').lower()
+        ex = (tx.get('exchange_id') or tx.get('exchange') or '').lower()
         sym = tx.get('symbol', '')
         side = tx.get('side', '')
         price = tx.get('price', 0.0)
@@ -85,7 +85,7 @@ def calculate_performance_metrics(history: List[Dict[str, Any]], initial_cash: f
     # 간이 손익 매칭 (SELL 발생 시, 해당 포지션의 평단가와 비교)
     temp_positions = {}  # (exchange, symbol) -> (quantity, avg_price)
     for tx in sorted_history:
-        ex = tx.get('exchange', '').lower()
+        ex = (tx.get('exchange_id') or tx.get('exchange') or '').lower()
         sym = tx.get('symbol', '')
         side = tx.get('side', '')
         price = tx.get('price', 0.0)

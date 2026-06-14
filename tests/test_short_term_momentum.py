@@ -19,7 +19,7 @@ except ImportError:
 
 def make_candle(close: float, timestamp: int, high: float = None, low: float = None, open_val: float = None, volume: float = 100.0) -> Candle:
     return Candle(
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         interval=60,
         timestamp=timestamp,
@@ -36,12 +36,12 @@ def make_candle(close: float, timestamp: int, high: float = None, low: float = N
 
 def setup_context_with_candles(candles: list, strategy_params: dict) -> tuple[MarketDataContext, StrategyContext]:
     # 헬퍼 함수: MarketDataContext에 캔들을 밀어넣고 최신 캔들 상태의 Context를 생성합니다.
-    mdc = MarketDataContext(exchange="upbit", symbol="BTC", interval=60, max_len=100)
+    mdc = MarketDataContext(exchange_id="upbit", symbol="BTC", interval=60, max_len=100)
     for c in candles:
         mdc.add_candle(c)
     
     context = StrategyContext(
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         interval=60,
         market_data_context=mdc,

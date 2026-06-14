@@ -241,7 +241,7 @@ async def test_universe_resource_guards_and_logging_rules():
         price_features={"close": 50000.0, "returns": 0.01, "volatility": 0.2},
         liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 10000.0, "tps": 0.5, "idle_time": 5.0},
         regime_features={"regime_index": 1.0},
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         market_type="crypto",
         is_fresh=True
@@ -278,7 +278,7 @@ async def test_universe_resource_guards_and_logging_rules():
         "fallback_risk_score": 0.2,
         "final_promotion_score": 0.85,
         "shadow_risk_score": 0.1,
-        "exchange": "upbit",
+        "exchange_id": "upbit",
         "market_type": "crypto"
     })
     
@@ -296,7 +296,7 @@ async def test_universe_resource_guards_and_logging_rules():
     
     await repo.insert_system_event("PROMOTION_COOLDOWN_BLOCKED", "BTC", "재승격 쿨다운 미경과")
     await repo.upsert_universe_guard_state(
-        exchange="upbit",
+        exchange_id="upbit",
         market_type="crypto",
         symbol="BTC",
         status="WATCHED",
@@ -317,7 +317,7 @@ async def test_universe_resource_guards_and_logging_rules():
     # 동일 사유이므로 system_events 추가 없음, count 누적만 수행
     new_count = prev_state["blocked_count"] + 1
     await repo.upsert_universe_guard_state(
-        exchange="upbit",
+        exchange_id="upbit",
         market_type="crypto",
         symbol="BTC",
         status="WATCHED",
@@ -346,7 +346,7 @@ async def test_universe_resource_guards_and_logging_rules():
     service.limit_blocked_count += 1
     await repo.insert_system_event("PROMOTION_LIMIT_BLOCKED", "BTC", "일일 한도 초과")
     await repo.upsert_universe_guard_state(
-        exchange="upbit",
+        exchange_id="upbit",
         market_type="crypto",
         symbol="BTC",
         status="WATCHED",
@@ -369,5 +369,5 @@ async def test_universe_resource_guards_and_logging_rules():
     metrics = await repo.get_girs_shadow_metrics(100)
     assert len(metrics) > 0
     for m in metrics:
-        assert m["exchange"] != "UNKNOWN"
+        assert m["exchange_id"] != "UNKNOWN"
         assert m["market_type"] != "UNKNOWN"

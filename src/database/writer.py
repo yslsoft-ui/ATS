@@ -78,7 +78,7 @@ class DatabaseWriter:
                             while len(buffer) < 500:
                                 item = await asyncio.wait_for(self.db_queue.get(), timeout=1.0)
                                 buffer.append((
-                                    item.get('exchange', 'upbit'),
+                                    item.get('exchange_id', 'upbit'),
                                     item.get('market', 'KRW'),
                                     item['code'],
                                     item['trade_price'],
@@ -142,7 +142,7 @@ class DatabaseWriter:
     async def _write_ticks_to_db(self, db, buffer):
         """틱 리스트를 실제 DB에 벌크 삽입하고 커밋합니다 (재시도 지원)."""
         await db.executemany(
-            "INSERT INTO trades (exchange, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
+            "INSERT INTO trades (exchange_id, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", 
             buffer
         )
         await db.commit()
@@ -154,11 +154,11 @@ class DatabaseWriter:
             return
         query = """
         INSERT OR REPLACE INTO candles 
-        (exchange, symbol, interval, timestamp, open, high, low, close, volume) 
+        (exchange_id, symbol, interval, timestamp, open, high, low, close, volume) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = [
-            (c.exchange, c.symbol, c.interval, c.timestamp, c.open, c.high, c.low, c.close, c.volume)
+            (c.exchange_id, c.symbol, c.interval, c.timestamp, c.open, c.high, c.low, c.close, c.volume)
             for c in candles_to_write
         ]
         await db_conn.executemany(query, params)
@@ -175,7 +175,7 @@ class DatabaseWriter:
                 while not self.db_queue.empty():
                     item = self.db_queue.get_nowait()
                     ticks_to_write.append((
-                        item.get('exchange', 'upbit'),
+                        item.get('exchange_id', 'upbit'),
                         item.get('market', 'KRW'),
                         item['code'],
                         item['trade_price'],
@@ -188,7 +188,7 @@ class DatabaseWriter:
 
                 if ticks_to_write:
                     await db.executemany(
-                        "INSERT INTO trades (exchange, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT INTO trades (exchange_id, market, symbol, trade_price, trade_volume, ask_bid, trade_timestamp, sequential_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         ticks_to_write
                     )
                     logger.info(f"[DatabaseWriter] 종료 가드: 잔여 틱 {len(ticks_to_write)}개 최종 영속화 완수")
