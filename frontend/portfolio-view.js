@@ -47,11 +47,14 @@ const PortfolioView = {
                 profitRate = pos.avg_price > 0 ? ((currentPrice - pos.avg_price) / pos.avg_price * 100).toFixed(2) : 0;
             }
             
+            if (!pos.exchange_id) {
+                throw new Error(`Invalid position: exchange_id is missing for symbol ${pos.symbol}`);
+            }
             const rateClass = profitRate >= 0 ? 'bull' : 'bear';
-            const exBadge = pos.exchange ? `<span class="ctx-badge" style="font-size: 0.65rem; padding: 2px 4px; margin-left: 5px; vertical-align: middle; background: rgba(148, 163, 184, 0.15);">${pos.exchange.toUpperCase()}</span>` : '';
+            const exBadge = `<span class="ctx-badge" style="font-size: 0.65rem; padding: 2px 4px; margin-left: 5px; vertical-align: middle; background: rgba(148, 163, 184, 0.15);">${pos.exchange_id.toUpperCase()}</span>`;
 
             const displaySymbol = pos.symbol.replace(/^(KRW-|UPB-|KIS-)/, '');
-            const coinInfo = marketData.find(c => c.market === displaySymbol && (!pos.exchange || c.exchange === pos.exchange));
+            const coinInfo = marketData.find(c => c.market === displaySymbol && c.exchange === pos.exchange_id);
             const koreanName = (coinInfo && coinInfo.korean_name) || pos.korean_name || '';
             const tooltipAttr = koreanName ? `title="${koreanName}"` : '';
             const tooltipStyle = koreanName ? 'cursor:help; border-bottom: 1px dashed rgba(148,163,184,0.4);' : '';
@@ -69,7 +72,10 @@ const PortfolioView = {
             // 행 클릭 시 상세 모달 열기
             tr.onclick = () => {
                 if (typeof showAssetDetails === 'function') {
-                    showAssetDetails(pos.exchange || (pos.symbol.includes('KIS') ? 'kis' : 'upbit'), pos.symbol);
+                    if (!pos.exchange_id) {
+                        throw new Error(`Invalid position: exchange_id is missing for symbol ${pos.symbol}`);
+                    }
+                    showAssetDetails(pos.exchange_id, pos.symbol);
                 }
             };
             
@@ -122,16 +128,21 @@ const PortfolioView = {
         });
     },
 
-    /**
-     * 자산 상세 모달 내 데이터를 갱신합니다.
-     */
     updateModalContent(portfolioData, exchange, symbol, marketData = []) {
         if (!portfolioData) return;
+        if (!exchange) {
+            throw new Error(`Invalid parameter: exchange is missing for symbol ${symbol}`);
+        }
         
-        const pos = portfolioData.positions.find(p => p.exchange === exchange && p.symbol === symbol);
+        const pos = portfolioData.positions.find(p => {
+            if (!p.exchange_id) {
+                throw new Error(`Invalid position in portfolio: exchange_id is missing for symbol ${p.symbol}`);
+            }
+            return p.exchange_id.toLowerCase() === exchange.toLowerCase() && p.symbol === symbol;
+        });
         if (!pos) return;
 
-        const coin = marketData.find(c => c.exchange === exchange && c.market === symbol);
+        const coin = marketData.find(c => c.exchange && c.exchange.toLowerCase() === exchange.toLowerCase() && c.market === symbol);
         const currentPrice = coin ? coin.trade_price : pos.avg_price;
         const profitRate = ((currentPrice - pos.avg_price) / pos.avg_price * 100).toFixed(2);
         const pnl = (currentPrice - pos.avg_price) * pos.quantity;

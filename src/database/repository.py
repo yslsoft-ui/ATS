@@ -2075,7 +2075,7 @@ class SqliteTradingRepository(BaseTradingRepository):
             for pos_key, pos in portfolio.positions.items():
                 symbol = pos.symbol
                 if self.system and hasattr(self.system, 'get_latest_price'):
-                    price_info = self.system.get_latest_price(pos.exchange, symbol)
+                    price_info = self.system.get_latest_price(pos.exchange_id, symbol)
                     if price_info and price_info.get("trade_price"):
                         current_prices[symbol] = price_info["trade_price"]
                 if symbol not in current_prices:

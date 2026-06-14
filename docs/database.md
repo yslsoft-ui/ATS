@@ -29,7 +29,7 @@
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 체결 레코드 순번 |
-| **exchange** | TEXT | - | 거래소 ID (`upbit`, `bithumb`, `kis`) |
+| **exchange_id** | TEXT | - | 거래소 ID (`upbit`, `bithumb`, `kis`) |
 | **market** | TEXT | - | 세부 시장 (예: `KRW`, `BTC` / `KRX`, `NXT`) |
 | **symbol** | TEXT | - | 순수 자산 심볼 (예: `BTC`, `005930`) |
 | **trade_price** | REAL | - | 체결 가격 |
@@ -161,7 +161,7 @@
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
-| **exchange** (PK) | TEXT | - | 거래소 ID |
+| **exchange_id** (PK) | TEXT | - | 거래소 ID |
 | **symbol** (PK, FK) | TEXT | REFERENCES asset_master(symbol) ON UPDATE CASCADE | 자산 심볼 |
 | **is_active** | INTEGER | DEFAULT 1 | 현재 수집 및 전략 감시 활성화 여부 (0: 비활성, 1: 활성) |
 | **is_delisted** | INTEGER | DEFAULT 0 | 상장 폐지 여부 (1: 상장폐지) |
@@ -212,11 +212,11 @@
 
 1. **`idx_trades_exch_sym_time`**
    - 대상 테이블: `trades`
-   - 인덱스 구성 컬럼: `(exchange, symbol, trade_timestamp DESC)`
+   - 인덱스 구성 컬럼: `(exchange_id, symbol, trade_timestamp DESC)`
    - 목적: 특정 종목의 최근 체결 틱을 백테스트 엔진이나 캔들 복원기에서 시간 내림차순으로 매우 빠르게 조회하기 위함. 특히 1초봉 등 초 단위 저분봉 데이터를 백엔드에서 실시간 온디맨드 즉석 조립(Aggregation)하여 제공할 때, 대량의 틱 데이터를 30분 단위(13ms 수준)로 초고속 조회 및 가공하는 데 핵심적인 역할을 수행함.
 2. **`idx_candles_exch_sym_time`**
    - 대상 테이블: `candles`
-   - 인덱스 구성 컬럼: `(exchange, symbol, interval, timestamp DESC)`
+   - 인덱스 구성 컬럼: `(exchange_id, symbol, interval, timestamp DESC)`
    - 목적: 대시보드 차트 요청 시 최근 N개의 캔들(SMA, RSI 연산용) 데이터를 효율적으로 반환하기 위함.
 3. **`idx_orders_history_portfolio_id`**
    - 대상 테이블: `orders_history`
@@ -228,7 +228,7 @@
    - 목적: 포트폴리오의 실자산 보유 비중 현황을 조회하기 위함.
 5. **`idx_exchange_assets_active`**
    - 대상 테이블: `exchange_assets`
-   - 인덱스 구성 컬럼: `(exchange, is_active)`
+   - 인덱스 구성 컬럼: `(exchange_id, is_active)`
    - 목적: 데몬 구동 시 활성화된 수집 자산 종목들만 즉시 추출하여 수집 세션에 주입하기 위함.
 
 ---
@@ -482,11 +482,11 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
 
 1. **`idx_trades_exch_sym_time`**
    - 대상 테이블: `trades`
-   - 인덱스 구성 컬럼: `(exchange, symbol, trade_timestamp DESC)`
+   - 인덱스 구성 컬럼: `(exchange_id, symbol, trade_timestamp DESC)`
    - 목적: 특정 종목의 최근 체결 틱을 백테스트 엔진이나 캔들 복원기에서 시간 내림차순으로 매우 빠르게 조회하기 위함. 특히 1초봉 등 초 단위 저분봉 데이터를 백엔드에서 실시간 온디맨드 즉석 조립(Aggregation)하여 제공할 때, 대량의 틱 데이터를 30분 단위(13ms 수준)로 초고속 조회 및 가공하는 데 핵심적인 역할을 수행함.
 2. **`idx_candles_exch_sym_time`**
    - 대상 테이블: `candles`
-   - 인덱스 구성 컬럼: `(exchange, symbol, interval, timestamp DESC)`
+   - 인덱스 구성 컬럼: `(exchange_id, symbol, interval, timestamp DESC)`
    - 목적: 대시보드 차트 요청 시 최근 N개의 캔들(SMA, RSI 연산용) 데이터를 효율적으로 반환하기 위함.
 3. **`idx_orders_history_portfolio_id`**
    - 대상 테이블: `orders_history`
@@ -498,7 +498,7 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
    - 목적: 포트폴리오의 실자산 보유 비중 현황을 조회하기 위함.
 5. **`idx_exchange_assets_active`**
    - 대상 테이블: `exchange_assets`
-   - 인덱스 구성 컬럼: `(exchange, is_active)`
+   - 인덱스 구성 컬럼: `(exchange_id, is_active)`
    - 목적: 데몬 구동 시 활성화된 수집 자산 종목들만 즉시 추출하여 수집 세션에 주입하기 위함.
 6. **`idx_strategy_param_hist`**
    - 대상 테이블: `strategy_parameter_history`

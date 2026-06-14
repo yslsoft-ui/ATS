@@ -495,7 +495,10 @@ async function loadPortfolio(force = false) {
         if (!isBacktest && state.ws && state.ws.readyState === WebSocket.OPEN) {
             const activeSymbols = new Set([`${state.currentExchange}:${state.currentSymbol}`]);
             positions.forEach(pos => {
-                const exch = pos.exchange || 'upbit';
+                if (!pos.exchange_id) {
+                    throw new Error(`Invalid position: exchange_id is missing for symbol ${pos.symbol}`);
+                }
+                const exch = pos.exchange_id;
                 activeSymbols.add(`${exch}:${pos.symbol}`);
             });
             activeSymbols.forEach(token => {

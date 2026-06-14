@@ -13,7 +13,7 @@
 | 컬럼명 | 데이터 타입 | 설명 |
 | :--- | :--- | :--- |
 | `id` | INTEGER PRIMARY KEY | 내부 식별자 (Auto Increment) |
-| `exchange` | TEXT | 거래소 명칭 (예: UPBIT, BINANCE) |
+| `exchange_id` | TEXT | 거래소 식별자 (예: upbit, kis, bithumb) |
 | `symbol` | TEXT | 종목 코드 (예: KRW-BTC, BTCUSDT) |
 | `trade_price` | REAL | 체결 가격 |
 | `trade_volume` | REAL | 체결 수량 |
@@ -23,10 +23,10 @@
 | `created_at` | DATETIME | DB 저장 시각 |
 
 - **인덱스 설계**:
-  - `CREATE INDEX idx_exch_sym_time ON trades (exchange, symbol, trade_timestamp);`
+  - `CREATE INDEX idx_trades_exch_sym_time ON trades (exchange_id, symbol, trade_timestamp DESC);`
   - 사유: 거래소별/종목별 시간 범위 조회를 위한 인덱스 최적화.
 
-> ⚠️ **참고**: `src/server/main.py`의 간이 CREATE문은 `exchange`, `sequential_id`, `created_at` 컬럼이 누락된 축소 스키마를 사용합니다. 정식 스키마 초기화 시 `schema.py`를 사용하세요.
+> ⚠️ **참고**: `src/server/main.py`의 간이 CREATE문은 `exchange_id`, `sequential_id`, `created_at` 컬럼이 누락된 축소 스키마를 사용합니다. 정식 스키마 초기화 시 `schema.py`를 사용하세요.
 
 ### 1.2. `orderbooks` 테이블
 
@@ -35,7 +35,7 @@
 | 컬럼명 | 데이터 타입 | 설명 |
 | :--- | :--- | :--- |
 | `id` | INTEGER PRIMARY KEY | 내부 식별자 |
-| `exchange` | TEXT | 거래소 명칭 |
+| `exchange_id` | TEXT | 거래소 식별자 |
 | `symbol` | TEXT | 종목 코드 |
 | `timestamp` | INTEGER | 호가 생성 시각 (ms) |
 | `bids` | TEXT | 매수 호가 및 잔량 데이터 (JSON 구조: `[{"price": 100, "size": 1.5}, ...]`) |
@@ -43,7 +43,7 @@
 | `created_at` | DATETIME | DB 저장 시각 |
 
 - **인덱스 설계**:
-  - `CREATE INDEX idx_ob_exch_sym_time ON orderbooks (exchange, symbol, timestamp);`
+  - `CREATE INDEX idx_ob_exch_sym_time ON orderbooks (exchange_id, symbol, timestamp DESC);`
 
 ## 2. 수집기 아키텍처 (Collector Architecture)
 

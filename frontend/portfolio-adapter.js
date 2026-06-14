@@ -54,7 +54,10 @@ const PortfolioAdapter = {
 
         // 1. 보유 포지션 그룹화
         portfolioData.positions.forEach((pos, idx) => {
-            const ex = pos.exchange ? pos.exchange.toLowerCase() : 'upbit';
+            if (!pos.exchange_id) {
+                throw new Error(`Invalid position: exchange_id is missing for symbol ${pos.symbol}`);
+            }
+            const ex = pos.exchange_id.toLowerCase();
             if (!exchangeGroups[ex]) {
                 exchangeGroups[ex] = {
                     exchange: ex,
