@@ -50,7 +50,7 @@ class ConnectionManager:
     async def broadcast(self, message: dict):
         """해당 종목을 구독 중인 클라이언트에게만 O(1) 속도로 선별 전송합니다."""
         symbol = message.get('code', '')
-        exchange = message.get('exchange', 'upbit')
+        exchange = message.get('exchange_id', message.get('exchange', 'upbit'))
         key = (exchange, symbol)
         
         targets = self.subscriptions.get(key, set())

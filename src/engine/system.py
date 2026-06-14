@@ -170,7 +170,7 @@ class TradingSystem:
     async def _handle_market_data(self, data: dict):
         """수집된 시장 데이터를 외부로 브로드캐스트하고 캐싱합니다."""
         if data.get('type') == 'tick':
-            ex = data.get('exchange', 'upbit')
+            ex = data.get('exchange_id', 'upbit')
             sym = data.get('code', '')
             key = f"{ex}:{sym}"
             

@@ -230,7 +230,7 @@ function processTick(tick) {
     }
 
     if (!state.isLoaded) return;
-    if (tick.exchange !== state.currentExchange || tick.code !== state.currentSymbol) return; 
+    if (tick.exchange_id !== state.currentExchange || tick.code !== state.currentSymbol) return; 
 
     // --- 실시간 틱 기반 캔들 조립 및 보조지표 점진 연산 ---
     const timestamp = Math.floor(tick.trade_timestamp / 1000);

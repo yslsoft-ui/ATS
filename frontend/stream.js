@@ -98,7 +98,7 @@ const DataStream = (() => {
 
         const msg = JSON.stringify({
             subscribe: symbol,
-            exchange: exchange
+            exchange_id: exchange
         });
         
         console.log(`[DataStream] 실시간 구독 메시지 전송: ${symbol} (${exchange})`);
