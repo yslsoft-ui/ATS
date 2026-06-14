@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import pytest
-from src.engine.portfolio import Portfolio, Position
+from src.engine.portfolio import Portfolio, Position, get_integer_portfolio_id
 from src.engine.performance_analyzer import PerformanceAnalyzer
 
 
@@ -25,7 +25,7 @@ def test_performance_analyzer_empty_portfolio():
     )
 
     assert report["status"] == "success"
-    assert report["portfolio_id"] == "test_empty"
+    assert report["portfolio_id"] == get_integer_portfolio_id("test_empty")
     assert report["initial_cash"] == 10000000.0
     assert report["cash"] == 10000000.0
     assert report["total_value"] == 10000000.0

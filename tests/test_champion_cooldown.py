@@ -9,7 +9,7 @@ import pytest
 import aiosqlite
 from src.database.repository import SqliteTradingRepository, InMemoryTradingRepository, ChampionCooldownBlockedError
 from src.engine.auto_scheduler import HybridAutoApplyScheduler
-from src.engine.portfolio import Portfolio, PortfolioManager, OrderExecutor
+from src.engine.portfolio import Portfolio, PortfolioManager, OrderExecutor, get_integer_portfolio_id
 from src.engine.girs_types import CandidateProposal
 
 DB_FILE = "data/test_champion_cooldown.db"
@@ -238,12 +238,14 @@ async def test_auto_scheduler_cooldown_logging():
     
     now_ms = int(time.time()) * 1000
     
+    port_id = get_integer_portfolio_id("p1")
     # 1. 첫 번째 제안 승격 성공
     async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (?, 'p1', 'simulation')", (port_id,))
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (1, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
-        """)
+            VALUES (1, 'RSIStrategy', ?, 'PENDING', 'NONE', '{"rsi_window": 14}', '{"rsi_window": 15}', 85)
+        """, (port_id,))
         await db.commit()
         
     await scheduler.repository.approve_proposal_atomic(1, now_ms)
@@ -252,13 +254,16 @@ async def test_auto_scheduler_cooldown_logging():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute("""
             INSERT INTO strategy_proposals (id, strategy_id, portfolio_id, status, outcome, proposed_params, original_params, confidence_score)
-            VALUES (2, 'RSIStrategy', 'p1', 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 85)
-        """)
+            VALUES (2, 'RSIStrategy', ?, 'PENDING', 'NONE', '{"rsi_window": 12}', '{"rsi_window": 14}', 85)
+        """, (port_id,))
         await db.commit()
         
     # 스케줄러에 제안 2 감지 통보 -> 디바운스 대기 후 배치 승인 돌면서 쿨다운 에러 유발
     await scheduler.notify_proposal_created(2)
-    await asyncio.sleep(0.3) # 디바운스 0.1초 이상 대기
+    if scheduler._debounce_task:
+        await scheduler._debounce_task
+    else:
+        await asyncio.sleep(0.3)
     
     # 3. 쿨다운 차단 이벤트가 데이터베이스에 적재되었는지 확인
     events = await scheduler.repository.get_system_events(limit=5)

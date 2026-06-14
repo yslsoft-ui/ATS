@@ -149,9 +149,10 @@ async def test_market_cleanup_and_idempotency():
     # 이 평가가 PENDING 이라면, 35일 전의 candles는 clean_old_candles 시 삭제 대상이어야 하지만 보호되어야 함.
     async with get_db_conn(db_path) as db:
         # 외래 키 제약을 위해 strategy_proposals 에 mock 데이터 선제 주입
+        await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (999, 'sim_port_rehearsal', 'simulation')")
         await db.execute("""
             INSERT INTO strategy_proposals (id, version, portfolio_id, strategy_id, status, outcome)
-            VALUES (999, 1, 'sim_port_rehearsal', 'BTC', 'PENDING', 'RUNNING')
+            VALUES (999, 1, 999, 'BTC', 'PENDING', 'RUNNING')
         """)
         # PENDING 평가를 하나 강제로 insert
         await db.execute("""

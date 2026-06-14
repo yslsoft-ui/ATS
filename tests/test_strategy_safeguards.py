@@ -5,6 +5,7 @@ import json
 import asyncio
 from src.database.schema import init_db
 from src.database.repository import SqliteTradingRepository
+from src.engine.portfolio import get_integer_portfolio_id
 
 TEST_DB_PATH = "tests/test_safeguards.db"
 
@@ -15,6 +16,15 @@ def setup_test_db():
     # asyncio.run을 동기적으로 감싸서 초기화 수행
     async def do_init():
         await init_db(TEST_DB_PATH)
+        # 테스트에 필요한 포트폴리오 사전 삽입 및 캐시 동기화
+        from src.engine.portfolio import get_integer_portfolio_id
+        from src.database.connection import get_db_conn
+        repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+        port_id = get_integer_portfolio_id("port_test")
+        async with get_db_conn(TEST_DB_PATH) as db:
+            await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (?, ?, 'simulation')", (port_id, "port_test"))
+            await db.commit()
+        await repo.sync_portfolio_id_cache()
     asyncio.run(do_init())
     
     # 전략 모듈 로딩 추가
@@ -66,15 +76,15 @@ async def test_adaptive_diversity():
         
         # portfolios 테이블에 대상 포트폴리오 시드 생성
         await db.execute('''
-            INSERT INTO portfolios (id, name, type)
+            INSERT OR IGNORE INTO portfolios (id, name, type)
             VALUES (?, ?, ?)
-        ''', ("port_test", "Test Portfolio", "simulated"))
+        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulated"))
         
         # portfolio_exchanges 테이블에 자금 시드 생성
         await db.execute('''
-            INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
+            INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
             VALUES (?, ?, ?, ?)
-        ''', ("port_test", "upbit", 10000000.0, 10000000.0))
+        ''', (get_integer_portfolio_id("port_test"), "upbit", 10000000.0, 10000000.0))
         
         # 30건 이상의 거래가 백테스트에서 수행되도록 가격이 요동치고 시간이 흘러가는 500건의 틱 데이터를 시드
         for i in range(500):
@@ -196,11 +206,11 @@ async def test_counterfactual_sampling_tracker():
         await db.execute('''
             INSERT OR IGNORE INTO portfolios (id, name, type)
             VALUES (?, ?, ?)
-        ''', ("port_test", "Test Portfolio", "simulated"))
+        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulated"))
         await db.execute('''
             INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
             VALUES (?, ?, ?, ?)
-        ''', ("port_test", "upbit", 10000000.0, 10000000.0))
+        ''', (get_integer_portfolio_id("port_test"), "upbit", 10000000.0, 10000000.0))
         
         await db.execute('''
             INSERT INTO trades (exchange_id, symbol, trade_price, trade_volume, ask_bid, trade_timestamp)

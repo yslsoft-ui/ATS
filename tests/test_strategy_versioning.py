@@ -6,6 +6,7 @@ import asyncio
 import pytest_asyncio
 from src.database.schema import init_db
 from src.database.repository import SqliteTradingRepository
+from src.engine.portfolio import get_integer_portfolio_id
 from src.engine.utils.performance import calculate_performance_metrics
 
 TEST_DB_PATH = "tests/test_versioning.db"
@@ -17,6 +18,18 @@ async def setup_test_db():
         os.remove(TEST_DB_PATH)
         
     await init_db(TEST_DB_PATH)
+    
+    # 테스트에 필요한 포트폴리오 사전 삽입 및 캐시 동기화
+    from src.engine.portfolio import get_integer_portfolio_id
+    from src.database.connection import get_db_conn
+    repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+    async with get_db_conn(TEST_DB_PATH) as db:
+        for p_id in ["sim_port_1", "sim_port_2", "sim_port_3", "sim_port_legacy", "port_policy_test", "loop_test_port"]:
+            port_id = get_integer_portfolio_id(p_id)
+            await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (?, ?, 'simulation')", (port_id, p_id))
+        await db.commit()
+    await repo.sync_portfolio_id_cache()
+    
     yield
     
     # 테스트 종료 후 정리
@@ -274,7 +287,7 @@ async def test_analyzer_and_shadow_backtest_with_regime():
     
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
     strategy_id = "RSIStrategy"
-    portfolio_id = "sim_port_2"
+    portfolio_id = get_integer_portfolio_id("sim_port_2")
     
     # 1. 캔들 및 거래소, 포트폴리오 셋업
     # exchange_assets 활성 종목 등록
@@ -537,7 +550,7 @@ async def test_strategy_execution_full_loop():
     from src.engine.portfolio import Portfolio, PortfolioManager
     
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
-    portfolio_id = "loop_test_port"
+    portfolio_id = get_integer_portfolio_id("loop_test_port")
     strategy_id = "loop_test_strategy"
     
     # 1. 테스트용 포트폴리오를 DB 및 자산 마스터에 등록
@@ -839,7 +852,7 @@ async def test_atomic_mutations_and_async_enrichment():
     from src.database.connection import get_db_conn
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH, champion_cooldown_days=0.0, champion_cooldown_trades=0)
     strategy_id = "RSIStrategy"
-    portfolio_id = "sim_port_atomic"
+    portfolio_id = get_integer_portfolio_id("sim_port_atomic")
     
     # 1. 자산 마스터 및 포트폴리오 등록
     async with get_db_conn(TEST_DB_PATH) as db:

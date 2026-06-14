@@ -98,6 +98,14 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
     repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
     config = MockConfig(TEST_DB_PATH)
     
+    # 테스트에 필요한 포트폴리오 사전 삽입 및 캐시 동기화
+    from src.engine.portfolio import get_integer_portfolio_id
+    port_id = get_integer_portfolio_id("port_baseline_test")
+    async with get_db_conn(TEST_DB_PATH) as db:
+        await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (?, ?, 'backtest')", (port_id, "port_baseline_test"))
+        await db.commit()
+    await repo.sync_portfolio_id_cache()
+    
     # 1. Mock Proposal 생성
     proposal_data = {
         "insight_id": None,

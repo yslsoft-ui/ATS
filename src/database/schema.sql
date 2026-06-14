@@ -36,9 +36,9 @@ CREATE TABLE IF NOT EXISTS orderbooks (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. portfolios (정규화 완료)
+-- 3. portfolios (INTEGER 키로 완전 개편)
 CREATE TABLE IF NOT EXISTS portfolios (
-    id TEXT PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     duration REAL DEFAULT 0.0,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
 
 -- 3.5. portfolio_exchanges
 CREATE TABLE IF NOT EXISTS portfolio_exchanges (
-    portfolio_id TEXT,
+    portfolio_id INTEGER,
     exchange_id TEXT,
     initial_cash REAL DEFAULT 0.0,
     cash REAL DEFAULT 0.0,
@@ -61,9 +61,9 @@ CREATE TABLE IF NOT EXISTS portfolio_exchanges (
     FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- 4. positions (명칭 통일 및 FK 제약)
+-- 4. positions (INTEGER portfolio_id 반영 및 FK 제약)
 CREATE TABLE IF NOT EXISTS positions (
-    portfolio_id TEXT,
+    portfolio_id INTEGER,
     symbol TEXT,
     quantity REAL DEFAULT 0,
     avg_price REAL DEFAULT 0,
@@ -75,10 +75,10 @@ CREATE TABLE IF NOT EXISTS positions (
     FOREIGN KEY (portfolio_id, exchange_id) REFERENCES portfolio_exchanges(portfolio_id, exchange_id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- 5. orders_history (exchange_id 명칭 통일)
+-- 5. orders_history (INTEGER portfolio_id 반영 및 FK 제약)
 CREATE TABLE IF NOT EXISTS orders_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    portfolio_id TEXT,
+    portfolio_id INTEGER,
     exchange_id TEXT,
     market TEXT,
     strategy_id TEXT,
@@ -222,12 +222,13 @@ CREATE TABLE IF NOT EXISTS market_regime_summaries (
 -- 16. strategy_insights
 CREATE TABLE IF NOT EXISTS strategy_insights (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    portfolio_id TEXT,
+    portfolio_id INTEGER,
     strategy_id TEXT,
     category TEXT NOT NULL,
     fact_summary TEXT NOT NULL,
     details_json TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 -- 17. strategy_proposals
@@ -236,7 +237,7 @@ CREATE TABLE IF NOT EXISTS strategy_proposals (
     insight_id INTEGER,
     proposal_group_id TEXT,
     version INTEGER,
-    portfolio_id TEXT,
+    portfolio_id INTEGER,
     strategy_id TEXT,
     status TEXT NOT NULL,
     outcome TEXT NOT NULL,
@@ -254,7 +255,8 @@ CREATE TABLE IF NOT EXISTS strategy_proposals (
     is_counterfactual_tracked INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (insight_id) REFERENCES strategy_insights(id) ON UPDATE CASCADE ON DELETE SET NULL
+    FOREIGN KEY (insight_id) REFERENCES strategy_insights(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 -- 18. proposal_evaluations
@@ -299,7 +301,7 @@ CREATE TABLE IF NOT EXISTS proposal_evaluations (
 CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp REAL NOT NULL,
-    proposal_id TEXT,
+    proposal_id INTEGER,
     strategy_id TEXT,
     model_risk_score REAL,
     fallback_risk_score REAL,
@@ -338,7 +340,7 @@ CREATE TABLE IF NOT EXISTS girs_shadow_metrics (
 CREATE TABLE IF NOT EXISTS promotion_event_log (
     global_sequence_no INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT UNIQUE NOT NULL,
-    proposal_id TEXT NOT NULL,
+    proposal_id INTEGER NOT NULL,
     sequence_no INTEGER NOT NULL,
     event_type TEXT NOT NULL,
     payload TEXT,
@@ -422,3 +424,6 @@ CREATE INDEX IF NOT EXISTS idx_proposal_eval_runs_prop ON proposal_evaluation_ru
 CREATE INDEX IF NOT EXISTS idx_universe_guard_state_status ON universe_guard_state (status);
 CREATE INDEX IF NOT EXISTS idx_universe_guard_state_lookup ON universe_guard_state (exchange_id, market_type, status);
 CREATE INDEX IF NOT EXISTS idx_ob_exch_sym_time ON orderbooks (exchange_id, symbol, timestamp DESC);
+
+-- live 포트폴리오 시드 데이터
+INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (1, '실거래 포트폴리오', 'live');

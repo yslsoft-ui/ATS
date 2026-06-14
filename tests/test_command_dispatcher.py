@@ -50,11 +50,13 @@ class FakeConfigManager:
             val = val[k]
         val[keys[-1]] = value
 
+from src.engine.portfolio import PortfolioDict
+
 class FakePortfolioManager:
     """PortfolioManager 역할을 하는 Fake 객체"""
     def __init__(self, db_path):
         self.db_path = db_path
-        self.portfolios = {}
+        self.portfolios = PortfolioDict()
         self.executors = {
             "simulation": FakeOrderExecutor()
         }

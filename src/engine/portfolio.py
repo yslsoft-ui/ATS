@@ -21,14 +21,50 @@ class Position:
     entry_time: float = 0.0
     peak_price: float = 0.0
 
+# 문자열 ID -> 정수 ID 매핑 캐시 (세션 내 영속)
+_portfolio_str_to_int_map = {}
+_portfolio_int_to_str_map = {}
+_portfolio_counter = 2000
+
+def seed_portfolio_id_map(string_id: str, integer_id: int):
+    """
+    외부(예: 데이터베이스 조회 결과)에서 문자열 식별자와 실제 정수 ID 간의 맵핑을 명시적으로 적재(시드)합니다.
+    """
+    global _portfolio_counter
+    _portfolio_str_to_int_map[string_id] = integer_id
+    _portfolio_int_to_str_map[integer_id] = string_id
+    if integer_id >= _portfolio_counter:
+        _portfolio_counter = integer_id + 1
+
+def get_integer_portfolio_id(portfolio_id: Any) -> int:
+    global _portfolio_counter
+    if portfolio_id is None:
+        raise ValueError("Portfolio ID cannot be None")
+    if str(portfolio_id).strip() == "":
+        raise ValueError("Portfolio ID cannot be empty")
+        
+    try:
+        return int(portfolio_id)
+    except:
+        pass
+    
+    str_id = str(portfolio_id)
+    if str_id not in _portfolio_str_to_int_map:
+        _portfolio_str_to_int_map[str_id] = _portfolio_counter
+        _portfolio_int_to_str_map[_portfolio_counter] = str_id
+        _portfolio_counter += 1
+        
+    return _portfolio_str_to_int_map[str_id]
+
 class Portfolio:
     """
     개별 포트폴리오의 자산 상태(현금, 포지션)를 관리합니다.
     """
-    def __init__(self, portfolio_id: str, name: str, portfolio_type: str = 'simulation', strategy_info: str = ""):
-        self.id = portfolio_id
+    def __init__(self, portfolio_id: Any, name: str, portfolio_type: str = 'simulation', strategy_info: str = ""):
+        self.id = get_integer_portfolio_id(portfolio_id)
         self.name = name
-        self.portfolio_type = portfolio_type
+        self.portfolio_type = 'live' if self.id == 1 or portfolio_type == 'live' else portfolio_type
+        self.portfolio_type = self.portfolio_type if hasattr(self, 'portfolio_type') else portfolio_type
         self.positions: Dict[Tuple[str, str], Position] = {} # Key is (exchange_id.lower(), symbol)
         self.exchange_cash: Dict[str, float] = {} # 거래소별 가용 자금 격리 관리 (Source of Truth)
         self.exchange_initial_cash: Dict[str, float] = {} # 거래소별 초기 설정 자금
@@ -533,6 +569,33 @@ class RealOrderExecutorAdapter(OrderExecutor):
                 logger.error(f"RealOrderExecutorAdapter: Exception placing KIS order: {e}")
                 return None
 
+class PortfolioDict(dict):
+    def get(self, key, default=None):
+        target_id = get_integer_portfolio_id(key)
+        res = super().get(target_id)
+        if res is not None:
+            return res
+        return default
+
+    def __getitem__(self, key):
+        target_id = get_integer_portfolio_id(key)
+        val = super().get(target_id)
+        if val is None:
+            raise KeyError(key)
+        return val
+
+    def __contains__(self, key):
+        target_id = get_integer_portfolio_id(key)
+        return super().__contains__(target_id)
+
+    def __setitem__(self, key, value):
+        target_id = get_integer_portfolio_id(key)
+        super().__setitem__(target_id, value)
+
+    def pop(self, key, default=None):
+        target_id = get_integer_portfolio_id(key)
+        return super().pop(target_id, default)
+
 class PortfolioManager:
     """
     여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다.
@@ -541,7 +604,7 @@ class PortfolioManager:
         self.db_path = db_path
         self.repository = repository or SqliteTradingRepository(db_path=db_path)
         self.config_manager = ConfigManager("config/settings.yaml")
-        self.portfolios: Dict[str, Portfolio] = {}
+        self.portfolios = PortfolioDict()
         self.exchange_configs: Dict[str, Dict] = {} # [NEW] 거래소별 수수료 등 설정 캐시
         self.executors: Dict[str, OrderExecutor] = {
             'simulation': VirtualOrderExecutorAdapter()

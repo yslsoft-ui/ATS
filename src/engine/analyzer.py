@@ -22,11 +22,13 @@ class StrategyHypothesisAnalyzer:
         logger.info(f"[Analyzer] 실패 거래 분석 시작: portfolio_id={portfolio_id}, strategy_id={strategy_id}")
         
         # 1. 특정 전략의 거래 이력 획득
+        from src.engine.portfolio import get_integer_portfolio_id
+        pid = get_integer_portfolio_id(portfolio_id)
         trades = []
         async with get_db_conn(self.db_path) as db:
             async with db.execute(
                 "SELECT * FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? ORDER BY timestamp ASC",
-                (portfolio_id, strategy_id)
+                (pid, strategy_id)
             ) as cursor:
                 rows = await cursor.fetchall()
                 trades = [dict(r) for r in rows]
@@ -169,12 +171,14 @@ class StrategyHypothesisAnalyzer:
                 })
                 
         # 5. 발굴된 인사이트 DB 저장 및 제안 리스트 리턴
+        from src.engine.portfolio import get_integer_portfolio_id
+        pid = get_integer_portfolio_id(portfolio_id)
         for ins in insights:
             async with get_db_conn(self.db_path) as db:
                 await db.execute('''
                     INSERT INTO strategy_insights (portfolio_id, strategy_id, category, fact_summary, details_json)
                     VALUES (?, ?, ?, ?, ?)
-                ''', (portfolio_id, strategy_id, ins["category"], ins["fact_summary"], json.dumps(ins["details"])))
+                ''', (pid, strategy_id, ins["category"], ins["fact_summary"], json.dumps(ins["details"])))
                 await db.commit()
                 
         # Shadow Backtest로 흘려보낼 최종 제안 변이 정보 취합

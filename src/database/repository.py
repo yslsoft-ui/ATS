@@ -990,25 +990,119 @@ class SqliteTradingRepository(BaseTradingRepository):
         self.girs_shadow_mode_override = girs_shadow_mode_override if girs_shadow_mode_override is not None else (False if is_pytest else None)
         self.auto_strategy_promotion_enabled_override = auto_strategy_promotion_enabled_override if auto_strategy_promotion_enabled_override is not None else (True if is_pytest else None)
 
+    async def sync_portfolio_id_cache(self):
+        """
+        데이터베이스의 portfolios 테이블을 조회하여, 
+        type='live'인 포트폴리오의 ID를 포함하여 등록된 모든 포트폴리오의 (name/type, id) 매핑을
+        src.engine.portfolio의 캐시 맵에 동적으로 적재합니다.
+        """
+        from src.engine.portfolio import seed_portfolio_id_map
+        async with get_db_conn(self.db_path) as db:
+            # portfolios 테이블 존재 여부 확인
+            cursor = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='portfolios'")
+            table_exists = await cursor.fetchone()
+            if not table_exists:
+                return
+                
+            async with db.execute("SELECT id, name, type FROM portfolios") as cur:
+                async for row in cur:
+                    p_id = row['id']
+                    p_name = row['name']
+                    p_type = row['type']
+                    
+                    if p_type == 'live':
+                        seed_portfolio_id_map('live', p_id)
+                    if p_name:
+                        seed_portfolio_id_map(p_name, p_id)
+
+    async def _resolve_portfolio_id(self, db, portfolio_id: Any) -> Optional[int]:
+        if portfolio_id is None:
+            raise ValueError("Portfolio ID cannot be None")
+        if str(portfolio_id).strip() == "":
+            raise ValueError("Portfolio ID cannot be empty")
+            
+        # 1. get_integer_portfolio_id를 통해 메모리상의 매핑된 정수 ID를 먼저 얻음
+        from src.engine.portfolio import get_integer_portfolio_id
+        try:
+            pid = get_integer_portfolio_id(portfolio_id)
+        except ValueError:
+            pid = None
+            
+        # 2. 그 정수 ID가 실제로 DB portfolios 테이블에 존재하는지 확인 (Fail-Fast 적용)
+        if pid is not None:
+            cursor = await db.execute("SELECT id FROM portfolios WHERE id = ? LIMIT 1", (pid,))
+            row = await cursor.fetchone()
+            if row:
+                return row[0]
+                
+        # 3. 만약 메모리 캐시에 없거나 DB에서 찾을 수 없다면, name 또는 type 컬럼에서 추가 검색 (하위 호환 및 복구용)
+        cursor = await db.execute("SELECT id FROM portfolios WHERE name = ? LIMIT 1", (str(portfolio_id),))
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+            
+        cursor = await db.execute("SELECT id FROM portfolios WHERE type = ? LIMIT 1", (str(portfolio_id),))
+        row = await cursor.fetchone()
+        if row:
+            return row[0]
+            
+        raise ValueError(f"Portfolio not found for identifier: {portfolio_id}")
+
     async def save_portfolio(self, portfolio: Any):
         async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 기본 정보 저장
-            await db.execute('''
-                INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-                ON CONFLICT(id) DO UPDATE SET
-                    name = excluded.name,
-                    type = excluded.type,
-                    strategy_info = excluded.strategy_info,
-                    duration = COALESCE(excluded.duration, portfolios.duration),
-                    updated_at = datetime('now')
-            ''', (
-                portfolio.id,
-                portfolio.name,
-                portfolio.portfolio_type,
-                getattr(portfolio, 'strategy_info', ''),
-                getattr(portfolio, 'duration', None)
-            ))
+            if portfolio.portfolio_type == 'live' or portfolio.id == 1 or portfolio.id == 'live':
+                pid = 1
+                await db.execute('''
+                    INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
+                    VALUES (1, ?, 'live', ?, ?, datetime('now'))
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = excluded.name,
+                        strategy_info = excluded.strategy_info,
+                        duration = COALESCE(excluded.duration, portfolios.duration),
+                        updated_at = datetime('now')
+                ''', (
+                    portfolio.name,
+                    getattr(portfolio, 'strategy_info', ''),
+                    getattr(portfolio, 'duration', None)
+                ))
+                portfolio.id = 1
+            else:
+                pid = None
+                if isinstance(portfolio.id, int):
+                    pid = portfolio.id
+                elif str(portfolio.id).isdigit():
+                    pid = int(portfolio.id)
+                
+                if pid is not None:
+                    await db.execute('''
+                        INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                        ON CONFLICT(id) DO UPDATE SET
+                            name = excluded.name,
+                            type = excluded.type,
+                            strategy_info = excluded.strategy_info,
+                            duration = COALESCE(excluded.duration, portfolios.duration),
+                            updated_at = datetime('now')
+                    ''', (
+                        pid,
+                        portfolio.name,
+                        portfolio.portfolio_type,
+                        getattr(portfolio, 'strategy_info', ''),
+                        getattr(portfolio, 'duration', None)
+                    ))
+                else:
+                    cursor = await db.execute('''
+                        INSERT INTO portfolios (name, type, strategy_info, duration, updated_at)
+                        VALUES (?, ?, ?, ?, datetime('now'))
+                    ''', (
+                        portfolio.name,
+                        portfolio.portfolio_type,
+                        getattr(portfolio, 'strategy_info', ''),
+                        getattr(portfolio, 'duration', None)
+                    ))
+                    pid = cursor.lastrowid
+                    portfolio.id = pid
 
             # 1.5. 거래소별 격리 자금 정보 저장 (portfolio_exchanges)
             if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
@@ -1028,22 +1122,23 @@ class SqliteTradingRepository(BaseTradingRepository):
                         INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary, updated_at)
                         VALUES (?, ?, ?, ?, ?, datetime('now'))
                         ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, initial_cash = ?, updated_at = datetime('now')
-                    ''', (portfolio.id, ex_id, init_cash, ex_cash, is_primary, ex_cash, init_cash))
+                    ''', (pid, ex_id, init_cash, ex_cash, is_primary, ex_cash, init_cash))
 
             # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
-            await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (portfolio.id,))
+            await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (pid,))
             for pos in portfolio.positions.values():
                 if pos.quantity > 0:
                     await db.execute('''
                         INSERT INTO positions (portfolio_id, exchange_id, symbol, quantity, avg_price, entry_time, peak_price, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                    ''', (portfolio.id, pos.exchange_id, pos.symbol, pos.quantity, pos.avg_price, getattr(pos, 'entry_time', 0.0), getattr(pos, 'peak_price', 0.0)))
+                    ''', (pid, pos.exchange_id, pos.symbol, pos.quantity, pos.avg_price, getattr(pos, 'entry_time', 0.0), getattr(pos, 'peak_price', 0.0)))
             
             await db.commit()
 
     async def load_portfolios(self, exclude_types: list = None) -> Dict[str, Any]:
-        from src.engine.portfolio import Portfolio, Position
-        loaded_portfolios = {}
+        await self.sync_portfolio_id_cache()
+        from src.engine.portfolio import Portfolio, Position, PortfolioDict
+        loaded_portfolios = PortfolioDict()
         async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 로드
             query = "SELECT * FROM portfolios"
@@ -1062,10 +1157,12 @@ class SqliteTradingRepository(BaseTradingRepository):
                         portfolio_type=row['type'],
                         strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
                     )
-                    loaded_portfolios[p.id] = p
+                    key = 'live' if p.portfolio_type == 'live' else str(p.id)
+                    loaded_portfolios[key] = p
             
             # 2. 각 포트폴리오의 포지션 및 거래소 격리 자금 로드
-            for pid, p in loaded_portfolios.items():
+            for key, p in loaded_portfolios.items():
+                pid = p.id
                 # 2.1. portfolio_exchanges 로드
                 p.exchange_cash = {}
                 p.exchange_initial_cash = {}
@@ -1091,17 +1188,25 @@ class SqliteTradingRepository(BaseTradingRepository):
                 # 3. 최근 거래 내역 로드 (최근 100건)
                 async with db.execute("SELECT * FROM orders_history WHERE portfolio_id = ? ORDER BY timestamp DESC LIMIT 100", (pid,)) as cursor:
                     rows = await cursor.fetchall()
-                    p.history = [dict(r) for r in reversed(rows)]
+                    orders = []
+                    for r in reversed(rows):
+                        order = dict(r)
+                        order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
+                        orders.append(order)
+                    p.history = orders
         return loaded_portfolios
 
     async def insert_order_history(self, portfolio_id: str, order: Dict[str, Any]):
         async with get_db_conn(self.db_path) as db:
             import json
+            pid = await self._resolve_portfolio_id(db, portfolio_id)
+            if not pid:
+                raise ValueError(f"Could not resolve portfolio_id: {portfolio_id}")
             await db.execute('''
                 INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                portfolio_id, 
+                pid, 
                 order['exchange_id'],
                 order.get('market', 'KRW'),
                 order.get('strategy_id', ""),
@@ -1159,6 +1264,9 @@ class SqliteTradingRepository(BaseTradingRepository):
 
         async with get_db_conn(self.db_path) as db:
             import json
+            pid = await self._resolve_portfolio_id(db, portfolio_id)
+            if not pid:
+                return []
             if limit is not None and limit > 0:
                 query = """
                     SELECT * FROM (
@@ -1168,20 +1276,21 @@ class SqliteTradingRepository(BaseTradingRepository):
                         LIMIT ?
                     ) ORDER BY timestamp ASC
                 """
-                params = (portfolio_id, limit)
+                params = (pid, limit)
             else:
                 query = """
                     SELECT * FROM orders_history 
                     WHERE portfolio_id = ? 
                     ORDER BY timestamp ASC
                 """
-                params = (portfolio_id,)
+                params = (pid,)
                 
             async with db.execute(query, params) as cursor:
                 rows = await cursor.fetchall()
                 orders = []
                 for r in rows:
                     order = dict(r)
+                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])
@@ -1195,14 +1304,18 @@ class SqliteTradingRepository(BaseTradingRepository):
     ) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
             import json
+            pid = await self._resolve_portfolio_id(db, portfolio_id)
+            if not pid:
+                return []
             async with db.execute(
                 "SELECT * FROM orders_history WHERE portfolio_id = ? AND strategy_id = ? ORDER BY timestamp ASC",
-                (portfolio_id, strategy_id)
+                (pid, strategy_id)
             ) as cursor:
                 rows = await cursor.fetchall()
                 orders = []
                 for r in rows:
                     order = dict(r)
+                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])
@@ -1216,16 +1329,20 @@ class SqliteTradingRepository(BaseTradingRepository):
     ) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
             import json
+            pid = await self._resolve_portfolio_id(db, portfolio_id)
+            if not pid:
+                return []
             async with db.execute(
                 "SELECT * FROM orders_history "
                 "WHERE portfolio_id = ? AND strategy_id = ? AND timestamp BETWEEN ? AND ? "
                 "ORDER BY timestamp ASC",
-                (portfolio_id, strategy_id, start_ts, end_ts)
+                (pid, strategy_id, start_ts, end_ts)
             ) as cursor:
                 rows = await cursor.fetchall()
                 orders = []
                 for r in rows:
                     order = dict(r)
+                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])
@@ -1523,6 +1640,8 @@ class SqliteTradingRepository(BaseTradingRepository):
                 if (45 <= confidence_score < 60) or (diversity_penalty >= 10):
                     is_counterfactual_tracked = 1
 
+            pid = await self._resolve_portfolio_id(db, proposal_data["portfolio_id"])
+
             cursor = await db.execute('''
                 INSERT OR IGNORE INTO strategy_proposals 
                 (insight_id, proposal_group_id, version, portfolio_id, strategy_id, status, outcome, 
@@ -1533,7 +1652,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 proposal_data.get("insight_id"),
                 proposal_data["proposal_group_id"],
                 proposal_data["version"],
-                proposal_data["portfolio_id"],
+                pid,
                 proposal_data["strategy_id"],
                 status,
                 proposal_data.get("outcome", "RUNNING"),

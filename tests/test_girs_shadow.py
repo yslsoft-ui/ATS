@@ -41,7 +41,7 @@ async def test_live_trading_blocked_and_events(temp_db_path):
     
     # 3. live 포트폴리오 추가 및 저장
     live_portfolio = Portfolio(
-        portfolio_id="live_port_1",
+        portfolio_id="live",
         name="Live Portfolio",
         portfolio_type="live"
     )
@@ -53,7 +53,7 @@ async def test_live_trading_blocked_and_events(temp_db_path):
     # 4. 실계좌 주문 시도 -> 차단 확인 및 BLOCKED_LIVE_ORDER 이벤트 확인
     signal = DummySignal()
     res = await pm.execute_pipeline_order(
-        portfolio_id="live_port_1",
+        portfolio_id="live",
         signal=signal,
         quantity=0.1,
         execution_price=50000.0
@@ -67,7 +67,7 @@ async def test_live_trading_blocked_and_events(temp_db_path):
     events = await repo.get_system_events(limit=10)
     blocked_events = [e for e in events if e["event_type"] == "BLOCKED_LIVE_ORDER"]
     assert len(blocked_events) > 0
-    assert blocked_events[0]["target"] == "live_port_1"
+    assert blocked_events[0]["target"] == "1"
 
 @pytest.mark.asyncio
 async def test_simulation_trading_allowed(temp_db_path):
@@ -109,10 +109,11 @@ async def test_approve_proposal_blocked_in_shadow_mode(temp_db_path):
     
     # PENDING 제안 임의 등록
     async with get_db_conn(temp_db_path) as db:
+        await db.execute("INSERT INTO portfolios (id, name, type) VALUES (2, 'Sim Portfolio', 'simulation')")
         await db.execute("""
             INSERT INTO strategy_proposals 
             (id, strategy_id, portfolio_id, status, outcome, original_params, proposed_params, metrics, confidence_score)
-            VALUES (1, 'strat_1', 'sim_port_1', 'PENDING', 'PENDING', '{}', '{}', '{}', 85)
+            VALUES (1, 'strat_1', 2, 'PENDING', 'PENDING', '{}', '{}', '{}', 85)
         """)
         await db.commit()
         
@@ -127,10 +128,11 @@ async def test_scheduler_promotion_skips_and_events(temp_db_path):
     
     # PENDING 제안 임의 등록
     async with get_db_conn(temp_db_path) as db:
+        await db.execute("INSERT INTO portfolios (id, name, type) VALUES (2, 'Sim Portfolio', 'simulation')")
         await db.execute("""
             INSERT INTO strategy_proposals 
             (id, strategy_id, portfolio_id, status, outcome, original_params, proposed_params, metrics, confidence_score)
-            VALUES (2, 'strat_1', 'sim_port_1', 'PENDING', 'PENDING', '{}', '{}', '{}', 90)
+            VALUES (2, 'strat_1', 2, 'PENDING', 'PENDING', '{}', '{}', '{}', 90)
         """)
         await db.commit()
         

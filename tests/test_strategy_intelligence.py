@@ -14,6 +14,18 @@ async def setup_test_db():
     if os.path.exists(TEST_DB_PATH):
         os.remove(TEST_DB_PATH)
     await init_db(TEST_DB_PATH)
+    
+    # 테스트에 필요한 포트폴리오 사전 삽입 및 캐시 동기화
+    from src.engine.portfolio import get_integer_portfolio_id
+    from src.database.connection import get_db_conn
+    repo = SqliteTradingRepository(db_path=TEST_DB_PATH)
+    async with get_db_conn(TEST_DB_PATH) as db:
+        for p_id in ["port_test", "port_apply"]:
+            port_id = get_integer_portfolio_id(p_id)
+            await db.execute("INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (?, ?, 'simulation')", (port_id, p_id))
+        await db.commit()
+    await repo.sync_portfolio_id_cache()
+    
     yield
     if os.path.exists(TEST_DB_PATH):
         os.remove(TEST_DB_PATH)
