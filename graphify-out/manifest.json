@@ -505,8 +505,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1781444604.6924453,
-    "ast_hash": "7cef15922e76db5c8f5aea2a58cc7c46",
+    "mtime": 1781444880.0135446,
+    "ast_hash": "78b54ed13e89418593f3e07ff6641925",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
@@ -515,8 +515,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/client.js": {
-    "mtime": 1781359615.3604207,
-    "ast_hash": "f4991b9f26e628133fd7eefb2d1ecebc",
+    "mtime": 1781444886.5336652,
+    "ast_hash": "134fd6ce265ad15bdfbcab7c4e50422a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/overview.js": {
@@ -960,8 +960,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/portfolio.py": {
-    "mtime": 1781443370.9096303,
-    "ast_hash": "0c75238cc6ee7aced746df32e260469a",
+    "mtime": 1781444892.8617826,
+    "ast_hash": "ff5fcf278459209804410a07601040ef",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/intelligence.py": {
@@ -1285,7 +1285,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781443412.09039,
+    "mtime": 1781444909.2900867,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },
@@ -1305,8 +1305,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781425366.2422938,
-    "ast_hash": "236c1339032f4647ad73f33fc812235a",
+    "mtime": 1781444868.157325,
+    "ast_hash": "ca7663b60b2b5c7d09a8b75e40e1d044",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {

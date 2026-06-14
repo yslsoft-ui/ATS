@@ -644,50 +644,7 @@
                 <div
                     style="display: flex; gap: 20px; width: 100%; align-items: flex-start; flex-wrap: wrap; margin-top: 15px;">
 
-                    <!-- 1. 좌측 이력 및 가동 제어 사이드바 (Sidebar) -->
-                    <aside id="portfolio-sidebar"
-                        style="flex: 0 0 320px; display: flex; flex-direction: column; gap: 15px; width: 320px;">
-
-                        <!-- 모의투자 / 백테스트 제어 카드 -->
-                        <div class="card"
-                            style="padding: 15px; border: 1px solid rgba(148, 163, 184, 0.15); background: #1E293B; border-radius: 8px; display: flex; flex-direction: column; gap: 12px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between;">
-                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">🚀 모의투자 및 테스트</h3>
-                                <span id="session-status-badge" class="ctx-badge"
-                                    style="background: rgba(239, 68, 68, 0.2); color: #EF4444; font-size: 0.72rem; padding: 2px 6px;">미가동</span>
-                            </div>
-
-                            <div id="session-action-group" style="display: flex; flex-direction: column; gap: 8px;">
-                                <button class="btn success" style="width: 100%; font-size: 0.85rem;"
-                                    onclick="openStrategyRunModal('simulation')">▶️ 실시간 모의투자 시작</button>
-                            </div>
-                        </div>
-
-                        <!-- 통합 이력 관리 테이블 패널 -->
-                        <div class="card"
-                            style="padding: 15px; border: 1px solid rgba(148, 163, 184, 0.15); background: #1E293B; border-radius: 8px; display: flex; flex-direction: column; gap: 10px;">
-                            <div
-                                style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 8px;">
-                                <h3 style="margin: 0; color: #F8FAFC; font-size: 0.9rem;">📂 통합 세션 이력 관리</h3>
-                            </div>
-
-                            <div style="max-height: 500px; overflow-y: auto;">
-                                <table
-                                    style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.8rem;"
-                                    id="portfolio-history-table">
-                                    <tbody id="portfolio-history-list-tbody">
-                                        <!-- JS에서 동적으로 채워짐 -->
-                                        <tr>
-                                            <td style="text-align: center; color: #64748B; padding: 15px;">이력을 불러오는 중...
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </aside>
-
-                    <!-- 2. 우측 메인 대시보드 패널 (Main Content) -->
+                    <!-- 1. 메인 대시보드 패널 (Main Content - 가로 확장) -->
                     <main id="portfolio-main-content"
                         style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 15px;">
                         <header class="main-header"
@@ -725,6 +682,37 @@
                                 <!-- 적용된 전략 요약이 표시됩니다 -->
                             </div>
                         </header>
+
+                        <!-- 📂 모의투자 세션 및 이력 관리 통합 패널 [NEW] -->
+                        <div class="card"
+                            style="padding: 15px; border: 1px solid rgba(148, 163, 184, 0.15); background: #1E293B; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; width: 100%;">
+                            <div
+                                style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(148,163,184,0.1); padding-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <h3 style="margin: 0; color: #F8FAFC; font-size: 0.95rem;">📂 모의투자 세션 및 이력 관리</h3>
+                                    <span id="session-status-badge" class="ctx-badge"
+                                        style="background: rgba(239, 68, 68, 0.2); color: #EF4444; font-size: 0.72rem; padding: 2px 6px;">미가동</span>
+                                </div>
+                                <div id="session-action-group" style="display: flex; gap: 10px; align-items: center;">
+                                    <button class="btn success" style="font-size: 0.85rem; padding: 4px 12px;"
+                                        onclick="openStrategyRunModal('simulation')">▶️ 실시간 모의투자 시작</button>
+                                </div>
+                            </div>
+
+                            <div style="max-height: 200px; overflow-y: auto;">
+                                <table
+                                    style="width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 0.8rem;"
+                                    id="portfolio-history-table">
+                                    <tbody id="portfolio-history-list-tbody">
+                                        <!-- JS에서 동적으로 채워짐 -->
+                                        <tr>
+                                            <td style="text-align: center; color: #64748B; padding: 15px;">이력을 불러오는 중...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
 
                         <div class="portfolio-grid">
                             <!-- 자산 비중 차트 카드 [NEW] -->

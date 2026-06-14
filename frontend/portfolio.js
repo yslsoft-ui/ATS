@@ -1629,7 +1629,7 @@ function updateSessionControlUI() {
         badge.style.color = "#10B981";
 
         actionGroup.innerHTML = `
-            <button class="btn danger" style="width: 100%; font-size: 0.85rem;" onclick="endSimulationSession('${activeSession.id}')">⏹️ 모의투자 즉시 종료</button>
+            <button class="btn danger" style="font-size: 0.85rem; padding: 4px 12px;" onclick="endSimulationSession('${activeSession.id}')">⏹️ 모의투자 즉시 종료</button>
         `;
     } else {
         badge.innerText = "미가동";
@@ -1637,7 +1637,7 @@ function updateSessionControlUI() {
         badge.style.color = "#EF4444";
 
         actionGroup.innerHTML = `
-            <button class="btn success" style="width: 100%; font-size: 0.85rem;" onclick="openStrategyRunModal('simulation')">▶️ 실시간 모의투자 시작</button>
+            <button class="btn success" style="font-size: 0.85rem; padding: 4px 12px;" onclick="openStrategyRunModal('simulation')">▶️ 실시간 모의투자 시작</button>
         `;
     }
 }

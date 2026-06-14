@@ -279,7 +279,7 @@ function updatePortfolioRealtime(tick) {
     // 백테스트이거나 종료된 모의투자 세션(ended_at이 존재하는 경우)이면 실시간 갱신을 차단
     if (state.currentPortfolioData.type === 'backtest' || 
         state.currentPortfolioData.ended_at || 
-        state.currentPortfolioData.id.startsWith('backtest_')) {
+        String(state.currentPortfolioData.id).startsWith('backtest_')) {
         return;
     }
     
