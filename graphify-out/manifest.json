@@ -490,8 +490,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/market.js": {
-    "mtime": 1781414114.3577235,
-    "ast_hash": "60ba62f81fd3dd5053d95b73b966794b",
+    "mtime": 1781421346.6236308,
+    "ast_hash": "dc9600020b0b42633f009e08a8bcdd0a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/ranking.js": {
@@ -1120,8 +1120,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_command_dispatcher.py": {
-    "mtime": 1781405601.377762,
-    "ast_hash": "8aa02a6de94c332f07b7fa3185d0a827",
+    "mtime": 1781420055.6065662,
+    "ast_hash": "8b09a9d196830a081b0e501bd994acc3",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_baseline_snapshot.py": {
@@ -1180,8 +1180,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_collector_detail.py": {
-    "mtime": 1781413975.1612277,
-    "ast_hash": "67fd348705d450a1eb0a5a020e7e3c0a",
+    "mtime": 1781420048.0664153,
+    "ast_hash": "b2a55051b7e3f90881b25d3a71f1765a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_girs_shadow.py": {
@@ -1275,7 +1275,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781418041.4262776,
+    "mtime": 1781420070.8708713,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },

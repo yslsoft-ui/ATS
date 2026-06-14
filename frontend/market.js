@@ -46,11 +46,11 @@ function renderMarketTable(data) {
     tbody.innerHTML = '';
     
     // 현재 선택된 탭에 맞는 거래소 데이터만 필터링
-    const filteredByExch = data.filter(c => c.exchange_id === state.currentMarketTab);
+    const filteredByExch = data.filter(c => c.exchange === state.currentMarketTab);
     
     filteredByExch.forEach((coin, idx) => {
         const ticker = coin.market;
-        const exchange = coin.exchange_id || 'upbit';
+        const exchange = coin.exchange || 'upbit';
         const symbolLower = ticker.toLowerCase();
         let iconUrl = '';
         let fallbackUrl = '';
@@ -106,7 +106,7 @@ function renderMarketTable(data) {
         // 클릭 시 모니터링 페이지로 전환
         tr.addEventListener('click', () => {
             Store.update({
-                currentExchange: coin.exchange_id || 'upbit',
+                currentExchange: coin.exchange || 'upbit',
                 currentSymbol: coin.market
             });
 
