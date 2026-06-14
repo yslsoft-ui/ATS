@@ -109,29 +109,6 @@ async def delete_portfolio_history(portfolio_id: str, request: Request):
     system.portfolio_manager.portfolios.pop(portfolio_id, None)
     return {"status": "success", "message": "이력이 정상적으로 삭제되었습니다."}
 
-@router.delete("/api/portfolio/history")
-async def delete_all_portfolio_history(request: Request):
-    """모든 종료된 모의투자 및 과거 백테스트 이력을 DB와 메모리에서 일괄 영구 삭제합니다."""
-    system = request.app.state.system
-    db_path = system.portfolio_manager.db_path
-    
-    async with get_db_conn(db_path) as db:
-        await db.execute("""
-            DELETE FROM portfolios 
-            WHERE type = 'backtest' OR (type = 'simulation' AND ended_at IS NOT NULL)
-        """)
-        await db.commit()
-        
-    to_delete = [
-        pid for pid, p in system.portfolio_manager.portfolios.items()
-        if getattr(p, 'portfolio_type', 'simulation') == 'backtest' or
-           (getattr(p, 'portfolio_type', 'simulation') == 'simulation' and getattr(p, 'ended_at', None) is not None)
-    ]
-    for pid in to_delete:
-        system.portfolio_manager.portfolios.pop(pid, None)
-        
-    return {"status": "success", "message": "모든 이력이 성공적으로 삭제되었습니다."}
-
 
 @router.get("/trades")
 async def get_trades(request: Request, exchange_id: str = "upbit", symbol: str = "BTC", limit: int = 10):

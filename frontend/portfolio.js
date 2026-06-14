@@ -164,7 +164,7 @@ async function loadPortfolioHistoryList(force = false) {
 
             // 행 클릭 시 해당 포트폴리오 로드
             tr.onclick = (e) => {
-                if (e.target.closest('.btn-delete-history')) return;
+                if (e.target.closest('.btn-delete-history') || e.target.closest('.btn-end-simulation')) return;
                 
                 state.currentPortfolioId = item.id;
                 document.querySelectorAll('#portfolio-history-list-tbody tr').forEach(r => r.style.background = '');
@@ -173,11 +173,14 @@ async function loadPortfolioHistoryList(force = false) {
                 loadPortfolio(true);
             };
 
-            // 삭제 버튼: 진행중(simulation 중 ended_at이 없는 상태) 또는 실거래(live)가 아닐 때만 노출 (종료된 simulation은 삭제 허용)
+            // 삭제 버튼 및 종료 버튼 분기
             const showDelete = (item.type === 'simulation' && item.ended_at) || (item.type !== 'simulation' && item.type !== 'live');
-            const deleteBtnHtml = showDelete 
+            const showEnd = (item.type === 'simulation' && !item.ended_at);
+            const actionBtnHtml = showDelete 
                 ? `<button class="btn danger btn-delete-history" style="padding:2px 6px; font-size:0.7rem; background:#EF4444; border:none; color:white; border-radius:4px; cursor:pointer;" onclick="deletePortfolioHistory('${item.id}')">삭제</button>`
-                : '';
+                : (showEnd 
+                    ? `<button class="btn warning btn-end-simulation" style="padding:2px 6px; font-size:0.7rem; background:#F59E0B; border:none; color:white; border-radius:4px; cursor:pointer;" onclick="endSimulationSession('${item.id}')">종료</button>`
+                    : '');
 
             tr.innerHTML = `
                 <td style="padding:8px 4px; width: 55%; overflow: hidden; text-overflow: ellipsis;">
@@ -189,7 +192,7 @@ async function loadPortfolioHistoryList(force = false) {
                 </td>
                 <td style="padding:8px 4px; text-align:right; width: 25%;" class="num ${roiClass}">${roiText}</td>
                 <td style="padding:8px 4px; text-align:center; width: 20%;">
-                    ${deleteBtnHtml}
+                    ${actionBtnHtml}
                 </td>
             `;
 
@@ -267,35 +270,7 @@ async function deletePortfolioHistory(portfolioId) {
     }
 }
 
-/**
- * 활성 세션을 제외한 모든 이력을 일괄 삭제합니다.
- */
-async function clearAllPortfolioHistory() {
-    if (!confirm("모든 백테스트 및 종료된 모의투자 세션 이력을 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다. (가동 중인 세션은 삭제되지 않습니다.)")) {
-        return;
-    }
 
-    try {
-        const res = await APIClient.clearAllPortfolioHistory();
-        if (res.status === 'success') {
-            showAlert("모든 이력이 정상적으로 삭제되었습니다.", "success");
-            
-            // 캐시 일괄 비우기 (진행중인 simulation 세션 제외)
-            if (state.portfoliosCache) {
-                state.portfoliosCache = state.portfoliosCache.filter(p => p.type === 'simulation');
-            }
-
-            state.currentPortfolioId = null;
-            await loadPortfolioHistoryList(true);
-            await loadPortfolio(true);
-        } else {
-            showAlert(res.message || "삭제 실패", "error");
-        }
-    } catch (e) {
-        showAlert("이력 삭제 도중 오류가 발생했습니다.", "error");
-        console.error(e);
-    }
-}
 
 /**
  * 특정 포트폴리오(실시간 모의투자 또는 과거 백테스트 이력)의 상태를 불러와 화면에 업데이트합니다.
@@ -308,7 +283,7 @@ async function loadPortfolio(force = false) {
         let portfolioId = state.currentPortfolioId;
         if (!portfolioId) {
             if (state.portfoliosCache && state.portfoliosCache.length > 0) {
-                const activeSim = state.portfoliosCache.find(p => p.type === 'simulation');
+                const activeSim = state.portfoliosCache.find(p => p.type === 'simulation' && !p.ended_at);
                 portfolioId = activeSim ? activeSim.id : state.portfoliosCache[0].id;
             }
         }
@@ -1646,7 +1621,7 @@ function updateSessionControlUI() {
     if (!badge || !actionGroup) return;
 
     const portfolios = state.portfoliosCache || [];
-    const activeSession = portfolios.find(p => p.type === 'simulation');
+    const activeSession = portfolios.find(p => p.type === 'simulation' && !p.ended_at);
 
     if (activeSession) {
         badge.innerText = "가동중";
@@ -1702,7 +1677,6 @@ window.closeStrategyRunModal = closeStrategyRunModal;
 window.submitStrategyRun = submitStrategyRun;
 window.loadPortfolioHistoryList = loadPortfolioHistoryList;
 window.deletePortfolioHistory = deletePortfolioHistory;
-window.clearAllPortfolioHistory = clearAllPortfolioHistory;
 window.endSimulationSession = endSimulationSession;
 
 // 실자산 및 실계좌 관련 신규 바인딩

@@ -269,10 +269,7 @@ const APIClient = (() => {
          */
         deletePortfolioHistory: (portfolioId) => _fetchAPI(`/api/portfolio/history/${portfolioId}`, { method: 'DELETE' }),
 
-        /**
-         * 전체 모의투자 및 백테스트 이력 영구 삭제
-         */
-        clearAllPortfolioHistory: () => _fetchAPI('/api/portfolio/history', { method: 'DELETE' }),
+
 
         /**
          * 특정 전략의 상세 상태 조회
