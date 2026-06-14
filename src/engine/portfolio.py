@@ -71,6 +71,9 @@ class Portfolio:
         self.history: List[Dict] = []
         self.strategy_info = strategy_info
         self.status = "ACTIVE" # 포트폴리오 상태: ACTIVE, PAUSED, ERROR
+        self.created_at = None
+        self.updated_at = None
+        self.ended_at = None
 
     @property
     def cash(self) -> float:
@@ -1285,11 +1288,11 @@ class PortfolioManager:
         self.exchange_configs = await self.repository.load_exchange_configs()
         logger.info(f"{len(self.exchange_configs)}개의 거래소 설정을 로드했습니다.")
 
-    async def load_from_db(self, exclude_types: list = None):
+    async def load_from_db(self, exclude_types: list = None, exclude_ended: bool = False):
         """DB에서 저장된 포트폴리오 정보를 불러옵니다."""
         await self.load_exchange_configs() # 거래소 설정 먼저 로드
 
-        loaded_portfolios = await self.repository.load_portfolios(exclude_types=exclude_types)
+        loaded_portfolios = await self.repository.load_portfolios(exclude_types=exclude_types, exclude_ended=exclude_ended)
         
         # 원자적 참조 교체로 메모리 동기화 및 기존 stale 세션 날리기 완수
         self.portfolios = loaded_portfolios

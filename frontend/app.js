@@ -276,9 +276,9 @@ function processTick(tick) {
 function updatePortfolioRealtime(tick) {
     if (!state.currentPortfolioData || ViewRouter.getActiveView() !== 'portfolio-view') return;
     
-    // 백테스트이거나 종료된 모의투자 세션이면 실시간 갱신을 차단
+    // 백테스트이거나 종료된 모의투자 세션(ended_at이 존재하는 경우)이면 실시간 갱신을 차단
     if (state.currentPortfolioData.type === 'backtest' || 
-        state.currentPortfolioData.type === 'simulation_ended' || 
+        state.currentPortfolioData.ended_at || 
         state.currentPortfolioData.id.startsWith('backtest_')) {
         return;
     }

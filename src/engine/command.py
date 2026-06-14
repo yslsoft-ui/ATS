@@ -379,7 +379,7 @@ class UserCommandDispatcher:
                 
         # 2. 신규 포트폴리오 생성 및 거래소별 자금 분배
         portfolio_id = payload.get("portfolio_id") or f"simulation_{int(time.time())}"
-        p_name = f"실시간 모의투자 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
+        p_name = "실시간 모의투자"
         initial_cash_input = initial_cash
         exchange_cash_map = {}
         exchange_initial_cash_map = {}
@@ -512,7 +512,8 @@ class UserCommandDispatcher:
         
         # 4. 타입 변경 및 저장
         portfolio.strategy_info = json.dumps(meta)
-        portfolio.portfolio_type = 'simulation_ended'
+        portfolio.portfolio_type = 'simulation'
+        portfolio.ended_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         # DB 영구 저장
         await self.portfolio_manager.save_to_db(portfolio_id)

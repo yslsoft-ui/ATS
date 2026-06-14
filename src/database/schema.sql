@@ -40,9 +40,10 @@ CREATE TABLE IF NOT EXISTS orderbooks (
 CREATE TABLE IF NOT EXISTS portfolios (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    type TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('live', 'simulation', 'backtest')),
     duration REAL DEFAULT 0.0,
     strategy_info TEXT DEFAULT '',
+    ended_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

@@ -59,7 +59,15 @@ async def migrate_to_integer_keys(db_path: str):
         id_map = {}
         
         if 'portfolios' in existing_tables:
-            cursor = await db.execute("SELECT id, name, type, duration, strategy_info, created_at, updated_at FROM portfolios_old")
+            cursor = await db.execute("PRAGMA table_info(portfolios_old)")
+            cols = [col[1] for col in await cursor.fetchall()]
+            has_ended_at = 'ended_at' in cols
+            
+            select_cols = "id, name, type, duration, strategy_info, created_at, updated_at"
+            if has_ended_at:
+                select_cols += ", ended_at"
+                
+            cursor = await db.execute(f"SELECT {select_cols} FROM portfolios_old")
             rows = await cursor.fetchall()
             
             seq_counter = 2
@@ -72,10 +80,16 @@ async def migrate_to_integer_keys(db_path: str):
                     seq_counter += 1
                 id_map[old_id] = new_id
                 
+                p_type = r[2]
+                ended_at = r[7] if has_ended_at else None
+                if p_type == 'simulation_ended':
+                    p_type = 'simulation'
+                    ended_at = r[6]  # updated_at
+                
                 await db.execute('''
-                    INSERT OR REPLACE INTO portfolios (id, name, type, duration, strategy_info, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (new_id, r[1], r[2], r[3], r[4], r[5], r[6]))
+                    INSERT OR REPLACE INTO portfolios (id, name, type, duration, strategy_info, ended_at, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (new_id, r[1], p_type, r[3], r[4], ended_at, r[5], r[6]))
                 
         if 'portfolio_exchanges' in existing_tables:
             cursor = await db.execute("SELECT portfolio_id, exchange_id, initial_cash, cash, metrics, created_at, updated_at FROM portfolio_exchanges_old")
@@ -202,6 +216,16 @@ async def _init_db_core(target_path: str):
 
     async with get_db_conn(target_path) as db:
         await db.executescript(schema_sql)
+        await db.commit()
+        
+        # portfolios 테이블에 ended_at 컬럼 추가
+        await ensure_column(db, 'portfolios', 'ended_at', 'DATETIME')
+        # simulation_ended 데이터 보정 마이그레이션 실행
+        await db.execute("""
+            UPDATE portfolios 
+            SET type = 'simulation', ended_at = updated_at 
+            WHERE type = 'simulation_ended'
+        """)
         await db.commit()
     
     await seed_initial_assets(target_path)

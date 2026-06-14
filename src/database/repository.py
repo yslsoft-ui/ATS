@@ -1052,13 +1052,14 @@ class SqliteTradingRepository(BaseTradingRepository):
             if portfolio.portfolio_type == 'live' or portfolio.id == 1:
                 pid = 1
                 await db.execute('''
-                    INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
-                    VALUES (1, ?, 'live', ?, ?, datetime('now'))
+                    INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at, ended_at)
+                    VALUES (1, ?, 'live', ?, ?, datetime('now'), NULL)
                     ON CONFLICT(id) DO UPDATE SET
                         name = excluded.name,
                         strategy_info = excluded.strategy_info,
                         duration = COALESCE(excluded.duration, portfolios.duration),
-                        updated_at = datetime('now')
+                        updated_at = datetime('now'),
+                        ended_at = NULL
                 ''', (
                     portfolio.name,
                     getattr(portfolio, 'strategy_info', ''),
@@ -1072,32 +1073,36 @@ class SqliteTradingRepository(BaseTradingRepository):
                 elif str(portfolio.id).isdigit():
                     pid = int(portfolio.id)
                 
+                ended_at = getattr(portfolio, 'ended_at', None)
                 if pid is not None:
                     await db.execute('''
-                        INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
-                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                        INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at, ended_at)
+                        VALUES (?, ?, ?, ?, ?, datetime('now'), ?)
                         ON CONFLICT(id) DO UPDATE SET
                             name = excluded.name,
                             type = excluded.type,
                             strategy_info = excluded.strategy_info,
                             duration = COALESCE(excluded.duration, portfolios.duration),
-                            updated_at = datetime('now')
+                            updated_at = datetime('now'),
+                            ended_at = excluded.ended_at
                     ''', (
                         pid,
                         portfolio.name,
                         portfolio.portfolio_type,
                         getattr(portfolio, 'strategy_info', ''),
-                        getattr(portfolio, 'duration', None)
+                        getattr(portfolio, 'duration', None),
+                        ended_at
                     ))
                 else:
                     cursor = await db.execute('''
-                        INSERT INTO portfolios (name, type, strategy_info, duration, updated_at)
-                        VALUES (?, ?, ?, ?, datetime('now'))
+                        INSERT INTO portfolios (name, type, strategy_info, duration, updated_at, ended_at)
+                        VALUES (?, ?, ?, ?, datetime('now'), ?)
                     ''', (
                         portfolio.name,
                         portfolio.portfolio_type,
                         getattr(portfolio, 'strategy_info', ''),
-                        getattr(portfolio, 'duration', None)
+                        getattr(portfolio, 'duration', None),
+                        ended_at
                     ))
                     pid = cursor.lastrowid
                     portfolio.id = pid
@@ -1131,17 +1136,24 @@ class SqliteTradingRepository(BaseTradingRepository):
             
             await db.commit()
 
-    async def load_portfolios(self, exclude_types: list = None) -> Dict[str, Any]:
+    async def load_portfolios(self, exclude_types: list = None, exclude_ended: bool = False) -> Dict[str, Any]:
         await self.sync_portfolio_id_cache()
         from src.engine.portfolio import Portfolio, Position, PortfolioDict
         loaded_portfolios = PortfolioDict()
         async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 로드
             query = "SELECT * FROM portfolios"
+            conditions = []
+            params = []
             if exclude_types:
                 placeholders = ",".join(["?"] * len(exclude_types))
-                query += f" WHERE type NOT IN ({placeholders})"
-                cursor = await db.execute(query, exclude_types)
+                conditions.append(f"type NOT IN ({placeholders})")
+                params.extend(exclude_types)
+            if exclude_ended:
+                conditions.append("ended_at IS NULL")
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+                cursor = await db.execute(query, params)
             else:
                 cursor = await db.execute(query)
 
@@ -1153,6 +1165,9 @@ class SqliteTradingRepository(BaseTradingRepository):
                         portfolio_type=row['type'],
                         strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
                     )
+                    p.created_at = row['created_at'] if 'created_at' in row.keys() else None
+                    p.updated_at = row['updated_at'] if 'updated_at' in row.keys() else None
+                    p.ended_at = row['ended_at'] if 'ended_at' in row.keys() else None
                     key = str(p.id)
                     loaded_portfolios[key] = p
             

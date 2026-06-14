@@ -48,9 +48,10 @@
 | :--- | :--- | :--- | :--- |
 | **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 포트폴리오 고유 ID (정수) |
 | **name** | TEXT | NOT NULL | 포트폴리오 식별 이름 |
-| **type** | TEXT | NOT NULL | 운용 타입 (`backtest`, `paper`, `live`) |
+| **type** | TEXT | NOT NULL CHECK (type IN ('live', 'simulation', 'backtest')) | 운용 타입 (`live`, `simulation`, `backtest`) |
 | **duration** | REAL | DEFAULT 0.0 | 백테스트 소요 시간 등 운용 경과 시간 (초) |
 | **strategy_info** | TEXT | DEFAULT '' | 연결된 매매 전략 설정 정보 (JSON 스트링 등) |
+| **ended_at** | DATETIME | - | 포트폴리오(모의투자) 종료 일시 (진행 중인 경우 NULL) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 갱신 일시 |
 

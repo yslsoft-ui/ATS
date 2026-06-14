@@ -114,7 +114,7 @@ class TradingSystem:
         from src.database.schema import init_db
         await init_db(self.db_path)
         await stock_mapper.load_from_db(self.db_path)
-        await self.portfolio_manager.load_from_db(exclude_types=['simulationR'])
+        await self.portfolio_manager.load_from_db(exclude_types=['backtest'])
         
         # 2. 전략 동적 로드 및 동기화 [NEW]
         load_dynamic_strategies(self.strategies_dir)

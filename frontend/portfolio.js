@@ -5,6 +5,23 @@
 let lastPortfolioFetchedAt = null;
 let lastPortfolioListFetchedAt = null;
 
+function formatDateTime(dateStr) {
+    if (!dateStr) return '-';
+    try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '-';
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const min = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+    } catch (e) {
+        return '-';
+    }
+}
+
 /**
  * 실시간 모의투자 및 과거 백테스트 목록 전체를 불러와 좌측 통합 이력 리스트 패널에 바인딩합니다.
  */
@@ -42,7 +59,8 @@ async function loadPortfolioHistoryList(force = false) {
                 items.push({
                     id: p.id,
                     name: p.name,
-                    type: p.type, // 'simulation' 또는 'simulation_ended'
+                    type: p.type,
+                    ended_at: p.ended_at,
                     roi: parseFloat(roi),
                     trade_count: p.history ? p.history.length : 0,
                     created_at: p.created_at || new Date().toISOString(),
@@ -101,7 +119,7 @@ async function loadPortfolioHistoryList(force = false) {
 
         // 기본 선택 처리: 현재 currentPortfolioId가 유효하지 않거나 목록에 없는 경우 최신 포트폴리오 지정
         if (!state.currentPortfolioId || !addedIds.has(state.currentPortfolioId)) {
-            const activeSim = items.find(item => item.type === 'simulation');
+            const activeSim = items.find(item => item.type === 'simulation' && !item.ended_at);
             if (activeSim) {
                 state.currentPortfolioId = activeSim.id;
             } else if (items.length > 0) {
@@ -125,14 +143,24 @@ async function loadPortfolioHistoryList(force = false) {
             if (item.type === 'live') {
                 badgeHtml = `<span class="ctx-badge" style="background: rgba(239, 68, 68, 0.2); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">실거래</span>`;
             } else if (item.type === 'simulation') {
-                badgeHtml = `<span class="ctx-badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">진행중</span>`;
-            } else if (item.type === 'simulation_ended') {
-                badgeHtml = `<span class="ctx-badge" style="background: rgba(100, 116, 139, 0.2); color: #94A3B8; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">종료됨</span>`;
+                if (item.ended_at) {
+                    badgeHtml = `<span class="ctx-badge" style="background: rgba(100, 116, 139, 0.2); color: #94A3B8; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">종료됨</span>`;
+                } else {
+                    badgeHtml = `<span class="ctx-badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">진행중</span>`;
+                }
             } else {
                 badgeHtml = `<span class="ctx-badge" style="background: rgba(217, 70, 239, 0.2); color: #D946EF; font-size: 0.65rem; padding: 1px 4px; border-radius: 3px; font-weight: normal; flex-shrink: 0;">백테스트</span>`;
             }
 
-            const dateStr = item.created_at ? new Date(item.created_at).toLocaleString() : '-';
+            let dateStr = '-';
+            if (item.created_at) {
+                const start = formatDateTime(item.created_at);
+                if (item.ended_at) {
+                    dateStr = `${start} ~ ${formatDateTime(item.ended_at)}`;
+                } else {
+                    dateStr = `${start} ~`;
+                }
+            }
 
             // 행 클릭 시 해당 포트폴리오 로드
             tr.onclick = (e) => {
@@ -145,8 +173,8 @@ async function loadPortfolioHistoryList(force = false) {
                 loadPortfolio(true);
             };
 
-            // 삭제 버튼: 진행중(simulation) 또는 실거래(live)가 아닐 때만 노출
-            const showDelete = item.type !== 'simulation' && item.type !== 'live';
+            // 삭제 버튼: 진행중(simulation 중 ended_at이 없는 상태) 또는 실거래(live)가 아닐 때만 노출 (종료된 simulation은 삭제 허용)
+            const showDelete = (item.type === 'simulation' && item.ended_at) || (item.type !== 'simulation' && item.type !== 'live');
             const deleteBtnHtml = showDelete 
                 ? `<button class="btn danger btn-delete-history" style="padding:2px 6px; font-size:0.7rem; background:#EF4444; border:none; color:white; border-radius:4px; cursor:pointer;" onclick="deletePortfolioHistory('${item.id}')">삭제</button>`
                 : '';
@@ -182,9 +210,11 @@ async function loadPortfolioHistoryList(force = false) {
                 if (item.type === 'live') {
                     prefix = '🔴 [실거래]';
                 } else if (item.type === 'simulation') {
-                    prefix = '🟢 [진행중]';
-                } else if (item.type === 'simulation_ended') {
-                    prefix = '⚪ [종료됨]';
+                    if (item.ended_at) {
+                        prefix = '⚪ [종료됨]';
+                    } else {
+                        prefix = '🟢 [진행중]';
+                    }
                 } else {
                     return; // 백테스트 또는 정의되지 않은 타입 차단
                 }
@@ -333,7 +363,7 @@ async function loadPortfolio(force = false) {
         }
 
         const cachedPort = (state.portfoliosCache || []).find(p => p.id === portfolioId);
-        const isBacktest = String(portfolioId).startsWith('backtest_') || (cachedPort && cachedPort.type === 'simulation_ended');
+        const isBacktest = String(portfolioId).startsWith('backtest_') || (cachedPort && cachedPort.type === 'simulation' && cachedPort.ended_at);
 
         // UI 요소 캐시
         const typeBadge = document.getElementById('portfolio-type-badge');
@@ -390,6 +420,7 @@ async function loadPortfolio(force = false) {
         state.currentPortfolioData = {
             id: portfolioId,
             type: (portfolioId === '1' || portfolioId === 1 || portfolioId === 'live') ? 'live' : (cachedPort ? cachedPort.type : (String(portfolioId).startsWith('backtest_') ? 'backtest' : 'simulation')),
+            ended_at: data.ended_at || (cachedPort ? cachedPort.ended_at : null),
             total_value: totalValue,
             cash: cash,
             exchange_cash: exchangeCashMap,
@@ -407,7 +438,7 @@ async function loadPortfolio(force = false) {
             renderBacktestPerformance(data);
         } else if (isBacktest) {
             if (typeBadge) {
-                if (cachedPort && cachedPort.type === 'simulation_ended') {
+                if (cachedPort && cachedPort.type === 'simulation' && cachedPort.ended_at) {
                     typeBadge.innerText = '모의투자 종료';
                     typeBadge.style.background = '#64748B';
                 } else {

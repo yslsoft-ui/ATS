@@ -78,7 +78,7 @@ async def test_adaptive_diversity():
         await db.execute('''
             INSERT OR IGNORE INTO portfolios (id, name, type)
             VALUES (?, ?, ?)
-        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulated"))
+        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulation"))
         
         # portfolio_exchanges 테이블에 자금 시드 생성
         await db.execute('''
@@ -206,7 +206,7 @@ async def test_counterfactual_sampling_tracker():
         await db.execute('''
             INSERT OR IGNORE INTO portfolios (id, name, type)
             VALUES (?, ?, ?)
-        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulated"))
+        ''', (get_integer_portfolio_id("port_test"), "Test Portfolio", "simulation"))
         await db.execute('''
             INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
             VALUES (?, ?, ?, ?)

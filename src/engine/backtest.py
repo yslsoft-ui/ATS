@@ -79,7 +79,7 @@ class BacktestEngine:
         portfolio = Portfolio(
             portfolio_id=portfolio_id, 
             name=portfolio_name, 
-            portfolio_type='simulationR'
+            portfolio_type='backtest'
         )
         portfolio.exchange_cash[exchange_id.lower()] = float(initial_cash)
         portfolio.exchange_initial_cash[exchange_id.lower()] = float(initial_cash)
@@ -255,7 +255,7 @@ class BacktestEngine:
         portfolio = Portfolio(
             portfolio_id=portfolio_id,
             name=portfolio_name,
-            portfolio_type='simulationR'
+            portfolio_type='backtest'
         )
         self.portfolio_manager.add_portfolio(portfolio)
         # 백테스트 틱 리플레이 도중 발생하는 주문의 외래 키 제약 충족을 위해 사전 저장

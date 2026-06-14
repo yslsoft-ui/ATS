@@ -72,11 +72,12 @@ class FakePortfolioManager:
         return sim_ports[0]
 
     async def db_save_portfolio(self, db, portfolio):
+        ended_at = getattr(portfolio, 'ended_at', None)
         await db.execute('''
-            INSERT INTO portfolios (id, name, type)
-            VALUES (?, ?, ?)
-            ON CONFLICT(id) DO NOTHING
-        ''', (portfolio.id, portfolio.name, portfolio.portfolio_type))
+            INSERT INTO portfolios (id, name, type, ended_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET ended_at = excluded.ended_at
+        ''', (portfolio.id, portfolio.name, portfolio.portfolio_type, ended_at))
         
         if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
             for ex_id, ex_cash in portfolio.exchange_cash.items():
@@ -282,4 +283,5 @@ async def test_portfolio_lifecycle(setup_dispatcher):
     end_payload = {"portfolio_id": "sim_test_123"}
     await dispatcher.dispatch(UserCommand.PORTFOLIO_END, end_payload)
 
-    assert portfolio.portfolio_type == "simulation_ended"
+    assert portfolio.portfolio_type == "simulation"
+    assert portfolio.ended_at is not None

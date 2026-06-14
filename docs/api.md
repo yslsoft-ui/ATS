@@ -178,6 +178,19 @@
 
 - **`GET /api/portfolios`**
   - **설명**: 현재 구동되고 있는 활성 시뮬레이션 포트폴리오 정보 목록을 조회합니다.
+  - **응답 (JSON)**:
+    ```json
+    [
+      {
+        "id": 2,
+        "name": "실시간 모의투자",
+        "cash": 10000000.0,
+        "type": "simulation",
+        "created_at": "2026-06-14 22:00:00",
+        "ended_at": null
+      }
+    ]
+    ```
 
 - **`GET /api/portfolio?portfolio_id={id}`**
   - **설명**: 특정 포트폴리오의 상세 상태, 거래소별 잔고(`portfolio_exchanges`), 분리 격리된 거래소별 현금(`exchange_cash`) 및 보유 종목(`positions`) 목록을 반환합니다. 실거래(`live`) 포트폴리오의 경우 실제 거래소 API(Upbit 및 KIS)와 실시간 연동하여 지갑 잔고와 평가금액을 동기화하여 가져옵니다.
@@ -193,6 +206,8 @@
       "total_value": 18883.0,
       "roi": 0.0,
       "type": "live",
+      "created_at": "2026-06-14 22:00:00",
+      "ended_at": null,
       "exchange_cash": {
         "upbit": 0,
         "kis": 2063

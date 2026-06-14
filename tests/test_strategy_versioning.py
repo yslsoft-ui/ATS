@@ -299,8 +299,8 @@ async def test_analyzer_and_shadow_backtest_with_regime():
             (portfolio_id, "테스트 모의투자", "simulation", 0.0, "")
         )
         await db.execute(
-            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
-            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0)
         )
         await db.commit()
 
@@ -562,8 +562,8 @@ async def test_strategy_execution_full_loop():
             (portfolio_id, "루프 테스트 포트", "simulation", 0.0, "")
         )
         await db.execute(
-            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
-            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0)
         )
         await db.commit()
         
@@ -863,8 +863,8 @@ async def test_atomic_mutations_and_async_enrichment():
             (portfolio_id, "원자적 테스트 포트", "simulation", 0.0, "")
         )
         await db.execute(
-            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary) VALUES (?, ?, ?, ?, ?)",
-            (portfolio_id, "upbit", 10000000.0, 10000000.0, 1)
+            "INSERT OR IGNORE INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash) VALUES (?, ?, ?, ?)",
+            (portfolio_id, "upbit", 10000000.0, 10000000.0)
         )
         await db.commit()
 

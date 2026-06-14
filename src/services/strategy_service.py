@@ -249,7 +249,7 @@ class StrategyService(DaemonService):
 
         # 2. 포트폴리오 매니저 기동
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
-        await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+        await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
 
         # 3. ExecutionPipeline 연동
         self.execution_pipeline = ExecutionPipeline(self.portfolio_manager)
@@ -341,7 +341,7 @@ class StrategyService(DaemonService):
         if data.get('type') == 'update_portfolio':
             logger.info(f"[StrategyService] 포트폴리오 업데이트 제어 신호 수신")
             async with self._lock:
-                await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
                 active_p = self.portfolio_manager.get_active_simulation_portfolio()
                 active_id = active_p.id if active_p else None
                 
@@ -468,7 +468,7 @@ class StrategyService(DaemonService):
                     for sig in signals:
                         logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
                         # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
-                        await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+                        await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
                         op_mode = self.config_manager.get("system.operation_mode", "shadow")
                         target_portfolio_id = '1' if op_mode == 'live' else None
                         await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
@@ -542,7 +542,7 @@ class StrategyService(DaemonService):
             param_hash = hashlib.sha256(param_str.encode('utf-8')).hexdigest()
             
             # 2. 포트폴리오 로드
-            await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
+            await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
             portfolio = self.portfolio_manager.portfolios.get(self.current_portfolio_id)
             if not portfolio:
                 return

@@ -27,12 +27,14 @@ async def list_portfolios(request: Request):
     
     ports = []
     for p in system.portfolio_manager.portfolios.values():
-        if p.portfolio_type in ['simulation', 'simulation_ended']:
+        if p.portfolio_type == 'simulation':
             ports.append({
                 "id": p.id,
                 "name": p.name,
                 "cash": p.cash,
-                "type": p.portfolio_type
+                "type": p.portfolio_type,
+                "created_at": p.created_at,
+                "ended_at": p.ended_at
             })
             
     ports.sort(key=lambda x: x["id"], reverse=True)
@@ -95,7 +97,10 @@ async def delete_portfolio_history(portfolio_id: str, request: Request):
     db_path = system.portfolio_manager.db_path
     
     async with get_db_conn(db_path) as db:
-        cursor = await db.execute("DELETE FROM portfolios WHERE id = ? AND type IN ('simulationR', 'simulation_ended')", (portfolio_id,))
+        cursor = await db.execute("""
+            DELETE FROM portfolios 
+            WHERE id = ? AND (type = 'backtest' OR (type = 'simulation' AND ended_at IS NOT NULL))
+        """, (portfolio_id,))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=400, detail="삭제할 포트폴리오를 찾을 수 없습니다. (가동 중이거나 존재하지 않음)")
         await db.commit()
@@ -111,12 +116,16 @@ async def delete_all_portfolio_history(request: Request):
     db_path = system.portfolio_manager.db_path
     
     async with get_db_conn(db_path) as db:
-        await db.execute("DELETE FROM portfolios WHERE type IN ('simulationR', 'simulation_ended')")
+        await db.execute("""
+            DELETE FROM portfolios 
+            WHERE type = 'backtest' OR (type = 'simulation' AND ended_at IS NOT NULL)
+        """)
         await db.commit()
         
     to_delete = [
         pid for pid, p in system.portfolio_manager.portfolios.items()
-        if getattr(p, 'portfolio_type', 'simulation') in ('simulationR', 'simulation_ended')
+        if getattr(p, 'portfolio_type', 'simulation') == 'backtest' or
+           (getattr(p, 'portfolio_type', 'simulation') == 'simulation' and getattr(p, 'ended_at', None) is not None)
     ]
     for pid in to_delete:
         system.portfolio_manager.portfolios.pop(pid, None)
