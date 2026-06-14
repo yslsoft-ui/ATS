@@ -33,7 +33,7 @@ async def _determine_strategy_status(system, strategy_id: str) -> str:
     """활성 포트폴리오와 보유 잔고 상태를 연산하여 전략의 실시간 동작 상태를 판별합니다."""
     active_p = system.portfolio_manager.get_active_simulation_portfolio()
     if not active_p:
-        active_p = system.portfolio_manager.portfolios.get('live')
+        active_p = system.portfolio_manager.portfolios.get('1')
         
     if not active_p or not getattr(active_p, 'strategy_info', None):
         return "DISABLED"

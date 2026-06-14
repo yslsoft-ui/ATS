@@ -23,6 +23,12 @@ const OverviewEngine = (() => {
      */
     async function initialize() {
         console.log("[OverviewEngine] Initializing...");
+        
+        // [NEW] 대시보드 진입 시 세션 목록(드롭다운 옵션)을 선제적으로 로드하고 구성
+        if (typeof loadPortfolioHistoryList === 'function') {
+            await loadPortfolioHistoryList(true);
+        }
+        
         await refreshData();
         
         // 1. 초기 로드 시점의 최근 주문 이력을 가져와서 활동 피드에 삽입
@@ -520,8 +526,9 @@ const OverviewEngine = (() => {
 
     function updateSessionSelectUI(portfolioId, type) {
         const selectEl = document.getElementById('overview-session-select');
-        if (selectEl && selectEl.value !== portfolioId) {
-            selectEl.value = portfolioId;
+        const valToSet = portfolioId ? String(portfolioId) : '';
+        if (selectEl && selectEl.value !== valToSet) {
+            selectEl.value = valToSet;
         }
 
         if (selectEl) {

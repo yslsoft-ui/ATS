@@ -71,14 +71,15 @@ async function loadPortfolioHistoryList(force = false) {
         // 정렬: 생성일시 역순 (최신이 위로)
         items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        // 'live' 항목 최상단 고정 배치
-        const liveIndex = items.findIndex(item => item.id === 'live');
+        // '1' (실거래) 항목 최상단 고정 배치
+        const liveIndex = items.findIndex(item => item.id === '1' || item.id === 1 || item.id === 'live');
         if (liveIndex > -1) {
             const liveItem = items.splice(liveIndex, 1)[0];
+            liveItem.id = '1'; // 식별자를 '1'로 강제 동기화
             items.unshift(liveItem);
         } else {
             items.unshift({
-                id: 'live',
+                id: '1',
                 name: '실계좌 자동매매',
                 type: 'live',
                 roi: 0.0,
@@ -86,7 +87,7 @@ async function loadPortfolioHistoryList(force = false) {
                 created_at: new Date().toISOString(),
                 isLive: true
             });
-            addedIds.add('live');
+            addedIds.add('1');
         }
 
         tbody.innerHTML = '';
@@ -332,7 +333,7 @@ async function loadPortfolio(force = false) {
         }
 
         const cachedPort = (state.portfoliosCache || []).find(p => p.id === portfolioId);
-        const isBacktest = portfolioId.startsWith('backtest_') || (cachedPort && cachedPort.type === 'simulation_ended');
+        const isBacktest = String(portfolioId).startsWith('backtest_') || (cachedPort && cachedPort.type === 'simulation_ended');
 
         // UI 요소 캐시
         const typeBadge = document.getElementById('portfolio-type-badge');
@@ -388,7 +389,7 @@ async function loadPortfolio(force = false) {
 
         state.currentPortfolioData = {
             id: portfolioId,
-            type: portfolioId === 'live' ? 'live' : (cachedPort ? cachedPort.type : (portfolioId.startsWith('backtest_') ? 'backtest' : 'simulation')),
+            type: (portfolioId === '1' || portfolioId === 1 || portfolioId === 'live') ? 'live' : (cachedPort ? cachedPort.type : (String(portfolioId).startsWith('backtest_') ? 'backtest' : 'simulation')),
             total_value: totalValue,
             cash: cash,
             exchange_cash: exchangeCashMap,
@@ -429,7 +430,7 @@ async function loadPortfolio(force = false) {
             renderBacktestPerformance(data);
         } else {
             if (typeBadge) {
-                if (portfolioId === 'live') {
+                if (portfolioId === '1' || portfolioId === 1 || portfolioId === 'live') {
                     typeBadge.innerText = '실계좌 자동매매';
                     typeBadge.style.background = '#EF4444';
                 } else {

@@ -65,7 +65,6 @@
 | **exchange_id** (PK) | TEXT | - | 해당 자산이 귀속된 거래소 ID |
 | **initial_cash** | REAL | DEFAULT 0.0 | 해당 거래소용 초기 설정 현금 |
 | **cash** | REAL | DEFAULT 0.0 | 해당 거래소에서 운용 가능한 현재 현금 |
-| **is_primary** | INTEGER | DEFAULT 0 | 포트폴리오의 대표 거래소 여부 (0: 일반, 1: 대표) |
 | **metrics** | TEXT | DEFAULT '{}' | 포트폴리오 성과 지표 (MDD, 승률, 누적수익률 등 JSON 포맷) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 변경 일시 |

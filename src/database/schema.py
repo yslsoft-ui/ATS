@@ -78,15 +78,15 @@ async def migrate_to_integer_keys(db_path: str):
                 ''', (new_id, r[1], r[2], r[3], r[4], r[5], r[6]))
                 
         if 'portfolio_exchanges' in existing_tables:
-            cursor = await db.execute("SELECT portfolio_id, exchange_id, initial_cash, cash, is_primary, metrics, created_at, updated_at FROM portfolio_exchanges_old")
+            cursor = await db.execute("SELECT portfolio_id, exchange_id, initial_cash, cash, metrics, created_at, updated_at FROM portfolio_exchanges_old")
             rows = await cursor.fetchall()
             for r in rows:
                 old_pid = r[0]
                 new_pid = id_map.get(old_pid, 999)
                 await db.execute('''
-                    INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary, metrics, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (new_pid, r[1], r[2], r[3], r[4], r[5], r[6], r[7]))
+                    INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, metrics, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (new_pid, r[1], r[2], r[3], r[4], r[5], r[6]))
                     
         if 'positions' in existing_tables:
             cursor = await db.execute("SELECT portfolio_id, symbol, quantity, avg_price, entry_time, peak_price, updated_at, exchange_id FROM positions_old")

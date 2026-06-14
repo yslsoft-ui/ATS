@@ -1010,8 +1010,6 @@ class SqliteTradingRepository(BaseTradingRepository):
                     p_name = row['name']
                     p_type = row['type']
                     
-                    if p_type == 'live':
-                        seed_portfolio_id_map('live', p_id)
                     if p_name:
                         seed_portfolio_id_map(p_name, p_id)
 
@@ -1051,7 +1049,7 @@ class SqliteTradingRepository(BaseTradingRepository):
     async def save_portfolio(self, portfolio: Any):
         async with get_db_conn(self.db_path) as db:
             # 1. 포트폴리오 기본 정보 저장
-            if portfolio.portfolio_type == 'live' or portfolio.id == 1 or portfolio.id == 'live':
+            if portfolio.portfolio_type == 'live' or portfolio.id == 1:
                 pid = 1
                 await db.execute('''
                     INSERT INTO portfolios (id, name, type, strategy_info, duration, updated_at)
@@ -1116,13 +1114,11 @@ class SqliteTradingRepository(BaseTradingRepository):
                             portfolio.exchange_initial_cash = {}
                         portfolio.exchange_initial_cash[ex_id] = init_cash
 
-                    is_primary = 1 if ex_id.lower() == 'upbit' else 0
-
                     await db.execute('''
-                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, is_primary, updated_at)
-                        VALUES (?, ?, ?, ?, ?, datetime('now'))
+                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash, updated_at)
+                        VALUES (?, ?, ?, ?, datetime('now'))
                         ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = ?, initial_cash = ?, updated_at = datetime('now')
-                    ''', (pid, ex_id, init_cash, ex_cash, is_primary, ex_cash, init_cash))
+                    ''', (pid, ex_id, init_cash, ex_cash, ex_cash, init_cash))
 
             # 2. 현재 포지션 정보 저장 (기존 포지션 삭제 후 재삽입)
             await db.execute("DELETE FROM positions WHERE portfolio_id = ?", (pid,))
@@ -1157,7 +1153,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                         portfolio_type=row['type'],
                         strategy_info=row['strategy_info'] if 'strategy_info' in row.keys() else ""
                     )
-                    key = 'live' if p.portfolio_type == 'live' else str(p.id)
+                    key = str(p.id)
                     loaded_portfolios[key] = p
             
             # 2. 각 포트폴리오의 포지션 및 거래소 격리 자금 로드
@@ -1191,7 +1187,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                     orders = []
                     for r in reversed(rows):
                         order = dict(r)
-                        order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
+                        order['portfolio_id'] = str(order['portfolio_id'])
                         orders.append(order)
                     p.history = orders
         return loaded_portfolios
@@ -1222,7 +1218,7 @@ class SqliteTradingRepository(BaseTradingRepository):
             await db.commit()
 
     async def get_orders_history(self, portfolio_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        if portfolio_id == 'live':
+        if portfolio_id == '1' or portfolio_id == 1:
             async with get_db_conn(self.db_path) as db:
                 query = """
                     SELECT * FROM real_orders
@@ -1246,7 +1242,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                                 pass
                         
                         orders.append({
-                            'portfolio_id': 'live',
+                            'portfolio_id': '1',
                             'exchange_id': r['exchange_id'],
                             'market': 'KRW',
                             'strategy_id': 'live_auto',
@@ -1290,7 +1286,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 orders = []
                 for r in rows:
                     order = dict(r)
-                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
+                    order['portfolio_id'] = str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])
@@ -1315,7 +1311,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 orders = []
                 for r in rows:
                     order = dict(r)
-                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
+                    order['portfolio_id'] = str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])
@@ -1342,7 +1338,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 orders = []
                 for r in rows:
                     order = dict(r)
-                    order['portfolio_id'] = 'live' if order['portfolio_id'] == 1 else str(order['portfolio_id'])
+                    order['portfolio_id'] = str(order['portfolio_id'])
                     if 'context' in order and isinstance(order['context'], str) and order['context']:
                         try:
                             order['context'] = json.loads(order['context'])

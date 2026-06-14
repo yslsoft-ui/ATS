@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS portfolio_exchanges (
     exchange_id TEXT,
     initial_cash REAL DEFAULT 0.0,
     cash REAL DEFAULT 0.0,
-    is_primary INTEGER DEFAULT 0,
     metrics TEXT DEFAULT '{}',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

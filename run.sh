@@ -121,9 +121,9 @@ stop_ats() {
     tmux list-panes -a -t "$TMUX_SESSION" -F '#{session_name}:#{window_index}.#{pane_index}' | xargs -I {} tmux send-keys -t {} C-c
 
     # 4.2. 파이썬 데몬 및 uvicorn 프로세스 잔존 여부 확인
-    echo "프로세스가 안전하게 종료될 때까지 대기합니다 (최대 10초)..."
+    echo "프로세스가 안전하게 종료될 때까지 대기합니다 (최대 20초)..."
     local pids_alive=true
-    for i in {1..10}; do
+    for i in {1..20}; do
         if ! pgrep -f "src/collector_daemon.py|src/strategy_daemon.py|src/shadow_eval_daemon.py|src/market_cleanup_daemon.py|src/server/main.py|uvicorn" > /dev/null; then
             pids_alive=false
             echo "모든 파이썬 데몬 및 웹 서버 프로세스가 그래이스풀하게 종료되었습니다."

@@ -258,7 +258,7 @@ class UserCommandDispatcher:
     async def _sync_active_portfolio_strategies(self, strategy_id: str, enabled: bool):
         active_p = self.portfolio_manager.get_active_simulation_portfolio()
         if not active_p:
-            active_p = self.portfolio_manager.portfolios.get('live')
+            active_p = self.portfolio_manager.portfolios.get('1')
             
         if active_p and active_p.strategy_info:
             try:

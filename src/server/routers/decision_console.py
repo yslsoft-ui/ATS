@@ -110,7 +110,7 @@ async def get_strategies(request: Request):
                 db_versions = {r["strategy_id"]: {"version": r["current_version_id"], "params": r["current_params"]} for r in await cur.fetchall()}
                 
         # 실제 데몬/엔진 활성화 상태 조회
-        active_p = system.portfolio_manager.get_active_simulation_portfolio() or system.portfolio_manager.portfolios.get('live')
+        active_p = system.portfolio_manager.get_active_simulation_portfolio() or system.portfolio_manager.portfolios.get('1')
         applied_in_engine = {}
         if active_p and hasattr(active_p, 'strategy_info') and active_p.strategy_info:
             try:
@@ -189,7 +189,7 @@ async def get_strategy_trace(strategy_id: str, request: Request):
             settings_enabled = config.get("enabled", False)
             
             # 엔진 상태
-            active_p = system.portfolio_manager.get_active_simulation_portfolio() or system.portfolio_manager.portfolios.get('live')
+            active_p = system.portfolio_manager.get_active_simulation_portfolio() or system.portfolio_manager.portfolios.get('1')
             engine_enabled = False
             engine_version = None
             if active_p and hasattr(active_p, 'strategy_info') and active_p.strategy_info:

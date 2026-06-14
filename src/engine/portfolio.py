@@ -625,11 +625,11 @@ class PortfolioManager:
         from pathlib import Path
         from src.engine.utils.stock_mapper import stock_mapper
         
-        portfolio = self.portfolios.get('live')
+        portfolio = self.portfolios.get('1') or self.portfolios.get(1)
         if not portfolio:
             portfolio = Portfolio(
-                portfolio_id='live',
-                name='실계좌 자동매매',
+                portfolio_id=1,
+                name='실거래 포트폴리오',
                 portfolio_type='live'
             )
             self.add_portfolio(portfolio)
@@ -734,8 +734,7 @@ class PortfolioManager:
                 if tot_val > 0.0:
                     portfolio.exchange_initial_cash['upbit'] = tot_val
 
-            # 실거래(live) 포트폴리오의 초기 투자금을 0원으로 강제 고정합니다.
-            portfolio.exchange_initial_cash['upbit'] = 0.0
+
             
         except Exception as e:
             logger.error(f"sync_live_portfolio_from_exchange (Upbit): Exception occurred: {e}")
@@ -968,7 +967,7 @@ class PortfolioManager:
                     logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for {ex_id} to {total_ex_val}")
                     
         try:
-            await self.save_to_db('live')
+            await self.save_to_db('1')
         except Exception as e:
             logger.error(f"sync_live_portfolio_from_exchange: Failed to save to DB: {e}")
 
@@ -1441,10 +1440,14 @@ class PortfolioManager:
         기존 backtest.py와 portfolio-adapter.js에 파편화되어 있던 성과 데이터 구조를 단일화합니다.
         실제 데이터 가공 및 성과 통계 계산은 PerformanceAnalyzer로 위임합니다.
         """
-        if portfolio_id == 'live':
+        if portfolio_id == '1' or portfolio_id == 1:
             await self.sync_live_portfolio_from_exchange(system)
 
-        portfolio = self.portfolios.get(portfolio_id)
+        portfolio = self.portfolios.get(str(portfolio_id)) or self.portfolios.get(portfolio_id)
+        if not portfolio and (portfolio_id == '1' or portfolio_id == 1):
+            await self.sync_live_portfolio_from_exchange(system)
+            portfolio = self.portfolios.get('1') or self.portfolios.get(1)
+            
         if not portfolio:
             return {
                 "status": "success",

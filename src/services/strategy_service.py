@@ -265,7 +265,7 @@ class StrategyService(DaemonService):
             op_mode = self.config_manager.get("system.operation_mode", "shadow")
             if op_mode == 'live':
                 await self.portfolio_manager.sync_live_portfolio_from_exchange(self)
-                active_p = self.portfolio_manager.portfolios.get('live')
+                active_p = self.portfolio_manager.portfolios.get('1')
             else:
                 active_p = self.portfolio_manager.get_active_simulation_portfolio()
                 
@@ -470,7 +470,7 @@ class StrategyService(DaemonService):
                         # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
                         await self.portfolio_manager.load_from_db(exclude_types=['simulationR', 'simulation_ended'])
                         op_mode = self.config_manager.get("system.operation_mode", "shadow")
-                        target_portfolio_id = 'live' if op_mode == 'live' else None
+                        target_portfolio_id = '1' if op_mode == 'live' else None
                         await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
         except asyncio.CancelledError:
             pass
