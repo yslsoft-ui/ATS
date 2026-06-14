@@ -440,8 +440,8 @@
     "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1781443168.2138755,
-    "ast_hash": "c7cde370208dc622f309d648a54650e8",
+    "mtime": 1781445475.1725497,
+    "ast_hash": "2eeb9dc7aec74ff43755d6932423781d",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/settings.js": {
@@ -505,8 +505,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1781444880.0135446,
-    "ast_hash": "78b54ed13e89418593f3e07ff6641925",
+    "mtime": 1781445342.7700975,
+    "ast_hash": "00c69d121008a08e63f142b6f17008cc",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
@@ -1285,7 +1285,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781444909.2900867,
+    "mtime": 1781445491.1568456,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },
@@ -1305,8 +1305,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781444868.157325,
-    "ast_hash": "ca7663b60b2b5c7d09a8b75e40e1d044",
+    "mtime": 1781445331.54589,
+    "ast_hash": "dc6f89d3937f752239fe8e396c6e7579",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
