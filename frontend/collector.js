@@ -27,6 +27,7 @@ const CollectorView = (() => {
     // 로컬 종목 데이터 및 메타데이터 캐시
     let activeSymbols = {};
     let activeSymbolsMetadata = {};
+    let daemonSymbolsVersions = {}; // 데몬의 실제 종목 버전 캐시
     let isStaleState = false;
 
     // 모니터링 관련 임계값 설정 (백엔드와 동기화되며, 연결 전에는 안전한 기본값으로 fallback)
@@ -154,6 +155,7 @@ const CollectorView = (() => {
             const detail = data.daemon_detail || {};
             currentPid = detail.source_pid || null;
             currentDaemonStartedAt = detail.daemon_started_at || 0;
+            daemonSymbolsVersions = detail.symbols_version || {};
             
             // 하트비트 갱신
             const detailSyncedAt = detail.synced_at || 0;
@@ -262,7 +264,7 @@ const CollectorView = (() => {
             const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
             
             // 데몬 측 캐시 버전 대조
-            const daemonVer = window.state.collectorStatuses?.[exch]?.symbols_version || 1;
+            const daemonVer = daemonSymbolsVersions[exch] || 1;
             const cachedVer = meta.symbols_version || 0;
             const isMismatch = daemonVer !== cachedVer;
 
@@ -478,7 +480,7 @@ const CollectorView = (() => {
         const ageMs = meta.synced_at ? (now - meta.synced_at) : 999999;
         const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
         
-        const daemonVer = exchInfo.symbols_version || 1;
+        const daemonVer = daemonSymbolsVersions[exch] || 1;
         const cachedVer = meta.symbols_version || 0;
         const isMismatch = daemonVer !== cachedVer;
         const isSyncPending = isSymStale || isMismatch;
@@ -796,6 +798,7 @@ const CollectorView = (() => {
         // 데몬 메타데이터 백업 및 갱신
         currentPid = data.source_pid || null;
         currentDaemonStartedAt = data.daemon_started_at || 0;
+        daemonSymbolsVersions = data.symbols_version || {};
 
         // [재기동 검증] restart_daemon 명령 펜딩이 있는 경우, 새 PID/기동시각 대조
         for (const [cmdId, cmd] of pendingCommands.entries()) {

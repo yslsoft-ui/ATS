@@ -54,7 +54,7 @@ async def get_symbols(request: Request):
             # settings.yaml에 명시된 고정 종목 목록
             for s in fixed_symbols:
                 all_symbols.append({
-                    "exchange": exch,
+                    "exchange_id": exch,
                     "symbol": s,
                     "name": stock_mapper.get_name(exch, s)
                 })
@@ -64,13 +64,13 @@ async def get_symbols(request: Request):
             try:
                 async with get_db_conn(system.db_path) as db:
                     async with db.execute(
-                        'SELECT symbol FROM exchange_assets WHERE exchange = ?', (exch,)
+                        'SELECT symbol FROM exchange_assets WHERE exchange_id = ?', (exch,)
                     ) as cursor:
                         rows = await cursor.fetchall()
                 for row in rows:
                     s = row['symbol']
                     all_symbols.append({
-                        "exchange": exch,
+                        "exchange_id": exch,
                         "symbol": s,
                         "name": stock_mapper.get_name(exch, s)
                     })
@@ -82,7 +82,7 @@ async def get_symbols(request: Request):
 @router.get("/candles")
 async def get_candles(
     request: Request = None, 
-    exchange: str = "upbit", 
+    exchange_id: str = "upbit", 
     symbol: str = "BTC", 
     interval: int = 60, 
     limit: int = 500, 
@@ -92,7 +92,7 @@ async def get_candles(
     """최적화된 고성능 캔들 데이터 반환 (저장소 패턴 위임)"""
     system = request.app.state.system if request and hasattr(request.app.state, 'system') else None
     return await market_repo.get_candles(
-        exchange=exchange,
+        exchange_id=exchange_id,
         symbol=symbol,
         interval=interval,
         limit=limit,
@@ -103,13 +103,13 @@ async def get_candles(
 
 @router.get("/restored-candles")
 async def get_restored_candles(
-    exchange: Optional[str] = None,
+    exchange_id: Optional[str] = None,
     symbol: Optional[str] = None,
     limit_minutes: int = 1440
 ):
     """DB에 누락되었으나 틱으로 복구된 캔들 목록 반환"""
     return await market_repo.get_restored_candles(
-        exchange=exchange,
+        exchange_id=exchange_id,
         symbol=symbol,
         limit_minutes=limit_minutes
     )
@@ -881,7 +881,7 @@ async def toggle_kis_symbol(request: Request, body: dict):
             # 2. exchange_assets 에 해당 종목이 존재하는지 확인
             async with db.execute('''
                 SELECT is_active FROM exchange_assets 
-                WHERE exchange = 'kis' AND symbol = ?
+                WHERE exchange_id = 'kis' AND symbol = ?
             ''', (code,)) as cursor:
                 row = await cursor.fetchone()
                 
@@ -895,14 +895,14 @@ async def toggle_kis_symbol(request: Request, body: dict):
                     new_status_val = 0 if current_active == 1 else 1
                 await db.execute('''
                     UPDATE exchange_assets SET is_active = ?, updated_at = datetime('now')
-                    WHERE exchange = 'kis' AND symbol = ?
+                    WHERE exchange_id = 'kis' AND symbol = ?
                 ''', (new_status_val, code))
                 new_status = (new_status_val == 1)
             else:
                 # 존재하지 않으면 명시값 우선, 없으면 활성으로 추가
                 new_status_val = 1 if (explicit_active is None or explicit_active) else 0
                 await db.execute('''
-                    INSERT INTO exchange_assets (exchange, symbol, is_active)
+                    INSERT INTO exchange_assets (exchange_id, symbol, is_active)
                     VALUES ('kis', ?, ?)
                 ''', (code, new_status_val))
                 new_status = (new_status_val == 1)
@@ -1037,12 +1037,12 @@ def _create_bithumb_jwt(access_key, secret_key, query_hash=None):
     ).digest()
     return f"{signing_input}.{base64url(sig)}"
 
-@router.get("/api/exchanges/{exchange}/orderbook/{symbol}")
-async def get_exchange_orderbook(request: Request, exchange: str, symbol: str):
+@router.get("/api/exchanges/{exchange_id}/orderbook/{symbol}")
+async def get_exchange_orderbook(request: Request, exchange_id: str, symbol: str):
     """
     거래소(업비트/빗썸/KIS)의 호가창 및 현재가 데이터를 조회하여 반환합니다.
     """
-    exchange = exchange.lower()
+    exchange = exchange_id.lower()
     system = request.app.state.system
     
     if exchange == 'kis':
@@ -1175,12 +1175,12 @@ async def get_exchange_orderbook(request: Request, exchange: str, symbol: str):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/api/exchanges/{exchange}/order")
-async def place_exchange_order(request: Request, exchange: str, body: RealOrderRequest):
+@router.post("/api/exchanges/{exchange_id}/order")
+async def place_exchange_order(request: Request, exchange_id: str, body: RealOrderRequest):
     """
     실제 거래소(업비트/빗썸/KIS)에 주문을 제출합니다.
     """
-    exchange = exchange.lower()
+    exchange = exchange_id.lower()
     if exchange not in ('upbit', 'bithumb', 'kis'):
         raise HTTPException(status_code=400, detail=f"지원하지 않는 거래소입니다: {exchange}")
         
@@ -1270,7 +1270,7 @@ async def place_exchange_order(request: Request, exchange: str, body: RealOrderR
                         async with get_db_conn(system.db_path) as db:
                             await db.execute('''
                                 INSERT OR IGNORE INTO real_orders 
-                                (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 'upbit',
@@ -1363,7 +1363,7 @@ async def place_exchange_order(request: Request, exchange: str, body: RealOrderR
                         async with get_db_conn(system.db_path) as db:
                             await db.execute('''
                                 INSERT OR IGNORE INTO real_orders 
-                                (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 'bithumb',
@@ -1470,7 +1470,7 @@ async def place_exchange_order(request: Request, exchange: str, body: RealOrderR
                         async with get_db_conn(system.db_path) as db:
                             await db.execute('''
                                 INSERT OR IGNORE INTO real_orders 
-                                (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+                                (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ''', (
                                 'kis',
@@ -1504,12 +1504,12 @@ async def place_exchange_order(request: Request, exchange: str, body: RealOrderR
                 raise e
             raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/api/exchanges/{exchange}/orders")
-async def get_exchange_orders(request: Request, exchange: str, symbol: str, limit: Optional[int] = None):
+@router.get("/api/exchanges/{exchange_id}/orders")
+async def get_exchange_orders(request: Request, exchange_id: str, symbol: str, limit: Optional[int] = None):
     """
     로컬 DB(real_orders)에 적재된 실제 거래소의 체결 완료 주문 내역을 최신순으로 가져옵니다.
     """
-    exchange = exchange.lower()
+    exchange = exchange_id.lower()
     if exchange not in ('upbit', 'bithumb', 'kis'):
         raise HTTPException(status_code=400, detail=f"현재 주문 내역 조회는 업비트, 빗썸, KIS만 지원합니다.")
         
@@ -1525,11 +1525,11 @@ async def get_exchange_orders(request: Request, exchange: str, symbol: str, limi
             query = """
                 SELECT uuid, side, price, volume, executed_volume, fee, state, created_at, symbol
                 FROM real_orders
-                WHERE exchange = ? AND symbol = ? AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+                WHERE exchange_id = ? AND symbol = ? AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
                 ORDER BY created_at DESC
                 LIMIT ?
             """
-            async with db.execute(query, (exchange, clean_symbol, limit)) as cursor:
+            async with db.execute(query, (exchange_id, clean_symbol, limit)) as cursor:
                 rows = await cursor.fetchall()
                 
                 processed = []

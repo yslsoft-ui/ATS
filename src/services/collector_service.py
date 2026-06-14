@@ -121,7 +121,7 @@ class CollectorService(DaemonService):
             # 가공 프로세서 생성
             from src.engine.market_data_processor import MarketDataProcessor
             processor = MarketDataProcessor(
-                exchange=exchange_id,
+                exchange_id=exchange_id,
                 processing_queue=proc_queue,
                 db_queue=tick_queue,
                 candle_queue=candle_queue
@@ -613,10 +613,10 @@ class CollectorService(DaemonService):
                     active_symbols = []
                     async with get_db_conn(self.db_path) as db:
                         async with db.execute(
-                            "SELECT exchange, symbol FROM exchange_assets WHERE is_active = 1"
+                            "SELECT exchange_id, symbol FROM exchange_assets WHERE is_active = 1"
                         ) as cursor:
                             rows = await cursor.fetchall()
-                            active_symbols = [(r["exchange"], r["symbol"]) for r in rows]
+                            active_symbols = [(r["exchange_id"], r["symbol"]) for r in rows]
                             
                     # 2. 종목별 피처 계산 및 적재
                     for ex, sym in active_symbols:
@@ -625,7 +625,7 @@ class CollectorService(DaemonService):
                         async with get_db_conn(self.db_path) as db:
                             async with db.execute(
                                 "SELECT open, high, low, close, volume, timestamp FROM candles "
-                                "WHERE exchange = ? AND symbol = ? AND interval = 60 "
+                                "WHERE exchange_id = ? AND symbol = ? AND interval = 60 "
                                 "ORDER BY timestamp DESC LIMIT 25",
                                 (ex, sym)
                             ) as cursor:
@@ -676,7 +676,7 @@ class CollectorService(DaemonService):
                         async with get_db_conn(self.db_path) as db:
                             async with db.execute(
                                 "SELECT trade_price, trade_volume, ask_bid FROM trades "
-                                "WHERE exchange = ? AND symbol = ? AND trade_timestamp BETWEEN ? AND ?",
+                                "WHERE exchange_id = ? AND symbol = ? AND trade_timestamp BETWEEN ? AND ?",
                                 (ex, sym, bucket_start_ms, bucket_end_ms)
                             ) as cursor:
                                 t_rows = await cursor.fetchall()

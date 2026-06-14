@@ -178,7 +178,7 @@ class UserCommandDispatcher:
     async def _handle_collector_start(self, command_id: str, payload: Dict[str, Any]):
         exchange = payload.get("exchange")
         if not exchange:
-            raise ValueError("Exchange parameter is missing")
+            raise ValueError("exchange parameter is missing")
             
         if exchange == "all":
             exchanges_config = self.config_manager.get('exchanges', {})
@@ -202,7 +202,7 @@ class UserCommandDispatcher:
     async def _handle_collector_stop(self, command_id: str, payload: Dict[str, Any]):
         exchange = payload.get("exchange")
         if not exchange:
-            raise ValueError("Exchange parameter is missing")
+            raise ValueError("exchange parameter is missing")
             
         if exchange == "all":
             exchanges_config = self.config_manager.get('exchanges', {})
@@ -382,44 +382,46 @@ class UserCommandDispatcher:
         p_name = f"실시간 모의투자 ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
         initial_cash_input = initial_cash
         exchange_cash_map = {}
-        total_cash = 0.0
+        exchange_initial_cash_map = {}
 
-        enabled_exchanges = []
-        exchanges_config = self.config_manager.get('exchanges', {})
-        for ex_id, exch_config in exchanges_config.items():
-            if exch_config.get('enabled', True):
-                enabled_exchanges.append(ex_id.lower())
-                
-        if not enabled_exchanges:
-            enabled_exchanges = ['upbit']
+        # 명시적으로 요청에 포함된 거래소 목록
+        target_exchanges = payload.get("exchange_ids") or payload.get("exchanges")
+        
+        # 명시적 거래소 목록이 없다면 설정 파일에서 활성화된(enabled=True) 거래소 리스트 사용
+        if not target_exchanges:
+            target_exchanges = []
+            exchanges_config = self.config_manager.get('exchanges', {})
+            for ex_id, exch_config in exchanges_config.items():
+                if exch_config.get('enabled', True):
+                    target_exchanges.append(ex_id.lower())
+                    
+        if not target_exchanges:
+            target_exchanges = ['upbit']
+            
+        target_exchanges = [ex.lower() for ex in target_exchanges]
 
         if isinstance(initial_cash_input, dict):
             for ex, cash_val in initial_cash_input.items():
                 ex_lower = ex.lower()
-                if ex_lower in enabled_exchanges:
+                if ex_lower in target_exchanges:
                     val = float(cash_val)
                     exchange_cash_map[ex_lower] = val
-                    total_cash += val
-            
-            if not exchange_cash_map:
-                total_cash = 30000000.0
-                each_cash = total_cash / len(enabled_exchanges)
-                exchange_cash_map = {ex: each_cash for ex in enabled_exchanges}
+                    exchange_initial_cash_map[ex_lower] = val
         else:
             total_cash = float(initial_cash_input)
-            each_cash = total_cash / len(enabled_exchanges)
-            exchange_cash_map = {ex: each_cash for ex in enabled_exchanges}
+            each_cash = total_cash / len(target_exchanges)
+            for ex in target_exchanges:
+                exchange_cash_map[ex] = each_cash
+                exchange_initial_cash_map[ex] = each_cash
 
         from src.engine.portfolio import Portfolio
         p = Portfolio(
             portfolio_id=portfolio_id,
             name=p_name,
-            initial_cash=total_cash,
-            exchange_id='all',
             portfolio_type='simulation'
         )
-        p.cash = total_cash
         p.exchange_cash = exchange_cash_map
+        p.exchange_initial_cash = exchange_initial_cash_map
         
         # 4. 선택 전략 메타 정보 기재
         meta_info = {
