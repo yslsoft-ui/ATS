@@ -69,31 +69,35 @@ class FakePortfolioManager:
         sim_ports.sort(key=lambda x: x.id, reverse=True)
         return sim_ports[0]
 
+    async def db_save_portfolio(self, db, portfolio):
+        await db.execute('''
+            INSERT INTO portfolios (id, name, type)
+            VALUES (?, ?, ?)
+            ON CONFLICT(id) DO NOTHING
+        ''', (portfolio.id, portfolio.name, portfolio.portfolio_type))
+        
+        if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
+            for ex_id, ex_cash in portfolio.exchange_cash.items():
+                init_cash = portfolio.exchange_initial_cash.get(ex_id, ex_cash)
+                await db.execute('''
+                    INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = excluded.cash
+                ''', (portfolio.id, ex_id, init_cash, ex_cash))
+        else:
+            await db.execute('''
+                INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
+                VALUES (?, 'upbit', 10000000.0, ?)
+                ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = excluded.cash
+            ''', (portfolio.id, portfolio.cash))
+
     async def save_to_db(self, portfolio_id: str):
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
             return
         from src.database.connection import get_db_conn
         async with get_db_conn(self.db_path) as db:
-            await db.execute('''
-                INSERT INTO portfolios (id, name, type, exchange_id, initial_cash, cash)
-                VALUES (?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET cash = excluded.cash
-            ''', (portfolio.id, portfolio.name, portfolio.portfolio_type, portfolio.exchange_id, portfolio.initial_cash, portfolio.cash))
-            
-            if hasattr(portfolio, 'exchange_cash') and portfolio.exchange_cash:
-                for ex_id, ex_cash in portfolio.exchange_cash.items():
-                    await db.execute('''
-                        INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
-                        VALUES (?, ?, 10000000.0, ?)
-                        ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = excluded.cash
-                    ''', (portfolio.id, ex_id, ex_cash))
-            else:
-                await db.execute('''
-                    INSERT INTO portfolio_exchanges (portfolio_id, exchange_id, initial_cash, cash)
-                    VALUES (?, 'upbit', 10000000.0, ?)
-                    ON CONFLICT(portfolio_id, exchange_id) DO UPDATE SET cash = excluded.cash
-                ''', (portfolio.id, portfolio.cash))
+            await self.db_save_portfolio(db, portfolio)
             await db.commit()
 
     async def get_portfolio_current_prices(self, portfolio_id: str, system):
