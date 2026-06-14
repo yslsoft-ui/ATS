@@ -356,4 +356,23 @@ sequenceDiagram
   - **재시작 (`./run.sh restart`)**: 안전 종료(`stop`) 프로세스를 먼저 끝낸 뒤, 재기동(`start`)을 시작합니다.
   - 옵션으로 웹 서버 핫 리로딩을 켜고 싶을 경우 `start`나 `restart` 커맨드 뒤에 `--reload`를 덧붙여 실행합니다 (예: `./run.sh start --reload`).
 
+---
+
+## 11. 로깅 및 모니터링 가시성 정책 (Logging & Telemetry Policy)
+
+실시간 트레이딩 환경의 디버깅 가시성을 확보하고 로그 중복으로 인한 가독성 저하를 방지하기 위해 다음과 같은 로깅 정책을 강제합니다.
+
+### 11.1. 로거 네임스페이스 자동 정규화
+- `get_logger(name)`을 통해 로거를 획득할 때, 모듈 로거 이름이 `src.` 접두사로 시작하지 않는 경우(예: `strategy_service`) 자동으로 `src.` 접두사(예: `src.strategy_service`)를 부여합니다.
+- 이를 통해 개별 서비스의 로그가 최상위 `src` 로거로 유실 없이 버블링(Bubble-up)되어 전파(propagation)되도록 보장하며, 최종적으로 `logs/ats.log` 및 콘솔 콘솔 핸들러에 적절히 보존됩니다.
+
+### 11.2. 로깅 핸들러 중복 등록 방어
+- 데몬 재시작 또는 설정 핫리로드 시 `setup_logging`이 여러 모듈에 의해 다중 호출되어 핸들러가 중복 등록되고 동일 로그가 콘솔 및 파일에 여러 번 인쇄되는 현상을 방지합니다.
+- `setup_logging` 실행 시 `logging.getLogger('src')`에 이미 바인딩된 핸들러(`target_logger.handlers`)가 존재할 경우, 전역 상태 변수(`_is_initialized`)를 즉시 True로 복원하고 초기화 단계를 회피합니다.
+
+### 11.3. 실시간 틱 가드 및 미매칭 키 경고 Throttling
+- 실시간 틱 수신 루프(`_market_data_loop`) 내부로 들어오는 틱 중 `exchange_id` 및 `symbol`이 결여된 불량 이벤트 감지 시 즉각 `warning` 로그를 남기고 폐기하여 데이터 무결성을 보장합니다.
+- 활성화된 TradeEngine 세션에 등록되지 않은 종목의 틱(`exchange_id:symbol` 미매칭 키)이 들어올 경우, 실시간 고속 스트리밍 환경에서 콘솔 로그가 폭발하는 것을 막기 위해 `self._unmatched_keys` 집합을 사용하여 **최초 1회만 경고 로그**를 발생시키고 이후에는 경고를 음소거(Throttling)합니다.
+
+
 

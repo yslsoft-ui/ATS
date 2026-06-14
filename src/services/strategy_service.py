@@ -35,6 +35,7 @@ class StrategyService(DaemonService):
         self.execution_pipeline: Optional[ExecutionPipeline] = None
         
         self.trade_engines: Dict[str, TradeEngine] = {}
+        self._unmatched_keys = set()
         self.current_portfolio_id = None
         self._status_counter = 0
 
@@ -415,11 +416,22 @@ class StrategyService(DaemonService):
                     continue
 
                 if data.get('type') == 'tick':
-                    exchange = data.get('exchange')
+                    logger.debug(f"[StrategyService] 틱 이벤트 수신: {data}")
+                    
+                    exchange = data.get('exchange_id')
                     symbol = data.get('code')
+                    
+                    if not exchange:
+                        logger.warning(f"[StrategyService] 틱 이벤트에 exchange_id 누락: {data}")
+                        continue
+                    if not symbol:
+                        logger.warning(f"[StrategyService] 틱 이벤트에 symbol(code) 누락: {data}")
+                        continue
+                        
                     key = f"{exchange}:{symbol}"
                     
                     signals = []
+                    closed_candles = []
                     async with self._lock:
                         if key in self.trade_engines:
                             engine = self.trade_engines[key]
@@ -430,8 +442,29 @@ class StrategyService(DaemonService):
                                 'trade_timestamp': data['trade_timestamp']
                             }
                             
-                            signals, _ = await engine.process_tick(tick_payload, self.portfolio_manager)
-                        
+                            signals, closed_candles = await engine.process_tick(tick_payload, self.portfolio_manager)
+                        else:
+                            if key not in self._unmatched_keys:
+                                self._unmatched_keys.add(key)
+                                logger.warning(
+                                    f"[StrategyService] 활성화된 전략 엔진에 매칭되지 않는 키 감지 (최초 1회 경고): {key}. "
+                                    f"현재 등록된 엔진 키 목록 예시: {list(self.trade_engines.keys())[:5]}"
+                                )
+                                
+                    if closed_candles:
+                        logger.info(f"[StrategyService] [{key}] 틱 처리 완료: 생성된 캔들={len(closed_candles)}, 신호 개수={len(signals)}")
+                        for candle in closed_candles:
+                            context = engine.contexts.get(candle.interval)
+                            if context:
+                                indicators_str = ""
+                                for host in engine.hosts:
+                                    required = getattr(host.strategy, 'required_indicators', [])
+                                    for ind in required:
+                                        window = host.params.get('rsi_window', host.params.get('sma_window', 20))
+                                        val = context.get_indicator(ind, window=window)
+                                        indicators_str += f" | {ind}({window})={val}"
+                                logger.info(f"[StrategyService] [{key}] 캔들 마감 (Interval={candle.interval}): Close={candle.close}, Vol={candle.volume}{indicators_str}")
+                                
                     for sig in signals:
                         logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
                         # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)

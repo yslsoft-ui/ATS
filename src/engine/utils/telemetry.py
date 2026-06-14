@@ -87,11 +87,15 @@ def setup_logging(
     if _is_initialized:
         return
         
+    target_logger = logging.getLogger('src')
+    # 중복 출력 방지를 위해 핸들러가 이미 추가되었는지 재검사
+    if target_logger.handlers:
+        _is_initialized = True
+        return
+        
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, log_file)
 
-    # 루트 로거 대신 'src' 로거를 대상으로 하여 우리 코드에만 적용
-    target_logger = logging.getLogger('src')
     target_logger.setLevel(level)
     # 외부로 전파하지 않아 루트 로거(Uvicorn 등)와 섞이지 않게 함
     target_logger.propagate = False 
@@ -116,8 +120,6 @@ def setup_logging(
     _ui_handler.setFormatter(logging.Formatter("%(message)s"))
     target_logger.addHandler(_ui_handler)
 
-    # 외부 라이브러리 로그 통합 로직 삭제
-
     _is_initialized = True
     target_logger.info(f"Telemetry system initialized for 'src' package. Log file: {log_path}")
 
@@ -129,4 +131,6 @@ def update_broadcast_callback(callback: Callable):
 
 def get_logger(name: str) -> logging.Logger:
     """모듈별 로거를 반환합니다."""
+    if not name.startswith("src.") and name != "src":
+        name = f"src.{name}"
     return logging.getLogger(name)
