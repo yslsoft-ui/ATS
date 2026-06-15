@@ -82,14 +82,19 @@ async def get_symbols(request: Request):
 @router.get("/candles")
 async def get_candles(
     request: Request = None, 
-    exchange_id: str = "upbit", 
-    symbol: str = "BTC", 
+    exchange_id: Optional[str] = None, 
+    symbol: Optional[str] = None, 
     interval: int = 60, 
     limit: int = 500, 
     start_ts: int = None, 
     end_ts: int = None
 ):
     """최적화된 고성능 캔들 데이터 반환 (저장소 패턴 위임)"""
+    if not exchange_id or not symbol:
+        raise HTTPException(status_code=400, detail="Required parameters 'exchange_id' and 'symbol' must be provided.")
+    if exchange_id not in ("upbit", "bithumb", "kis"):
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
+        
     system = request.app.state.system if request and hasattr(request.app.state, 'system') else None
     return await market_repo.get_candles(
         exchange_id=exchange_id,
@@ -108,6 +113,11 @@ async def get_restored_candles(
     limit_minutes: int = 1440
 ):
     """DB에 누락되었으나 틱으로 복구된 캔들 목록 반환"""
+    if not exchange_id:
+        raise HTTPException(status_code=400, detail="Required parameter 'exchange_id' must be provided.")
+    if exchange_id not in ("upbit", "bithumb", "kis"):
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
+        
     return await market_repo.get_restored_candles(
         exchange_id=exchange_id,
         symbol=symbol,

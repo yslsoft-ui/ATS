@@ -369,7 +369,7 @@ class KisCollector(BaseCollector):
             }
 
             params = {
-                "FID_COND_MRKT_DIV_CODE": "UN",
+                "FID_COND_MRKT_DIV_CODE": "J",
                 "FID_INPUT_ISCD": symbol,
                 "FID_INPUT_HOUR_1": hour_str,
                 "FID_PW_DATA_INCU_YN": "Y",

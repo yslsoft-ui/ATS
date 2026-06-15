@@ -44,19 +44,19 @@ const APIClient = (() => {
          * 특정 마켓/심볼/인터벌의 과거 캔들 시세 조회
          */
         fetchCandleHistory: (exchange, symbol, interval, limit = 10000) => 
-            _fetchAPI(`/candles?exchange=${exchange}&symbol=${symbol}&interval=${interval}&limit=${limit}`),
+            _fetchAPI(`/candles?exchange_id=${exchange}&symbol=${symbol}&interval=${interval}&limit=${limit}`),
             
         /**
          * 특정 시간 범위(Range)의 과거 캔들 데이터 조회 (지연 로딩 지원)
          */
         fetchCandlesRange: (exchange, symbol, interval, startTs, endTs, limit = 1000) => 
-            _fetchAPI(`/candles?exchange=${exchange}&symbol=${symbol}&interval=${interval}&start_ts=${startTs}&end_ts=${endTs}&limit=${limit}`),
+            _fetchAPI(`/candles?exchange_id=${exchange}&symbol=${symbol}&interval=${interval}&start_ts=${startTs}&end_ts=${endTs}&limit=${limit}`),
 
         /**
          * 특정 마켓/심볼의 최근 실시간 체결 내역 조회
          */
         fetchRecentTrades: (exchange, symbol, limit = 10) => 
-            _fetchAPI(`/trades?exchange=${exchange}&symbol=${symbol}&limit=${limit}`),
+            _fetchAPI(`/trades?exchange_id=${exchange}&symbol=${symbol}&limit=${limit}`),
 
         /**
          * 실시간 급등/체결 알림 이력 조회

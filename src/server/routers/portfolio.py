@@ -111,8 +111,13 @@ async def delete_portfolio_history(portfolio_id: str, request: Request):
 
 
 @router.get("/trades")
-async def get_trades(request: Request, exchange_id: str = "upbit", symbol: str = "BTC", limit: int = 10):
+async def get_trades(request: Request, exchange_id: Optional[str] = None, symbol: Optional[str] = None, limit: int = 10):
     """최근 체결 데이터를 DB에서 조회하여 반환합니다."""
+    if not exchange_id or not symbol:
+        raise HTTPException(status_code=400, detail="Required parameters 'exchange_id' and 'symbol' must be provided.")
+    if exchange_id not in ("upbit", "bithumb", "kis"):
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
+        
     system = request.app.state.system
     async with get_db_conn(system.portfolio_manager.db_path) as db:
         async with db.execute("SELECT trade_price, trade_volume, ask_bid, trade_timestamp FROM trades WHERE exchange_id = ? AND symbol = ? ORDER BY trade_timestamp DESC LIMIT ?", (exchange_id, symbol, limit)) as cursor:
