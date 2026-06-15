@@ -40,7 +40,7 @@ sequenceDiagram
     participant ZMQ as ZeroMQ Bus
 
     Daemon->>Daemon: 1. 설정 및 도메인 마스터 로드
-    Daemon->>DB: 2. 스키마 초기화 및 자산(Asset) 1회 동기화
+    Daemon->>DB: 2. 스키마 초기화 (기동 시 자산 동기화 스킵, 웹 UI 수동 동기화만 수행)
     Daemon->>DBW: 3. DB Writer 백그라운드 시작
     Daemon->>Reg: 4. 거래소별 수집기 인스턴스 등록
     Daemon->>ZMQ: 5. 제어 구독(collector_control) 리스너 시작

@@ -21,12 +21,16 @@ class KisMarketAdapter(MarketAdapter):
         kis_config_symbols = system.config_manager.get('exchanges.kis.symbols', [])
         if kis_config_symbols:
             kis_symbols.update(kis_config_symbols)
-        for key in system.latest_prices.keys():
-            if key.startswith('kis:'):
-                kis_symbols.add(key.split(':')[1])
         kis_active_symbols = stock_mapper.get_active_symbols('kis')
         if kis_active_symbols:
             kis_symbols.update(kis_active_symbols)
+
+        # 가격 캐시(latest_prices)에 존재하더라도, 실제로 활성화되었거나 설정된 종목만 노출
+        for key in system.latest_prices.keys():
+            if key.startswith('kis:'):
+                s_code = key.split(':')[1]
+                if s_code in kis_active_symbols or s_code in kis_config_symbols:
+                    kis_symbols.add(s_code)
 
         if mode == "serial":
             # 순수 동기식(순차) 루프 DB 웜업으로 대기 시간 체감

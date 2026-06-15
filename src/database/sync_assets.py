@@ -111,7 +111,12 @@ async def sync_exchange_assets(db_path: str) -> Dict[str, Any]:
     
     kospi_assets = await download_and_parse_mst(KOSPI_URL, "kospi_code.mst")
     kosdaq_assets = await download_and_parse_mst(KOSDAQ_URL, "kosdaq_code.mst")
-    kis_symbols = kospi_assets + kosdaq_assets
+    
+    if not kospi_assets or not kosdaq_assets:
+        logger.error("[KIS] 코스피 또는 코스닥 마스터 파일 다운로드/파싱에 실패했습니다. KIS 자산 동기화를 건너뛰어 잘못된 상장폐지 및 비활성화 처리를 방지합니다.")
+        kis_symbols = []
+    else:
+        kis_symbols = kospi_assets + kosdaq_assets
 
     if not upbit_symbols and not bithumb_symbols and not kis_symbols:
         logger.error("모든 거래소로부터 종목 정보를 읽어오는 데 실패했습니다. 동기화를 중단합니다.")

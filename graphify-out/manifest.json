@@ -850,8 +850,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market/kis.py": {
-    "mtime": 1779954431.0107467,
-    "ast_hash": "0b40e4e49470d488bb979c392e92b995",
+    "mtime": 1781497984.7233572,
+    "ast_hash": "c688b4b5cf83556e688f9df6b95bb12f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market/dto.py": {
@@ -1010,8 +1010,8 @@
     "semantic_hash": "478fc53ddcedf11eed4a0e700cf71c8a"
   },
   "/home/simon/ATS/src/database/sync_assets.py": {
-    "mtime": 1781415928.884338,
-    "ast_hash": "04bbdbf68781f67422b2bcb71714f48b",
+    "mtime": 1781495695.9038513,
+    "ast_hash": "744ecc2579cebaac7343527271ff3404",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/schema.sql": {
@@ -1075,8 +1075,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
-    "mtime": 1781417962.3486981,
-    "ast_hash": "5a07c65e9e80a2f1b1118c37e85a2c6d",
+    "mtime": 1781495691.0037234,
+    "ast_hash": "42f1afb766b595c8cf6ef7867f1b3653",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/shadow_eval_service.py": {
@@ -1225,8 +1225,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/AGENTS.md": {
-    "mtime": 1781493495.7724137,
-    "ast_hash": "a9befaffeddc778d306e7d7172c32b18",
+    "mtime": 1781493618.3628361,
+    "ast_hash": "6f286bb092788b7fc4f0e9dbefc3bd01",
     "semantic_hash": ""
   },
   "/home/simon/ATS/requirements.txt": {
@@ -1255,8 +1255,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/kis-chart-bug/issue.md": {
-    "mtime": 1781492189.9305584,
-    "ast_hash": "f5b27c53e233828069b7364e6d6e8cac",
+    "mtime": 1781493737.7651067,
+    "ast_hash": "3a9cc31ddc320a0629350e3ed598f4fe",
     "semantic_hash": ""
   },
   "/home/simon/ATS/scratch/portfolio-ui/issue.md": {
@@ -1300,7 +1300,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781448039.7008145,
+    "mtime": 1781495769.1377602,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },

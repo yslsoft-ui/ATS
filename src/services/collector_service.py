@@ -83,13 +83,8 @@ class CollectorService(DaemonService):
         self.db_writer = DatabaseWriter(db_path=self.db_path)
         await self.db_writer.start()
 
-        # 2. 마스터 자산 동기화
-        from src.database.sync_assets import sync_exchange_assets
-        try:
-            logger.info("[CollectorService] Starting boot-time asset synchronization...")
-            await sync_exchange_assets(self.db_path)
-        except Exception as e:
-            logger.error(f"[CollectorService] Failed to run boot-time asset sync: {e}")
+        # 2. 마스터 자산 동기화 (기동 시 스킵, 웹 UI 수동 동기화만 지원)
+        logger.info("[CollectorService] Skipping boot-time asset synchronization. Manual synchronization is required via the Web UI.")
 
         # 3. StockMapper 캐시 기동
         from src.engine.utils.stock_mapper import stock_mapper
