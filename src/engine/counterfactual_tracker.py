@@ -81,24 +81,37 @@ class CounterfactualSamplingTracker:
 
     async def _run_counterfactual_backtest(self, strategy_id: str, portfolio_id: str, start_ms: int, end_ms: int, params: Dict[str, Any]) -> (float, float):
         try:
-            # 1. 대상 거래소 및 심볼 획득
+            # 1. 대상 거래소 및 심볼 획득 (다중 거래소 대응을 위한 JOIN/IN 쿼리 사용)
             exchange = "upbit"
             symbol = "BTC"
             
             async with get_db_conn(self.db_path) as db:
-                async with db.execute("SELECT exchange_id FROM portfolios WHERE id = ?", (portfolio_id,)) as cursor:
+                async with db.execute(
+                    """
+                    SELECT t.exchange_id, t.symbol
+                    FROM trades t
+                    JOIN portfolio_exchanges pe ON t.exchange_id = pe.exchange_id
+                    WHERE pe.portfolio_id = ?
+                    ORDER BY t.trade_timestamp DESC
+                    LIMIT 1
+                    """,
+                    (portfolio_id,)
+                ) as cursor:
                     row = await cursor.fetchone()
                     if row:
                         exchange = row["exchange_id"]
-                        if exchange == "all":
-                            exchange = "upbit"
-
-                async with db.execute("SELECT symbol FROM trades WHERE exchange = ? ORDER BY trade_timestamp DESC LIMIT 1", (exchange,)) as cursor:
-                    row = await cursor.fetchone()
-                    if row:
                         symbol = row["symbol"]
+                    else:
+                        # 거래 이력이 전혀 없는 경우의 Fallback
+                        async with db.execute(
+                            "SELECT exchange_id FROM portfolio_exchanges WHERE portfolio_id = ?",
+                            (portfolio_id,)
+                        ) as pe_cursor:
+                            pe_rows = await pe_cursor.fetchall()
+                            if pe_rows:
+                                exchange = pe_rows[0]["exchange_id"]
 
-            # 2. 백테스트 구동
+            # 2. 백테스트 구동 (인자 명칭을 exchange_id로 수정)
             strategy_configs = {
                 strategy_id: {
                     "enabled": True,
@@ -106,7 +119,7 @@ class CounterfactualSamplingTracker:
                 }
             }
             res = await self.backtest_engine.run(
-                exchange=exchange,
+                exchange_id=exchange,
                 symbol=symbol,
                 start_date=start_ms,
                 end_date=end_ms,
