@@ -453,7 +453,7 @@ class StrategyService(DaemonService):
                                 )
                                 
                     if closed_candles:
-                        logger.info(f"[StrategyService] [{key}] 틱 처리 완료: 생성된 캔들={len(closed_candles)}, 신호 개수={len(signals)}")
+                        logger.debug(f"[StrategyService] [{key}] 틱 처리 완료: 생성된 캔들={len(closed_candles)}, 신호 개수={len(signals)}")
                         for candle in closed_candles:
                             context = engine.contexts.get(candle.interval)
                             if context:
@@ -464,7 +464,7 @@ class StrategyService(DaemonService):
                                         window = host.params.get('rsi_window', host.params.get('sma_window', 20))
                                         val = context.get_indicator(ind, window=window)
                                         indicators_str += f" | {ind}({window})={val}"
-                                logger.info(f"[StrategyService] [{key}] 캔들 마감 (Interval={candle.interval}): Close={candle.close}, Vol={candle.volume}{indicators_str}")
+                                logger.debug(f"[StrategyService] [{key}] 캔들 마감 (Interval={candle.interval}): Close={candle.close}, Vol={candle.volume}{indicators_str}")
                                 
                     for sig in signals:
                         logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
