@@ -1,16 +1,16 @@
 # Graph Report - ATS  (2026-06-15)
 
 ## Corpus Check
-- 293 files · ~729,507 words
+- 293 files · ~729,564 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6453 nodes · 8430 edges · 784 communities (633 shown, 151 thin omitted)
+- 6453 nodes · 8430 edges · 782 communities (631 shown, 151 thin omitted)
 - Extraction: 82% EXTRACTED · 18% INFERRED · 0% AMBIGUOUS · INFERRED: 1540 edges (avg confidence: 0.69)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `640db982`
+- Built from commit: `b491e06e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -731,8 +731,6 @@
 - [[_COMMUNITY_Community 757|Community 757]]
 - [[_COMMUNITY_Community 758|Community 758]]
 - [[_COMMUNITY_Community 760|Community 760]]
-- [[_COMMUNITY_Community 762|Community 762]]
-- [[_COMMUNITY_Community 763|Community 763]]
 - [[_COMMUNITY_Community 764|Community 764]]
 - [[_COMMUNITY_Community 765|Community 765]]
 - [[_COMMUNITY_Community 766|Community 766]]
@@ -778,7 +776,7 @@
 - `main()` --calls--> `MomentumSpikeStrategy`  [INFERRED]
   run_backtest_sample.py → src/engine/strategies/momentum_spike_strategy.py
 
-## Communities (784 total, 151 thin omitted)
+## Communities (782 total, 151 thin omitted)
 
 ### Community 0 - "업비트 코인 마스터 데이터"
 Cohesion: 0.01
@@ -969,8 +967,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외옵션 호가
 
 ### Community 86 - "Community 86"
-Cohesion: 0.15
-Nodes (5): BaseCollector, 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., UpbitCollector
+Cohesion: 0.17
+Nodes (4): 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., UpbitCollector
 
 ### Community 87 - "Community 87"
 Cohesion: 0.22
@@ -1517,8 +1515,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외선물 체결추이(월간)
 
 ### Community 223 - "Community 223"
-Cohesion: 0.12
-Nodes (14): _create_bithumb_jwt(), _create_upbit_jwt(), execute_pipeline_order(), 외부(예: 데이터베이스 조회 결과)에서 문자열 식별자와 실제 정수 ID 간의 맵핑을 명시적으로 적재(시드)합니다., 'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다., 'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다. (+6 more)
+Cohesion: 0.33
+Nodes (6): get_backtest_history_detail(), 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다.
 
 ### Community 224 - "Community 224"
 Cohesion: 0.4
@@ -2241,8 +2239,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 주문
 
 ### Community 411 - "Community 411"
-Cohesion: 0.29
-Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 해외주식 예약주문접수취소
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 예약주문접수취소
 
 ### Community 412 - "Community 412"
 Cohesion: 0.4
@@ -2345,8 +2343,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 거래회전율순위
 
 ### Community 437 - "Community 437"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 해외뉴스종합(제목)
+Cohesion: 0.29
+Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 해외뉴스종합(제목)
 
 ### Community 438 - "Community 438"
 Cohesion: 0.4
@@ -2637,8 +2635,8 @@ Cohesion: 0.2
 Nodes (9): 백그라운드에서 파일 변경을 감시합니다., 현재 메모리의 설정을 파일로 저장합니다., 현재 메모리의 설정을 파일로 저장합니다., 현재 메모리의 설정을 파일로 저장합니다., 현재 메모리의 설정을 파일로 저장합니다., 현재 메모리의 설정을 파일로 저장합니다., 하위 호환성 가드를 유지합니다. (물리 파일 수정은 update 내에서 즉시 수행됩니다), 하위 호환성 가드를 유지합니다. (물리 파일 수정은 update 내에서 즉시 수행됩니다) (+1 more)
 
 ### Community 562 - "Community 562"
-Cohesion: 0.14
-Nodes (11): PerformanceAnalyzer, Stateless 포트폴리오 성과 분석 연산기.     어떠한 외부 DB/API/시세 조회 I/O 없이, 주어진 입력값만을 기반으로 리포트 데이, 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다. (+3 more)
+Cohesion: 0.09
+Nodes (15): PerformanceAnalyzer, Stateless 포트폴리오 성과 분석 연산기.     어떠한 외부 DB/API/시세 조회 I/O 없이, 주어진 입력값만을 기반으로 리포트 데이, _create_bithumb_jwt(), _create_upbit_jwt(), 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다., 실제 업비트(Upbit) API를 호출하여 시장가/지정가 주문을 전송하는 주문 집행 어댑터입니다. (+7 more)
 
 ### Community 563 - "Community 563"
 Cohesion: 0.25
@@ -2701,8 +2699,8 @@ Cohesion: 0.17
 Nodes (12): 1.12. strategy_versions (전략 활성 버전 마스터), 1.13. strategy_parameter_history (전략 파라미터 변경 이력), 1.14. strategy_performance_snapshots (전략 성과 스냅샷), 1.15. market_regime_summaries (시장 상태 요약 피처), 1.16. strategy_insights (분석 통계 인사이트), 1.17. strategy_proposals (전략 파라미터 개선 제안), 1.18. proposal_evaluations (제안 사후 성과 평가), 1.19. girs_shadow_metrics [NEW] (+4 more)
 
 ### Community 584 - "Community 584"
-Cohesion: 0.13
-Nodes (14): PortfolioManager, 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다. (+6 more)
+Cohesion: 0.09
+Nodes (22): PortfolioManager, 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 여러 포트폴리오를 관리하고 전략 신호를 주문으로 연결합니다., 'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다. (+14 more)
 
 ### Community 589 - "Community 589"
 Cohesion: 0.15
@@ -2801,8 +2799,8 @@ Cohesion: 0.25
 Nodes (7): 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다., 알림을 데이터베이스에 영구 저장합니다.
 
 ### Community 630 - "Community 630"
-Cohesion: 0.17
-Nodes (11): BacktestRunRequest, get_backtest_history(), get_backtest_history_detail(), 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다., 특정 백테스트 세트의 상세 정보를 복원하여 반환합니다. (+3 more)
+Cohesion: 0.14
+Nodes (13): BacktestRunRequest, delete_all_backtest_history(), get_backtest_history(), 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 누적된 과거 백테스트 세트(이력) 목록을 반환합니다., 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다., 틱 리플레이 기반 백테스트를 실행합니다., 틱 리플레이 기반 백테스트를 실행합니다 (단일 자금 풀 다중 종목 지원). (+5 more)
 
 ### Community 631 - "Community 631"
 Cohesion: 0.22
@@ -2885,16 +2883,16 @@ Cohesion: 0.27
 Nodes (8): download_and_parse_mst(), fetch_bithumb_symbols(), fetch_upbit_symbols(), 거래소 API 전체 종목 정보를 조회하여 DB(asset_master, exchange_assets)와 1회성 동기화를 진행합니다.     -, 거래소 API 전체 종목 정보를 조회하여 DB(asset_master, exchange_assets)와 1회성 동기화를 진행합니다.     -, 거래소 API 전체 종목 정보를 조회하여 DB(asset_master, exchange_assets)와 1회성 동기화를 진행합니다.     -, sync_exchange_assets(), main()
 
 ### Community 675 - "Community 675"
-Cohesion: 0.12
-Nodes (16): 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt (+8 more)
+Cohesion: 0.09
+Nodes (18): execute_pipeline_order(), 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt, 포트폴리오의 실시간/정적 성과 통계 및 요약 보고서 데이터를 빌드합니다.         기존 backtest.py와 portfolio-adapt (+10 more)
 
 ### Community 677 - "Community 677"
 Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 선물옵션 시세호가
 
 ### Community 680 - "Community 680"
-Cohesion: 0.2
-Nodes (3): 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., UpbitCollector
+Cohesion: 0.18
+Nodes (4): BaseCollector, 업비트 API로부터 실시간 체결 데이터를 수집하고 분석 엔진으로 배분합니다., 업비트 REST API를 사용하여 지정 구간 내의 1분봉 데이터를 조회합니다., UpbitCollector
 
 ### Community 681 - "Community 681"
 Cohesion: 0.29
@@ -3079,14 +3077,6 @@ Nodes (7): panic_sell(), 최근 체결 데이터를 DB에서 조회하여 반환
 ### Community 756 - "Community 756"
 Cohesion: 0.5
 Nodes (3): 최근 30일 완료된 Counterfactual 기록과 현재 PENDING/APPLIED 제안의         파라미터 공간 Entropy를 함께, 최근 30일 완료된 Counterfactual 기록과 현재 PENDING/APPLIED 제안의         파라미터 공간 Entropy를 함께, 최근 30일 완료된 Counterfactual 기록과 현재 PENDING/APPLIED 제안의         파라미터 공간 Entropy를 함께
-
-### Community 762 - "Community 762"
-Cohesion: 0.5
-Nodes (4): delete_all_backtest_history(), 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다., 누적된 모든 백테스트 이력(세트)을 DB 및 메모리에서 일괄 영구 삭제합니다., 누적된 모든 백테스트 및 종료된 실시간 모의투자 이력을 DB 및 메모리에서 일괄 영구 삭제합니다.
-
-### Community 763 - "Community 763"
-Cohesion: 0.5
-Nodes (4): 틱 리플레이 기반 백테스트를 실행합니다., 틱 리플레이 기반 백테스트를 실행합니다 (단일 자금 풀 다중 종목 지원)., 틱 리플레이 기반 백테스트를 실행합니다 (단일 자금 풀 다중 종목 지원)., run_backtest()
 
 ### Community 764 - "Community 764"
 Cohesion: 0.32
