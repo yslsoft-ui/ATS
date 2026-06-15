@@ -27,6 +27,7 @@
                 <div class="menu-item" data-view="strategy-view">🎯 전략</div>
                 <div class="menu-item" data-view="portfolio-view">💼 포트폴리오</div>
                 <div class="menu-item" data-view="real-asset-view">💳 실자산 현황</div>
+                <div class="menu-item" data-view="system-events-view">🗂️ 시스템 이벤트 로그</div>
                 <div class="menu-item" data-view="ranking-view">📊 순위분석</div>
                 <div class="menu-item" data-view="settings-view">⚙️ 설정</div>
                 <div class="menu-item" data-view="collector-view">🛰️ 수집기 데몬</div>
@@ -1370,6 +1371,60 @@
                 </div>
             </section>
 
+            <!-- 시스템 이벤트 로그 감사 뷰 (초기엔 숨김) -->
+            <section id="system-events-view" style="display: none;">
+                <header class="main-header" style="flex-direction: column; align-items: flex-start; gap: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <h1>🗂️ 시스템 이벤트 감사 로그 (Audit Log)</h1>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div class="control-group" style="margin: 0; display: flex; gap: 8px; align-items: center;">
+                                <select id="system-events-type-select" class="dark-input" style="margin: 0; padding: 6px 12px; width: 180px; font-weight: bold; background: #1E293B;">
+                                    <option value="all" selected>전체 이벤트 타입</option>
+                                    <!-- JS에서 동적으로 로드됨 -->
+                                </select>
+                                <input type="text" id="system-events-search" class="dark-input" placeholder="심볼, 메시지, context 검색..." style="margin: 0; padding: 6px 12px; width: 220px;" />
+                                <select id="system-events-limit-select" class="dark-input" style="margin: 0; padding: 6px 12px; width: 100px; font-weight: bold; background: #1E293B;">
+                                    <option value="50" selected>50개씩</option>
+                                    <option value="100">100개씩</option>
+                                    <option value="200">200개씩</option>
+                                    <option value="500">500개씩</option>
+                                </select>
+                            </div>
+                            <button class="btn sm primary" onclick="loadSystemEventLogs()" style="padding: 6px 15px; font-weight: bold;">🔍 검색</button>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="restored-summary-banner" style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0; margin-bottom: 8px; color: #F8FAFC; font-size: 1.05rem;">💡 시스템 감사 로그 안내</h3>
+                    <p style="margin: 0; color: #94A3B8; font-size: 0.85rem; line-height: 1.5;">
+                        로컬 시스템 내부에서 발생한 주요 운영 및 거래 감사 로그(<code>system_events</code>) 목록입니다.<br>
+                        자산 동기화(신규상장, 상장폐지), 전략 매개변수 제안 및 적용, 수집 데몬 운영 제어 등 다양한 시스템 변경 내역을 실시간 추적하고 감사할 수 있습니다.
+                    </p>
+                </div>
+
+                <div class="market-table-wrapper" style="max-height: calc(100vh - 280px); overflow-y: auto;">
+                    <table id="main-system-events-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px; text-align: center;">순번</th>
+                                <th style="text-align: center; width: 200px;">이벤트 타입</th>
+                                <th style="text-align: left; width: 120px;">대상 (Target)</th>
+                                <th style="text-align: left; width: 180px;">발생 시간</th>
+                                <th style="text-align: left;">로그 메시지</th>
+                            </tr>
+                        </thead>
+                        <tbody id="main-system-events-tbody">
+                            <tr>
+                                <td colspan="5" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">
+                                    검색 버튼을 클릭하여 데이터를 확인해보세요.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <!-- 클린업 데몬 뷰 (초기엔 숨김) -->
             <section id="cleanup-view" style="display: none;">
                 <header class="main-header"
@@ -2267,6 +2322,7 @@
     <script src="restored-view.js"></script>
     <script src="cleanup.js"></script>
     <script src="collector.js"></script>
+    <script src="system-events.js"></script>
     <script src="app.js?v=1.0.2"></script>
 </body>
 

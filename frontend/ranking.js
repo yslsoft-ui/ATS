@@ -187,6 +187,14 @@ async function loadRankingResult(trId) {
                     const name = e.target.dataset.name;
                     const isChecked = e.target.checked;
                     
+                    const actionText = isChecked ? '수집 시작' : '수집 해제';
+                    const confirmMsg = `${name} (${code}) ${actionText}을 진행하시겠습니까?`;
+                    
+                    if (!confirm(confirmMsg)) {
+                        e.target.checked = !isChecked; // 체크 상태 원복
+                        return;
+                    }
+                    
                     try {
                         const result = await APIClient.toggleKisSymbol(code, name, isChecked);
                         const statusMsg = result.is_collected ? '수집 등록 완료' : '수집 해제 완료';

@@ -21,6 +21,7 @@ class KisCollector(BaseCollector):
         super().__init__(*args, **kwargs)
         self.cred_provider = CredentialProvider()
         self.rank_task: Optional[asyncio.Task] = None
+        self.symbol_market_map: Dict[str, str] = {}
 
     @property
     def exchange_id(self) -> str:
@@ -43,6 +44,8 @@ class KisCollector(BaseCollector):
             # DB 조회 실패 혹은 비어있을 때 기본 폴백 종목 지정 (예: 삼성전자 '005930')
             symbols = ["005930"]
             logger.info(f"[{self.exchange_id.upper()}] DB에 활성 종목이 없어 기본 종목으로 폴백합니다: {symbols}")
+            return symbols
+            
         return symbols
 
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:
@@ -52,7 +55,10 @@ class KisCollector(BaseCollector):
     async def _subscribe(self, ws, config: Dict[str, Any]):
         approval_key = await self.cred_provider.get_kis_approval_key()
         for symbol_code in self.available_symbols:
-            # 1. 통합 실시간 체결 구독
+            tr_id_cnt = 'H0UNCNT0'
+            tr_id_mko = 'H0UNMKO0'
+            
+            # 1. 실시간 체결 구독
             subscribe_msg_cnt = {
                 "header": {
                     "approval_key": approval_key,
@@ -62,15 +68,16 @@ class KisCollector(BaseCollector):
                 },
                 "body": {
                     "input": {
-                        "tr_id": "H0UNCNT0",  # 실시간 주식 체결가 통합
+                        "tr_id": tr_id_cnt,
                         "tr_key": symbol_code
                     }
                 }
             }
             await ws.send_json(subscribe_msg_cnt)
             await asyncio.sleep(0.05)
+            logger.info(f"[KIS] 웹소켓 실시간 체결 구독 등록 송신 완료: {symbol_code} (tr_id={tr_id_cnt})")
 
-            # 2. 통합 실시간 장운영정보 구독
+            # 2. 실시간 장운영정보 구독
             subscribe_msg_mko = {
                 "header": {
                     "approval_key": approval_key,
@@ -80,13 +87,14 @@ class KisCollector(BaseCollector):
                 },
                 "body": {
                     "input": {
-                        "tr_id": "H0UNMKO0",  # 국내주식 장운영정보 통합
+                        "tr_id": tr_id_mko,
                         "tr_key": symbol_code
                     }
                 }
             }
             await ws.send_json(subscribe_msg_mko)
             await asyncio.sleep(0.05)
+            logger.info(f"[KIS] 웹소켓 실시간 장운영정보 구독 등록 송신 완료: {symbol_code} (tr_id={tr_id_mko})")
 
     def _parse_message(self, msg) -> Optional[Dict]:
         if msg.type != aiohttp.WSMsgType.TEXT:
@@ -127,8 +135,8 @@ class KisCollector(BaseCollector):
 
                 tr_id = parts[1]
                 
-                # 장운영정보 통합 (H0UNMKO0) 실시간 파싱 및 감지
-                if tr_id == 'H0UNMKO0':
+                # 장운영정보 통합 (H0UNMKO0) 및 KRX 전용 (H0STMKO0) 실시간 파싱 및 감지
+                if tr_id in ('H0UNMKO0', 'H0STMKO0'):
                     try:
                         all_fields = parts[3].split('^')
                         if len(all_fields) >= 4:
@@ -141,11 +149,11 @@ class KisCollector(BaseCollector):
                             if trht_yn == 'Y':
                                 self.status = "SUSPENDED"
                                 self.status_reason = f"[{symbol_code}] 거래정지: {susp_reason}"
-                                logger.warning(f"[KIS] {symbol_code} 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code})")
+                                logger.warning(f"[KIS] {symbol_code} 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
                             elif vi_cls_code not in ('N', ''):
                                 self.status = "SUSPENDED"
                                 self.status_reason = f"[{symbol_code}] VI 발동 (VI구분: {vi_cls_code})"
-                                logger.warning(f"[KIS] {symbol_code} 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code})")
+                                logger.warning(f"[KIS] {symbol_code} 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
                             else:
                                 # 정상 복구
                                 if self.status == "SUSPENDED":
@@ -153,10 +161,11 @@ class KisCollector(BaseCollector):
                                     self.status_reason = None
                                     logger.info(f"[KIS] {symbol_code} 거래 정지/VI 해제. RUNNING 복구.")
                     except Exception as e:
-                        logger.error(f"[KIS] 장운영정보 통합 파싱 에러: {e}")
+                        logger.error(f"[KIS] 장운영정보 파싱 에러 (tr_id={tr_id}): {e}")
                     return None
 
-
+                if tr_id not in ('H0UNCNT0', 'H0STCNT0', 'H0NXCNT0'):
+                    return None
 
                 market = 'UN' if tr_id == 'H0UNCNT0' else ('NXT' if tr_id == 'H0NXCNT0' else 'KRX')
 
@@ -274,6 +283,8 @@ class KisCollector(BaseCollector):
                 self.available_symbols.append(code)
                 logger.info(f"[KIS] 동적 수집 종목 추가: {code}")
             
+            tr_id_cnt = 'H0UNCNT0'
+            
             # 웹소켓 구독 등록
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
                 try:
@@ -287,19 +298,21 @@ class KisCollector(BaseCollector):
                         },
                         "body": {
                             "input": {
-                                "tr_id": "H0UNCNT0",
+                                "tr_id": tr_id_cnt,
                                 "tr_key": code
                             }
                         }
                     }
                     await self.ws.send_json(subscribe_msg)
-                    logger.info(f"[KIS] 웹소켓 실시간 통합 구독 등록 송신 완료: {code}")
+                    logger.info(f"[KIS] 웹소켓 실시간 구독 등록 송신 완료: {code} (tr_id={tr_id_cnt})")
                 except Exception as e:
                     logger.error(f"[KIS] 웹소켓 구독 등록 실패 ({code}): {e}")
         else:
             if code in self.available_symbols:
                 self.available_symbols.remove(code)
                 logger.info(f"[KIS] 동적 수집 종목 제거: {code}")
+            
+            tr_id_cnt = 'H0UNCNT0'
             
             # 웹소켓 구독 해제
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
@@ -314,13 +327,13 @@ class KisCollector(BaseCollector):
                         },
                         "body": {
                             "input": {
-                                "tr_id": "H0UNCNT0",
+                                "tr_id": tr_id_cnt,
                                 "tr_key": code
                             }
                         }
                     }
                     await self.ws.send_json(unsubscribe_msg)
-                    logger.info(f"[KIS] 웹소켓 실시간 통합 구독 해제 송신 완료: {code}")
+                    logger.info(f"[KIS] 웹소켓 실시간 구독 해제 송신 완료: {code} (tr_id={tr_id_cnt})")
                 except Exception as e:
                     logger.error(f"[KIS] 웹소켓 구독 해제 실패 ({code}): {e}")
 

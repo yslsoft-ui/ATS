@@ -13,3 +13,4 @@ class MarketTickerDTO(BaseModel):
     acc_trade_price_24h: float = 0.0
     high_price: float = 0.0
     low_price: float = 0.0
+    is_collected: bool = True  # KIS 동적 수집 여부 체크용 (업비트/빗썸은 상시 수집이므로 True 기본값)

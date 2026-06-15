@@ -1561,6 +1561,84 @@ async def get_exchange_orders(request: Request, exchange_id: str, symbol: str, l
         raise HTTPException(status_code=500, detail=f"로컬 DB 거래 이력 조회 실패: {str(e)}")
 
 
+@router.get("/api/system/events")
+async def get_system_events_api(
+    request: Request,
+    event_type: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 100
+):
+    """시스템 감사 로그 통합 검색 API"""
+    system = request.app.state.system
+    db_path = system.db_path
+    
+    from src.database.connection import get_db_conn
+    import json
+    
+    query = "SELECT event_type, target, message, timestamp, context FROM system_events"
+    conditions = []
+    params = []
+    
+    if event_type and event_type != "all":
+        conditions.append("event_type = ?")
+        params.append(event_type)
+        
+    if search:
+        conditions.append("(target LIKE ? OR message LIKE ? OR context LIKE ?)")
+        search_param = f"%{search}%"
+        params.extend([search_param, search_param, search_param])
+        
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+        
+    query += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    
+    try:
+        async with get_db_conn(db_path) as db:
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                results = []
+                for r in rows:
+                    ctx_val = None
+                    if r["context"]:
+                        try:
+                            ctx_val = json.loads(r["context"])
+                        except:
+                            ctx_val = r["context"]
+                    results.append({
+                        "event_type": r["event_type"],
+                        "target": r["target"],
+                        "message": r["message"],
+                        "timestamp": r["timestamp"],
+                        "context": ctx_val
+                    })
+                return results
+    except Exception as e:
+        logger.error(f"Failed to fetch system events: {e}")
+        raise HTTPException(status_code=500, detail=f"시스템 감사 로그 조회 실패: {str(e)}")
+
+
+@router.get("/api/system/event-types")
+async def get_system_event_types(request: Request):
+    """현재 DB에 저장되어 있는 고유 이벤트 타입 목록 조회 API"""
+    system = request.app.state.system
+    db_path = system.db_path
+    
+    from src.database.connection import get_db_conn
+    
+    query = "SELECT DISTINCT event_type FROM system_events ORDER BY event_type"
+    try:
+        async with get_db_conn(db_path) as db:
+            async with db.execute(query) as cursor:
+                rows = await cursor.fetchall()
+                return [r["event_type"] for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to fetch system event types: {e}")
+        raise HTTPException(status_code=500, detail=f"이벤트 타입 목록 조회 실패: {str(e)}")
+
+
+
 
 
 

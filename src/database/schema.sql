@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS asset_master (
     symbol TEXT PRIMARY KEY,
     korean_name TEXT NOT NULL,
     asset_type TEXT NOT NULL,
+    category TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -133,6 +134,8 @@ CREATE TABLE IF NOT EXISTS exchange_assets (
     symbol TEXT,
     is_active INTEGER DEFAULT 1,
     is_delisted INTEGER DEFAULT 0,
+    market TEXT,
+    market_updated_at DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (exchange_id, symbol),

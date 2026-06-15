@@ -52,6 +52,7 @@
 - **[cleanup.js](file:///home/simon/ATS/frontend/cleanup.js)**: [NEW] 시장 데이터 정리 데몬의 라이프사이클 제어와 4개 카드 통합 실시간 텔레메트리 렌더링, 수동 정리 날짜 피커 변경 시 틱(Trades) 예상 삭제량 실시간 자동 쿼리, command_id 기반 비동기 대기 및 타임아웃(3초/5초/30초), 중복 실행 방지(Mutex), 그리고 최근 10건의 감사 이력 타임라인을 렌더링하는 클린업 관리 전용 뷰입니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.
+- **[system-events.js](file:///home/simon/ATS/frontend/system-events.js)**: [NEW] 시스템 감사 로그 통합 조회 페이지입니다. `system_events` 테이블의 모든 감사 로그를 조회하고, 실시간 검색(키워드 필터링) 및 동적 이벤트 타입 필터를 지원하는 전용 감사 로그 뷰 모듈입니다.
 
 ---
 

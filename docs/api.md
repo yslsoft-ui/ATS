@@ -299,6 +299,16 @@
 - **`GET /api/system/queues`**
   - **설명**: 수집 데몬 큐, DB 저장 대기 큐, 캔들 가공 큐 등에 적체된 미처리 패킷 백로그 건수 및 누적 처리량을 반환합니다.
 
+- **`GET /api/system/events?event_type={type}&search={query}&limit={count}`**
+  - **설명**: 시스템 전체 감사 로그(`system_events` 테이블)를 통합 검색 및 조회합니다.
+  - **Query Parameters**:
+    - `event_type`: (선택) 특정 이벤트 타입 필터 (예: `ASSET_LISTED`, `ASSET_DELISTED`, `DAEMON_START` 등)
+    - `search`: (선택) 심볼, 메시지, context 내용 등에 대한 키워드 검색어
+    - `limit`: (기본 100) 최대 반환 행수
+
+- **`GET /api/system/event-types`**
+  - **설명**: DB에 적재되어 있는 모든 고유 시스템 이벤트 타입 목록을 가나다순으로 조회합니다.
+
 - **`GET /test-alert?symbol={symbol}`**
   - **설명**: UI 연동 테스트를 위해 특정 심볼의 가상 급등락(Spike) 알림을 강제로 발생시키고 브로드캐스트합니다.
 

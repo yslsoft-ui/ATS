@@ -220,6 +220,14 @@ async def _init_db_core(target_path: str):
         
         # portfolios 테이블에 ended_at 컬럼 추가
         await ensure_column(db, 'portfolios', 'ended_at', 'DATETIME')
+        
+        # exchange_assets 테이블에 market 및 market_updated_at 컬럼 추가
+        await ensure_column(db, 'exchange_assets', 'market', 'TEXT')
+        await ensure_column(db, 'exchange_assets', 'market_updated_at', 'DATETIME')
+        
+        # asset_master 테이블에 category 컬럼 추가
+        await ensure_column(db, 'asset_master', 'category', 'TEXT')
+        
         # simulation_ended 데이터 보정 마이그레이션 실행
         await db.execute("""
             UPDATE portfolios 

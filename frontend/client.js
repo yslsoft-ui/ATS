@@ -357,10 +357,26 @@ const APIClient = (() => {
         /**
          * 특정 데이터 유형의 원본 DB JSON 레코드 데이터 조회
          */
-        fetchDecisionConsoleRaw: (objectType, objectId) => _fetchAPI(`/api/decision-console/raw/${objectType}/${objectId}`)
+        fetchDecisionConsoleRaw: (objectType, objectId) => _fetchAPI(`/api/decision-console/raw/${objectType}/${objectId}`),
+
+        /**
+         * 시스템 감사 로그 통합 조회
+         */
+        fetchSystemEventLogs: (eventType = 'all', search = '', limit = 100) => {
+            let url = `/api/system/events?limit=${limit}`;
+            if (eventType && eventType !== 'all') url += `&event_type=${eventType}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+            return _fetchAPI(url);
+        },
+
+        /**
+         * DB에 적재된 고유 시스템 이벤트 타입 리스트 조회
+         */
+        fetchSystemEventTypes: () => _fetchAPI('/api/system/event-types')
     };
 })();
 
 
 // 전역 window 바인딩
 window.APIClient = APIClient;
+

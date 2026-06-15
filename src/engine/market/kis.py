@@ -105,7 +105,8 @@ class KisMarketAdapter(MarketAdapter):
                 change_price=change_price,
                 acc_trade_price_24h=acc_trade_price_24h,
                 high_price=high_price,
-                low_price=low_price
+                low_price=low_price,
+                is_collected=True
             ))
         return dto_list
 

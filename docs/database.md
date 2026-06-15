@@ -802,6 +802,9 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
   - `_REQUEST` $\rightarrow$ `_SUCCESS` / `_FAILED` 의 쌍을 이루는 비즈니스 감사 로그(Audit Log) 체계로 운영됩니다. (예: `COLLECTOR_START_REQUEST` -> `COLLECTOR_START_SUCCESS`)
   - 데몬 프로세스 상태 로깅 (`DAEMON_START`, `DAEMON_STOP`, `DAEMON_CRASHED`)
   - 시장 예외 상태 로깅 (`EXCHANGE_SUSPENDED`, `EXCHANGE_RESUMED`, `EXCHANGE_ERROR`)
+  - 자산 동기화 감사 로그 (`ASSET_LISTED`, `ASSET_DELISTED`)
+    - `ASSET_LISTED`: 신규 상장 또는 기존 폐지 종목의 재상장 시 적재. `context`에 거래소, 카테고리(ETF, ETN, ELW 등) 및 재상장 여부(`relisted: true/false`) 메타데이터가 보존됨.
+    - `ASSET_DELISTED`: 상장폐지 또는 마스터 파일 유실 시 적재.
 
 ---
 

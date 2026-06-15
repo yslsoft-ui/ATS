@@ -4,6 +4,7 @@
 
 // 전역 마켓 데이터 적재 변수
 let marketData = [];
+let allSymbolsCache = [];
 
 // 최종 수집 시각 (Date 객체)
 let lastMarketFetchedAt = null;
@@ -41,9 +42,42 @@ function startElapsedTimer() {
  * @param {Array} data - 마켓 데이터 배열
  */
 function renderMarketTable(data) {
+    const thead = document.querySelector('#market-table thead');
     const tbody = document.getElementById('market-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
+    
+    // thead 동적 구성
+    if (thead) {
+        if (state.currentMarketTab === 'kis') {
+            thead.innerHTML = `
+                <tr>
+                    <th style="width: 65px; text-align: center;">수집</th>
+                    <th style="width: 50px; text-align: center;">#</th>
+                    <th>종목</th>
+                    <th style="text-align:right">현재가</th>
+                    <th style="text-align:right">변동률(24h)</th>
+                    <th style="text-align:right">변동액(24h)</th>
+                    <th style="text-align:right">고가</th>
+                    <th style="text-align:right">저가</th>
+                    <th style="text-align:right">거래대금(24h)</th>
+                </tr>
+            `;
+        } else {
+            thead.innerHTML = `
+                <tr>
+                    <th>#</th>
+                    <th>종목</th>
+                    <th style="text-align:right">현재가</th>
+                    <th style="text-align:right">변동률(24h)</th>
+                    <th style="text-align:right">변동액(24h)</th>
+                    <th style="text-align:right">고가</th>
+                    <th style="text-align:right">저가</th>
+                    <th style="text-align:right">거래대금(24h)</th>
+                </tr>
+            `;
+        }
+    }
     
     // 현재 선택된 탭에 맞는 거래소 데이터만 필터링
     const filteredByExch = data.filter(c => c.exchange === state.currentMarketTab);
@@ -51,9 +85,7 @@ function renderMarketTable(data) {
     filteredByExch.forEach((coin, idx) => {
         const ticker = coin.market;
         const exchange = coin.exchange || 'upbit';
-        const symbolLower = ticker.toLowerCase();
         let iconUrl = '';
-        let fallbackUrl = '';
 
         if (exchange === 'upbit') {
             iconUrl = `https://static.upbit.com/logos/${ticker}.png`;
@@ -62,6 +94,9 @@ function renderMarketTable(data) {
         }
 
         const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%231E293B' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='9' font-family='sans-serif' font-weight='bold' fill='%2394A3B8' text-anchor='middle'>${ticker.slice(0, 3)}</text></svg>`;
+
+        const isCollected = coin.is_collected !== false; // undefined이거나 true면 수집 중
+        const checked = isCollected ? 'checked' : '';
 
         const rate = (coin.signed_change_rate || 0) * 100;
         const rateClass = rate >= 0 ? 'bull' : 'bear';
@@ -77,7 +112,26 @@ function renderMarketTable(data) {
 
         const tr = document.createElement('tr');
         tr.className = 'market-row';
-        tr.innerHTML = `
+
+        const tradePriceText = !isCollected ? '-' : formatPrice(coin.trade_price, decimals);
+        const rateText = !isCollected ? '-' : rateStr;
+        const changePriceText = !isCollected ? '-' : changePriceStr;
+        const highPriceText = !isCollected ? '-' : formatPrice(coin.high_price);
+        const lowPriceText = !isCollected ? '-' : formatPrice(coin.low_price);
+        const volumeText = !isCollected ? '-' : formatVolume(coin.acc_trade_price_24h);
+
+        let trHtml = '';
+        if (state.currentMarketTab === 'kis') {
+            trHtml += `
+                <td style="text-align: center; width: 65px;" class="checkbox-cell">
+                    <div class="collect-checkbox-wrapper">
+                        <input type="checkbox" class="collect-checkbox" data-code="${ticker}" data-name="${coin.korean_name}" ${checked}>
+                    </div>
+                </td>
+            `;
+        }
+
+        trHtml += `
             <td class="rank">${idx + 1}</td>
             <td class="coin-cell">
                 <img src="${iconUrl}" alt="${ticker}" class="coin-icon">
@@ -86,13 +140,14 @@ function renderMarketTable(data) {
                     <span class="coin-code">${ticker}</span>
                 </div>
             </td>
-            <td class="num">${formatPrice(coin.trade_price, decimals)}</td>
-            <td class="num ${rateClass}">${rateStr}</td>
-            <td class="num ${rateClass}">${changePriceStr}</td>
-            <td class="num">${formatPrice(coin.high_price)}</td>
-            <td class="num">${formatPrice(coin.low_price)}</td>
-            <td class="num secondary">${formatVolume(coin.acc_trade_price_24h)}</td>
+            <td class="num">${tradePriceText}</td>
+            <td class="num ${!isCollected ? '' : rateClass}">${rateText}</td>
+            <td class="num ${!isCollected ? '' : rateClass}">${changePriceText}</td>
+            <td class="num">${highPriceText}</td>
+            <td class="num">${lowPriceText}</td>
+            <td class="num secondary">${volumeText}</td>
         `;
+        tr.innerHTML = trHtml;
 
         // 이미지 로드 에러 시 안전하게 SVG 텍스트 대체
         const img = tr.querySelector('.coin-icon');
@@ -105,6 +160,10 @@ function renderMarketTable(data) {
 
         // 클릭 시 모니터링 페이지로 전환
         tr.addEventListener('click', () => {
+            if (state.currentMarketTab === 'kis' && !isCollected) {
+                showToast("수집 중이 아닌 종목은 모니터링할 수 없습니다. 수집을 먼저 시작하십시오.", "warning");
+                return;
+            }
             Store.update({
                 currentExchange: coin.exchange || 'upbit',
                 currentSymbol: coin.market
@@ -113,6 +172,53 @@ function renderMarketTable(data) {
             // 모니터링 메뉴로 전환
             ViewRouter.navigateTo('monitoring-view');
         });
+
+        // 체크박스 영역 클릭 시 tr 클릭 이벤트 전파 차단
+        const checkboxCell = tr.querySelector('.checkbox-cell');
+        if (checkboxCell) {
+            checkboxCell.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+        }
+
+        const checkbox = tr.querySelector('.collect-checkbox');
+        if (checkbox) {
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            checkbox.addEventListener('change', async (e) => {
+                const code = e.target.dataset.code;
+                const name = e.target.dataset.name;
+                const isChecked = e.target.checked;
+
+                const actionText = isChecked ? '수집 시작' : '수집 해제';
+                const confirmMsg = `${name} (${code}) ${actionText}을 진행하시겠습니까?`;
+
+                if (!confirm(confirmMsg)) {
+                    e.target.checked = !isChecked; // 체크 상태 원복
+                    return;
+                }
+
+                try {
+                    const result = await APIClient.toggleKisSymbol(code, name, isChecked);
+                    const statusMsg = result.is_collected ? '수집 등록 완료' : '수집 해제 완료';
+                    showToast(`${name} (${code}) ${statusMsg}`, result.is_collected ? 'success' : 'info');
+
+                    // 약간의 딜레이 후 강제 리로드하여 화면 갱신
+                    setTimeout(() => {
+                        loadMarket(true);
+                    }, 500);
+
+                    if (window.updateCollectorStatus) {
+                        window.updateCollectorStatus();
+                    }
+                } catch (err) {
+                    e.target.checked = !isChecked;
+                    showToast(`수집 변경 실패: ${err.message}`, 'error');
+                }
+            });
+        }
+
         tbody.appendChild(tr);
     });
     
@@ -180,6 +286,7 @@ async function loadMarket(force = false) {
 async function loadSymbols() {
     try {
         const symbols = await APIClient.fetchSymbols();
+        allSymbolsCache = symbols || [];
         
         // 한글 종목명 매핑은 select 드롭다운 존재 유무와 관계없이 항상 수행
         symbols.forEach(symObj => {
@@ -236,10 +343,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMarketTable(marketData); 
                 return; 
             }
-            const filtered = marketData.filter(c =>
+            let filtered = marketData.filter(c =>
                 c.korean_name.toLowerCase().includes(q) ||
                 c.market.toLowerCase().includes(q)
             );
+            
+            // KIS 탭이고 검색어가 입력되었을 때, 미수집 종목도 검색 결과에 포함
+            if (state.currentMarketTab === 'kis') {
+                const activeCodes = new Set(marketData.filter(c => c.exchange === 'kis').map(c => c.market));
+                const nonActiveKisSymbols = allSymbolsCache.filter(symObj => 
+                    symObj.exchange_id === 'kis' && 
+                    !activeCodes.has(symObj.symbol) &&
+                    (symObj.name.toLowerCase().includes(q) || symObj.symbol.toLowerCase().includes(q))
+                );
+                
+                const extraItems = nonActiveKisSymbols.map(symObj => ({
+                    exchange: 'kis',
+                    market: symObj.symbol,
+                    korean_name: symObj.name,
+                    trade_price: 0,
+                    signed_change_rate: 0,
+                    change_price: 0,
+                    high_price: 0,
+                    low_price: 0,
+                    acc_trade_price_24h: 0,
+                    is_collected: false // 비활성화 마킹
+                }));
+                
+                filtered = [...filtered, ...extraItems];
+            }
+            
             renderMarketTable(filtered);
         });
     }
