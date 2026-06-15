@@ -40,26 +40,26 @@
 
 ```mermaid
 erDiagram
-    PORTFOLIOS ||--o{ PORTFOLIO_EXCHANGES : "거래소 잔고 보유"
-    PORTFOLIOS ||--o{ POSITIONS : "보유 포지션 내역"
-    PORTFOLIOS ||--o{ ORDERS_HISTORY : "체결 주문 이력"
-    PORTFOLIOS ||--o{ STRATEGY_INSIGHTS : "AI 손실 분석 생성"
-    PORTFOLIOS ||--o{ STRATEGY_PROPOSALS : "개선 제안 소유"
+    PORTFOLIOS_포트폴리오 ||--o{ PORTFOLIO_EXCHANGES_포트폴리오_잔고 : "거래소 잔고 보유"
+    PORTFOLIOS_포트폴리오 ||--o{ POSITIONS_보유_포지션 : "보유 포지션 내역"
+    PORTFOLIOS_포트폴리오 ||--o{ ORDERS_HISTORY_주문_이력 : "체결 주문 이력"
+    PORTFOLIOS_포트폴리오 ||--o{ STRATEGY_INSIGHTS_전략_인사이트 : "AI 손실 분석 생성"
+    PORTFOLIOS_포트폴리오 ||--o{ STRATEGY_PROPOSALS_전략_제안 : "개선 제안 소유"
 
-    EXCHANGES ||--o{ PORTFOLIO_EXCHANGES : "자산 호스팅"
-    EXCHANGES ||--o{ TRADES : "실시간 틱 수집"
-    EXCHANGES ||--o{ CANDLES : "OHLCV 캔들 취합"
-    EXCHANGES ||--o{ EXCHANGE_ASSETS : "취급 자산 목록"
+    EXCHANGES_거래소 ||--o{ PORTFOLIO_EXCHANGES_포트폴리오_잔고 : "자산 호스팅"
+    EXCHANGES_거래소 ||--o{ TRADES_실시간_체결 : "실시간 틱 수집"
+    EXCHANGES_거래소 ||--o{ CANDLES_분봉_캔들 : "OHLCV 캔들 취합"
+    EXCHANGES_거래소 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "취급 자산 목록"
     
-    PORTFOLIO_EXCHANGES ||--o{ POSITIONS : "자산 포지션 잔고 보유"
+    PORTFOLIO_EXCHANGES_포트폴리오_잔고 ||--o{ POSITIONS_보유_포지션 : "자산 포지션 잔고 보유"
     
-    ASSET_MASTER ||--o{ EXCHANGE_ASSETS : "거래 자산 메타 매핑"
+    ASSET_MASTER_자산_마스터 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "거래 자산 메타 매핑"
     
-    STRATEGY_INSIGHTS ||--o{ STRATEGY_PROPOSALS : "개선 파라미터 제안 도출"
-    STRATEGY_PROPOSALS ||--o{ PROPOSAL_EVALUATIONS : "다중 Horizon 사후 평가"
-    STRATEGY_PROPOSALS ||--o{ PROPOSAL_EVALUATION_RUNS : "수동 재평가 결과 누적"
+    STRATEGY_INSIGHTS_전략_인사이트 ||--o{ STRATEGY_PROPOSALS_전략_제안 : "개선 파라미터 제안 도출"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ PROPOSAL_EVALUATIONS_제안_사후_평가 : "다중 Horizon 사후 평가"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "수동 재평가 결과 누적"
     
-    PROPOSAL_REEVALUATION_JOBS ||--o{ PROPOSAL_EVALUATION_RUNS : "비동기 평가 Job 실행"
+    PROPOSAL_REEVALUATION_JOBS_재평가_작업_큐 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "비동기 평가 Job 실행"
 ```
 
 ---
@@ -86,7 +86,7 @@ erDiagram
 
 ```mermaid
 erDiagram
-    PORTFOLIOS {
+    PORTFOLIOS_포트폴리오 {
         integer id PK "일련번호 (자동 증가)"
         text name "식별 이름 (중복 허용)"
         text type "운용 타입 (live, simulation, backtest)"
@@ -97,7 +97,7 @@ erDiagram
         datetime updated_at "최종 수정 일시"
     }
 
-    EXCHANGES {
+    EXCHANGES_거래소 {
         text id PK "거래소 고유 식별자 (upbit, bithumb, kis)"
         text name "거래소 한글/영문 표시명"
         real fee_rate "기본 적용 수수료율"
@@ -106,7 +106,7 @@ erDiagram
         datetime updated_at "수정 일시"
     }
 
-    PORTFOLIO_EXCHANGES {
+    PORTFOLIO_EXCHANGES_포트폴리오_잔고 {
         integer portfolio_id PK, FK "소속 포트폴리오 ID"
         text exchange_id PK "해당 거래소 ID"
         real initial_cash "초기 설정 투자 자금"
@@ -116,7 +116,7 @@ erDiagram
         datetime updated_at "최종 갱신 일시"
     }
 
-    POSITIONS {
+    POSITIONS_보유_포지션 {
         integer portfolio_id PK, FK "소속 포트폴리오 ID"
         text exchange_id PK, FK "보유 자산 거래소 ID"
         text symbol PK "자산 심볼 코드 (BTC, 005930 등)"
@@ -127,7 +127,7 @@ erDiagram
         datetime updated_at "최종 평가/갱신 일시"
     }
 
-    ORDERS_HISTORY {
+    ORDERS_HISTORY_주문_이력 {
         integer id PK "주문 번호 (자동 증가)"
         integer portfolio_id FK "주문 발주 포트폴리오 ID"
         text exchange_id "주문 거래소 ID"
@@ -157,7 +157,7 @@ erDiagram
 
 ```mermaid
 erDiagram
-    ASSET_MASTER {
+    ASSET_MASTER_자산_마스터 {
         text symbol PK "자산 고유 심볼 코드"
         text korean_name "한글 종목명"
         text asset_type "자산 속성 (crypto / stock)"
@@ -165,7 +165,7 @@ erDiagram
         datetime updated_at "마스터 최종 수정 일시"
     }
 
-    EXCHANGE_ASSETS {
+    EXCHANGE_ASSETS_거래소_자산 {
         text exchange_id PK "거래소 ID"
         text symbol PK, FK "자산 심볼 코드"
         integer is_active "수집 및 감시 활성 여부 (0/1)"
@@ -174,7 +174,7 @@ erDiagram
         datetime updated_at "상태 변경 일시"
     }
 
-    TRADES {
+    TRADES_실시간_체결 {
         integer id PK "체결 레코드 일련번호"
         text exchange_id "수집 거래소 ID"
         text market "세부 시장 (KRW, KRX 등)"
@@ -187,7 +187,7 @@ erDiagram
         datetime created_at "로컬 DB 적재 일시"
     }
 
-    CANDLES {
+    CANDLES_분봉_캔들 {
         text exchange_id PK "대상 거래소 ID"
         text symbol PK "자산 심볼 코드"
         integer interval PK "캔들 주기 규격 (초 단위)"
@@ -199,7 +199,7 @@ erDiagram
         real volume "누적 체결 거래량"
     }
 
-    ALERTS {
+    ALERTS_실시간_알림 {
         integer id PK "알림 고유 일련번호"
         text exchange_id "감지 거래소 ID"
         text symbol "자산 심볼 코드"
@@ -231,7 +231,7 @@ AI 모델을 활용해 손실 원인을 분석하고, 최적의 파라미터 개
 
 ```mermaid
 erDiagram
-    STRATEGY_INSIGHTS {
+    STRATEGY_INSIGHTS_전략_인사이트 {
         integer id PK "인사이트 일련번호"
         integer portfolio_id FK "소속 포트폴리오 ID"
         text strategy_id "분석 대상 전략 ID"
@@ -241,7 +241,7 @@ erDiagram
         datetime created_at "작성 일시"
     }
 
-    STRATEGY_PROPOSALS {
+    STRATEGY_PROPOSALS_전략_제안 {
         integer id PK "제안 고유 번호"
         integer insight_id FK "원인 제공 인사이트 ID"
         text proposal_group_id "제안 묶음 그룹 ID"
@@ -266,7 +266,7 @@ erDiagram
         datetime updated_at "수정 일시"
     }
 
-    PROPOSAL_EVALUATIONS {
+    PROPOSAL_EVALUATIONS_제안_사후_평가 {
         integer id PK "평가 일련번호"
         integer proposal_id FK "평가 대상 제안 ID"
         text horizon_name "Horizon 식별자 (10m, 30m, 1d 등)"
@@ -292,7 +292,7 @@ erDiagram
         datetime created_at "평가 생성 일시"
     }
 
-    PROPOSAL_REEVALUATION_JOBS {
+    PROPOSAL_REEVALUATION_JOBS_재평가_작업_큐 {
         integer job_id PK "수동 재평가 Job ID"
         integer proposal_id "재평가 대상 제안 ID"
         text status "FSM 상태 (QUEUED, RUNNING, COMPLETED 등)"
@@ -306,7 +306,7 @@ erDiagram
         text worker_id "처리 담당 데몬 ID"
     }
 
-    PROPOSAL_EVALUATION_RUNS {
+    PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 {
         integer evaluation_run_id PK "수동 재평가 런(Run) 일련번호"
         integer proposal_id "평가 대상 제안 ID"
         integer job_id "연결된 reevaluation Job ID"
@@ -345,7 +345,7 @@ erDiagram
 
 ```mermaid
 erDiagram
-    STRATEGY_VERSIONS {
+    STRATEGY_VERSIONS_전략_버전 {
         text strategy_id PK "전략 고유 ID 식별자"
         integer current_version_id "현재 런타임 활성 버전 번호"
         text current_params "현재 동작 중인 파라미터 JSON 문자열"
@@ -354,7 +354,7 @@ erDiagram
         datetime updated_at "최종 변경 일시"
     }
 
-    STRATEGY_PARAMETER_HISTORY {
+    STRATEGY_PARAMETER_HISTORY_파라미터_변경_이력 {
         integer id PK "이력 고유 일련번호"
         text strategy_id "대상 전략 ID"
         integer version_id "버전 번호"
@@ -368,7 +368,7 @@ erDiagram
         datetime created_at "이력 기록 일시"
     }
 
-    STRATEGY_PERFORMANCE_SNAPSHOTS {
+    STRATEGY_PERFORMANCE_SNAPSHOTS_성과_스냅샷 {
         integer id PK "스냅샷 일련번호"
         text strategy_id "대상 전략 ID"
         integer version_id "성과 측정 대상 전략 버전"
@@ -383,7 +383,7 @@ erDiagram
         datetime created_at "스냅샷 작성 일시"
     }
 
-    MARKET_REGIME_SUMMARIES {
+    MARKET_REGIME_SUMMARIES_시장_요약 {
         integer id PK "피처 기록 번호"
         integer timestamp "1분 정규화 버킷 타임스탬프 (ms)"
         text symbol "exchange:symbol 결합 종목 코드"
@@ -395,7 +395,7 @@ erDiagram
         datetime created_at "피처 적재 일시"
     }
 
-    GIRS_SHADOW_METRICS {
+    GIRS_SHADOW_METRICS_GIRS_섀도_지표 {
         integer id PK "메트릭 적재 일련번호"
         real timestamp "기록 시각 (Unix epoch 초)"
         text proposal_id "연관 승격 제안 ID"
@@ -429,7 +429,7 @@ erDiagram
         text exchange_id "거래소 ID"
     }
 
-    UNIVERSE_GUARD_STATE {
+    UNIVERSE_GUARD_STATE_유니버스_가드_상태 {
         text exchange_id PK "대상 거래소 ID"
         text market_type PK "crypto / stock"
         text symbol PK "대상 종목 심볼 코드"
@@ -440,7 +440,7 @@ erDiagram
         text last_event_logged_reason "마지막 감사 로그에 기록된 차단 사유"
     }
 
-    SYSTEM_EVENTS {
+    SYSTEM_EVENTS_시스템_이벤트 {
         integer id PK "이벤트 번호 (자동 증가)"
         text event_type "이벤트 유형분류 (DAEMON_START, EXCHANGE_SUSPENDED 등)"
         text target "이벤트 대상 식별자"
