@@ -283,6 +283,7 @@ erDiagram
 | **symbol** (PK) | TEXT | NOT NULL | 자산 심볼 (예: `BTC`, `005930`) |
 | **korean_name** | TEXT | NOT NULL | 한글 종목명 (예: `비트코인`, `삼성전자`) |
 | **asset_type** | TEXT | NOT NULL | 자산 속성 구분 (`crypto`, `stock`) |
+| **category** | TEXT | - | 세부 자산군 카테고리 (`ETF`, `ETN`, `ELW`, `Crypto`, `KOSPI`, `KOSDAQ` 등) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 생성 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 변경 일시 |
 
@@ -295,6 +296,8 @@ erDiagram
 | **symbol** (PK, FK) | TEXT | REFERENCES asset_master(symbol) ON UPDATE CASCADE | 자산 심볼 |
 | **is_active** | INTEGER | DEFAULT 1 | 현재 수집 및 전략 감시 활성화 여부 (0: 비활성, 1: 활성) |
 | **is_delisted** | INTEGER | DEFAULT 0 | 상장 폐지 여부 (1: 상장폐지) |
+| **market** | TEXT | - | 실시간 구독 대상 세부 시장 구분 (예: `KRW`, `UN` 등) |
+| **market_updated_at** | DATETIME | - | 세부 시장 구분 최종 확인 및 업데이트 시각 |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 등록 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 상태 갱신 일시 |
 
