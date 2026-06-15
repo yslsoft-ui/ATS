@@ -2,7 +2,7 @@ import asyncio
 import time
 from typing import Dict, List, Optional, Any, Callable
 from src.engine.utils.telemetry import get_logger
-from src.engine.candles import CandleGenerator, Candle
+from src.engine.candles import Candle
 from src.engine.trade_engine import TradeEngine
 from src.engine.strategy import StrategyRegistry
 
@@ -33,8 +33,6 @@ class MarketDataProcessor:
 
         self.is_running = False
         self.trade_engines: Dict[str, TradeEngine] = {}
-        self.candle_generator = CandleGenerator(intervals=[60])
-        self.candle_lock = asyncio.Lock()
         self.total_processed_count = 0
         self.processor_tasks: List[asyncio.Task] = []
         self._flush_task: Optional[asyncio.Task] = None  # [NEW] 분 경계 flush 태스크
@@ -112,16 +110,16 @@ class MarketDataProcessor:
                 self.total_processed_count += 1
                 symbol = data['code']
 
-                # 1. 1분봉 실시간 캔들 조립 처리 (동시성 락 적용)
-                async with self.candle_lock:
-                    closed_candles = self.candle_generator.process_tick(
-                        exchange_id=self.exchange_id,
-                        symbol=symbol,
-                        price=data['trade_price'],
-                        volume=data['trade_volume'],
-                        side=data['ask_bid'],
-                        timestamp_ms=data['trade_timestamp']
-                    )
+                closed_candles = []
+                signals = []
+
+                # 1. 자동매매 전략 엔진 및 시세 컨텍스트 구동
+                if symbol in self.trade_engines:
+                    engine = self.trade_engines[symbol]
+                    signals, closed_candles = await engine.process_tick(data, None)
+                    for sig in signals:
+                        if self.on_signal_callback:
+                            await self.on_signal_callback(sig, data['trade_price'])
 
                 # 2. 완성된 캔들이 있는 경우 DB/ZMQ 영속화 큐 주입
                 for candle in closed_candles:
@@ -136,14 +134,6 @@ class MarketDataProcessor:
 
                 if self.db_queue:
                     await self.db_queue.put(data)
-
-                # 4. 자동매매 전략 구동 종목에 대한 시그널 연산
-                if symbol in self.trade_engines:
-                    engine = self.trade_engines[symbol]
-                    signals, _ = await engine.process_tick(data, None)
-                    for sig in signals:
-                        if self.on_signal_callback:
-                            await self.on_signal_callback(sig, data['trade_price'])
 
                 self.processing_queue.task_done()
 
@@ -206,20 +196,19 @@ class MarketDataProcessor:
                 current_min_start = (int(time.time()) // 60) * 60
                 flushed = 0
 
-                async with self.candle_lock:
-                    for interval, symbols_dict in self.candle_generator.current_candles.items():
-                        expired_symbols = []
-                        for symbol, candle in symbols_dict.items():
-                            # 캔들의 시작 시각이 현재 분보다 이전이면 → 이미 완료된 분봉
-                            if candle.timestamp < current_min_start:
-                                candle.is_closed = True
-                                if self.candle_queue:
-                                    await self.candle_queue.put(candle)
-                                expired_symbols.append(symbol)
-                                flushed += 1
-                        # 수거 완료된 캔들을 메모리에서 제거
-                        for symbol in expired_symbols:
-                            del symbols_dict[symbol]
+                for engine in list(self.trade_engines.values()):
+                    for context in list(engine.contexts.values()):
+                        for interval, symbols_dict in list(context.candle_gen.current_candles.items()):
+                            expired_symbols = []
+                            for symbol, candle in list(symbols_dict.items()):
+                                if candle.timestamp < current_min_start:
+                                    candle.is_closed = True
+                                    if self.candle_queue:
+                                        await self.candle_queue.put(candle)
+                                    expired_symbols.append(symbol)
+                                    flushed += 1
+                            for symbol in expired_symbols:
+                                del symbols_dict[symbol]
 
                 if flushed > 0:
                     logger.info(f"[{self.exchange_id.upper()}] 분 경계 flush: 미마감 캔들 {flushed}개 강제 close 및 DB 큐 적재")

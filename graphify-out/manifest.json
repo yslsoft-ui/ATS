@@ -650,8 +650,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_context.py": {
-    "mtime": 1781405898.223252,
-    "ast_hash": "23a97abe72834f33bb2ac461e96f7c6c",
+    "mtime": 1781532546.4938996,
+    "ast_hash": "8a92811673c6c417c3b065e05c1b0147",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/dataset_exporter.py": {
@@ -760,8 +760,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/trade_engine.py": {
-    "mtime": 1781405885.803022,
-    "ast_hash": "04643c621e9b7c60a98d6e9049264942",
+    "mtime": 1781532561.2502391,
+    "ast_hash": "91fa45e7414cb7ed8a067acad8412411",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/girs_scorer.py": {
@@ -840,8 +840,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_processor.py": {
-    "mtime": 1781405930.7198539,
-    "ast_hash": "886c233d0d356948efc1b2e782c02c09",
+    "mtime": 1781532577.846621,
+    "ast_hash": "19089f6b39336e094e4e55a56032325c",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/daemon_adapters.py": {
@@ -1235,13 +1235,18 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_strategy_unmatched_warnings.py": {
-    "mtime": 1781525172.0546656,
-    "ast_hash": "b8983cbe78d24c18e7823b7432d20f63",
+    "mtime": 1781532769.9510415,
+    "ast_hash": "c30a2b9b5db1e43fd2c471aa0e5a6a3e",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_short_term_momentum.py": {
     "mtime": 1781406105.267084,
     "ast_hash": "4909419eba086e2d3c81b7074538da10",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_context_refactoring.py": {
+    "mtime": 1781532707.749611,
+    "ast_hash": "c0215767b8bee06b310685d9b295ba1a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_collector_detail.py": {
@@ -1345,7 +1350,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781524462.3166134,
+    "mtime": 1781532728.5580893,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },

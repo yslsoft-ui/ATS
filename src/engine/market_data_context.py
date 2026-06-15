@@ -1,6 +1,6 @@
 import numpy as np
 from typing import List, Dict, Any
-from src.engine.candles import Candle
+from src.engine.candles import Candle, CandleGenerator
 from src.engine.exceptions import IndicatorNotReady, UnsupportedIndicatorError
 from src.engine.indicators import (
     calculate_sma,
@@ -21,6 +21,7 @@ class MarketDataContext:
         self.max_len = max_len
         self.candles: List[Candle] = []
         self.indicator_cache: Dict[str, Any] = {}
+        self.candle_gen = CandleGenerator(intervals=[interval])
 
     def add_candle(self, candle: Candle):
         """새로운 완성형 캔들을 추가하고 기존 캐시를 전부 무효화합니다."""
@@ -29,6 +30,20 @@ class MarketDataContext:
             self.candles.pop(0)
         # 캔들이 새로 유입되면 지표 값이 변경되므로 캐시를 지웁니다.
         self.indicator_cache.clear()
+
+    def add_tick(self, tick: Dict[str, Any]) -> List[Candle]:
+        """실시간 틱 데이터를 입력받아 캔들을 조립하고, 마감된 캔들이 있으면 내부에 추가합니다."""
+        closed_candles = self.candle_gen.process_tick(
+            exchange_id=self.exchange_id,
+            symbol=self.symbol,
+            price=tick['trade_price'],
+            volume=tick['trade_volume'],
+            side=tick.get('ask_bid') or tick.get('side') or 'BID',
+            timestamp_ms=tick['trade_timestamp']
+        )
+        for candle in closed_candles:
+            self.add_candle(candle)
+        return closed_candles
 
     @property
     def prices(self) -> np.ndarray:

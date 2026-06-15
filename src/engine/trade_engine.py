@@ -7,7 +7,7 @@ from typing import List, Dict, Optional, Any
 from src.engine.utils.telemetry import get_logger
 
 logger = get_logger(__name__)
-from src.engine.candles import CandleGenerator, Candle
+from src.engine.candles import Candle
 from src.engine.strategy import BaseStrategy, StrategyType, TradeSignal, StrategyResult
 from src.engine.strategy_host import StrategyHost
 from src.engine.market_data_context import MarketDataContext
@@ -44,7 +44,6 @@ class TradeEngine:
         self.contexts: Dict[int, MarketDataContext] = {
             interval: MarketDataContext(exchange_id, symbol, interval) for interval in self.intervals
         }
-        self.candle_gen = CandleGenerator(intervals=self.intervals)
         self.feature_builder = FeatureBuilder(self.market_data_repo, self.config_manager)
 
     async def warm_up(self, db_path: Optional[str] = None, lookback_ticks: int = 1000, lookback_candles: int = 100):
@@ -159,20 +158,13 @@ class TradeEngine:
                                 context={"exit_type": exit_reason, "avg_price": pos.avg_price, "peak_price": pos.peak_price}
                             ))
 
-        closed_candles = self.candle_gen.process_tick(
-            self.exchange_id,
-            self.symbol, 
-            tick['trade_price'], 
-            tick['trade_volume'], 
-            tick['ask_bid'], 
-            tick['trade_timestamp']
-        )
+        closed_candles = []
+        for interval in self.intervals:
+            context = self.contexts[interval]
+            candles_for_interval = context.add_tick(tick)
+            closed_candles.extend(candles_for_interval)
         
         for candle in closed_candles:
-            # 완성된 캔들을 컨텍스트에 갱신하여 지표 계산 캐시 무효화 및 데이터 누적
-            context = self.contexts[candle.interval]
-            context.add_candle(candle)
-            
             if is_warmup:
                 continue
                 

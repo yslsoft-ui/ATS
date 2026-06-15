@@ -6,6 +6,9 @@ from tests.test_command_dispatcher import FakeConfigManager
 from src.database.repository import InMemoryTradingRepository
 from src.engine.portfolio import Portfolio
 
+def setup_module(module):
+    logging.getLogger("src").propagate = True
+
 class MockSubscriber:
     def __init__(self, data_list):
         self.data_list = data_list

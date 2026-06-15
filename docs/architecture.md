@@ -137,9 +137,10 @@ sequenceDiagram
     alt 공통 청산 조건 충족 시
         TE->>PM: 즉시 청산 신호 (SELL) 발송
         PM->>Exec: 가상 주문 실행 요청
-    else 일반 캔들 마감 시
-        TE->>TE: 틱 데이터를 캔들(OHLCV)로 합산
-        TE->>MDC: 완성된 캔들 추가 및 지표 캐시 무효화 (add_candle)
+    TE->>MDC: 실시간 틱 주입 (add_tick)
+    MDC->>MDC: 틱 조립 및 캔들(OHLCV) 완성
+    alt 캔들 마감 시 (Feature Snapshot 준비 완료)
+        MDC->>TE: 완성된 캔들 목록 반환
         TE->>Host: 전략 실행 요청 (execute)
         Host->>MDC: 필요한 지표 동적 계산/조회 (get_indicator)
         MDC->>MDC: 캐시 확인 또는 numpy 기반 지표 연산 및 캐싱
@@ -289,8 +290,8 @@ classDiagram
 
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
-- **MarketDataContext 통합**: 지표 계산과 캔들 데이터 누적 책임을 `MarketDataContext`로 일원화하고, 각 전략(`StrategyHost`)은 공유된 컨텍스트를 주입받아 동적으로 계산하되 동일 시점의 요청은 캐싱하여 고속 반환하는 메커니즘을 사용합니다.
-- **실시간 다중 인터벌 캔들 조립**: 전략 데몬([strategy_service.py](file:///home/simon/ATS/src/services/strategy_service.py))은 수집기 데몬이 발행한 실시간 틱 데이터를 구독하여, 탑재된 전략의 설정 주기(예: 3분, 5분, 15분 등)에 맞는 다양한 시간봉을 메모리 상에서 독립적으로 직접 조립하고 관리합니다.
+- **MarketDataContext 통합 (Deepening)**: 캔들의 실시간 조립(`CandleGenerator`) 및 지표 연산 캐싱 책임을 `MarketDataContext`로 완전히 단일화했습니다. 틱 데이터 주입(`add_tick`)을 통해 내부에서 독립적으로 캔들을 마감 및 적재하고, 완성된 캔들이 반환될 때(Feature Snapshot 준비)에만 전략을 실행하여 불필요한 이중 생성과 결합도를 해소했습니다.
+- **실시간 다중 인터벌 캔들 조립**: 시세 가공 처리기([market_data_processor.py](file:///home/simon/ATS/src/engine/market_data_processor.py))가 이중으로 캔들을 빌드하던 비효율을 제거하고, 개별 종목의 `TradeEngine`에 틱 데이터를 전달하여 하부의 `MarketDataContext`가 유일한 캔들 빌더로서 작동하도록 가공 흐름을 단일화했습니다.
 - **공통 청산 규칙 평가기 (Common Exit Evaluator)**: 개별 전략별로 산재해 있던 손절(Stop Loss), 트레일링 스탑(Trailing Stop), 시간 제한 탈출(Time-limit Exit) 로직을 통합 및 격리하여 `CommonExitEvaluator`로 구현했습니다. 틱 데이터가 수신될 때마다 실시간으로 포지션의 `peak_price`와 시간 및 수익률을 감시하여 즉시 시장가 청산을 수행하므로, 데몬 재시작 시에도 DB에 보존된 최고가와 진입 시각 상태에 기반하여 안전하고 신뢰도 높은 청산 동작을 보장합니다. 또한 매매비용(수수료, 세금, 슬리피지, 안전 마진)을 종합적으로 고려한 **비용 반영 본전이동(Breakeven Stop)** 규칙을 내장하고 있으며, 가격 기반 청산 후보 방어선(`stop_loss_floor`, `breakeven_floor`, `trailing_floor`) 중 가장 높은 방어선을 최우선 적용하여 일괄 청산함으로써 리스크 관리를 극대화합니다.
 - **매매 엔진의 단일화 및 전략 비활성 시 가드**: 전략 실행 호스트를 Entry/Exit 호스트로 쪼개어 돌리던 복잡한 아키텍처를 단일 `hosts` 루프로 일원화했습니다. 또한 전략이 비활성화(`enabled = False`)되어 있더라도 포지션을 보유 중인 상태라면 청산 로직은 정상 구동되어 안전하게 청산이 진행되도록 보증하며, 신규 진입(BUY) 신호만 필터링 차단합니다.
 - **파라미터 평가 및 스코어링 모듈 분리 (ParameterEvaluator Seam)**: 제안된 파라미터 후보군 평가 시 사용되던 파라미터 가중 거리 계산, 시장 국면별 적합도 가중치 산정, 다요소 신뢰도 점수(Confidence Score) 연산 등의 수학적 연산 정책들을 `ShadowBacktestEngine`으로부터 분리하여 무상태(Stateless) 전용 연산기인 `ParameterEvaluator`로 이관했습니다. 이를 통해 DB나 백테스트 엔진 구동 없이 계산 정책만을 독립적으로 단위 테스트하고 재사용할 수 있는 기반을 구축했습니다.
