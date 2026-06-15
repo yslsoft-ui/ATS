@@ -1215,8 +1215,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/README.md": {
-    "mtime": 1781328485.4936445,
-    "ast_hash": "ed64b45e12e78ff5cf2e82c927daaf85",
+    "mtime": 1781501208.1082966,
+    "ast_hash": "8e04e625bfefc03edd3e4be228341d8d",
     "semantic_hash": ""
   },
   "/home/simon/ATS/CONTEXT.md": {
@@ -1300,7 +1300,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781495769.1377602,
+    "mtime": 1781498026.1884367,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },
@@ -1340,8 +1340,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/daemons.md": {
-    "mtime": 1781436413.0669777,
-    "ast_hash": "e37835733ba083280841ec662c8e549c",
+    "mtime": 1781498291.2913282,
+    "ast_hash": "5ce17eb5205848dc21c75f45764a18f2",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/docs/erd-specification.md": {
+    "mtime": 1781501202.748175,
+    "ast_hash": "de3de7f2d1c0dc5e33fa56cd5f849e70",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
