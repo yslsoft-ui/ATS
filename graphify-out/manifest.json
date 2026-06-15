@@ -1405,8 +1405,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1781516086.3299925,
-    "ast_hash": "55e593f382473e341ff5314ea215eadc",
+    "mtime": 1781516216.188949,
+    "ast_hash": "488869cdbc55ce73b67b90b8837a9f6b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {

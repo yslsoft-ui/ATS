@@ -227,6 +227,7 @@ erDiagram
         text symbol PK "자산 고유 심볼 코드"
         text korean_name "한글 종목명"
         text asset_type "자산 속성 (crypto / stock)"
+        text category "세부 자산군 카테고리"
         datetime created_at "마스터 등록 일시"
         datetime updated_at "마스터 최종 수정 일시"
     }
@@ -236,6 +237,8 @@ erDiagram
         text symbol PK, FK "자산 심볼 코드"
         integer is_active "수집 및 감시 활성 여부 (0/1)"
         integer is_delisted "상장 폐지 여부 (0: 유지, 1: 상폐)"
+        text market "세부 시장 구분 (KRW, UN 등)"
+        datetime market_updated_at "세부 시장 최종 갱신 시각"
         datetime created_at "맵 등록 일시"
         datetime updated_at "상태 변경 일시"
     }

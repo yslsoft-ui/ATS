@@ -1,7 +1,7 @@
 # Graph Report - ATS  (2026-06-15)
 
 ## Corpus Check
-- 293 files · ~729,487 words
+- 293 files · ~729,507 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0f2d05c9`
+- Built from commit: `640db982`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1009,8 +1009,8 @@ Cohesion: 0.29
 Nodes (6): 3. Logging & Telemetry, 4. KIS (한국투자증권) API 연동 규격 원칙, Flagged ambiguities, Language, Multi-Market Real-time Trading System, Relationships
 
 ### Community 96 - "Community 96"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 기간별시세(일)
+Cohesion: 0.29
+Nodes (6): Example, Fields, 📊 KIS 채권/ELW/기타자산 오픈 API 정제 규격 마스터, 개요, 기본정보, 장내채권 기간별시세(일)
 
 ### Community 97 - "Community 97"
 Cohesion: 0.4
@@ -1321,8 +1321,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 평균단가조회
 
 ### Community 174 - "Community 174"
-Cohesion: 0.29
-Nodes (6): Example, Fields, 📊 KIS 채권/ELW/기타자산 오픈 API 정제 규격 마스터, 개요, 기본정보, 장내채권 발행정보
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 기본정보, 장내채권 발행정보
 
 ### Community 175 - "Community 175"
 Cohesion: 0.4
@@ -2241,8 +2241,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 주문
 
 ### Community 411 - "Community 411"
-Cohesion: 0.4
-Nodes (5): Example, Fields, 개요, 기본정보, 해외주식 예약주문접수취소
+Cohesion: 0.29
+Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 해외주식 예약주문접수취소
 
 ### Community 412 - "Community 412"
 Cohesion: 0.4
@@ -2349,8 +2349,8 @@ Cohesion: 0.4
 Nodes (5): Example, Fields, 개요, 기본정보, 해외뉴스종합(제목)
 
 ### Community 438 - "Community 438"
-Cohesion: 0.29
-Nodes (6): Example, Fields, 🇺🇸 KIS 해외주식 오픈 API 정제 규격 마스터, 개요, 기본정보, 당사 해외주식담보대출 가능 종목
+Cohesion: 0.4
+Nodes (5): Example, Fields, 개요, 기본정보, 당사 해외주식담보대출 가능 종목
 
 ### Community 439 - "Community 439"
 Cohesion: 0.4
