@@ -83,6 +83,7 @@ class StrategyService(DaemonService):
 
     async def reload_trade_engines(self, portfolio):
         new_engines = {}
+        self._unmatched_keys.clear()
         if not portfolio:
             logger.info("[StrategyService] 활성화된 실시간 모의투자 세션이 없습니다. 대기 상태로 유지합니다.")
             return new_engines
@@ -444,7 +445,7 @@ class StrategyService(DaemonService):
                             
                             signals, closed_candles = await engine.process_tick(tick_payload, self.portfolio_manager)
                         else:
-                            if key not in self._unmatched_keys:
+                            if self.trade_engines and key not in self._unmatched_keys:
                                 self._unmatched_keys.add(key)
                                 logger.warning(
                                     f"[StrategyService] 활성화된 전략 엔진에 매칭되지 않는 키 감지 (최초 1회 경고): {key}. "

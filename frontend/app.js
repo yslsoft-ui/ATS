@@ -388,9 +388,12 @@ function updateHeaderInfo(exchange, symbol) {
                 iconEl.src = fallbackSvg;
             };
         } else if (exchange === 'kis') {
-            // 국내 주식을 상징하는 세련된 네온 레드 주식 상승 차트 SVG 주입
-            iconEl.src = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="%23FF4B4B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m18.7 8-5.1 5.2-2.8-2.7L7 14.3"/></svg>`;
+            iconEl.src = `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${ticker}.png`;
             iconEl.style.display = 'block';
+            iconEl.onerror = () => {
+                iconEl.onerror = null;
+                iconEl.src = fallbackSvg;
+            };
         } else {
             iconEl.style.display = 'none';
         }

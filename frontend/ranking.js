@@ -152,7 +152,10 @@ async function loadRankingResult(trId) {
                 </td>
                 <td style="color: #F8FAFC; font-weight: bold; text-align: center; width: 60px;">${index + 1}</td>
                 <td style="color: #94A3B8; text-align: center; width: 80px; font-family: 'Roboto Mono', monospace;">${item.code}</td>
-                <td class="coin-cell" style="color: #F8FAFC; font-weight: bold; cursor: pointer; text-align: left; width: 180px;">${item.name}</td>
+                <td class="coin-cell" style="color: #F8FAFC; font-weight: bold; cursor: pointer; text-align: left; width: 180px;">
+                    <img src="https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${item.code}.png" alt="${item.code}" class="coin-icon" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'24\\' height=\\'24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%233B82F6\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'8\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'white\\' text-anchor=\\'middle\\'>ST</text></svg>';">
+                    <span class="coin-kr">${item.name}</span>
+                </td>
             `;
             
             columns.forEach(col => {

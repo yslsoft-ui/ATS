@@ -91,6 +91,8 @@ function renderMarketTable(data) {
             iconUrl = `https://static.upbit.com/logos/${ticker}.png`;
         } else if (exchange === 'bithumb') {
             iconUrl = `https://static.upbit.com/logos/${ticker.toUpperCase()}.png`;
+        } else if (exchange === 'kis') {
+            iconUrl = `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${ticker}.png`;
         }
 
         const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%231E293B' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='9' font-family='sans-serif' font-weight='bold' fill='%2394A3B8' text-anchor='middle'>${ticker.slice(0, 3)}</text></svg>`;
