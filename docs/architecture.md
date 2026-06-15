@@ -164,17 +164,123 @@ sequenceDiagram
 - **비동기 백필 기동**: 수집기 기동 시 과거 누락된 1분봉 동기화 작업이 실시간 수집 시작을 지연시키지 않도록 백필 작업을 `asyncio.create_task`로 비동기 실행하여 구동 즉시 실시간 데이터 수집을 병행합니다.
 - **벌크 병합 백필 (Bulk Merged Backfill)**: 과거 누락 캔들을 채울 때 개별 틈새마다 요청을 쪼개지 않고, 전체 누락 타임스탬프의 `[min, max]` 단일 대형 구간을 계산하여 1회의 벌크 API 호출로 데이터를 수집하고, 이미 존재하는 데이터는 메모리 상에서 중복 필터링하여 저장함으로써 API 호출 횟수를 90% 이상 절감합니다.
 
+##### 시장 데이터 수집 및 어댑터 레이어 클래스 관계도
+이종 거래소(Upbit, KIS 등)의 API 요청 및 포맷 차이를 표준 규격화하는 마켓 어댑터, 소켓 스트리밍 수집 데몬, 그리고 수집된 대량 데이터를 DB에 병목 없이 다중 스레드로 적재하는 `DBWriter` 간의 결합성 구조입니다.
+
+```mermaid
+classDiagram
+    class MarketAdapter {
+        <<Abstract>>
+        +exchange_id: str
+        +fetch_ticker(symbol) Ticker
+        +fetch_orderbook(symbol) Orderbook
+        +get_balance() Balance
+    }
+    class UpbitMarketAdapter {
+        +fetch_ticker(symbol) Ticker
+    }
+    class KisMarketAdapter {
+        +fetch_ticker(symbol) Ticker
+    }
+    class BithumbMarketAdapter {
+        +fetch_ticker(symbol) Ticker
+    }
+
+    class CollectorBase {
+        <<Abstract>>
+        +start_collecting() void
+        +stop_collecting() void
+        -DBWriter db_writer
+    }
+    class UpbitCollector {
+        +start_collecting() void
+    }
+    class KisCollector {
+        +start_collecting() void
+    }
+    class DBWriter {
+        +enqueue_tick(tick)
+        +enqueue_candle(candle)
+        -write_loop() void
+    }
+
+    MarketAdapter <|-- UpbitMarketAdapter : "Upbit API 및 WebSocket 어댑터 구현 (Inheritance)"
+    MarketAdapter <|-- KisMarketAdapter : "한국투자증권 주식 API 어댑터 구현 (Inheritance)"
+    MarketAdapter <|-- BithumbMarketAdapter : "Bithumb API 어댑터 구현 (Inheritance)"
+
+    CollectorBase <|-- UpbitCollector : "가상자산 소켓 수집 구현"
+    CollectorBase <|-- KisCollector : "주식 실시간 체결가 수집 구현"
+    
+    CollectorBase ..> DBWriter : "수집 틱/캔들 데이터를 비동기 쓰기 큐에 주입 (Dependency)"
+```
+
 ### 3.2. 포트폴리오 관리자 및 체결 엔진 (PortfolioManager & Executor)
 - **포트폴리오 격리**: 각 트레이딩 세션이나 백테스트 실행은 독립된 `portfolio_id`를 가져 충돌을 원천 차단합니다.
 - **주문 체결 분리**: `OrderExecutor` 인터페이스를 통해 실제 API 주문(`KISExecutor`)과 모의 시뮬레이션 주문(`VirtualOrderExecutorAdapter`)을 완벽하게 교체할 수 있습니다. 어댑터는 생성 시 `fee_rate` 를 주입받아 수수료를 자동 적용합니다.
 - **성과 분석기 분리 (PerformanceAnalyzer Seam)**: 포트폴리오의 실시간/정적 성과 통계 보고서 데이터 계산 로직을 `PortfolioManager`로부터 완전히 격리해내고, 외부 I/O가 배제된 무상태(Stateless) 성과 분석 모듈 `PerformanceAnalyzer`로 위임하여 아키텍처 깊이(Depth)와 결합도를 개선하고 단위 테스트의 용이성을 확보했습니다.
-- **주문 실행 스코어러 분리 (ExecutionScorer Seam)**: 주문 처리 파이프라인(`ExecutionPipeline`)에서 포지션 수량 산정, 리스크 한도 검증, 슬리피지 가격 보정 등의 순수 비즈니스 연산 로직을 무상태(Stateless) 계산 모듈인 `ExecutionScorer`로 격리했습니다. 이를 통해 DB나 외부 상태 의존성을 완벽히 제거하여 순수 연산의 단위 테스트 용이성을 개선하였고, 파이프라인은 오케스트레이션 역할에만 집중하게 되었습니다.
+- **주문 실행 스코어러 분리 (ExecutionScorer Seam)**: 주문 처리 파이프라인(`ExecutionPipeline`)에서 포지션 수량 산정, 리스크 한도 검증, 슬리피지 가격 보정 등의 순수 비즈니스 연산 로직을 무상태(Stateless) 계산 모듈인 `ExecutionScorer`로 격리했습니다. 이를 통해 DB이나 외부 상태 의존성을 완벽히 제거하여 순수 연산의 단위 테스트 용이성을 개선하였고, 파이프라인은 오케스트레이션 역할에만 집중하게 되었습니다.
 - **저장소 레이어를 통한 거래 조회 격리 (Repository Seam)**: 포트폴리오 매니저 내부에서 DB 직접 연결 및 SQLite 원시 쿼리 처리를 완전히 배제하고, `BaseTradingRepository` 인터페이스 및 `SqliteTradingRepository.get_orders_history()` 래퍼를 통해 DB 조작을 캡슐화했습니다.
 - **BTC 마켓 전용 자산 원화 시세 환산**:
   - 업비트 거래소에서 원화(KRW) 마켓 없이 BTC 마켓만 상장된 종목(`OBSR`, `ENJ` 등)의 경우, 실시간 현재가를 `BTC-{코인} 현재가 × KRW-BTC 원화 현재가`로 곱셈하여 원화 가치로 정확하게 변환해 포지션 평가에 반영합니다.
   - 단, 업비트 API가 제공하는 자산 평균 매수가(`avg_buy_price`)는 이미 내부적으로 원화(KRW) 기준으로 자동 제공하므로, 시세 변환을 제외한 평단가 원화 환산은 이중 곱셈이 발생하지 않도록 원래 수치를 그대로 보존합니다.
 - **상장폐지/거래중단 자산 가치 평가 예외 처리**:
   - 실거래(`live`) 포트폴리오 평가 시, 거래소 API 조회가 불가능하거나 현재가 획득에 실패한 상장폐지 또는 거래중단 찌꺼기 자산들은 이전 구매 평단가로 평가액이 부풀려지는 현상을 막기 위해, 현재 가치를 강제로 **`0.0 원`**으로 평가하여 대시보드 및 비중 연산의 무결성을 보장합니다.
+
+##### 트레이딩 실행 및 전략 레이어 클래스 관계도
+주문 집행 라이프사이클을 총괄하는 엔진(`TradeEngine`), 모의투자 및 실자산의 계좌/포지션을 관리하는 `PortfolioManager`, 매매 알고리즘 전략이 구동되는 `StrategyHost`와 개별 매매 전략(`BaseStrategy` 구현체) 간의 정합성 구조를 나타냅니다.
+
+```mermaid
+classDiagram
+    class TradeEngine {
+        +start() void
+        +stop() void
+        -PortfolioManager portfolio_manager
+        -StrategyHost strategy_host
+        -DatabaseRepository db_repository
+    }
+    class PortfolioManager {
+        +load_portfolio(portfolio_id)
+        +update_position(symbol, qty, price)
+        +get_balance(exchange_id)
+        -DatabaseRepository db_repository
+    }
+    class StrategyHost {
+        +load_strategies()
+        +run_loop() void
+        -list~BaseStrategy~ strategies
+        -PortfolioManager portfolio_manager
+    }
+    class BaseStrategy {
+        <<Abstract>>
+        +strategy_id: str
+        +on_tick(tick) void
+        +on_candle(candle) void
+        +generate_order() Order
+    }
+    class RsiStrategy {
+        +rsi_period: int
+        +on_candle(candle) void
+    }
+    class MacdStrategy {
+        +on_candle(candle) void
+    }
+    class TrendBendStrategy {
+        +on_candle(candle) void
+    }
+    class DatabaseRepository {
+        +fetch_portfolio(id)
+        +save_order(order)
+    }
+
+    TradeEngine *-- PortfolioManager : "1대1 소유 및 생명주기 관리 (Composition)"
+    TradeEngine *-- StrategyHost : "1대1 소유 및 실행 루프 바인딩 (Composition)"
+    StrategyHost o-- BaseStrategy : "1대N 전략 인스턴스 참조 및 집합 관리 (Aggregation)"
+    BaseStrategy <|-- RsiStrategy : "전략 구현체 확장 (Inheritance)"
+    BaseStrategy <|-- MacdStrategy : "전략 구현체 확장 (Inheritance)"
+    BaseStrategy <|-- TrendBendStrategy : "전략 구현체 확장 (Inheritance)"
+    PortfolioManager ..> DatabaseRepository : "자산 로드 및 체결 기록 영속화 위임 (Dependency)"
+    StrategyHost ..> PortfolioManager : "매매 판단 시 현금 및 포지션 한도 검증 위임"
+```
 
 ### 3.3. 지표 및 전략 계산기 (Indicators & Strategy)
 - **웜업 프로토콜**: 실시간 매매 전략 구동 전, 데이터베이스에서 최근 N개의 틱 데이터를 읽어와 차트 지표의 초기 버퍼를 채우는 웜업(Warm-up) 단계를 거칩니다.
@@ -219,6 +325,41 @@ sequenceDiagram
 - **FSM 큐 랭킹 및 배치 정정 (Lazy Replay Correction)**: 큐 디버깅 및 전이 안전성을 위해 Candidate $\rightarrow$ Scored $\rightarrow$ Ranked $\rightarrow$ Promotion(Pending, Locked, Rejected, Executed 4단계 세분화)으로 전이하는 **FSM 모델로 설계하되, 제안 노후화 및 상태 교착을 막기 위해 **생명주기 가드**를 적용합니다. `proposal_ttl` (max_queue_age) 만료 시 즉각 **`Expired` 상태로 강제 전이**하고, `PromotionLocked` 상태가 `promotion_lock_timeout` 초과 체류 시 즉각 **`PromotionRejected(reason="LOCK_TIMEOUT")`로 강제 복구 전이**하며, `PromotionRejected` 상태가 `rejected_max_age` 초과 정체 시 즉시 `Expired` 상태로 이동해 영구 격리(재진입 영구 차단)합니다. Rejected 상태에서의 전이 진동(Flapping)을 방지하기 위해 쿨다운 게이트($T_{\text{cooldown}}$)를 적용하고 복귀는 ScoredQueue 하나로만 결정론적으로 고정하며, Raw Event Log 테이블에 event_id(UUID) 및 sequence_no(단조증가)를 지정하고 (proposal_id, sequence_no) 또는 event_id에 Unique Constraint를 부여하여 중복 삽입 및 멱등 리플레이 오차를 방지합니다. 백그라운드에서는 **주기적 배치 윈도우(e.g., 10s)** 단위로 Replay를 가동하되 미세 랭킹 흔들림(Oscillation) 방지를 위해 이중 임계치 기반 **Hysteresis Override Rule**에 입각하여 오차를 정정합니다. 이때 Rank Drift 계산의 후보수 N 의존성을 제거하고 누락 예외를 줄이기 위해, 대상을 Fast와 Replay의 합집합($candidates = union(FastRank, ReplayRank)$, $N=len(candidates)$)으로 고정하고 누락 후보는 $missing\_rank = N+1$로 가드 처리하며, 개별 순위 차이를 분모 $N$으로 나누어 정규화하고 [0, 1] 범위로 clip한 **Normalised Weighted Rank Drift** 오차 수식($\text{drift} = \sum weight_i * \text{rank\_diff\_i} / \sum weight_i$, $\text{rank\_diff\_i} = \text{clip}(|RankFast - RankReplay| / \max(1, N), 0.0, 1.0)$, 가중치는 $\min(RankFast, RankReplay)$ 기준 적용)을 사용하되, $N=0$ 또는 가중치합 0일 시 $drift=0.0$ 및 `action = NOOP`으로 예외를 방어(empty guard)합니다. 의사결정 최종 결합은 **Single Decision Authority Rule** (Replay 부재 시 Sigmoid 스무딩 가중합 $\alpha = \text{sigmoid}(10 * (\text{stability\_score} - 0.5))$ 기반의 $\text{final\_promotion\_score} = \alpha * girs\_promotion\_score + (1 - \alpha) * fallback\_promotion\_score$ 충돌 해소 적용, 모든 점수는 `1 - risk` 변환된 promotion_score로 통일)에 입각하여 처리합니다.
 - **모델 확률 및 Calibration 보증 (Validation & GNN Labeling)**: Phase 4 훈련 및 검증 시 Validation set 상에서 **Expected Calibration Error(ECE)** 및 **Brier Score** 평가 지표를 의무적으로 측정/기록하며, 확률 정합성 개선을 위해 **Platt Scaling** 또는 **Isotonic Regression**을 활용한 캘리브레이션 검증을 구동합니다. 캘리브레이션 검증 미달 시 `model_risk_score`는 확률이 아닌 랭킹용 **risk index**로 제한 사용하며 uncertainty는 의사 신뢰도로 제한 분류합니다. GNN 학습을 위한 `rollback_risk = 1` 정답 라벨은 적용 후 T시간 ROI 언더퍼폼, MDD 위반, 사용자 수동 롤백 및 shadow league 강등에 의거해 수립하며, 피처 생성 단계에서는 **Causal Data Leakage Guard**를 적용하여 미래 데이터의 누수를 원천 차단합니다.
 - **실시간 Shadow Operation 및 다중 Horizon 가상 롤백 평가 (Real-time Shadow Loop & Multi-Horizon Evaluation)**: GIRS Shadow Operation은 실거래 차단 상태(`live_trading_enabled = false` 및 `auto_strategy_promotion_enabled = false`)에서 실제 주문 실행 없이 가상 평가만을 안전하게 구동합니다. 생성된 모든 전략 제안(Proposal)은 1:N 관계로 매핑된 다중 Horizon(예: `10m`, `30m`, `2h`, `next_open`, `3_trading_days` 등 시간 및 세션 기반 경과시간) 기준으로 독립된 만기(`due_at`)가 산정되어 백그라운드 평가 데몬에 의해 개별 가상 롤백(Virtual Rollback) 여부가 지속 검증됩니다. 실시간 수집 대상이 되는 전종목 자산군(`WATCHED`) 중 유동성 프록시(거래량, 거래대금, TPS, 체결 공백 등) 기준을 충족하는 종목만 모의 유니버스인 `CANDIDATE`로 승격되지만, 이 과정은 영구적인 전략 승격이 아닌 주기적인 **'관찰 $\leftrightarrow$ 격하 $\leftrightarrow$ 재관찰'**의 유동적 Universe 순환 흐름으로 제어됩니다. 또한, 과도한 제안 생성 및 자원 폭증을 방지하기 위해 거래소별 동시 종목수 Quota, 재승격 Cooldown 쿨다운 게이트, 전역 일일 제안 수 Limit 가드가 실시간 Universe 전환 동작에 동적으로 개입하여 시스템 부하 및 메모리 누수를 원천 가드합니다.
+
+##### AI 분석 및 리스크 가드 레이어 클래스 관계도
+손실 원인 분석을 통한 개선안 도출 후, 실시간 가상 모니터링, 다중 Horizon 사후 성과 검증, 반사실적 ROI 대조 추적을 통해 전략 파라미터를 안전하게 승격/격하(Rollback)하는 AI 통제 큐 구조입니다.
+
+```mermaid
+classDiagram
+    class PromotionQueue {
+        +push_proposal(proposal) void
+        +evaluate_queue() void
+        -list~Proposal~ queue
+        -GIRSScorer girs_scorer
+        -EvaluationPolicyRouter policy_router
+        -CounterfactualTracker counterfactual_tracker
+    }
+    class GIRSScorer {
+        +calculate_risk_score(features) float
+        +verify_feature_contract(features) bool
+    }
+    class EvaluationPolicyRouter {
+        +route_evaluation(proposal) void
+        +check_rollback_condition() bool
+    }
+    class FeatureBuilder {
+        +build_feature_vector(proposal_id) List
+    }
+    class CounterfactualTracker {
+        +track_virtual_roi(proposal_id) void
+        +track_champion_roi() void
+    }
+    
+    PromotionQueue *-- GIRSScorer : "실시간 GNN 리스크 스코어 계산 위임 (Composition)"
+    PromotionQueue *-- EvaluationPolicyRouter : "제안 파라미터 승격/롤백 규칙 바인딩 (Composition)"
+    PromotionQueue *-- CounterfactualTracker : "반사실적 ROI 대조 모니터링 (Composition)"
+    FeatureBuilder ..> GIRSScorer : "추론 벡터 정규화 및 공급 (Dependency)"
+```
 
 ---
 
