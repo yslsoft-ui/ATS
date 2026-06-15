@@ -114,18 +114,26 @@ class TradeEngine:
         self.last_tick = tick
         tick_price = tick['trade_price']
         signals = []
+        common_exit_triggered = False
 
         # portfolio_manager 타입 유연성 대응 (실거래용 PortfolioManager vs 백테스트용 프록시 객체)
         target_portfolios = {}
         actual_pm = portfolio_manager
+        p_id = None
         if portfolio_manager:
             if hasattr(portfolio_manager, 'manager') and hasattr(portfolio_manager, 'portfolio_id'):
                 actual_pm = portfolio_manager.manager
-                pid = portfolio_manager.portfolio_id
-                if pid in actual_pm.portfolios:
-                    target_portfolios = {pid: actual_pm.portfolios[pid]}
+                p_id = portfolio_manager.portfolio_id
+                if p_id in actual_pm.portfolios:
+                    target_portfolios = {p_id: actual_pm.portfolios[p_id]}
             elif hasattr(portfolio_manager, 'portfolios'):
                 target_portfolios = portfolio_manager.portfolios
+                if len(target_portfolios) == 1:
+                    p_id = list(target_portfolios.keys())[0]
+                elif hasattr(portfolio_manager, 'get_active_simulation_portfolio'):
+                    active_sim = portfolio_manager.get_active_simulation_portfolio()
+                    if active_sim:
+                        p_id = active_sim.id
 
         # 1. 틱 가격 기준으로 포지션의 peak_price 갱신 및 공통 청산 규칙 평가 (웜업 단계 제외)
         if portfolio_manager and not is_warmup:
@@ -146,6 +154,7 @@ class TradeEngine:
                         tick_ts = tick['trade_timestamp'] / 1000.0 if 'trade_timestamp' in tick else None
                         exit_triggered, exit_reason = self.exit_evaluator.evaluate(pos, tick_price, tick_ts)
                         if exit_triggered:
+                            common_exit_triggered = True
                             # 즉시 시장가 SELL 신호 생성 (공통 청산)
                             signals.append(TradeSignal(
                                 exchange_id=self.exchange_id,
@@ -173,6 +182,11 @@ class TradeEngine:
                 if host.interval != candle.interval:
                     continue
                 
+                # 즉시 재진입 방지 가드: 이번 틱/캔들에서 공통 청산이 발생한 경우 신규 진입 차단
+                if common_exit_triggered:
+                    logger.info(f"[TradeEngine] Common Exit 발생으로 인해 {self.symbol} 전략 실행 생략 (즉시 재진입 방지)")
+                    continue
+                
                 # 포지션 보유 상태 확인
                 has_position = False
                 for portfolio in target_portfolios.values():
@@ -187,8 +201,8 @@ class TradeEngine:
                 if not strategy_enabled and not has_position:
                     continue
                 
-                # 전략 실행
-                action_result = await host.execute(context, portfolio_manager)
+                # 전략 실행 (portfolio_id 명시성 반영)
+                action_result = await host.execute(context, portfolio_manager, portfolio_id=p_id)
                 if action_result:
                     action = action_result.action if hasattr(action_result, 'action') else str(action_result)
                     # 비활성화된 전략의 오작동 BUY 신호 강제 차단

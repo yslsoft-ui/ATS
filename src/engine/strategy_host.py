@@ -45,14 +45,23 @@ class StrategyHost:
         # 전략에 설정된 파라미터 가져오기
         self.params = getattr(strategy, 'params', {})
 
-    async def execute(self, market_data_context: Any, portfolio_manager: Any = None) -> Optional[Any]:
+    async def execute(self, market_data_context: Any, portfolio_manager: Any = None, portfolio_id: Optional[str] = None) -> Optional[Any]:
         """
         주입된 MarketDataContext 기반으로 전략을 실행하고 원시 실행 결과(StrategyResult)를 반환합니다.
         """
-        # 1. 포트폴리오 상태 구성
+        # 1. 포트폴리오 상태 구성 (exchange_id + symbol + portfolio_id 기반)
         portfolio_status = {}
         if portfolio_manager:
-            portfolio_status = portfolio_manager.get_portfolio_summary(self.symbol, exchange_id=self.exchange_id)
+            portfolio_status = portfolio_manager.get_portfolio_summary(
+                self.symbol, 
+                portfolio_id=portfolio_id, 
+                exchange_id=self.exchange_id
+            )
+
+        # 1.5. 전략 상태 동기화 (공통 청산 및 수동 청산 등 외부 요인 반영)
+        if hasattr(self.strategy, 'in_position'):
+            has_position = portfolio_status.get('quantity', 0.0) > 0
+            self.strategy.in_position = has_position
 
         # 2. 컨텍스트 생성
         context = StrategyContext(

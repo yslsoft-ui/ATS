@@ -19,8 +19,9 @@ class BacktestPortfolioManagerProxy:
         self.manager = manager
         self.portfolio_id = portfolio_id
         
-    def get_portfolio_summary(self, symbol: str, exchange_id: Optional[str] = None) -> Dict[str, Any]:
-        return self.manager.get_portfolio_summary(symbol, self.portfolio_id, exchange_id)
+    def get_portfolio_summary(self, symbol: str, portfolio_id: Optional[str] = None, exchange_id: Optional[str] = None) -> Dict[str, Any]:
+        target_id = portfolio_id if portfolio_id is not None else self.portfolio_id
+        return self.manager.get_portfolio_summary(symbol, target_id, exchange_id)
 
 class BacktestEngine:
     def __init__(self, db_path: str = None):
