@@ -11,6 +11,41 @@ class ConfigManager:
     """
     YAML 설정을 관리하고, 실시간 변경 감지 및 환경 변수 치환을 수행합니다.
     """
+    _instances: Dict[str, 'ConfigManager'] = {}
+
+    def __new__(cls, config_path: Optional[str] = None, *args, **kwargs):
+        # .env 파일 로드
+        load_dotenv()
+        env_config_path = os.getenv("ATS_CONFIG")
+        
+        obsolete_profiles = ("settings_production.yaml", "settings_rehearsal.yaml")
+        if env_config_path and any(obsolete in env_config_path for obsolete in obsolete_profiles):
+            raise ValueError(
+                f"CRITICAL CONFIGURATION ERROR: The configuration profile '{env_config_path}' has been deleted. "
+                "Only 'config/settings.yaml' is supported."
+            )
+        if config_path and any(obsolete in config_path for obsolete in obsolete_profiles):
+            raise ValueError(
+                f"CRITICAL CONFIGURATION ERROR: The configuration profile '{config_path}' has been deleted. "
+                "Only 'config/settings.yaml' is supported."
+            )
+            
+        if env_config_path:
+            is_legacy_default = config_path in ("config/settings.yaml", None)
+            if is_legacy_default:
+                resolved_path = env_config_path
+            else:
+                resolved_path = config_path
+        else:
+            resolved_path = config_path or "config/settings.yaml"
+            
+        abs_path = os.path.abspath(resolved_path)
+        if abs_path not in cls._instances:
+            instance = super().__new__(cls)
+            instance._initialized = False
+            cls._instances[abs_path] = instance
+        return cls._instances[abs_path]
+
     def __init__(self, config_path: Optional[str] = None):
         # .env 파일 로드
         load_dotenv()
@@ -38,6 +73,10 @@ class ConfigManager:
                 self.config_path = config_path
         else:
             self.config_path = config_path or "config/settings.yaml"
+
+        if getattr(self, "_initialized", False):
+            return
+            
         self.config: Dict[str, Any] = {}
         self.last_mtime: float = 0
         self.subscribers: List[Callable[[Dict[str, Any]], Any]] = []
@@ -47,6 +86,7 @@ class ConfigManager:
         
         # 변경 감지 태스크
         self._watch_task: Optional[asyncio.Task] = None
+        self._initialized = True
 
     def reload(self):
         """설정 파일을 다시 읽고 환경 변수 치환 및 병합을 수행합니다."""
@@ -186,7 +226,7 @@ class ConfigManager:
 
     async def start_watching(self, interval: float = 2.0):
         """백그라운드에서 파일 변경을 감시합니다."""
-        if self._watch_task:
+        if self._watch_task and not self._watch_task.done():
             return
         
         self._watch_task = asyncio.create_task(self._watch_loop(interval))

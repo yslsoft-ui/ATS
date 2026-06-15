@@ -367,6 +367,11 @@ classDiagram
     FeatureBuilder ..> GIRSScorer : "추론 벡터 정규화 및 공급 (Dependency)"
 ```
 
+### 3.8. 설정 관리 및 싱글톤 아키텍처 (ConfigManager & Singleton Cache)
+- **경로 기반 조건부 싱글톤 (Conditional Singleton)**: 시스템 기동 시 다방면(TradeEngine, PortfolioManager 등)에서 발생하는 디스크 중복 I/O 및 파싱 연산을 방지하기 위해 `ConfigManager`에 경로 기반 캐싱을 도입했습니다. 동일한 설정 경로(예: 기본 `config/settings.yaml`)에 대한 인스턴스화 요청은 최초 1회만 실제 디스크 로드 및 환경변수 결합을 실행하고, 이후에는 메모리에 캐싱된 동일 인스턴스를 공유합니다.
+- **중복 감시 방지 (Hot-Reloading Watcher Guard)**: 설정 파일 변경을 실시간 감시하는 백그라운드 태스크가 중복으로 기동되지 않도록 `start_watching` 시 기존 태스크의 동작 여부를 엄격히 확인(`not self._watch_task.done()`)하여 중복 루프를 완벽히 차단합니다.
+- **테스트 격리 및 독립성 보장**: 단위 테스트 실행 시 전역 싱글톤 상태로 인한 테스트 오염을 차단하기 위해, `tests/conftest.py` 내의 Pytest autouse fixture를 활용하여 매 테스트 실행 전에 캐시 테이블(`ConfigManager._instances`)을 자동으로 비우도록 보장합니다. 이를 통해 각 테스트는 완전히 독립적인 설정 파일 수정을 지원받습니다.
+
 ---
 
 ## 4. 프로젝트 디렉토리 구조 (Directory Structure)

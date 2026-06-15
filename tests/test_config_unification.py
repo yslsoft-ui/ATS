@@ -49,3 +49,30 @@ def test_config_unification_default_load(monkeypatch):
     crypto_horizons = [h["name"] for h in horizons["crypto"]]
     assert "10m" not in crypto_horizons
     assert "1d" in crypto_horizons
+
+def test_config_manager_singleton(monkeypatch):
+    # 4. 동일 경로에 대한 조건부 싱글톤 인스턴스 공유 검증
+    ConfigManager._instances.clear()
+    
+    cfg1 = ConfigManager()
+    cfg2 = ConfigManager()
+    cfg3 = ConfigManager("config/settings.yaml")
+    
+    # 동일한 설정 경로(config/settings.yaml)에 대해서는 동일한 인스턴스를 공유해야 함
+    assert cfg1 is cfg2
+    assert cfg1 is cfg3
+    
+    # 임시 설정 경로에 대해서는 다른 인스턴스가 생성되어 격리되어야 함
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as tmp:
+        tmp.write("system:\n  operation_mode: mock\n")
+        tmp_name = tmp.name
+        
+    try:
+        cfg_temp = ConfigManager(tmp_name)
+        assert cfg_temp is not cfg1
+        assert cfg_temp.get("system.operation_mode") == "mock"
+    finally:
+        import os
+        if os.path.exists(tmp_name):
+            os.remove(tmp_name)
