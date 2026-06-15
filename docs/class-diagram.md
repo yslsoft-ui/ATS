@@ -53,9 +53,9 @@ classDiagram
         +save_order(order)
     }
 
-    TradeEngine *-- PortfolioManager : "1 : 1 소유 및 생명주기 관리 (Composition)"
-    TradeEngine *-- StrategyHost : "1 : 1 소유 및 실행 루프 바인딩 (Composition)"
-    StrategyHost o-- BaseStrategy : "1 : N 전략 인스턴스 참조 및 집합 관리 (Aggregation)"
+    TradeEngine *-- PortfolioManager : "1대1 소유 및 생명주기 관리 (Composition)"
+    TradeEngine *-- StrategyHost : "1대1 소유 및 실행 루프 바인딩 (Composition)"
+    StrategyHost o-- BaseStrategy : "1대N 전략 인스턴스 참조 및 집합 관리 (Aggregation)"
     BaseStrategy <|-- RsiStrategy : "전략 구현체 확장 (Inheritance)"
     BaseStrategy <|-- MacdStrategy : "전략 구현체 확장 (Inheritance)"
     BaseStrategy <|-- TrendBendStrategy : "전략 구현체 확장 (Inheritance)"
