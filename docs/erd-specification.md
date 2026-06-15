@@ -86,6 +86,12 @@ erDiagram
 
 ```mermaid
 erDiagram
+    PORTFOLIOS_포트폴리오 ||--o{ PORTFOLIO_EXCHANGES_포트폴리오_잔고 : "거래소 잔고 보유"
+    PORTFOLIOS_포트폴리오 ||--o{ POSITIONS_보유_포지션 : "보유 포지션 내역"
+    PORTFOLIOS_포트폴리오 ||--o{ ORDERS_HISTORY_주문_이력 : "체결 주문 이력"
+    EXCHANGES_거래소 ||--o{ PORTFOLIO_EXCHANGES_포트폴리오_잔고 : "자산 호스팅"
+    PORTFOLIO_EXCHANGES_포트폴리오_잔고 ||--o{ POSITIONS_보유_포지션 : "자산 포지션 잔고 보유"
+
     PORTFOLIOS_포트폴리오 {
         integer id PK "일련번호 (자동 증가)"
         text name "식별 이름 (중복 허용)"
@@ -157,6 +163,13 @@ erDiagram
 
 ```mermaid
 erDiagram
+    EXCHANGES_거래소 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "취급 자산 목록"
+    EXCHANGES_거래소 ||--o{ TRADES_실시간_체결 : "실시간 틱 수집"
+    EXCHANGES_거래소 ||--o{ CANDLES_분봉_캔들 : "OHLCV 캔들 취합"
+    EXCHANGES_거래소 ||--o{ ALERTS_실시간_알림 : "급등락 경보 발생"
+    ASSET_MASTER_자산_마스터 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "거래 자산 메타 매핑"
+
+    EXCHANGES_거래소 {}
     ASSET_MASTER_자산_마스터 {
         text symbol PK "자산 고유 심볼 코드"
         text korean_name "한글 종목명"
@@ -231,6 +244,14 @@ AI 모델을 활용해 손실 원인을 분석하고, 최적의 파라미터 개
 
 ```mermaid
 erDiagram
+    PORTFOLIOS_포트폴리오 ||--o{ STRATEGY_INSIGHTS_전략_인사이트 : "AI 손실 분석 생성"
+    PORTFOLIOS_포트폴리오 ||--o{ STRATEGY_PROPOSALS_전략_제안 : "개선 제안 소유"
+    STRATEGY_INSIGHTS_전략_인사이트 ||--o{ STRATEGY_PROPOSALS_전략_제안 : "개선 파라미터 제안 도출"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ PROPOSAL_EVALUATIONS_제안_사후_평가 : "다중 Horizon 사후 평가"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "수동 재평가 결과 누적"
+    PROPOSAL_REEVALUATION_JOBS_재평가_작업_큐 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "비동기 평가 Job 실행"
+
+    PORTFOLIOS_포트폴리오 {}
     STRATEGY_INSIGHTS_전략_인사이트 {
         integer id PK "인사이트 일련번호"
         integer portfolio_id FK "소속 포트폴리오 ID"
@@ -345,6 +366,13 @@ erDiagram
 
 ```mermaid
 erDiagram
+    STRATEGY_VERSIONS_전략_버전 ||--o{ STRATEGY_PARAMETER_HISTORY_파라미터_변경_이력 : "버전별 변경 상세 기록"
+    STRATEGY_VERSIONS_전략_버전 ||--o{ STRATEGY_PERFORMANCE_SNAPSHOTS_성과_스냅샷 : "버전별 성과 추적"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ STRATEGY_PARAMETER_HISTORY_파라미터_변경_이력 : "승인 제안 적용"
+    STRATEGY_PROPOSALS_전략_제안 ||--o{ GIRS_SHADOW_METRICS_GIRS_섀도_지표 : "제안 시점 리스크 로깅"
+    STRATEGY_VERSIONS_전략_버전 ||--o{ GIRS_SHADOW_METRICS_GIRS_섀도_지표 : "활성 버전 리스크 감시"
+
+    STRATEGY_PROPOSALS_전략_제안 {}
     STRATEGY_VERSIONS_전략_버전 {
         text strategy_id PK "전략 고유 ID 식별자"
         integer current_version_id "현재 런타임 활성 버전 번호"
