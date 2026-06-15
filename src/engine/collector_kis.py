@@ -354,6 +354,7 @@ class KisCollector(BaseCollector):
 
         candles: List[Candle] = []
         to_time = end_time
+        prev_accum_val = None  # 페이지네이션 전체에 걸쳐 누적 거래대금을 추적하여 가짜 캔들 차단
 
         if not self.session or self.session.closed:
             self.session = aiohttp.ClientSession()
@@ -362,6 +363,14 @@ class KisCollector(BaseCollector):
         while to_time >= start_time:
             # KST 기준 시간 변환하여 FID_INPUT_HOUR_1 설정
             to_dt = datetime.fromtimestamp(to_time, tz=kst)
+            
+            # 미래 조회 보간 버그 방지를 위해 최대 저녁 8시(20:00:00)로 제한
+            if to_dt.hour >= 20:
+                to_dt = to_dt.replace(hour=20, minute=0, second=0, microsecond=0)
+                to_time = int(to_dt.timestamp())
+                if to_time < start_time:
+                    break
+
             hour_str = to_dt.strftime('%H%M%S')
 
             token = await self.cred_provider.get_kis_access_token()
@@ -382,7 +391,7 @@ class KisCollector(BaseCollector):
             }
 
             params = {
-                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_COND_MRKT_DIV_CODE": "UN",  # 통합 시장(KRX + NXT)으로 변경하여 대체거래소 연장 거래 수용
                 "FID_INPUT_ISCD": symbol,
                 "FID_INPUT_HOUR_1": hour_str,
                 "FID_PW_DATA_INCU_YN": "Y",
@@ -401,16 +410,34 @@ class KisCollector(BaseCollector):
                     if not output2:
                         break
                     
+                    # 1. output2의 캔들 목록을 영업일 및 체결시간 기준으로 시간 오름차순(과거->최신) 정렬
+                    output2_sorted = sorted(
+                        output2, 
+                        key=lambda x: (x.get('stck_bsop_date', ''), x.get('stck_cntg_hour', ''))
+                    )
+                    
                     batch_candles = []
                     min_ts = to_time
 
-                    for item in output2:
+                    for item in output2_sorted:
                         # 일자와 시간 필드 추출
                         date_str = item.get('stck_bsop_date')
                         time_str = item.get('stck_cntg_hour', '').zfill(6)
                         
                         if not date_str or not time_str:
                             continue
+
+                        # 누적 거래대금 파싱
+                        try:
+                            accum_val = float(item.get('acml_tr_pbmn', 0))
+                        except ValueError:
+                            accum_val = 0.0
+
+                        # 누적 거래대금의 변동이 전혀 없다면, 실제 체결이 발생하지 않은 빈 캔들로 보고 필터링
+                        if prev_accum_val is not None and accum_val == prev_accum_val:
+                            continue
+                        
+                        prev_accum_val = accum_val
 
                         # KST 기준 파싱하여 타임스탬프 변환
                         dt_str = f"{date_str}{time_str}"

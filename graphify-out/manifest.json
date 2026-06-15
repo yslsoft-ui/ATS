@@ -800,8 +800,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1781513302.2994623,
-    "ast_hash": "09ce14eb9a8e7783547cf09e73ba48e8",
+    "mtime": 1781566088.2594063,
+    "ast_hash": "8a6501f1d329cf5253a6a50531eaa789",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/analyzer.py": {
@@ -1189,6 +1189,11 @@
     "ast_hash": "fd55c2af79dd347973736430be41a4d0",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/tests/test_collector_kis_backfill.py": {
+    "mtime": 1781566150.300801,
+    "ast_hash": "0b5b84301b943c08c93aae5bbf966c84",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/tests/test_baseline_snapshot.py": {
     "mtime": 1781433785.6171212,
     "ast_hash": "9371e4bbdc11949d218bee69cff653ed",
@@ -1355,7 +1360,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781564561.3807507,
+    "mtime": 1781566169.0412228,
     "ast_hash": "423a6f72b83866dfa596a18c718107a6",
     "semantic_hash": ""
   },
