@@ -1443,37 +1443,23 @@ class PortfolioManager:
         기존 backtest.py와 portfolio-adapter.js에 파편화되어 있던 성과 데이터 구조를 단일화합니다.
         실제 데이터 가공 및 성과 통계 계산은 PerformanceAnalyzer로 위임합니다.
         """
-        if portfolio_id == '1' or portfolio_id == 1:
+        is_live = False
+        try:
+            if int(portfolio_id) == 1:
+                is_live = True
+        except (ValueError, TypeError):
+            pass
+
+        if is_live:
             await self.sync_live_portfolio_from_exchange(system)
 
         portfolio = self.portfolios.get(str(portfolio_id)) or self.portfolios.get(portfolio_id)
-        if not portfolio and (portfolio_id == '1' or portfolio_id == 1):
+        if not portfolio and is_live:
             await self.sync_live_portfolio_from_exchange(system)
             portfolio = self.portfolios.get('1') or self.portfolios.get(1)
             
         if not portfolio:
-            return {
-                "status": "success",
-                "id": "",
-                "portfolio_id": "",
-                "name": "등록된 포트폴리오 없음",
-                "initial_cash": 0.0,
-                "cash": 0.0,
-                "total_value": 0.0,
-                "type": "none",
-                "exchanges": [],
-                "positions": [],
-                "history": [],
-                "summary": {
-                    "initial_cash": 0.0,
-                    "final_value": 0.0,
-                    "profit": 0.0,
-                    "roi": 0.0,
-                    "fee": 0.0,
-                    "trade_count": 0
-                },
-                "results": []
-            }
+            raise ValueError(f"Portfolio with ID '{portfolio_id}' not found.")
 
         # 1. 최신 시세 획득
         current_prices = await self.get_portfolio_current_prices(portfolio_id, system)

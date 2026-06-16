@@ -5,6 +5,26 @@
 
 const PortfolioView = {
     /**
+     * 거래소와 심볼명을 받아 아이콘 이미지 HTML을 반환합니다.
+     */
+    getSymbolIconHtml(exchange, symbol) {
+        const cleanSymbol = symbol.replace(/^(KRW-|UPB-|KIS-)/, '');
+        const ex = exchange ? exchange.toLowerCase() : 'upbit';
+        
+        let iconHtml = '';
+        if (cleanSymbol === 'KRW') {
+            iconHtml = `<img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='20' height='20'><circle cx='12' cy='12' r='10' fill='%234caf50'/><text x='50%' y='62%' font-size='10' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>₩</text></svg>" style="width:20px; height:20px; border-radius:50%; flex-shrink:0; vertical-align: middle; margin-right: 5px;">`;
+        } else if (ex === 'kis') {
+            const iconUrl = `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${cleanSymbol}.png`;
+            iconHtml = `<img src="${iconUrl}" style="width:20px; height:20px; border-radius:50%; background:#1E293B; flex-shrink:0; vertical-align: middle; margin-right: 5px;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'20\\' height=\\'20\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%233B82F6\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'8\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'white\\' text-anchor=\\'middle\\'>ST</text></svg>';">`;
+        } else {
+            const iconUrl = `https://static.upbit.com/logos/${cleanSymbol}.png`;
+            iconHtml = `<img src="${iconUrl}" style="width:20px; height:20px; border-radius:50%; background:#1E293B; flex-shrink:0; vertical-align: middle; margin-right: 5px;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'20\\' height=\\'20\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%231E293B\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'9\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'%2394A3B8\\' text-anchor=\\'middle\\'>${cleanSymbol.slice(0, 3)}</text></svg>';">`;
+        }
+        return iconHtml;
+    },
+
+    /**
      * 포트폴리오 상단 메트릭 요약을 업데이트합니다.
      */
     updateMetrics(totalValue, roi, cash) {
@@ -588,7 +608,7 @@ const PortfolioView = {
 
             const tr = document.createElement('tr');
             tr.style.cursor = 'pointer';
-            tr.id = `port-pos-row-${item.exchange}-${item.symbol}`;
+            tr.id = `${tbodyId}-row-${item.exchange}-${item.symbol}`;
             
             const rateClass = item.profitRate >= 0 ? 'bull' : 'bear';
             const profitClass = item.profit >= 0 ? 'bull' : 'bear';
@@ -596,11 +616,19 @@ const PortfolioView = {
             const rateText = item.tradeCount > 0 ? `${item.profitRate.toFixed(4)}%` : '-';
             const profitText = (item.profit >= 0 ? '+' : '') + Math.round(item.profit).toLocaleString() + " 원";
 
+            const displaySymbol = item.symbol.replace(/^(KRW-|UPB-|KIS-)/, '');
+            const iconHtml = PortfolioView.getSymbolIconHtml(item.exchange, displaySymbol);
             const korName = item.korean_name && item.korean_name !== item.symbol ? item.korean_name : '';
+            const symbolText = korName ? `${korName}(${displaySymbol})` : displaySymbol;
             const symbolTooltip = korName ? `title="${korName}"` : '';
 
             tr.innerHTML = `
-                <td><strong ${symbolTooltip} style="${korName ? 'cursor:help; border-bottom: 1px dashed rgba(148,163,184,0.4);' : ''}">${item.symbol}</strong></td>
+                <td>
+                    <div style="display:flex; align-items:center; gap: 6px;">
+                        ${iconHtml}
+                        <strong ${symbolTooltip} style="${korName ? 'cursor:help; border-bottom: 1px dashed rgba(148,163,184,0.4);' : ''}">${symbolText}</strong>
+                    </div>
+                </td>
                 <td class="num">${item.tradeCount} 건</td>
                 <td class="num">${Math.round(item.buySum).toLocaleString()} 원</td>
                 <td class="num">${Math.round(item.sellSum).toLocaleString()} 원</td>
@@ -613,7 +641,10 @@ const PortfolioView = {
             `;
 
             tr.onclick = () => {
-                document.querySelectorAll('#port-symbols-table tbody tr').forEach(r => r.classList.remove('selected'));
+                const parentTable = tbody.closest('table');
+                if (parentTable) {
+                    parentTable.querySelectorAll('tbody tr').forEach(r => r.classList.remove('selected'));
+                }
                 tr.classList.add('selected');
                 if (typeof onSymbolClick === 'function') {
                     onSymbolClick(item);
@@ -680,9 +711,19 @@ const PortfolioView = {
             const hTr = document.createElement('tr');
             const dateStr = PortfolioAdapter.formatTimestampPort(t.timestamp);
 
+            const displaySymbol = item.symbol.replace(/^(KRW-|UPB-|KIS-)/, '');
+            const iconHtml = PortfolioView.getSymbolIconHtml(item.exchange, displaySymbol);
+            const korName = item.korean_name && item.korean_name !== item.symbol ? item.korean_name : '';
+            const symbolText = korName ? `${korName}(${displaySymbol})` : displaySymbol;
+
             hTr.innerHTML = `
                 <td>${dateStr}</td>
-                <td><strong>${item.symbol}</strong> <span style="font-size:0.7rem; color:#64748B;">(${item.exchange})</span></td>
+                <td>
+                    <div style="display:flex; align-items:center; gap: 6px;">
+                        ${iconHtml}
+                        <strong>${symbolText}</strong>
+                    </div>
+                </td>
                 <td class="${t.side === 'BUY' ? 'bull' : 'bear'}">${t.side}</td>
                 <td class="num">${PortfolioAdapter.formatPricePort(t.price)}</td>
                 <td class="num">${t.quantity.toFixed(4)}</td>

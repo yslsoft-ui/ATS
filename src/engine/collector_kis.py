@@ -394,7 +394,7 @@ class KisCollector(BaseCollector):
                 self.symbol_market_map[symbol] = "J"
 
             # 과도한 API 호출 방지를 위해 딜레이 부여
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.2)
 
 
     async def _handle_connection_error(self, error: Exception):
@@ -486,7 +486,7 @@ class KisCollector(BaseCollector):
         
         bf_config = self.config.get('collector', {}).get('backfill', {}) if hasattr(self, 'config') and self.config else {}
         delays = bf_config.get('delays', {})
-        delay = delays.get('kis', 0.1)
+        delay = delays.get('kis', 0.2)
         
         api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')
         url = f"{api_url}/uapi/domestic-stock/v1/quotations/inquire-time-itemchartprice"

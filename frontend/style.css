@@ -467,6 +467,11 @@ td {
     border-color: var(--primary-color);
 }
 
+.dark-input option {
+    background-color: #1e1e26 !important;
+    color: #FAFAFA !important;
+}
+
 .input-group label {
     font-size: 0.85rem;
     color: var(--text-secondary);
@@ -3543,6 +3548,48 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
+
+/* 대시보드 누적수익률 컬러 오버라이드 및 텍스트 폰트 조절 */
+.card-value.bull {
+    color: var(--bull-color) !important;
+}
+
+.card-value.bear {
+    color: var(--bear-color) !important;
+}
+
+#overview-simulation-roi-diff,
+#overview-live-roi-diff {
+    font-size: 0.88rem;
+    color: #e2e8f0;
+    margin-top: 4px;
+    font-weight: bold;
+}
+
+/* 거래소별 자산 비중 영역 분리 블록 스타일 */
+.exchange-allocation-block {
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.exchange-allocation-block:hover {
+    background: rgba(30, 41, 59, 0.75) !important;
+    border-color: rgba(99, 102, 241, 0.35) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.exchange-allocation-block.selected {
+    border-color: rgba(99, 102, 241, 0.8) !important;
+    background: rgba(99, 102, 241, 0.08) !important;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+}
+
 
 
 

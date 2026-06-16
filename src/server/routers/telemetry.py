@@ -48,13 +48,17 @@ async def get_queue_status(request: Request):
 async def test_alert(request: Request, symbol: str = "KRW-BTC"):
     """UI 확인용 테스트 알림을 강제로 발생시킵니다."""
     system = request.app.state.system
+    exchange_id = "kis" if symbol.isdigit() or len(symbol) == 6 else "upbit"
+    import time
     mock_alert = {
         "type": "alert",
+        "exchange_id": exchange_id,
         "code": symbol,
         "price": 100000000,
         "change": 5.23,
         "buy_ratio": 88.5,
-        "msg": f"🚀 [TEST] 급등 포착: {symbol} (+5.23%)"
+        "msg": f"🚀 [TEST] 급등 포착: {symbol} (+5.23%)",
+        "timestamp": int(time.time() * 1000)
     }
     await manager.broadcast_alert(mock_alert)
     await system.save_alert(mock_alert)

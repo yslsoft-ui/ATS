@@ -137,13 +137,13 @@
                     <h3>📊 거래소별 자산 비중 (Asset Allocation by Exchange)</h3>
 
                     <!-- 2.1. 업비트 (UPBIT) -->
-                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                    <div class="exchange-allocation-block" data-exchange="upbit">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #FF4B4B;">
                             <span>🔴 UPBIT (가상자산)</span>
                             <span id="overview-simulation-allocation-total-upbit"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-simulation-allocation-bar-upbit" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
@@ -151,13 +151,13 @@
                     </div>
 
                     <!-- 2.2. 빗썸 (BITHUMB) -->
-                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                    <div class="exchange-allocation-block" data-exchange="bithumb">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #F59E0B;">
                             <span>🟡 BITHUMB (가상자산)</span>
                             <span id="overview-simulation-allocation-total-bithumb"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-simulation-allocation-bar-bithumb" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
@@ -165,19 +165,77 @@
                     </div>
 
                     <!-- 2.3. 한국투자증권 (KIS) -->
-                    <div class="exchange-allocation-row">
+                    <div class="exchange-allocation-block" data-exchange="kis" style="margin-bottom: 0;">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #0072FF;">
                             <span>🔵 KIS (국내주식)</span>
                             <span id="overview-simulation-allocation-total-kis"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-simulation-allocation-bar-kis" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- 3. 거래소별 상세 종목 현황 및 종목별 거래내역 (영역 클릭 시 노출) -->
+                <div id="overview-simulation-detail-area" style="display: none; margin-top: 20px; flex-direction: column; gap: 20px; width: 100%;">
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 20px; width: 100%;">
+                        <!-- 종목별 상세 현황 -->
+                        <div class="portfolio-card" id="overview-simulation-symbols-card" style="display: block; width: 100%;">
+                            <h3 id="overview-simulation-symbols-title">상세 종목 현황</h3>
+                            <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">종목을 클릭하면 하단 패널에 상세 체결 및 매매 내역이 출력됩니다.</p>
+                            <div class="table-wrapper" style="min-height: 380px; max-height: 500px; overflow-y: auto;">
+                                <table id="overview-simulation-symbols-table">
+                                    <thead>
+                                        <tr>
+                                            <th>종목 (Asset)</th>
+                                            <th style="text-align:right">체결 건수</th>
+                                            <th style="text-align:right">누적 매수금액</th>
+                                            <th style="text-align:right">누적 매도금액</th>
+                                            <th style="text-align:right">보유량</th>
+                                            <th style="text-align:right">최종가격</th>
+                                            <th style="text-align:right">미실현 평가액</th>
+                                            <th style="text-align:right">누적 수수료</th>
+                                            <th style="text-align:right">수익금</th>
+                                            <th style="text-align:right">수익률</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="overview-simulation-symbols-tbody">
+                                        <!-- JS에서 렌더링 -->
+                                    </tbody>
+                                    <tfoot id="overview-simulation-symbols-tfoot" style="display: none;"></tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 종목별 거래내역 -->
+                    <div class="portfolio-card" id="overview-simulation-history-detail-card" style="display: block;">
+                        <h3>종목별 거래내역</h3>
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table id="overview-simulation-history-detail-table">
+                                <thead>
+                                    <tr>
+                                        <th>시간</th>
+                                        <th>종목 (Asset)</th>
+                                        <th>구분</th>
+                                        <th style="text-align:right">가격</th>
+                                        <th style="text-align:right">수량</th>
+                                        <th style="text-align:right">거래금액</th>
+                                        <th style="text-align:right">수수료</th>
+                                        <th>사유</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overview-simulation-history-detail-tbody">
+                                    <!-- JS에서 렌더링 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </section>
 
             <!-- 통합 요약 대시보드 뷰 (실거래) -->
@@ -239,13 +297,13 @@
                     <h3>📊 거래소별 자산 비중 (Asset Allocation by Exchange)</h3>
 
                     <!-- 2.1. 업비트 (UPBIT) -->
-                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                    <div class="exchange-allocation-block" data-exchange="upbit">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #FF4B4B;">
                             <span>🔴 UPBIT (가상자산)</span>
                             <span id="overview-live-allocation-total-upbit"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-live-allocation-bar-upbit" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
@@ -253,13 +311,13 @@
                     </div>
 
                     <!-- 2.2. 빗썸 (BITHUMB) -->
-                    <div class="exchange-allocation-row" style="margin-bottom: 20px;">
+                    <div class="exchange-allocation-block" data-exchange="bithumb">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #F59E0B;">
                             <span>🟡 BITHUMB (가상자산)</span>
                             <span id="overview-live-allocation-total-bithumb"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-live-allocation-bar-bithumb" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
@@ -267,19 +325,77 @@
                     </div>
 
                     <!-- 2.3. 한국투자증권 (KIS) -->
-                    <div class="exchange-allocation-row">
+                    <div class="exchange-allocation-block" data-exchange="kis" style="margin-bottom: 0;">
                         <h4 style="margin: 0 0 8px 0; font-size: 0.85rem; color: #0072FF;">
                             <span>🔵 KIS (국내주식)</span>
                             <span id="overview-live-allocation-total-kis"
                                 style="font-weight: normal; color: #94A3B8; margin-left: 5px;"></span>
                         </h4>
-                        <div class="allocation-bar-wrapper">
+                        <div class="allocation-bar-wrapper" style="margin: 5px 0 0 0;">
                             <div id="overview-live-allocation-bar-kis" class="stacked-bar-container">
                                 <!-- JS에서 동적 생성 -->
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- 3. 거래소별 상세 종목 현황 및 종목별 거래내역 (영역 클릭 시 노출) -->
+                <div id="overview-live-detail-area" style="display: none; margin-top: 20px; flex-direction: column; gap: 20px; width: 100%;">
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 20px; width: 100%;">
+                        <!-- 종목별 상세 현황 -->
+                        <div class="portfolio-card" id="overview-live-symbols-card" style="display: block; width: 100%;">
+                            <h3 id="overview-live-symbols-title">상세 종목 현황</h3>
+                            <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">종목을 클릭하면 하단 패널에 상세 체결 및 매매 내역이 출력됩니다.</p>
+                            <div class="table-wrapper" style="min-height: 380px; max-height: 500px; overflow-y: auto;">
+                                <table id="overview-live-symbols-table">
+                                    <thead>
+                                        <tr>
+                                            <th>종목 (Asset)</th>
+                                            <th style="text-align:right">체결 건수</th>
+                                            <th style="text-align:right">누적 매수금액</th>
+                                            <th style="text-align:right">누적 매도금액</th>
+                                            <th style="text-align:right">보유량</th>
+                                            <th style="text-align:right">최종가격</th>
+                                            <th style="text-align:right">미실현 평가액</th>
+                                            <th style="text-align:right">누적 수수료</th>
+                                            <th style="text-align:right">수익금</th>
+                                            <th style="text-align:right">수익률</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="overview-live-symbols-tbody">
+                                        <!-- JS에서 렌더링 -->
+                                    </tbody>
+                                    <tfoot id="overview-live-symbols-tfoot" style="display: none;"></tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 종목별 거래내역 -->
+                    <div class="portfolio-card" id="overview-live-history-detail-card" style="display: block;">
+                        <h3>종목별 거래내역</h3>
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table id="overview-live-history-detail-table">
+                                <thead>
+                                    <tr>
+                                        <th>시간</th>
+                                        <th>종목 (Asset)</th>
+                                        <th>구분</th>
+                                        <th style="text-align:right">가격</th>
+                                        <th style="text-align:right">수량</th>
+                                        <th style="text-align:right">거래금액</th>
+                                        <th style="text-align:right">수수료</th>
+                                        <th>사유</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="overview-live-history-detail-tbody">
+                                    <!-- JS에서 렌더링 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
             </section>
 
             <!-- 모니터링 뷰 (초기엔 숨김) -->
@@ -986,7 +1102,7 @@
                                 <div class="portfolio-card" id="port-symbols-card" style="display: block; width: 100%;">
                                     <h3 id="port-symbols-title">종목별 상세 현황</h3>
                                     <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">종목을 클릭하면 하단 패널에 상세 체결 및 매매 내역이 출력됩니다.</p>
-                                    <div class="table-wrapper">
+                                    <div class="table-wrapper" style="min-height: 380px; max-height: 500px; overflow-y: auto;">
                                         <table id="port-symbols-table">
                                             <thead>
                                                 <tr>
@@ -1009,11 +1125,11 @@
                                         </table>
                                     </div>
                                 </div>
-                            </div>
+                              </div>
 
-                            <!-- 백테스트 상세 거래 내역 -->
-                            <div class="portfolio-card" id="port-history-detail-card" style="display: block;">
-                                <h3>백테스트 전체 거래 내역</h3>
+                              <!-- 백테스트 상세 거래 내역 -->
+                              <div class="portfolio-card" id="port-history-detail-card" style="display: block;">
+                                  <h3>종목별 거래내역</h3>
                                 <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
                                     <table id="port-history-detail-table">
                                         <thead>

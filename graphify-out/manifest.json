@@ -470,8 +470,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-view.js": {
-    "mtime": 1781527750.7090166,
-    "ast_hash": "e5c6615989a425df6b61ea6d81e021bb",
+    "mtime": 1781604257.1991866,
+    "ast_hash": "22be889dffc12a2c56588fcd995f4dd7",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-chart.js": {
@@ -575,8 +575,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/overview.js": {
-    "mtime": 1781585362.02665,
-    "ast_hash": "cf948d4f52a03acb07d06addbfa6d698",
+    "mtime": 1781603113.4390574,
+    "ast_hash": "44174fd7bd0a959520b914d246b3594b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
@@ -1030,8 +1030,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/market.py": {
-    "mtime": 1781572154.9689975,
-    "ast_hash": "3d7194864bf5dfd4deb6d16cb9e10666",
+    "mtime": 1781598680.3650453,
+    "ast_hash": "d58836525aaf5d03a103d37895ab44db",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
@@ -1385,8 +1385,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781585329.4499698,
-    "ast_hash": "bb568acb0a40d6aad1a2c9f3bf968d7c",
+    "mtime": 1781603082.6384053,
+    "ast_hash": "a4156100fbc4d23a1bbd5db16169f3ab",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -1395,8 +1395,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781598270.0676029,
-    "ast_hash": "681b3c73ce92a72e4821c8ce789e3cd6",
+    "mtime": 1781603156.243965,
+    "ast_hash": "7e68fcfcb1323b1f96060b0e0c18d7fd",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
@@ -1410,13 +1410,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1781572315.848185,
-    "ast_hash": "620c35b74ee0d5ef4670a1d4725ad018",
+    "mtime": 1781599014.0527208,
+    "ast_hash": "8951abc3df8d606dcf564f81716b72e8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
-    "mtime": 1781598275.8317358,
-    "ast_hash": "b6bc003d3cf9daac6a66c6716dab00ed",
+    "mtime": 1781603167.3401995,
+    "ast_hash": "3a7b6faede7f891f39645e784c54bf85",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/backtest-engine-design.md": {

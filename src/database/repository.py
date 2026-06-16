@@ -1385,6 +1385,10 @@ class SqliteTradingRepository(BaseTradingRepository):
                 return None
 
     async def insert_alert(self, alert: Dict[str, Any]):
+        required_keys = ['exchange_id', 'code', 'price', 'msg', 'timestamp']
+        missing_keys = [k for k in required_keys if k not in alert]
+        if missing_keys:
+            raise ValueError(f"Required fields missing from alert dictionary: {missing_keys}")
 
         async with get_db_conn(self.db_path) as db:
             await db.execute(
@@ -2366,6 +2370,10 @@ class InMemoryTradingRepository(BaseTradingRepository):
         return sorted(sliced, key=lambda x: x.get('timestamp', 0))
 
     async def insert_alert(self, alert: Dict[str, Any]):
+        required_keys = ['exchange_id', 'code', 'price', 'msg', 'timestamp']
+        missing_keys = [k for k in required_keys if k not in alert]
+        if missing_keys:
+            raise ValueError(f"Required fields missing from alert dictionary: {missing_keys}")
         self.alerts.append(alert)
 
     async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:

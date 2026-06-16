@@ -19,6 +19,11 @@ const OverviewEngine = (() => {
         live: null
     };
 
+    let selectedExchange = {
+        simulation: null,
+        live: null
+    };
+
     let allocationBarHoverStates = {
         simulation: { upbit: false, bithumb: false, kis: false },
         live: { upbit: false, bithumb: false, kis: false }
@@ -41,6 +46,10 @@ const OverviewEngine = (() => {
         // 세션 선택 드롭다운 바인딩
         bindSessionSelect('simulation');
         bindSessionSelect('live');
+
+        // 거래소 클릭 바인딩
+        bindExchangeClick('simulation');
+        bindExchangeClick('live');
     }
 
     /**
@@ -67,6 +76,11 @@ const OverviewEngine = (() => {
                 cachedPortfolios[type] = response;
                 renderMetrics(type);
                 renderAllocationBar(type);
+
+                // 선택되어 있던 거래소가 있다면 실시간 데이터 갱신 시 리렌더링
+                if (selectedExchange[type]) {
+                    selectExchange(type, selectedExchange[type]);
+                }
             }
         } catch (e) {
             console.error(`[OverviewEngine] Refresh data failed for ${type}:`, e);
@@ -227,6 +241,7 @@ const OverviewEngine = (() => {
             if (totalEl) {
                 const exSummary = (cachedPortfolio.exchanges || []).find(e => e && e.exchange_id && e.exchange_id.toLowerCase() === ex);
                 const initCash = exSummary ? exSummary.initial_cash : 0.0;
+                const fee = exSummary ? exSummary.fee : 0.0;
                 
                 const roi = initCash > 0 ? ((totalVal - initCash) / initCash * 100) : (exSummary ? exSummary.roi : 0.0);
                 
@@ -247,10 +262,12 @@ const OverviewEngine = (() => {
                 
                 totalEl.innerHTML = `
                     <span style="color: #475569;">|</span>
-                    <span style="color: #94A3B8;">총 평가: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(totalVal).toLocaleString()}</strong>원</span>
                     <span style="color: #94A3B8;">ROI: <strong style="color: ${roiColor}; font-family: 'Roboto Mono', monospace;">${roiSign}${roi.toFixed(2)}%</strong></span>
+                    <span style="color: #94A3B8;">원금: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(initCash).toLocaleString()}</strong>원</span>
+                    <span style="color: #94A3B8;">총 평가: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(totalVal).toLocaleString()}</strong>원</span>
                     <span style="color: #94A3B8;">현금: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(exCash).toLocaleString()}</strong>원</span>
                     <span style="color: #94A3B8;">평가액: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(calculatedTotal).toLocaleString()}</strong>원</span>
+                    <span style="color: #94A3B8;">수수료: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(fee).toLocaleString()}</strong>원</span>
                 `;
             }
 
@@ -373,6 +390,15 @@ const OverviewEngine = (() => {
             
             const currentId = type === 'live' ? state.currentLivePortfolioId : state.currentSimPortfolioId;
             if (currentId === selectedId) return;
+
+            // 세션 변경 시 선택된 거래소 및 하단 상세 영역 숨김 초기화
+            selectedExchange[type] = null;
+            const detailArea = document.getElementById(`overview-${type}-detail-area`);
+            if (detailArea) {
+                detailArea.style.display = 'none';
+            }
+            const blocks = document.querySelectorAll(`#overview-${type}-view .exchange-allocation-block`);
+            blocks.forEach(block => block.classList.remove('selected'));
             
             if (type === 'live') {
                 state.currentLivePortfolioId = selectedId;
@@ -422,6 +448,52 @@ const OverviewEngine = (() => {
         const targetRow = tbody.querySelector(`tr[data-portfolio-id="${portfolioId}"]`);
         if (targetRow) {
             targetRow.style.background = 'rgba(99, 102, 241, 0.1)';
+        }
+    }
+
+    function bindExchangeClick(type) {
+        const blocks = document.querySelectorAll(`#overview-${type}-view .exchange-allocation-block`);
+        blocks.forEach(block => {
+            block.addEventListener('click', () => {
+                const exchange = block.getAttribute('data-exchange');
+                selectExchange(type, exchange);
+            });
+        });
+    }
+
+    function selectExchange(type, exchangeName) {
+        selectedExchange[type] = exchangeName;
+
+        // 선택 강조 클래스 추가
+        const blocks = document.querySelectorAll(`#overview-${type}-view .exchange-allocation-block`);
+        blocks.forEach(block => {
+            if (block.getAttribute('data-exchange') === exchangeName) {
+                block.classList.add('selected');
+            } else {
+                block.classList.remove('selected');
+            }
+        });
+
+        // 상세 종목 및 거래내역 영역 보이기
+        const detailArea = document.getElementById(`overview-${type}-detail-area`);
+        if (detailArea) {
+            detailArea.style.display = 'flex';
+        }
+
+        // 상세 종목 현황 테이블 렌더링
+        const cachedPortfolio = cachedPortfolios[type];
+        if (cachedPortfolio && typeof PortfolioView !== 'undefined') {
+            PortfolioView.renderSymbolDetailTable(
+                `overview-${type}-symbols-tbody`,
+                `overview-${type}-symbols-title`,
+                exchangeName,
+                cachedPortfolio,
+                `overview-${type}-symbols-tfoot`,
+                (item) => {
+                    // 종목 행 클릭 시 종목별 거래내역 렌더링
+                    PortfolioView.renderHistoryTablePort(`overview-${type}-history-detail-tbody`, item);
+                }
+            );
         }
     }
 
