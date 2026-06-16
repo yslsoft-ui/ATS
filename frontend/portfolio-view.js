@@ -626,7 +626,7 @@ const PortfolioView = {
                 <td>
                     <div style="display:flex; align-items:center; gap: 6px;">
                         ${iconHtml}
-                        <strong ${symbolTooltip} style="${korName ? 'cursor:help; border-bottom: 1px dashed rgba(148,163,184,0.4);' : ''}">${symbolText}</strong>
+                        <strong ${symbolTooltip}>${symbolText}</strong>
                     </div>
                 </td>
                 <td class="num">${item.tradeCount} 건</td>

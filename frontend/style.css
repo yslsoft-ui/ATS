@@ -3589,6 +3589,12 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
     box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
 }
 
+/* 테이블 행(tr) 선택 활성화 하이라이트 스타일 */
+table tbody tr.selected {
+    background-color: rgba(88, 166, 255, 0.15) !important;
+    font-weight: bold;
+}
+
 
 
 
