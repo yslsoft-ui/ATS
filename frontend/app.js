@@ -500,9 +500,15 @@ async function loadRecentTrades() {
 
 // --- UI 초기화 및 바인딩 컨트롤러 ---
 function initViewNavigation() {
-    ViewRouter.registerRoute('overview-view', () => {
+    ViewRouter.registerRoute('overview-simulation-view', () => {
         if (typeof OverviewEngine !== 'undefined') {
-            OverviewEngine.refreshData();
+            OverviewEngine.refreshData('simulation');
+        }
+    });
+
+    ViewRouter.registerRoute('overview-live-view', () => {
+        if (typeof OverviewEngine !== 'undefined') {
+            OverviewEngine.refreshData('live');
         }
     });
 
@@ -630,15 +636,30 @@ function initTradingControls() {
             renderCollectorStatuses(val);
         }
         
+        if (key === 'currentSimPortfolioId') {
+            console.log(`[Reactive Load] Simulation Portfolio ID changed: ${val}`);
+            const selectEl = document.getElementById('overview-simulation-session-select');
+            if (selectEl && selectEl.value !== val) {
+                selectEl.value = val || '';
+            }
+            if (ViewRouter.getActiveView() === 'overview-simulation-view') {
+                state.currentPortfolioId = val;
+            }
+        }
+
+        if (key === 'currentLivePortfolioId') {
+            console.log(`[Reactive Load] Live Portfolio ID changed: ${val}`);
+            const selectEl = document.getElementById('overview-live-session-select');
+            if (selectEl && selectEl.value !== val) {
+                selectEl.value = val || '';
+            }
+            if (ViewRouter.getActiveView() === 'overview-live-view') {
+                state.currentPortfolioId = val;
+            }
+        }
+
         if (key === 'currentPortfolioId') {
             console.log(`[Reactive Load] Portfolio ID changed: ${val}`);
-            
-            // [NEW] 대시보드 드롭다운 동기화
-            const selectEl = document.getElementById('overview-session-select');
-            if (selectEl && selectEl.value !== val) {
-                selectEl.value = val;
-            }
-            
             loadPortfolio();
         }
     });

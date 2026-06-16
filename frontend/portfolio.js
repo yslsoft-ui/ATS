@@ -66,13 +66,13 @@ async function loadPortfolioHistoryList(force = false) {
                     created_at: p.created_at || new Date().toISOString(),
                     isLive: true
                 });
-                addedIds.add(p.id);
+                addedIds.add(String(p.id));
             }
         });
 
         // 과거 백테스트 기록 처리
         backtestHistory.forEach(h => {
-            if (h.portfolio_id !== 'default' && !addedIds.has(h.portfolio_id)) {
+            if (h.portfolio_id !== 'default' && !addedIds.has(String(h.portfolio_id))) {
                 items.push({
                     id: h.portfolio_id,
                     name: h.name,
@@ -82,19 +82,20 @@ async function loadPortfolioHistoryList(force = false) {
                     created_at: h.created_at || new Date().toISOString(),
                     isLive: false
                 });
-                addedIds.add(h.portfolio_id);
+                addedIds.add(String(h.portfolio_id));
             }
         });
 
         // 정렬: 생성일시 역순 (최신이 위로)
         items.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-        // '1' (실거래) 항목 최상단 고정 배치
-        const liveIndex = items.findIndex(item => item.id === '1' || item.id === 1 || item.id === 'live');
+        // '1' (실거래) 항목 최상단 고정 배치 (식별자는 '1' 혹은 1만 매칭하며, 'live' 등의 임의 폴백 없음)
+        const liveIndex = items.findIndex(item => String(item.id) === '1');
         if (liveIndex > -1) {
             const liveItem = items.splice(liveIndex, 1)[0];
             liveItem.id = '1'; // 식별자를 '1'로 강제 동기화
             items.unshift(liveItem);
+            addedIds.add('1'); // 버그 수정: 최상단 고정 배치된 실거래 항목도 addedIds에 명시적으로 추가
         } else {
             items.unshift({
                 id: '1',
@@ -117,13 +118,50 @@ async function loadPortfolioHistoryList(force = false) {
             return;
         }
 
-        // 기본 선택 처리: 현재 currentPortfolioId가 유효하지 않거나 목록에 없는 경우 최신 포트폴리오 지정
-        if (!state.currentPortfolioId || !addedIds.has(state.currentPortfolioId)) {
-            const activeSim = items.find(item => item.type === 'simulation' && !item.ended_at);
+        // 1. 모의투자 세션 기본값 검증 및 설정
+        const simItems = items.filter(item => item.type === 'simulation');
+        const simIds = new Set(simItems.map(item => String(item.id)));
+        if (!state.currentSimPortfolioId || !simIds.has(String(state.currentSimPortfolioId))) {
+            const activeSim = simItems.find(item => !item.ended_at);
             if (activeSim) {
-                state.currentPortfolioId = activeSim.id;
-            } else if (items.length > 0) {
-                state.currentPortfolioId = items[0].id;
+                state.currentSimPortfolioId = activeSim.id;
+            } else if (simItems.length > 0) {
+                state.currentSimPortfolioId = simItems[0].id;
+            } else {
+                state.currentSimPortfolioId = null;
+            }
+        }
+
+        // 2. 실거래 세션 기본값 검증 및 설정
+        const liveItems = items.filter(item => item.type === 'live');
+        const liveIds = new Set(liveItems.map(item => String(item.id)));
+        if (!state.currentLivePortfolioId || !liveIds.has(String(state.currentLivePortfolioId))) {
+            const activeLive = liveItems.find(item => !item.ended_at);
+            if (activeLive) {
+                state.currentLivePortfolioId = activeLive.id;
+            } else if (liveItems.length > 0) {
+                state.currentLivePortfolioId = liveItems[0].id;
+            } else {
+                state.currentLivePortfolioId = '1';
+            }
+        }
+
+        // 기본 선택 처리: 현재 currentPortfolioId가 유효하지 않거나 목록에 없는 경우
+        if (!state.currentPortfolioId || state.currentPortfolioId === 'default' || !addedIds.has(String(state.currentPortfolioId))) {
+            if (state.currentPortfolioId && state.currentPortfolioId !== 'default') {
+                console.error(`선택된 포트폴리오 ID가 유효하지 않습니다: ${state.currentPortfolioId}`);
+                showAlert(`포트폴리오 세션 오류: 선택한 세션(${state.currentPortfolioId})이 유효하지 않거나 존재하지 않습니다.`, 'error');
+                state.currentPortfolioId = null;
+                updateSessionControlUI();
+                return;
+            }
+
+            // 활성 뷰에 맞는 세션 할당
+            const activeView = typeof ViewRouter !== 'undefined' ? ViewRouter.getActiveView() : '';
+            if (activeView === 'overview-live-view') {
+                state.currentPortfolioId = state.currentLivePortfolioId;
+            } else {
+                state.currentPortfolioId = state.currentSimPortfolioId;
             }
         }
 
@@ -199,34 +237,43 @@ async function loadPortfolioHistoryList(force = false) {
             tbody.appendChild(tr);
         });
 
-        // [NEW] 대시보드 세션 선택 드롭다운 옵션 동적 바인딩 (백테스트 제외)
-        const selectEl = document.getElementById('overview-session-select');
-        if (selectEl) {
-            selectEl.innerHTML = '';
+        // [NEW] 대시보드 세션 선택 드롭다운 옵션 동적 바인딩 (모의투자 및 실거래 분리)
+        const simSelectEl = document.getElementById('overview-simulation-session-select');
+        const liveSelectEl = document.getElementById('overview-live-session-select');
+        
+        // 1. 모의투자 드롭다운 옵션 채우기
+        if (simSelectEl) {
+            simSelectEl.innerHTML = '';
             items.forEach(item => {
-                if (item.type === 'backtest') return;
+                if (item.type !== 'simulation') return; // 모의투자만 바인딩
                 
                 const opt = document.createElement('option');
                 opt.value = item.id;
                 
-                let prefix = '';
-                if (item.type === 'live') {
-                    prefix = '🔴 [실거래]';
-                } else if (item.type === 'simulation') {
-                    if (item.ended_at) {
-                        prefix = '⚪ [종료됨]';
-                    } else {
-                        prefix = '🟢 [진행중]';
-                    }
-                } else {
-                    return; // 백테스트 또는 정의되지 않은 타입 차단
-                }
-                
+                const prefix = item.ended_at ? '⚪ [종료됨]' : '🟢 [진행중]';
                 opt.innerText = `${prefix} ${item.name || item.id}`;
-                if (item.id === state.currentPortfolioId) {
+                if (String(item.id) === String(state.currentSimPortfolioId)) {
                     opt.selected = true;
                 }
-                selectEl.appendChild(opt);
+                simSelectEl.appendChild(opt);
+            });
+        }
+
+        // 2. 실거래 드롭다운 옵션 채우기
+        if (liveSelectEl) {
+            liveSelectEl.innerHTML = '';
+            items.forEach(item => {
+                if (item.type !== 'live') return; // 실거래만 바인딩
+                
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                
+                const prefix = item.ended_at ? '⚪ [종료됨]' : '🔴 [실거래]';
+                opt.innerText = `${prefix} ${item.name || item.id}`;
+                if (String(item.id) === String(state.currentLivePortfolioId)) {
+                    opt.selected = true;
+                }
+                liveSelectEl.appendChild(opt);
             });
         }
 
@@ -394,7 +441,7 @@ async function loadPortfolio(force = false) {
 
         state.currentPortfolioData = {
             id: portfolioId,
-            type: (portfolioId === '1' || portfolioId === 1 || portfolioId === 'live') ? 'live' : (cachedPort ? cachedPort.type : (String(portfolioId).startsWith('backtest_') ? 'backtest' : 'simulation')),
+            type: (String(portfolioId) === '1') ? 'live' : (cachedPort ? cachedPort.type : (String(portfolioId).startsWith('backtest_') ? 'backtest' : 'simulation')),
             ended_at: data.ended_at || (cachedPort ? cachedPort.ended_at : null),
             total_value: totalValue,
             cash: cash,
@@ -436,7 +483,7 @@ async function loadPortfolio(force = false) {
             renderBacktestPerformance(data);
         } else {
             if (typeBadge) {
-                if (portfolioId === '1' || portfolioId === 1 || portfolioId === 'live') {
+                if (String(portfolioId) === '1') {
                     typeBadge.innerText = '실계좌 자동매매';
                     typeBadge.style.background = '#EF4444';
                 } else {

@@ -12,6 +12,8 @@
         currentExchange: "upbit",
         currentMarketTab: "upbit",
         currentPortfolioId: 'default',
+        currentSimPortfolioId: null,
+        currentLivePortfolioId: '1',
         ws: null,
         wsConnected: false,
         isExplorerMode: false,

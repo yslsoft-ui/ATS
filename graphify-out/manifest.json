@@ -480,13 +480,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/store.js": {
-    "mtime": 1779366326.563939,
-    "ast_hash": "8ac16e25a2f9eb9661d534695f50adca",
-    "semantic_hash": "8ac16e25a2f9eb9661d534695f50adca"
+    "mtime": 1781585304.769455,
+    "ast_hash": "7fe9e88de36a56c200ce7f9151e90cac",
+    "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1781527741.7768438,
-    "ast_hash": "ad03a3c0d6508955928c54c85322084c",
+    "mtime": 1781585341.762227,
+    "ast_hash": "c2c75f99f7c911f48559fe50ec988841",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/system-events.js": {
@@ -555,13 +555,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1781445342.7700975,
-    "ast_hash": "00c69d121008a08e63f142b6f17008cc",
+    "mtime": 1781585383.9991088,
+    "ast_hash": "3209005a5ca21110907d9d8b4c29a1a0",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
-    "mtime": 1779945097.995211,
-    "ast_hash": "094a07da35f8127a11e5fca080f6636b",
+    "mtime": 1781585420.7398775,
+    "ast_hash": "5d531104c37458ad85458105ffda2b96",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/client.js": {
@@ -575,8 +575,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/overview.js": {
-    "mtime": 1781438008.5581317,
-    "ast_hash": "d6d041d2dd2201fa4839df1bdd1f58ee",
+    "mtime": 1781585362.02665,
+    "ast_hash": "cf948d4f52a03acb07d06addbfa6d698",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/router.js": {
@@ -650,8 +650,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/pipeline.py": {
-    "mtime": 1781404795.3588488,
-    "ast_hash": "8a17775f871c0c9e7504a8ba8b82d54b",
+    "mtime": 1781577559.4756052,
+    "ast_hash": "06bda578983702812ff404becf1abee5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_context.py": {
@@ -690,8 +690,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/system.py": {
-    "mtime": 1781525172.0586655,
-    "ast_hash": "ac828d6bc478b61b317cd6b4d46e345d",
+    "mtime": 1781578300.1827915,
+    "ast_hash": "ae6e69576b83f219327128c0a786fd94",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/test_gnn_integration.py": {
@@ -720,8 +720,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/portfolio.py": {
-    "mtime": 1781443119.064966,
-    "ast_hash": "5aff1cdcb52edaf9c43a95bbfdf50373",
+    "mtime": 1781581731.8335204,
+    "ast_hash": "f394a830a6ec7a57ead3f62527f48995",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_upbit.py": {
@@ -805,8 +805,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1781574482.275081,
-    "ast_hash": "8171e1e36f37f935aac366c50e5fbcec",
+    "mtime": 1781581757.8181112,
+    "ast_hash": "884ce21fd0e17d35d8d82cc842c8ff43",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/analyzer.py": {
@@ -1010,8 +1010,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/telemetry.py": {
-    "mtime": 1781328107.642919,
-    "ast_hash": "fbf202a272652d6bac4ce8a218f85e5a",
+    "mtime": 1781581741.273735,
+    "ast_hash": "3de1b2ed02f279e88c5d9f2846f74291",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/portfolio.py": {
@@ -1045,8 +1045,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1781443111.292822,
-    "ast_hash": "7d61893105e7c064677ad08157a54373",
+    "mtime": 1781581751.689972,
+    "ast_hash": "acd2157ee6befbbdfbc9bca6d5ce2db8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -1365,8 +1365,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1781574522.339876,
-    "ast_hash": "423a6f72b83866dfa596a18c718107a6",
+    "mtime": 1781597552.7951221,
+    "ast_hash": "5ee38c58c66b9183519f41839f28fdb3",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_rehearsal_report.md": {
@@ -1385,8 +1385,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781572172.553347,
-    "ast_hash": "24e2dde2e08441a84e4d0063029bb402",
+    "mtime": 1781585329.4499698,
+    "ast_hash": "bb568acb0a40d6aad1a2c9f3bf968d7c",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -1395,8 +1395,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781572320.9762864,
-    "ast_hash": "6c392498a5fd6ce77b04ae4ada3b2610",
+    "mtime": 1781598270.0676029,
+    "ast_hash": "681b3c73ce92a72e4821c8ce789e3cd6",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
@@ -1415,8 +1415,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
-    "mtime": 1779953875.1147552,
-    "ast_hash": "cd4b26a0cb58806dfd4c7de4cca5884e",
+    "mtime": 1781598275.8317358,
+    "ast_hash": "b6bc003d3cf9daac6a66c6716dab00ed",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/backtest-engine-design.md": {

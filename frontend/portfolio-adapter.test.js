@@ -114,8 +114,8 @@ describe('PortfolioAdapter Unit Tests', () => {
         test('보유 자산 및 현금 분배 그룹화 검증', () => {
             const mockPortfolioData = {
                 positions: [
-                    { symbol: 'KRW-BTC', exchange: 'upbit', quantity: 0.1, avg_price: 50000000 },
-                    { symbol: 'KIS-005930', exchange: 'kis', quantity: 10, avg_price: 70000 }
+                    { symbol: 'KRW-BTC', exchange: 'upbit', exchange_id: 'upbit', quantity: 0.1, avg_price: 50000000 },
+                    { symbol: 'KIS-005930', exchange: 'kis', exchange_id: 'kis', quantity: 10, avg_price: 70000 }
                 ],
                 exchange_cash: {
                     upbit: 3000000,
