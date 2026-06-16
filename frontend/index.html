@@ -788,6 +788,25 @@
                                         <span id="port-cash" class="value">0</span>
                                     </div>
                                 </div>
+
+                                <div id="portfolio-backtest-summary" class="header-metrics" style="margin-top: 0; display: none; border-left: 1px solid rgba(148, 163, 184, 0.15); padding-left: 15px; grid-template-columns: repeat(4, 1fr);">
+                                    <div class="metric">
+                                        <span class="label">💵 투자 원금</span>
+                                        <span id="port-initial-cash" class="value">0</span>
+                                    </div>
+                                    <div class="metric">
+                                        <span class="label">💸 발생 수수료</span>
+                                        <span id="port-total-fee" class="value">0</span>
+                                    </div>
+                                    <div class="metric">
+                                        <span class="label">🔄 체결 건수</span>
+                                        <span id="port-trade-count" class="value">0</span>
+                                    </div>
+                                    <div class="metric">
+                                        <span class="label">⏱️ 소요 시간</span>
+                                        <span id="port-duration" class="value">0초</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <div id="portfolio-applied-strategies"
@@ -874,6 +893,87 @@
                                             </tr>
                                         </thead>
                                         <tbody id="port-history-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 과거 백테스트 결과 성과 분석 (수집 성과 뷰) -->
+                        <div class="portfolio-grid" id="portfolio-backtest-analysis-panels" style="display: none; flex-direction: column; gap: 20px; width: 100%; margin-top: 20px;">
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%;">
+                                <!-- 좌측: 거래소별 요약 성과 -->
+                                <div class="portfolio-card">
+                                    <h3>거래소별 요약 성과</h3>
+                                    <div class="table-wrapper">
+                                        <table id="port-exchanges-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>거래소 (Exchange)</th>
+                                                    <th style="text-align:right">투자 원금</th>
+                                                    <th style="text-align:right">최종 평가액</th>
+                                                    <th style="text-align:right">종목 수</th>
+                                                    <th style="text-align:right">총 체결</th>
+                                                    <th style="text-align:right">총 수수료</th>
+                                                    <th style="text-align:right">총 수익금</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="port-exchanges-tbody">
+                                                <!-- JS에서 렌더링 -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- 우측: 선택된 거래소의 종목별 상세 패널 -->
+                                <div class="portfolio-card" id="port-symbols-card" style="display: block; width: 100%;">
+                                    <h3 id="port-symbols-title">종목별 상세 현황</h3>
+                                    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0 15px 0;">종목을 클릭하면 하단 패널에 상세 체결 및 매매 내역이 출력됩니다.</p>
+                                    <div class="table-wrapper">
+                                        <table id="port-symbols-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>종목 (Asset)</th>
+                                                    <th style="text-align:right">체결 건수</th>
+                                                    <th style="text-align:right">누적 매수금액</th>
+                                                    <th style="text-align:right">누적 매도금액</th>
+                                                    <th style="text-align:right">보유량</th>
+                                                    <th style="text-align:right">최종가격</th>
+                                                    <th style="text-align:right">미실현 평가액</th>
+                                                    <th style="text-align:right">누적 수수료</th>
+                                                    <th style="text-align:right">수익금</th>
+                                                    <th style="text-align:right">수익률</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="port-symbols-tbody">
+                                                <tr><td colspan="10" style="text-align:center; padding:20px; color:#64748B;">좌측에서 거래소를 선택해 주세요.</td></tr>
+                                            </tbody>
+                                            <tfoot id="port-symbols-tfoot" style="display: none;"></tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 백테스트 상세 거래 내역 -->
+                            <div class="portfolio-card" id="port-history-detail-card" style="display: block;">
+                                <h3>백테스트 전체 거래 내역</h3>
+                                <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                                    <table id="port-history-detail-table">
+                                        <thead>
+                                            <tr>
+                                                <th>시간</th>
+                                                <th>종목 (Asset)</th>
+                                                <th>구분</th>
+                                                <th style="text-align:right">가격</th>
+                                                <th style="text-align:right">수량</th>
+                                                <th style="text-align:right">거래금액</th>
+                                                <th style="text-align:right">수수료</th>
+                                                <th>사유</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="port-history-detail-tbody">
+                                            <!-- JS에서 렌더링 -->
+                                        </tbody>
                                     </table>
                                 </div>
                             </div>
