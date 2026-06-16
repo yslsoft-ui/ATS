@@ -56,7 +56,7 @@ async def test_alert(request: Request, symbol: str = "KRW-BTC"):
         "buy_ratio": 88.5,
         "msg": f"🚀 [TEST] 급등 포착: {symbol} (+5.23%)"
     }
-    await manager.broadcast_global(mock_alert)
+    await manager.broadcast_alert(mock_alert)
     await system.save_alert(mock_alert)
     return {"message": f"Test alert for {symbol} sent to all clients and saved"}
 
@@ -74,7 +74,7 @@ async def test_strategy_status(strategy_id: str = "rsistrategy"):
         },
         "last_action": "WATCHING"
     }
-    await manager.broadcast_global(mock_status)
+    await manager.broadcast_alert(mock_status)
     return {"message": f"Test status for {strategy_id} broadcasted"}
 
 

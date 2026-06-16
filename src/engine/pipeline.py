@@ -174,9 +174,14 @@ class ExecutionPipeline:
         if self.broadcast_callback:
             await self.broadcast_callback(alert)
 
+    async def save_alert(self, alert: Dict):
+        """알림을 저장합니다. 외부 및 mock용 퍼블릭 인터페이스."""
+        await self._save_alert_to_db(alert)
+
     async def _save_alert_to_db(self, alert: Dict):
         """알림을 데이터베이스에 영구 저장합니다."""
         try:
             await self.repository.insert_alert(alert)
         except Exception as e:
             logger.error(f"Alert Save Error: {e}")
+

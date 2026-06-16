@@ -393,7 +393,7 @@ const OverviewEngine = (() => {
             } else if (ev.type === 'alert') {
                 badgeClass = 'alert';
                 badgeText = '감지';
-                messageText = ev.message;
+                messageText = ev.message || ev.msg || '';
             } else if (ev.type === 'system') {
                 badgeClass = 'system';
                 badgeText = '시스템';
@@ -427,7 +427,7 @@ const OverviewEngine = (() => {
         // 1. 체결 신호나 알림이 오면 활동 피드에 긴급 인입
         if (tick.type === 'alert') {
             let evType = 'alert';
-            let evMessage = tick.message;
+            let evMessage = tick.msg || tick.message || '';
             let evSide = '';
             let evQty = 0;
             let evPrice = 0;
