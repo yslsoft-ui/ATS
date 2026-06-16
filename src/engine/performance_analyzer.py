@@ -26,6 +26,7 @@ class PerformanceAnalyzer:
         외부 의존성 및 I/O를 배제하여 순수 연산으로 처리합니다.
         """
         total_fee = sum(t.get('fee', 0.0) for t in trades)
+        total_tax = sum(t.get('tax', 0.0) for t in trades)
         trade_count = len(trades)
 
         # 1. 거래소별 자산 집계
@@ -104,8 +105,9 @@ class PerformanceAnalyzer:
             buy_sum = sum(t["price"] * t["quantity"] for t in sym_trades if t["side"] == "BUY")
             sell_sum = sum(t["price"] * t["quantity"] for t in sym_trades if t["side"] == "SELL")
             valuation = current_qty * final_price
-            symbol_fee = sum(t["fee"] for t in sym_trades)
-            symbol_profit = sell_sum + valuation - buy_sum - symbol_fee
+            symbol_fee = sum(t.get("fee", 0.0) for t in sym_trades)
+            symbol_tax = sum(t.get("tax", 0.0) for t in sym_trades)
+            symbol_profit = sell_sum + valuation - buy_sum - symbol_fee - symbol_tax
 
             buy_trades = [t for t in sym_trades if t["side"] == "BUY"]
             buy_count = len(buy_trades)
@@ -127,6 +129,7 @@ class PerformanceAnalyzer:
                 "final_value": round(valuation, 2),
                 "roi": round(symbol_roi, 4),
                 "fee": round(symbol_fee, 2),
+                "tax": round(symbol_tax, 2),
                 "profit": round(symbol_profit, 2),
                 "trade_count": len(sym_trades),
                 "trades": [
@@ -135,6 +138,7 @@ class PerformanceAnalyzer:
                         "price": t["price"],
                         "quantity": t["quantity"],
                         "fee": t["fee"],
+                        "tax": t.get("tax", 0.0),
                         "timestamp": t["timestamp"] * 1000 if t["timestamp"] < 10000000000 else t["timestamp"],
                         "reason": t.get("reason", "")
                      }
@@ -149,6 +153,7 @@ class PerformanceAnalyzer:
         # 3. 거래소별 요약 지표 생성 (results 기반)
         ex_profit_sums = {ex.lower(): 0.0 for ex in ex_initial_cash_map.keys()}
         ex_fee_sums = {ex.lower(): 0.0 for ex in ex_initial_cash_map.keys()}
+        ex_tax_sums = {ex.lower(): 0.0 for ex in ex_initial_cash_map.keys()}
         ex_trade_counts = {ex.lower(): 0 for ex in ex_initial_cash_map.keys()}
 
         for r in results:
@@ -156,15 +161,18 @@ class PerformanceAnalyzer:
             if ex_lower not in ex_profit_sums:
                 ex_profit_sums[ex_lower] = 0.0
                 ex_fee_sums[ex_lower] = 0.0
+                ex_tax_sums[ex_lower] = 0.0
                 ex_trade_counts[ex_lower] = 0
             ex_profit_sums[ex_lower] += r["profit"]
             ex_fee_sums[ex_lower] += r["fee"]
+            ex_tax_sums[ex_lower] += r.get("tax", 0.0)
             ex_trade_counts[ex_lower] += r["trade_count"]
 
         for ex, init_cash in ex_initial_cash_map.items():
             ex_lower = ex.lower()
             ex_profit = ex_profit_sums.get(ex_lower, 0.0)
             ex_fee = ex_fee_sums.get(ex_lower, 0.0)
+            ex_tax = ex_tax_sums.get(ex_lower, 0.0)
             ex_trades = ex_trade_counts.get(ex_lower, 0)
             curr_cash = exchange_cash_map.get(ex_lower, 0.0)
             
@@ -179,6 +187,7 @@ class PerformanceAnalyzer:
                 "profit": ex_profit,
                 "roi": round((ex_profit / init_cash * 100), 2) if init_cash > 0 else 0.0,
                 "fee": ex_fee,
+                "tax": ex_tax,
                 "trade_count": ex_trades
             })
 
@@ -215,6 +224,7 @@ class PerformanceAnalyzer:
                 "price": t["price"],
                 "quantity": t["quantity"],
                 "fee": t["fee"],
+                "tax": t.get("tax", 0.0),
                 "timestamp": t["timestamp"],
                 "reason": t.get("reason", "")
             }
@@ -245,6 +255,7 @@ class PerformanceAnalyzer:
                 "profit": total_profit,
                 "roi": round(total_roi, 2),
                 "fee": total_fee,
+                "tax": total_tax,
                 "trade_count": trade_count
             },
             "positions": [

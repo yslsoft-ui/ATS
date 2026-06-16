@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS orders_history (
     price REAL,
     quantity REAL,
     fee REAL,
+    tax REAL DEFAULT 0.0,
     timestamp INTEGER,
     reason TEXT,
     context TEXT,
@@ -153,6 +154,7 @@ CREATE TABLE IF NOT EXISTS real_orders (
     volume REAL DEFAULT 0.0,
     executed_volume REAL DEFAULT 0.0,
     fee REAL DEFAULT 0.0,
+    tax REAL DEFAULT 0.0,
     state TEXT NOT NULL,
     created_at DATETIME,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

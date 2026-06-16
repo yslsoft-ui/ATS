@@ -63,8 +63,11 @@ class BacktestEngine:
         await self.portfolio_manager.load_exchange_configs()
         exchange_config = self.portfolio_manager.exchange_configs.get(exchange_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
+        execution_cost = self.portfolio_manager.config_manager.get("system.execution_cost", {})
+        ex_costs = execution_cost.get(exchange_id.lower(), {})
+        sell_tax_pct = float(ex_costs.get("sell_tax_pct", 0.0))
         
-        self.virtual_executor = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
+        self.virtual_executor = VirtualOrderExecutorAdapter(fee_rate=fee_rate, sell_tax_pct=sell_tax_pct)
         self.portfolio_manager.executors['simulation'] = self.virtual_executor
         self.portfolio_manager.executors[f"simulation_{exchange_id.lower()}"] = self.virtual_executor
 
@@ -228,9 +231,12 @@ class BacktestEngine:
 
         # 2. 거래소 수수료 설정 로드 및 거래소별 수수료 적용 어댑터 사전 등록
         await self.portfolio_manager.load_exchange_configs()
+        execution_cost = self.portfolio_manager.config_manager.get("system.execution_cost", {})
         for ex_id, config in self.portfolio_manager.exchange_configs.items():
             f_rate = config.get('fee_rate', 0.0005)
-            self.portfolio_manager.executors[f"simulation_{ex_id.lower()}"] = VirtualOrderExecutorAdapter(fee_rate=f_rate)
+            ex_costs = execution_cost.get(ex_id.lower(), {})
+            sell_tax_pct = float(ex_costs.get("sell_tax_pct", 0.0))
+            self.portfolio_manager.executors[f"simulation_{ex_id.lower()}"] = VirtualOrderExecutorAdapter(fee_rate=f_rate, sell_tax_pct=sell_tax_pct)
 
         # 3. 조회된 틱 데이터로부터 실제 데이터가 존재하는 종목 조합(pairs) 추출
         seen_pairs = {}

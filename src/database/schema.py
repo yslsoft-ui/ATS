@@ -227,6 +227,10 @@ async def _init_db_core(target_path: str):
         
         # asset_master 테이블에 category 컬럼 추가
         await ensure_column(db, 'asset_master', 'category', 'TEXT')
+
+        # orders_history 및 real_orders 테이블에 tax 컬럼 추가
+        await ensure_column(db, 'orders_history', 'tax', 'REAL DEFAULT 0.0')
+        await ensure_column(db, 'real_orders', 'tax', 'REAL DEFAULT 0.0')
         
         # kis_stock_info 테이블 생성
         await db.execute("""

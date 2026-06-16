@@ -130,6 +130,11 @@
                         <div class="card-value" id="overview-simulation-total-fee">0</div>
                         <div class="card-sub-label">누적 거래 체결 비용</div>
                     </div>
+                    <div class="overview-card metric-card grad-tax">
+                        <div class="card-label">💸 누적 거래세</div>
+                        <div class="card-value" id="overview-simulation-total-tax">0</div>
+                        <div class="card-sub-label">누적 매도 제세금</div>
+                    </div>
                 </div>
 
                 <!-- 2. 거래소별 가로형 자산 비중 바 (Stacked Progress Bar) -->
@@ -198,6 +203,7 @@
                                             <th style="text-align:right">최종가격</th>
                                             <th style="text-align:right">미실현 평가액</th>
                                             <th style="text-align:right">누적 수수료</th>
+                                            <th style="text-align:right">누적 거래세</th>
                                             <th style="text-align:right">수익금</th>
                                             <th style="text-align:right">수익률</th>
                                         </tr>
@@ -225,6 +231,7 @@
                                         <th style="text-align:right">수량</th>
                                         <th style="text-align:right">거래금액</th>
                                         <th style="text-align:right">수수료</th>
+                                        <th style="text-align:right">거래세</th>
                                         <th>사유</th>
                                     </tr>
                                 </thead>
@@ -289,6 +296,11 @@
                         <div class="card-label">🧾 누적 수수료</div>
                         <div class="card-value" id="overview-live-total-fee">0</div>
                         <div class="card-sub-label">누적 거래 체결 비용</div>
+                    </div>
+                    <div class="overview-card metric-card grad-tax">
+                        <div class="card-label">💸 누적 거래세</div>
+                        <div class="card-value" id="overview-live-total-tax">0</div>
+                        <div class="card-sub-label">누적 매도 제세금</div>
                     </div>
                 </div>
 
@@ -358,6 +370,7 @@
                                             <th style="text-align:right">최종가격</th>
                                             <th style="text-align:right">미실현 평가액</th>
                                             <th style="text-align:right">누적 수수료</th>
+                                            <th style="text-align:right">누적 거래세</th>
                                             <th style="text-align:right">수익금</th>
                                             <th style="text-align:right">수익률</th>
                                         </tr>
@@ -385,6 +398,7 @@
                                         <th style="text-align:right">수량</th>
                                         <th style="text-align:right">거래금액</th>
                                         <th style="text-align:right">수수료</th>
+                                        <th style="text-align:right">거래세</th>
                                         <th>사유</th>
                                     </tr>
                                 </thead>
@@ -1088,6 +1102,7 @@
                                                     <th style="text-align:right">종목 수</th>
                                                     <th style="text-align:right">총 체결</th>
                                                     <th style="text-align:right">총 수수료</th>
+                                                    <th style="text-align:right">총 거래세</th>
                                                     <th style="text-align:right">총 수익금</th>
                                                 </tr>
                                             </thead>
@@ -1114,12 +1129,13 @@
                                                     <th style="text-align:right">최종가격</th>
                                                     <th style="text-align:right">미실현 평가액</th>
                                                     <th style="text-align:right">누적 수수료</th>
+                                                    <th style="text-align:right">누적 거래세</th>
                                                     <th style="text-align:right">수익금</th>
                                                     <th style="text-align:right">수익률</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="port-symbols-tbody">
-                                                <tr><td colspan="10" style="text-align:center; padding:20px; color:#64748B;">좌측에서 거래소를 선택해 주세요.</td></tr>
+                                                <tr><td colspan="11" style="text-align:center; padding:20px; color:#64748B;">좌측에서 거래소를 선택해 주세요.</td></tr>
                                             </tbody>
                                             <tfoot id="port-symbols-tfoot" style="display: none;"></tfoot>
                                         </table>
@@ -1141,6 +1157,7 @@
                                                 <th style="text-align:right">수량</th>
                                                 <th style="text-align:right">거래금액</th>
                                                 <th style="text-align:right">수수료</th>
+                                                <th style="text-align:right">거래세</th>
                                                 <th>사유</th>
                                             </tr>
                                         </thead>
@@ -2248,6 +2265,12 @@
                             원</span>
                     </div>
                     <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="label" style="font-size: 0.72rem; color: #94A3B8;">총 거래세</span>
+                        <span id="real-hist-total-tax" class="value"
+                            style="font-weight: bold; color: #94A3B8; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0
+                            원</span>
+                    </div>
+                    <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
                         <span class="label" style="font-size: 0.72rem; color: #94A3B8;">실현 손익</span>
                         <span id="real-hist-total-pnl" class="value"
                             style="font-weight: bold; color: #F8FAFC; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0
@@ -2269,13 +2292,14 @@
                                 <th>체결가 (KRW)</th>
                                 <th>수량</th>
                                 <th>수수료 (KRW)</th>
+                                <th>거래세 (KRW)</th>
                                 <th>상태</th>
                                 <th>총액 (KRW)</th>
                             </tr>
                         </thead>
                         <tbody id="real-order-history-tbody">
                             <tr>
-                                <td colspan="7" style="text-align:center;padding:15px;color:var(--text-secondary);">거래
+                                <td colspan="8" style="text-align:center;padding:15px;color:var(--text-secondary);">거래
                                     내역을 불러오는 중...</td>
                             </tr>
                         </tbody>

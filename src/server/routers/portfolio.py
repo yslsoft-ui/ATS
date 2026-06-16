@@ -269,13 +269,14 @@ async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, forc
                                 # SQLite의 ON CONFLICT DO UPDATE 문법을 사용해 이미 Ignore 된 가격이 0.0인 레코드도 올바르게 보정
                                 await db.execute('''
                                     INSERT INTO real_orders 
-                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, tax, state, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     ON CONFLICT(uuid) DO UPDATE SET
                                         price = excluded.price,
                                         volume = excluded.volume,
                                         executed_volume = excluded.executed_volume,
                                         fee = excluded.fee,
+                                        tax = excluded.tax,
                                         state = excluded.state
                                 ''', (
                                     'upbit',
@@ -286,6 +287,7 @@ async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, forc
                                     float(o.get("volume") or 0.0),
                                     float(o.get("executed_volume") or 0.0),
                                     float(o.get("paid_fee") or 0.0),
+                                    0.0,
                                     o.get("state"),
                                     created_at
                                 ))
@@ -603,13 +605,14 @@ async def _sync_real_bithumb_orders(access_key: str, secret_key: str, api_url: s
                                 
                                 await db.execute('''
                                     INSERT INTO real_orders 
-                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, tax, state, created_at)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     ON CONFLICT(uuid) DO UPDATE SET
                                         price = excluded.price,
                                         volume = excluded.volume,
                                         executed_volume = excluded.executed_volume,
                                         fee = excluded.fee,
+                                        tax = excluded.tax,
                                         state = excluded.state
                                 ''', (
                                     'bithumb',
@@ -620,6 +623,7 @@ async def _sync_real_bithumb_orders(access_key: str, secret_key: str, api_url: s
                                     float(o.get("volume") or 0.0),
                                     float(o.get("executed_volume") or 0.0),
                                     float(o.get("paid_fee") or 0.0),
+                                    0.0,
                                     o.get("state"),
                                     created_at
                                 ))
@@ -720,6 +724,12 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
                     return
                 
                 output1 = data.get("output1", [])
+                execution_cost = system.config_manager.get('system.execution_cost', {})
+                kis_costs = execution_cost.get('kis', {})
+                buy_fee_rate = float(kis_costs.get('buy_fee_pct', 0.015)) / 100.0
+                sell_fee_rate = float(kis_costs.get('sell_fee_pct', 0.015)) / 100.0
+                sell_tax_rate = float(kis_costs.get('sell_tax_pct', 0.20)) / 100.0
+
                 async with get_db_conn() as db:
                     for o in output1:
                         odno = o.get("odno")
@@ -741,6 +751,14 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
                         side = "BUY" if o.get("sll_buy_dvsn_cd") == "02" else "SELL"
                         price = float(o.get("avg_prvs") or o.get("ord_unpr") or 0.0)
                         
+                        ccld_amt = price * ccld_qty
+                        if side == "BUY":
+                            fee = ccld_amt * buy_fee_rate
+                            tax = 0.0
+                        else:
+                            fee = ccld_amt * sell_fee_rate
+                            tax = ccld_amt * sell_tax_rate
+
                         ord_dt = o.get("ord_dt")
                         ord_tmd = o.get("ord_tmd")
                         created_at = None
@@ -749,13 +767,14 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
                         
                         await db.execute('''
                             INSERT INTO real_orders 
-                            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, tax, state, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(uuid) DO UPDATE SET
                                 price = excluded.price,
                                 volume = excluded.volume,
                                 executed_volume = excluded.executed_volume,
                                 fee = excluded.fee,
+                                tax = excluded.tax,
                                 state = excluded.state
                         ''', (
                             'kis',
@@ -765,7 +784,8 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
                             price,
                             ord_qty,
                             ccld_qty,
-                            0.0,
+                            fee,
+                            tax,
                             state,
                             created_at
                         ))

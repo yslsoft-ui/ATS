@@ -359,10 +359,10 @@ const PortfolioView = {
         const exInitialCashMap = res ? (res.exchange_initial_cash || {}) : {};
 
         if (results.length === 0 && Object.keys(exInitialCashMap).length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#64748B;">매매 거래가 발생한 종목이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:#64748B;">매매 거래가 발생한 종목이 없습니다.</td></tr>';
             const detailTbody = document.getElementById('port-history-detail-tbody');
             if (detailTbody) {
-                detailTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;">거래 내역이 없습니다.</td></tr>';
+                detailTbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;">거래 내역이 없습니다.</td></tr>';
             }
             return;
         }
@@ -376,6 +376,7 @@ const PortfolioView = {
                 symbolCount: 0,
                 tradeCount: 0,
                 fee: 0,
+                tax: 0,
                 profit: 0,
                 initialCash: cashVal
             };
@@ -389,6 +390,7 @@ const PortfolioView = {
                     symbolCount: 0,
                     tradeCount: 0,
                     fee: 0,
+                    tax: 0,
                     profit: 0,
                     initialCash: item.initial_cash || 0
                 };
@@ -399,11 +401,13 @@ const PortfolioView = {
 
             let currentQty = 0;
             let feeSum = 0;
+            let taxSum = 0;
             let sellSum = 0;
             let buySum = 0;
 
             trades.forEach(t => {
                 feeSum += t.fee || 0;
+                taxSum += t.tax || 0;
                 if (t.side === 'BUY') {
                     currentQty += t.quantity;
                     buySum += t.price * t.quantity;
@@ -415,11 +419,12 @@ const PortfolioView = {
             });
 
             const valuation = currentQty * finalPrice;
-            const profit = sellSum + valuation - buySum - feeSum;
+            const profit = sellSum + valuation - buySum - feeSum - taxSum;
 
             exchangeSummary[exKey].symbolCount += 1;
             exchangeSummary[exKey].tradeCount += trades.length;
             exchangeSummary[exKey].fee += feeSum;
+            exchangeSummary[exKey].tax += taxSum;
             exchangeSummary[exKey].profit += profit;
         });
 
@@ -428,6 +433,7 @@ const PortfolioView = {
         let totalSymbols = 0;
         let totalTrades = 0;
         let totalFees = 0;
+        let totalTaxes = 0;
         let totalProfit = 0;
 
         Object.values(exchangeSummary).forEach((sum, idx) => {
@@ -445,6 +451,7 @@ const PortfolioView = {
             totalSymbols += sum.symbolCount;
             totalTrades += sum.tradeCount;
             totalFees += sum.fee;
+            totalTaxes += sum.tax || 0;
             totalProfit += sum.profit;
 
             tr.innerHTML = `
@@ -454,6 +461,7 @@ const PortfolioView = {
                 <td class="num">${sum.symbolCount} 개</td>
                 <td class="num">${sum.tradeCount} 건</td>
                 <td class="num">${Math.round(sum.fee).toLocaleString()} 원</td>
+                <td class="num">${Math.round(sum.tax).toLocaleString()} 원</td>
                 <td class="num ${profitClass}">${profitText}</td>
             `;
 
@@ -492,6 +500,7 @@ const PortfolioView = {
                 <td class="num">${totalSymbols} 개</td>
                 <td class="num">${totalTrades} 건</td>
                 <td class="num">${Math.round(totalFees).toLocaleString()} 원</td>
+                <td class="num">${Math.round(totalTaxes).toLocaleString()} 원</td>
                 <td class="num ${totProfitClass}">${totProfitText}</td>
             `;
             tbody.appendChild(totalTr);
@@ -520,11 +529,13 @@ const PortfolioView = {
             let avgPrice = 0;
             let totalCost = 0;
             let feeSum = 0;
+            let taxSum = 0;
             let sellSum = 0;
             let buySum = 0;
 
             trades.forEach(t => {
                 feeSum += t.fee || 0;
+                taxSum += t.tax || 0;
                 if (t.side === 'BUY') {
                     totalCost += t.price * t.quantity;
                     currentQty += t.quantity;
@@ -544,7 +555,7 @@ const PortfolioView = {
             });
 
             const valuation = currentQty * finalPrice;
-            const profit = sellSum + valuation - buySum - feeSum;
+            const profit = sellSum + valuation - buySum - feeSum - taxSum;
             const investCash = avgPrice * currentQty;
             
             let profitRate = 0;
@@ -566,6 +577,7 @@ const PortfolioView = {
                 valuation,
                 tradeCount: trades.length,
                 fee: feeSum,
+                tax: taxSum,
                 buySum,
                 sellSum
             };
@@ -580,7 +592,7 @@ const PortfolioView = {
         }
 
         if (processedItems.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#64748B;">매매 거래가 발생한 종목이 없습니다.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:#64748B;">매매 거래가 발생한 종목이 없습니다.</td></tr>';
             return;
         }
 
@@ -589,6 +601,7 @@ const PortfolioView = {
         let totSellSum = 0;
         let totValuation = 0;
         let totFee = 0;
+        let totTax = 0;
         let totProfit = 0;
         let totAvgBuyVal = 0;
 
@@ -598,6 +611,7 @@ const PortfolioView = {
             totSellSum += item.sellSum || 0;
             totValuation += item.valuation || 0;
             totFee += item.fee || 0;
+            totTax += item.tax || 0;
             totProfit += item.profit || 0;
 
             const buyTrades = item.trades ? item.trades.filter(t => t.side === 'BUY') : [];
@@ -636,6 +650,7 @@ const PortfolioView = {
                 <td class="num">${PortfolioAdapter.formatPricePort(item.finalPrice)}</td>
                 <td class="num">${Math.round(item.valuation).toLocaleString()} 원</td>
                 <td class="num">${Math.round(item.fee).toLocaleString()} 원</td>
+                <td class="num">${Math.round(item.tax).toLocaleString()} 원</td>
                 <td class="num ${profitClass}">${profitText}</td>
                 <td class="num ${rateClass}">${rateText}</td>
             `;
@@ -685,6 +700,7 @@ const PortfolioView = {
                 <td class="num">-</td>
                 <td class="num">${Math.round(totValuation).toLocaleString()} 원</td>
                 <td class="num">${Math.round(totFee).toLocaleString()} 원</td>
+                <td class="num">${Math.round(totTax).toLocaleString()} 원</td>
                 <td class="num ${totProfitClass}">${totProfitText}</td>
                 <td class="num ${totRateClass}">${totRateText}</td>
             `;
@@ -702,7 +718,7 @@ const PortfolioView = {
 
         const trades = item.trades || [];
         if (trades.length === 0) {
-            histTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;">거래 내역이 없습니다.</td></tr>';
+            histTbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;">거래 내역이 없습니다.</td></tr>';
             return;
         }
 
@@ -729,6 +745,7 @@ const PortfolioView = {
                 <td class="num">${t.quantity.toFixed(4)}</td>
                 <td class="num">${PortfolioAdapter.formatPricePort(t.price * t.quantity)}</td>
                 <td class="num">${Math.round(t.fee).toLocaleString()} 원</td>
+                <td class="num">${Math.round(t.tax || 0).toLocaleString()} 원</td>
                 <td>${t.reason || '-'}</td>
             `;
             histTbody.appendChild(hTr);

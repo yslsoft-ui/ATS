@@ -170,6 +170,12 @@ const OverviewEngine = (() => {
         if (totalFeeEl) {
             updateValueWithFlash(totalFeeEl, Math.round(fee).toLocaleString() + ' 원');
         }
+
+        const tax = summary.tax !== undefined ? summary.tax : 0.0;
+        const totalTaxEl = document.getElementById(`overview-${type}-total-tax`);
+        if (totalTaxEl) {
+            updateValueWithFlash(totalTaxEl, Math.round(tax).toLocaleString() + ' 원');
+        }
     }
 
     /**
@@ -240,10 +246,11 @@ const OverviewEngine = (() => {
             // 총액 및 현금 라벨 헤더 한 줄 반영
             if (totalEl) {
                 const exSummary = (cachedPortfolio.exchanges || []).find(e => e && e.exchange_id && e.exchange_id.toLowerCase() === ex);
-                const initCash = exSummary ? exSummary.initial_cash : 0.0;
-                const fee = exSummary ? exSummary.fee : 0.0;
+                const initCash = exSummary && exSummary.initial_cash !== undefined && exSummary.initial_cash !== null ? exSummary.initial_cash : 0.0;
+                const fee = exSummary && exSummary.fee !== undefined && exSummary.fee !== null ? exSummary.fee : 0.0;
+                const tax = exSummary && exSummary.tax !== undefined && exSummary.tax !== null ? exSummary.tax : 0.0;
                 
-                const roi = initCash > 0 ? ((totalVal - initCash) / initCash * 100) : (exSummary ? exSummary.roi : 0.0);
+                const roi = initCash > 0 ? ((totalVal - initCash) / initCash * 100) : (exSummary && exSummary.roi !== undefined && exSummary.roi !== null ? exSummary.roi : 0.0);
                 
                 let roiColor = '#94A3B8';
                 let roiSign = '';
@@ -268,6 +275,7 @@ const OverviewEngine = (() => {
                     <span style="color: #94A3B8;">현금: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(exCash).toLocaleString()}</strong>원</span>
                     <span style="color: #94A3B8;">평가액: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(calculatedTotal).toLocaleString()}</strong>원</span>
                     <span style="color: #94A3B8;">수수료: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(fee).toLocaleString()}</strong>원</span>
+                    <span style="color: #94A3B8;">거래세: <strong style="color: #F8FAFC; font-family: 'Roboto Mono', monospace;">${Math.round(tax).toLocaleString()}</strong>원</span>
                 `;
             }
 

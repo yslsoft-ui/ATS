@@ -85,7 +85,7 @@ class Portfolio:
         """모든 거래소의 초기 자금 합산 값을 실시간 연산하는 읽기 전용 프로퍼티입니다."""
         return sum(self.exchange_initial_cash.values()) if self.exchange_initial_cash else 0.0
 
-    def update_position(self, exchange_id: str, symbol: str, side: str, price: float, quantity: float, fee: float, strategy_id: str = "", reason: str = "", context: Dict = None, market: str = None):
+    def update_position(self, exchange_id: str, symbol: str, side: str, price: float, quantity: float, fee: float, tax: float = 0.0, strategy_id: str = "", reason: str = "", context: Dict = None, market: str = None):
         """체결된 결과를 바탕으로 포지션과 잔고를 업데이트합니다."""
         if not exchange_id:
             self.status = "ERROR"
@@ -113,11 +113,11 @@ class Portfolio:
             pos.quantity += quantity
             if pos.quantity > 0:
                 pos.avg_price = total_cost / pos.quantity
-            self.exchange_cash[ex_key] -= (price * quantity) + fee
+            self.exchange_cash[ex_key] -= (price * quantity) + fee + tax
         else:
             # 매도: 수량 감소
             pos.quantity -= quantity
-            self.exchange_cash[ex_key] += (price * quantity) - fee
+            self.exchange_cash[ex_key] += (price * quantity) - fee - tax
             if pos.quantity <= 0:
                 pos.quantity = 0
                 pos.avg_price = 0
@@ -135,6 +135,7 @@ class Portfolio:
             'price': price,
             'quantity': quantity,
             'fee': fee,
+            'tax': tax,
             'timestamp': time.time(),
             'cash_after': self.cash,
             'strategy_id': strategy_id,
@@ -160,8 +161,9 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
     """
     OrderbookMatchingEngine을 완전히 내포하여 슬리피지 및 수수료가 반영된 가상 주문 체결을 집행하는 어댑터입니다.
     """
-    def __init__(self, fee_rate: float = 0.0005):
+    def __init__(self, fee_rate: float = 0.0005, sell_tax_pct: float = 0.0):
         self.matching_engine = OrderbookMatchingEngine(fee_rate=fee_rate)
+        self.sell_tax_pct = sell_tax_pct
 
     async def execute_order(self, exchange_id: str, symbol: str, side: str, quantity: float, **kwargs) -> Optional[Dict]:
         orderbook = kwargs.get('orderbook')
@@ -196,6 +198,10 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
         if vwap == 0 or executed_qty <= 0:
             return None
         
+        tax = 0.0
+        if side == 'SELL':
+            tax = executed_value * (self.sell_tax_pct / 100.0)
+        
         return {
             'exchange_id': exchange_id,
             'market': market,
@@ -204,6 +210,7 @@ class VirtualOrderExecutorAdapter(OrderExecutor):
             'price': vwap,
             'quantity': executed_qty,
             'fee': fee,
+            'tax': tax,
             'executed_value': executed_value,
             'timestamp': int(time.time() * 1000)
         }
@@ -1084,6 +1091,7 @@ class PortfolioManager:
                     price=result['price'],
                     quantity=result['quantity'],
                     fee=result['fee'],
+                    tax=result.get('tax', 0.0),
                     strategy_id="liquidate",
                     reason="전체 청산 (Liquidate All)",
                     market=result.get('market')
@@ -1181,6 +1189,9 @@ class PortfolioManager:
             
         exchange_config = self.exchange_configs.get(exchange_key, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
+        execution_cost = self.config_manager.get("system.execution_cost", {})
+        ex_costs = execution_cost.get(exchange_key.lower(), {})
+        sell_tax_pct = float(ex_costs.get("sell_tax_pct", 0.0))
         
         # 실거래 및 가상 거래소 어댑터 캐싱
         if portfolio.portfolio_type == 'live':
@@ -1190,7 +1201,7 @@ class PortfolioManager:
         else:
             executor_key = f"simulation_{exchange_key.lower()}"
             if executor_key not in self.executors:
-                self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate)
+                self.executors[executor_key] = VirtualOrderExecutorAdapter(fee_rate=fee_rate, sell_tax_pct=sell_tax_pct)
         executor = self.executors[executor_key]
 
         market_val = getattr(signal, 'market', None)
@@ -1219,6 +1230,7 @@ class PortfolioManager:
                 price=result['price'],
                 quantity=result['quantity'],
                 fee=result['fee'],
+                tax=result.get('tax', 0.0),
                 strategy_id=getattr(signal, 'strategy_id', ""),
                 reason=getattr(signal, 'reason', ""),
                 context=getattr(signal, 'context', {}),
@@ -1236,6 +1248,7 @@ class PortfolioManager:
                 'price': result['price'],
                 'quantity': result['quantity'],
                 'fee': result['fee'],
+                'tax': result.get('tax', 0.0),
                 'timestamp': int(time.time()),
                 'reason': getattr(signal, 'reason', ""),
                 'context': result.get('context', {}) or getattr(signal, 'context', {})

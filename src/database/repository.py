@@ -1214,8 +1214,8 @@ class SqliteTradingRepository(BaseTradingRepository):
             if not pid:
                 raise ValueError(f"Could not resolve portfolio_id: {portfolio_id}")
             await db.execute('''
-                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, timestamp, reason, context)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO orders_history (portfolio_id, exchange_id, market, strategy_id, symbol, side, price, quantity, fee, tax, timestamp, reason, context)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 pid, 
                 order['exchange_id'],
@@ -1226,6 +1226,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                 order['price'], 
                 order['quantity'], 
                 order['fee'], 
+                order.get('tax', 0.0),
                 order.get('timestamp', int(time.time())), 
                 order.get('reason', ""),
                 json.dumps(order.get('context', {}) or {})
@@ -1237,7 +1238,6 @@ class SqliteTradingRepository(BaseTradingRepository):
             async with get_db_conn(self.db_path) as db:
                 query = """
                     SELECT * FROM real_orders
-                    WHERE exchange_id = 'upbit'
                     ORDER BY created_at DESC
                 """
                 if limit is not None and limit > 0:
@@ -1266,6 +1266,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                             'price': float(r['price'] or 0.0),
                             'quantity': float(r['executed_volume'] or 0.0),
                             'fee': float(r['fee'] or 0.0),
+                            'tax': float(r.get('tax') or 0.0),
                             'timestamp': ts,
                             'reason': '실거래 체결',
                             'context': {}

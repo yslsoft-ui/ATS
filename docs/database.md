@@ -139,6 +139,7 @@ erDiagram
         real price "실제 체결 단가"
         real quantity "실제 체결 수량"
         real fee "거래 차감 수수료"
+        real tax "거래 차감 세금(증권거래세 등)"
         integer timestamp "체결 시각 타임스탬프 (초)"
         text reason "주문 발주 원인 사유"
         text context "주문 시점의 상태 정보 스냅샷 (JSON)"
@@ -213,6 +214,7 @@ erDiagram
 | **price** | REAL | - | 주문 체결 단가 |
 | **quantity** | REAL | - | 주문 체결 수량 |
 | **fee** | REAL | - | 주문 시 차감된 수수료 |
+| **tax** | REAL | 0.0 | 주문 시 차감된 세금 (증권거래세 등) |
 | **timestamp** | INTEGER | - | 체결 시점 타임스탬프 (Unix Time) |
 | **reason** | TEXT | - | 주문 트리거 사유 (예: `RSI Under 30`) |
 | **context** | TEXT | - | 주문 당시의 상태 맥락 스냅샷 (JSON 스트링) |
