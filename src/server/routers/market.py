@@ -113,9 +113,7 @@ async def get_restored_candles(
     limit_minutes: int = 1440
 ):
     """DB에 누락되었으나 틱으로 복구된 캔들 목록 반환"""
-    if not exchange_id:
-        raise HTTPException(status_code=400, detail="Required parameter 'exchange_id' must be provided.")
-    if exchange_id not in ("upbit", "bithumb", "kis"):
+    if exchange_id and exchange_id not in ("upbit", "bithumb", "kis"):
         raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
         
     return await market_repo.get_restored_candles(

@@ -157,6 +157,10 @@
 
 - **`GET /restored-candles?exchange={exchange_id}&symbol={symbol}&limit_minutes={min}`**
   - **설명**: DB 수집 누락 시점에 틱 체결 이력을 기반으로 로컬에서 복구 및 임시 재생성된 캔들 목록을 조회합니다.
+    - **쿼리 파라미터**:
+      - `exchange` (선택): 특정 거래소 필터 (`upbit`, `bithumb`, `kis`). 생략 시 전체 거래소 대상 조회.
+      - `symbol` (선택): 특정 종목 필터 (예: `BTC`). 생략 시 전체 종목 대상 조회.
+      - `limit_minutes` (선택, 기본값: `1440`): 조회할 과거 범위 (분 단위).
 
 - **`GET /market/ranking/types`**
   - **설명**: KIS OpenAPI가 지원하는 22종 순위 분석 항목(시가총액 상위, 배당률 상위, 거래량 급증 등)의 TR_ID와 설명 목록을 반환합니다.
