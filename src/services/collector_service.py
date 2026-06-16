@@ -568,7 +568,14 @@ class CollectorService(DaemonService):
                 reason = getattr(collector, 'status_reason', '서킷브레이크 의심')
                 await self.record_exchange_event('EXCHANGE_SUSPENDED', exch_id, f"{exch_id.upper()} 거래정지 감지: {reason}")
             elif prev['status'] == 'SUSPENDED' and current_status == 'RUNNING':
-                await self.record_exchange_event('EXCHANGE_RESUMED', exch_id, f"{exch_id.upper()} 거래정지 해제 (RUNNING 복구)")
+                last_symbol = getattr(collector, 'last_event_symbol', None)
+                if last_symbol:
+                    from src.engine.utils.stock_mapper import stock_mapper
+                    korean_name = stock_mapper.get_name(exch_id, last_symbol)
+                    msg = f"{exch_id.upper()} 거래정지 해제 (RUNNING 복구): [{last_symbol}] {korean_name}"
+                else:
+                    msg = f"{exch_id.upper()} 거래정지 해제 (RUNNING 복구)"
+                await self.record_exchange_event('EXCHANGE_RESUMED', exch_id, msg)
 
         # 2) 치명적 에러 발생 감지
         if current_error and prev['error'] != current_error:

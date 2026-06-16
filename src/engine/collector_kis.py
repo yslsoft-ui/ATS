@@ -22,6 +22,7 @@ class KisCollector(BaseCollector):
         self.cred_provider = CredentialProvider()
         self.rank_task: Optional[asyncio.Task] = None
         self.symbol_market_map: Dict[str, str] = {}
+        self.last_event_symbol: Optional[str] = None
 
     @property
     def exchange_id(self) -> str:
@@ -147,20 +148,23 @@ class KisCollector(BaseCollector):
                             mkop_cls_code = all_fields[3]
                             vi_cls_code = all_fields[8] if len(all_fields) > 8 else 'N'
                             
+                            korean_name = stock_mapper.get_name('kis', symbol_code)
+                            self.last_event_symbol = symbol_code
+                            
                             if trht_yn == 'Y':
                                 self.status = "SUSPENDED"
-                                self.status_reason = f"[{symbol_code}] 거래정지: {susp_reason}"
-                                logger.warning(f"[KIS] {symbol_code} 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
+                                self.status_reason = f"[{symbol_code}] {korean_name} 거래정지: {susp_reason}"
+                                logger.warning(f"[KIS] {symbol_code} ({korean_name}) 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
                             elif vi_cls_code not in ('N', ''):
                                 self.status = "SUSPENDED"
-                                self.status_reason = f"[{symbol_code}] VI 발동 (VI구분: {vi_cls_code})"
-                                logger.warning(f"[KIS] {symbol_code} 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
+                                self.status_reason = f"[{symbol_code}] {korean_name} VI 발동 (VI구분: {vi_cls_code})"
+                                logger.warning(f"[KIS] {symbol_code} ({korean_name}) 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
                             else:
                                 # 정상 복구
                                 if self.status == "SUSPENDED":
                                     self.status = "RUNNING"
                                     self.status_reason = None
-                                    logger.info(f"[KIS] {symbol_code} 거래 정지/VI 해제. RUNNING 복구.")
+                                    logger.info(f"[KIS] {symbol_code} ({korean_name}) 거래 정지/VI 해제. RUNNING 복구.")
                     except Exception as e:
                         logger.error(f"[KIS] 장운영정보 파싱 에러 (tr_id={tr_id}): {e}")
                     return None
