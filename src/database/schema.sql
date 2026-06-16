@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS exchanges (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    korean_name TEXT,
     fee_rate REAL DEFAULT 0.0005,
     market_type TEXT DEFAULT 'crypto',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

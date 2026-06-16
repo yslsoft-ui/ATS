@@ -232,6 +232,13 @@ async def _init_db_core(target_path: str):
         await ensure_column(db, 'orders_history', 'tax', 'REAL DEFAULT 0.0')
         await ensure_column(db, 'real_orders', 'tax', 'REAL DEFAULT 0.0')
         
+        # exchanges 테이블에 korean_name 컬럼 추가 및 데이터 보정
+        await ensure_column(db, 'exchanges', 'korean_name', 'TEXT')
+        await db.execute("UPDATE exchanges SET korean_name = '업비트' WHERE id = 'upbit'")
+        await db.execute("UPDATE exchanges SET korean_name = '한국투자증권' WHERE id = 'kis'")
+        await db.execute("UPDATE exchanges SET korean_name = '빗썸' WHERE id = 'bithumb'")
+        await db.commit()
+        
         # kis_stock_info 테이블 생성
         await db.execute("""
             CREATE TABLE IF NOT EXISTS kis_stock_info (

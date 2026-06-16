@@ -100,7 +100,8 @@ erDiagram
 
     EXCHANGES_거래소 {
         text id PK "거래소 고유 식별자 (upbit, bithumb, kis)"
-        text name "거래소 한글/영문 표시명"
+        text name "거래소 영문 표시명"
+        text korean_name "거래소 한글 표시명"
         real fee_rate "기본 적용 수수료율"
         text market_type "자산군 분류 (crypto / stock)"
         datetime created_at "등록 일시"
@@ -165,8 +166,9 @@ erDiagram
 
 | 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
 | :--- | :--- | :--- | :--- |
-| **id** (PK) | TEXT | NOT NULL | 거래소 고유 식별자 (`upbit`, `kis`) |
-| **name** | TEXT | NOT NULL | 거래소 표시명 (`Upbit`, `KIS`) |
+| **id** (PK) | TEXT | NOT NULL | 거래소 고유 식별자 (`upbit`, `bithumb`, `kis`) |
+| **name** | TEXT | NOT NULL | 거래소 영문 표시명 (`Upbit`, `Bithumb`, `KIS`) |
+| **korean_name** | TEXT | - | 거래소 한글 표시명 (`업비트`, `빗썸`, `한국투자증권`) |
 | **fee_rate** | REAL | DEFAULT 0.0005 | 거래소 수수료율 |
 | **market_type** | TEXT | DEFAULT 'crypto' | 자산군 분류 (`crypto`, `stock`) |
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 레코드 생성 일시 |
