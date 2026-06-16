@@ -430,3 +430,36 @@ CREATE INDEX IF NOT EXISTS idx_ob_exch_sym_time ON orderbooks (exchange_id, symb
 
 -- live 포트폴리오 시드 데이터
 INSERT OR IGNORE INTO portfolios (id, name, type) VALUES (1, '실거래 포트폴리오', 'live');
+
+-- 24. kis_stock_info (한국투자증권 주식 기본 세부정보 캐시 테이블)
+CREATE TABLE IF NOT EXISTS kis_stock_info (
+    symbol TEXT PRIMARY KEY,
+    prdt_name TEXT,
+    prdt_abrv_name TEXT,
+    mket_id_cd TEXT,
+    scty_grp_id_cd TEXT,
+    excg_dvsn_cd TEXT,
+    lstg_stqt INTEGER,
+    lstg_cptl_amt INTEGER,
+    cpta INTEGER,
+    papr REAL,
+    issu_pric REAL,
+    kospi200_item_yn TEXT,
+    scts_mket_lstg_dt TEXT,
+    kosdaq_mket_lstg_dt TEXT,
+    lstg_abol_dt TEXT,
+    std_pdno TEXT,
+    prdt_eng_name TEXT,
+    tr_stop_yn TEXT,
+    admn_item_yn TEXT,
+    thdt_clpr REAL,
+    bfdy_clpr REAL,
+    std_idst_clsf_cd_name TEXT,
+    idx_bztp_lcls_cd_name TEXT,
+    idx_bztp_mcls_cd_name TEXT,
+    idx_bztp_scls_cd_name TEXT,
+    cptt_trad_tr_psbl_yn TEXT,
+    nxt_tr_stop_yn TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+

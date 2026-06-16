@@ -169,6 +169,11 @@ sequenceDiagram
 - **호가 데이터 수집 및 디스크 용량 관리**: 실시간 호가(Orderbook) 데이터를 수집하여 `orderbooks` 테이블에 저장할 수 있으나, 호가 데이터의 극심한 데이터 밀도로 인한 디스크 고갈을 막기 위해 `system.enable_orderbook_features: false` 설정을 통해 호가 관련 적재/피처 계산 기능을 선택적으로 비활성화할 수 있습니다. 또한 수집된 과거 시장 데이터는 [market_cleanup_service.py](file:///home/simon/ATS/src/services/market_cleanup_service.py)에 의해 틱 데이터는 3일, 분봉은 30일 경과 시 삭제 및 1시간봉 압축 등의 생명주기 관리를 받습니다.
 - **비동기 백필 기동**: 수집기 기동 시 과거 누락된 1분봉 동기화 작업이 실시간 수집 시작을 지연시키지 않도록 백필 작업을 `asyncio.create_task`로 비동기 실행하여 구동 즉시 실시간 데이터 수집을 병행합니다.
 - **벌크 병합 백필 (Bulk Merged Backfill)**: 과거 누락 캔들을 채울 때 개별 틈새마다 요청을 쪼개지 않고, 전체 누락 타임스탬프의 `[min, max]` 단일 대형 구간을 계산하여 1회의 벌크 API 호출로 데이터를 수집하고, 이미 존재하는 데이터는 메모리 상에서 중복 필터링하여 저장함으로써 API 호출 횟수를 90% 이상 절감합니다.
+- **KIS 대체거래소(Nextrade) 동적 시세 구독 분기 처리**:
+  - KIS 실시간 WebSocket 체결 구독 시, 종목별 Nextrade 지원 여부에 따라 구독 TR ID와 시장 분류 코드를 다르게 지정하여 전송합니다.
+  - Nextrade 거래 가능 여부 판별은 KIS 주식기본조회 API(`CTPF1002R`)를 호출하여 `cptt_trad_tr_psbl_yn == "Y"`(NXT 거래종목여부)와 `nxt_tr_stop_yn != "Y"`(NXT 거래정지여부) 조건을 동시에 검증하여 `nxt_eligible` 상태로 정의합니다.
+  - 이 조회 결과는 로컬 데이터베이스 `kis_stock_info` 테이블에 캐싱되어 캐시 유효 기간 동안 재사용됩니다.
+  - Nextrade 거래가 가능(`nxt_eligible = True`)한 종목은 실시간 체결을 `UN`(통합) 시장 코드와 함께 `H0UNCNT0` TR ID로 구독하며, Nextrade 미지원 종목은 `J`(주식) 시장 코드와 함께 `H0STCNT0` TR ID로 구독하도록 분기 처리하여 미지원 종목의 시세 누락이나 웹소켓 구독 에러를 방지합니다.
 
 ##### 시장 데이터 수집 및 어댑터 레이어 클래스 관계도
 이종 거래소(Upbit, KIS 등)의 API 요청 및 포맷 차이를 표준 규격화하는 마켓 어댑터, 소켓 스트리밍 수집 데몬, 그리고 수집된 대량 데이터를 DB에 병목 없이 다중 스레드로 적재하는 `DBWriter` 간의 결합성 구조입니다.

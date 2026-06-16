@@ -43,6 +43,7 @@
 | `MARKET_REGIME_SUMMARIES` | 시장 상태 요약 | 1분 단위로 수집된 시장 변동성, RSI, 호가 불균형 등 분석용 피처 데이터 |
 | `GIRS_SHADOW_METRICS` | GIRS 섀도 지표 | 실시간 섀도 모니터링 시점의 모델 리스크 점수, 데이터 신선도, 연산 지연 상태 |
 | `UNIVERSE_GUARD_STATE` | 유니버스 가드 상태 | 쿨다운/한도 제한 등으로 실시간 매매 대상에서 일시 차단된 종목 감시 상태 |
+| `KIS_STOCK_INFO` | KIS 주식 상세 캐시 | KIS OpenAPI에서 조회한 종목별 세부 제원(Nextrade 연동 여부 포함) 캐시 |
 | `SYSTEM_EVENTS` | 시스템 이벤트 | 데몬 기동/종료, 에러, 사용자 수동 제어 등 시스템 운영 이력 및 감사 로그 |
 
 ```mermaid
@@ -67,6 +68,8 @@ erDiagram
     STRATEGY_PROPOSALS_전략_제안 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "수동 재평가 결과 누적"
     
     PROPOSAL_REEVALUATION_JOBS_재평가_작업_큐 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "비동기 평가 Job 실행"
+    
+    ASSET_MASTER_자산_마스터 ||--o| KIS_STOCK_INFO_KIS_주식_상세_캐시 : "KIS 주식 상세 제원 캐시"
 ```
 
 ---
@@ -226,6 +229,7 @@ erDiagram
     EXCHANGES_거래소 ||--o{ CANDLES_분봉_캔들 : "OHLCV 캔들 취합"
     EXCHANGES_거래소 ||--o{ ALERTS_실시간_알림 : "급등락 경보 발생"
     ASSET_MASTER_자산_마스터 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "거래 자산 메타 매핑"
+    ASSET_MASTER_자산_마스터 ||--o| KIS_STOCK_INFO_KIS_주식_상세_캐시 : "KIS 주식 상세 제원 캐시"
 
     EXCHANGES_거래소 {}
     ASSET_MASTER_자산_마스터 {
@@ -280,6 +284,37 @@ erDiagram
         real price "감지 시점 체결가"
         text msg "사용자 경고 메시지 내용"
         integer timestamp "이벤트 발생 시각 타임스탬프 (ms)"
+    }
+
+    KIS_STOCK_INFO_KIS_주식_상세_캐시 {
+        text symbol PK "자산 심볼 코드"
+        text prdt_name "상품명"
+        text prdt_abrv_name "상품약어명"
+        text mket_id_cd "시장ID코드"
+        text scty_grp_id_cd "증권그룹ID코드"
+        text excg_dvsn_cd "거래소구분코드"
+        integer lstg_stqt "상장주식수"
+        integer lstg_cptl_amt "상장자본금액"
+        integer cpta "자본금"
+        real papr "액면가"
+        real issu_pric "발행가격"
+        text kospi200_item_yn "코스피200 여부"
+        text scts_mket_lstg_dt "유가증권 상장일자"
+        text kosdaq_mket_lstg_dt "코스닥 상장일자"
+        text lstg_abol_dt "상장폐지일자"
+        text std_pdno "표준상품번호"
+        text prdt_eng_name "상품영문명"
+        text tr_stop_yn "거래정지 여부"
+        text admn_item_yn "관리종목 여부"
+        real thdt_clpr "당일종가"
+        real bfdy_clpr "전일종가"
+        text std_idst_clsf_cd_name "표준산업분류명"
+        text idx_bztp_lcls_cd_name "지수업종대분류명"
+        text idx_bztp_mcls_cd_name "지수업종중분류명"
+        text idx_bztp_scls_cd_name "지수업종소분류명"
+        text cptt_trad_tr_psbl_yn "NXT 거래가능 여부"
+        text nxt_tr_stop_yn "NXT 거래정지 여부"
+        datetime updated_at "캐시 갱신 시각"
     }
 ```
 
@@ -351,6 +386,40 @@ erDiagram
 | **price** | REAL | - | 감지 시점의 체결가 |
 | **msg** | TEXT | - | 사용자 경고 메시지 내용 (예: `[Spike] BTC 가격 3.5% 급등!`) |
 | **timestamp** | INTEGER | - | 감지 시점 타임스탬프 (ms) |
+
+#### 2.2.6. kis_stock_info (KIS 주식 상세 제원 캐시)
+한국투자증권 주식기본조회 API(`CTPF1002R`)로 획득한 각 종목별 상세 규격 및 대체거래소(Nextrade) 연동 상태를 캐싱합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **symbol** (PK) | TEXT | NOT NULL | 종목 코드 (6자리) |
+| **prdt_name** | TEXT | - | 공식 상품명 |
+| **prdt_abrv_name** | TEXT | - | 상품 약어명 |
+| **mket_id_cd** | TEXT | - | 시장 ID 코드 (STK: 코스피, KSQ: 코스닥, KNX: 코넥스 등) |
+| **scty_grp_id_cd** | TEXT | - | 증권 그룹 ID 코드 (ST: 주권, EF: ETF, EN: ETN 등) |
+| **excg_dvsn_cd** | TEXT | - | 거래소 구분 코드 (02: 거래소, 03: 코스닥 등) |
+| **lstg_stqt** | INTEGER | - | 상장 주식 수 |
+| **lstg_cptl_amt** | INTEGER | - | 상장 자본 금액 |
+| **cpta** | INTEGER | - | 자본금 |
+| **papr** | REAL | - | 액면가 |
+| **issu_pric** | REAL | - | 발행 가격 |
+| **kospi200_item_yn** | TEXT | - | 코스피200 종목 여부 (Y/N) |
+| **scts_mket_lstg_dt**| TEXT | - | 유가증권시장 상장일자 |
+| **kosdaq_mket_lstg_dt**| TEXT | - | 코스닥시장 상장일자 |
+| **lstg_abol_dt** | TEXT | - | 상장 폐지 일자 |
+| **std_pdno** | TEXT | - | 표준 상품 번호 (12자리) |
+| **prdt_eng_name** | TEXT | - | 상품 영문명 |
+| **tr_stop_yn** | TEXT | - | 거래 정지 여부 (Y/N) |
+| **admn_item_yn** | TEXT | - | 관리 종목 여부 (Y/N) |
+| **thdt_clpr** | REAL | - | 당일 종가 |
+| **bfdy_clpr** | REAL | - | 전일 종가 |
+| **std_idst_clsf_cd_name**| TEXT| - | 표준산업분류코드명 (예: 반도체 제조업) |
+| **idx_bztp_lcls_cd_name**| TEXT| - | 지수업종 대분류명 |
+| **idx_bztp_mcls_cd_name**| TEXT| - | 지수업종 중분류명 |
+| **idx_bztp_scls_cd_name**| TEXT| - | 지수업종 소분류명 |
+| **cptt_trad_tr_psbl_yn**| TEXT | - | Nextrade 거래 종목 여부 (Y: 거래가능, N: 불가능) |
+| **nxt_tr_stop_yn** | TEXT | - | Nextrade 거래 정지 여부 (Y: 거래정지, N: 정상) |
+| **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 캐시 레코드 최종 동기화 시각 |
 
 ---
 

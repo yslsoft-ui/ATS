@@ -228,6 +228,41 @@ async def _init_db_core(target_path: str):
         # asset_master 테이블에 category 컬럼 추가
         await ensure_column(db, 'asset_master', 'category', 'TEXT')
         
+        # kis_stock_info 테이블 생성
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS kis_stock_info (
+                symbol TEXT PRIMARY KEY,
+                prdt_name TEXT,
+                prdt_abrv_name TEXT,
+                mket_id_cd TEXT,
+                scty_grp_id_cd TEXT,
+                excg_dvsn_cd TEXT,
+                lstg_stqt INTEGER,
+                lstg_cptl_amt INTEGER,
+                cpta INTEGER,
+                papr REAL,
+                issu_pric REAL,
+                kospi200_item_yn TEXT,
+                scts_mket_lstg_dt TEXT,
+                kosdaq_mket_lstg_dt TEXT,
+                lstg_abol_dt TEXT,
+                std_pdno TEXT,
+                prdt_eng_name TEXT,
+                tr_stop_yn TEXT,
+                admn_item_yn TEXT,
+                thdt_clpr REAL,
+                bfdy_clpr REAL,
+                std_idst_clsf_cd_name TEXT,
+                idx_bztp_lcls_cd_name TEXT,
+                idx_bztp_mcls_cd_name TEXT,
+                idx_bztp_scls_cd_name TEXT,
+                cptt_trad_tr_psbl_yn TEXT,
+                nxt_tr_stop_yn TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.commit()
+        
         # simulation_ended 데이터 보정 마이그레이션 실행
         await db.execute("""
             UPDATE portfolios 

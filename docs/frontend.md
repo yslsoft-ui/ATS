@@ -53,6 +53,7 @@
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고, 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다.
 - **[system-events.js](file:///home/simon/ATS/frontend/system-events.js)**: [NEW] 시스템 감사 로그 통합 조회 페이지입니다. `system_events` 테이블의 모든 감사 로그를 조회하고, 실시간 검색(키워드 필터링) 및 동적 이벤트 타입 필터를 지원하는 전용 감사 로그 뷰 모듈입니다.
+- **[kis-detail.js](file:///home/simon/ATS/frontend/kis-detail.js)**: [NEW] KIS 종목 상세 정보를 조회하고 렌더링하는 전용 모달 뷰 모듈입니다. 대체거래소(Nextrade) 거래 대상 여부 및 거래 정지 여부를 직관적으로 보여주며, KIS 종목 설정 상태를 상세히 노출합니다.
 
 ---
 
@@ -138,6 +139,7 @@
 
 | 메서드 | 호출 엔드포인트 |
 |---|---|
+| `fetchKisSymbolDetail(symbol)` | `GET /market/symbols/kis/detail?symbol={symbol}` |
 | `fetchDecisionConsoleSummary()` | `GET /api/decision-console/summary` |
 | `fetchDecisionConsoleStrategies()` | `GET /api/decision-console/strategies` |
 | `fetchDecisionConsoleStrategyTrace(id)` | `GET /api/decision-console/strategies/{id}/trace` |

@@ -255,3 +255,154 @@ async def test_get_exchange_orders(tmp_path):
     assert res[0]["uuid"] == "dummy-order-uuid"
     assert res[0]["side"] == "BUY"
     assert res[0]["state"] == "done"
+
+
+from src.server.routers.market import get_kis_symbol_detail
+
+@pytest.mark.asyncio
+async def test_get_kis_symbol_detail_from_db(tmp_path):
+    db_file = tmp_path / "test_ats.db"
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.db_path = str(db_file)
+
+    # 임시 DB에 테이블 생성 및 미리 메타데이터 적재
+    import aiosqlite
+    async with aiosqlite.connect(str(db_file)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS kis_stock_info (
+                symbol TEXT PRIMARY KEY,
+                prdt_name TEXT,
+                prdt_abrv_name TEXT,
+                mket_id_cd TEXT,
+                scty_grp_id_cd TEXT,
+                excg_dvsn_cd TEXT,
+                lstg_stqt INTEGER,
+                lstg_cptl_amt INTEGER,
+                cpta INTEGER,
+                papr REAL,
+                issu_pric REAL,
+                kospi200_item_yn TEXT,
+                scts_mket_lstg_dt TEXT,
+                kosdaq_mket_lstg_dt TEXT,
+                lstg_abol_dt TEXT,
+                std_pdno TEXT,
+                prdt_eng_name TEXT,
+                tr_stop_yn TEXT,
+                admn_item_yn TEXT,
+                thdt_clpr REAL,
+                bfdy_clpr REAL,
+                std_idst_clsf_cd_name TEXT,
+                idx_bztp_lcls_cd_name TEXT,
+                idx_bztp_mcls_cd_name TEXT,
+                idx_bztp_scls_cd_name TEXT,
+                cptt_trad_tr_psbl_yn TEXT,
+                nxt_tr_stop_yn TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            INSERT INTO kis_stock_info (symbol, prdt_name, prdt_abrv_name, cptt_trad_tr_psbl_yn, nxt_tr_stop_yn)
+            VALUES (?, ?, ?, ?, ?)
+        """, ("047040", "대우건설보통주", "대우건설", "N", "N"))
+        await db.commit()
+
+    res = await get_kis_symbol_detail(request, symbol="047040")
+    assert res["symbol"] == "047040"
+    assert res["prdt_abrv_name"] == "대우건설"
+    assert res["cptt_trad_tr_psbl_yn"] == "N"
+
+
+@pytest.mark.asyncio
+async def test_get_kis_symbol_detail_from_api_fallback(tmp_path):
+    db_file = tmp_path / "test_ats.db"
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.db_path = str(db_file)
+    
+    # CredentialProvider Mocking
+    request.app.state.system.cred_provider.get_kis_access_token = AsyncMock(return_value="mock_token")
+    request.app.state.system.config_manager.get.return_value = {
+        'app_key': 'mock_app_key',
+        'app_secret': 'mock_app_secret',
+        'api_url': 'https://api.dummy'
+    }
+
+    # 임시 DB에 테이블 생성만 함 (데이터는 없음)
+    import aiosqlite
+    async with aiosqlite.connect(str(db_file)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS kis_stock_info (
+                symbol TEXT PRIMARY KEY,
+                prdt_name TEXT,
+                prdt_abrv_name TEXT,
+                mket_id_cd TEXT,
+                scty_grp_id_cd TEXT,
+                excg_dvsn_cd TEXT,
+                lstg_stqt INTEGER,
+                lstg_cptl_amt INTEGER,
+                cpta INTEGER,
+                papr REAL,
+                issu_pric REAL,
+                kospi200_item_yn TEXT,
+                scts_mket_lstg_dt TEXT,
+                kosdaq_mket_lstg_dt TEXT,
+                lstg_abol_dt TEXT,
+                std_pdno TEXT,
+                prdt_eng_name TEXT,
+                tr_stop_yn TEXT,
+                admn_item_yn TEXT,
+                thdt_clpr REAL,
+                bfdy_clpr REAL,
+                std_idst_clsf_cd_name TEXT,
+                idx_bztp_lcls_cd_name TEXT,
+                idx_bztp_mcls_cd_name TEXT,
+                idx_bztp_scls_cd_name TEXT,
+                cptt_trad_tr_psbl_yn TEXT,
+                nxt_tr_stop_yn TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.commit()
+
+    # KIS API Mock 응답
+    mock_api_response = {
+        "rt_cd": "0",
+        "output": {
+            "pdno": "005930",
+            "prdt_name": "삼성전자보통주",
+            "prdt_abrv_name": "삼성전자",
+            "cptt_trad_tr_psbl_yn": "Y",
+            "nxt_tr_stop_yn": "N"
+        },
+        "msg1": "정상처리"
+    }
+
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.json.return_value = mock_api_response
+
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def get(self, url, **kwargs):
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+
+    with patch('aiohttp.ClientSession', MockClientSession):
+        res = await get_kis_symbol_detail(request, symbol="005930")
+        assert res["prdt_abrv_name"] == "삼성전자"
+        assert res["cptt_trad_tr_psbl_yn"] == "Y"
+
+        # DB에 캐싱이 완료되었는지 확인
+        async with aiosqlite.connect(str(db_file)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT * FROM kis_stock_info WHERE symbol = ?", ("005930",)) as cursor:
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row["prdt_abrv_name"] == "삼성전자"
+                assert row["cptt_trad_tr_psbl_yn"] == "Y"
+

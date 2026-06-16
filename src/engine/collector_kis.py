@@ -55,8 +55,9 @@ class KisCollector(BaseCollector):
     async def _subscribe(self, ws, config: Dict[str, Any]):
         approval_key = await self.cred_provider.get_kis_approval_key()
         for symbol_code in self.available_symbols:
-            tr_id_cnt = 'H0UNCNT0'
-            tr_id_mko = 'H0UNMKO0'
+            market = self.symbol_market_map.get(symbol_code, "J")
+            tr_id_cnt = 'H0UNCNT0' if market == "UN" else 'H0STCNT0'
+            tr_id_mko = 'H0UNMKO0' if market == "UN" else 'H0STMKO0'
             
             # 1. 실시간 체결 구독
             subscribe_msg_cnt = {
@@ -257,7 +258,139 @@ class KisCollector(BaseCollector):
                 return False
             logger.error("Failed to get approval key. Retrying in 10s...")
             return False
+        
+        # 종목별 Nextrade 정보 사전 조회 및 동기화
+        await self._detect_symbol_markets(self.available_symbols)
         return True
+
+    async def _detect_symbol_markets(self, symbols: List[str]):
+        """종목별 Nextrade 거래 가능 여부를 판단하여 self.symbol_market_map에 매핑하고 DB에 캐싱합니다."""
+        db_path = self.config.get('db_path', 'data/backtest.db') if hasattr(self, 'config') and self.config else 'data/backtest.db'
+        from src.database.connection import get_db_conn
+        
+        # 1. 먼저 DB에서 존재하는 정보 조회
+        symbols_to_fetch = []
+        try:
+            async with get_db_conn(db_path) as db:
+                for symbol in symbols:
+                    async with db.execute(
+                        "SELECT cptt_trad_tr_psbl_yn, nxt_tr_stop_yn FROM kis_stock_info WHERE symbol = ?", 
+                        (symbol,)
+                    ) as cursor:
+                        row = await cursor.fetchone()
+                        if row:
+                            psbl = row['cptt_trad_tr_psbl_yn']
+                            stop = row['nxt_tr_stop_yn']
+                            self.symbol_market_map[symbol] = "UN" if (psbl == "Y" and stop != "Y") else "J"
+                        else:
+                            symbols_to_fetch.append(symbol)
+        except Exception as e:
+            logger.error(f"[KIS] DB에서 stock_info 조회 실패: {e}")
+            symbols_to_fetch = list(symbols)
+
+        if not symbols_to_fetch:
+            return
+
+        # 2. DB에 없는 종목은 KIS OpenAPI CTPF1002R 호출
+        kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}
+        api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+        url = f"{api_url}/uapi/domestic-stock/v1/quotations/search-stock-info"
+
+        if not self.session or self.session.closed:
+            self.session = aiohttp.ClientSession()
+
+        for symbol in symbols_to_fetch:
+            token = await self.cred_provider.get_kis_access_token()
+            if not token:
+                logger.error(f"[KIS] {symbol} 정보 조회를 위한 KIS access token 발급 실패")
+                self.symbol_market_map[symbol] = "J" # fallback
+                continue
+
+            app_key = kis_config.get('app_key')
+            app_secret = kis_config.get('app_secret')
+
+            headers = {
+                "Content-Type": "application/json",
+                "authorization": f"Bearer {token}",
+                "appkey": str(app_key) if app_key else "",
+                "appsecret": str(app_secret) if app_secret else "",
+                "tr_id": "CTPF1002R",
+                "custtype": "P"
+            }
+            params = {
+                "PRDT_TYPE_CD": "300",
+                "PDNO": symbol
+            }
+
+            try:
+                async with self.session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"[KIS] {symbol} 주식기본조회 실패 (HTTP {resp.status}): {body}")
+                        self.symbol_market_map[symbol] = "J"
+                        continue
+                    
+                    data = await resp.json()
+                    if data.get('rt_cd') != '0':
+                        logger.error(f"[KIS] {symbol} 주식기본조회 API 오류: {data.get('msg1')}")
+                        self.symbol_market_map[symbol] = "J"
+                        continue
+
+                    output = data.get('output', {})
+                    psbl = output.get('cptt_trad_tr_psbl_yn', 'N')
+                    stop = output.get('nxt_tr_stop_yn', 'N')
+
+                    self.symbol_market_map[symbol] = "UN" if (psbl == "Y" and stop != "Y") else "J"
+
+                    # DB에 캐싱 저장
+                    async with get_db_conn(db_path) as db:
+                        await db.execute("""
+                            INSERT OR REPLACE INTO kis_stock_info (
+                                symbol, prdt_name, prdt_abrv_name, mket_id_cd, scty_grp_id_cd, excg_dvsn_cd,
+                                lstg_stqt, lstg_cptl_amt, cpta, papr, issu_pric, kospi200_item_yn,
+                                scts_mket_lstg_dt, kosdaq_mket_lstg_dt, lstg_abol_dt, std_pdno, prdt_eng_name,
+                                tr_stop_yn, admn_item_yn, thdt_clpr, bfdy_clpr, std_idst_clsf_cd_name,
+                                idx_bztp_lcls_cd_name, idx_bztp_mcls_cd_name, idx_bztp_scls_cd_name,
+                                cptt_trad_tr_psbl_yn, nxt_tr_stop_yn, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        """, (
+                            symbol,
+                            output.get('prdt_name'),
+                            output.get('prdt_abrv_name'),
+                            output.get('mket_id_cd'),
+                            output.get('scty_grp_id_cd'),
+                            output.get('excg_dvsn_cd'),
+                            int(output.get('lstg_stqt') or 0) if output.get('lstg_stqt') else None,
+                            int(output.get('lstg_cptl_amt') or 0) if output.get('lstg_cptl_amt') else None,
+                            int(output.get('cpta') or 0) if output.get('cpta') else None,
+                            float(output.get('papr') or 0) if output.get('papr') else None,
+                            float(output.get('issu_pric') or 0) if output.get('issu_pric') else None,
+                            output.get('kospi200_item_yn'),
+                            output.get('scts_mket_lstg_dt') or output.get('kosdaq_mket_lstg_dt'),
+                            output.get('kosdaq_mket_lstg_dt'),
+                            output.get('lstg_abol_dt'),
+                            output.get('std_pdno'),
+                            output.get('prdt_eng_name'),
+                            output.get('tr_stop_yn'),
+                            output.get('admn_item_yn'),
+                            float(output.get('thdt_clpr') or 0) if output.get('thdt_clpr') else None,
+                            float(output.get('bfdy_clpr') or 0) if output.get('bfdy_clpr') else None,
+                            output.get('std_idst_clsf_cd_name'),
+                            output.get('idx_bztp_lcls_cd_name'),
+                            output.get('idx_bztp_mcls_cd_name'),
+                            output.get('idx_bztp_scls_cd_name'),
+                            psbl,
+                            stop
+                        ))
+                        await db.commit()
+                    
+                    logger.info(f"[KIS] {symbol} 기본정보 동기화 완료: Nextrade 여부(가능={psbl}, 정지={stop}) -> Market {self.symbol_market_map[symbol]}")
+            except Exception as e:
+                logger.error(f"[KIS] {symbol} 기본정보 동기화 실패: {e}")
+                self.symbol_market_map[symbol] = "J"
+
+            # 과도한 API 호출 방지를 위해 딜레이 부여
+            await asyncio.sleep(0.05)
 
 
     async def _handle_connection_error(self, error: Exception):
@@ -283,7 +416,12 @@ class KisCollector(BaseCollector):
                 self.available_symbols.append(code)
                 logger.info(f"[KIS] 동적 수집 종목 추가: {code}")
             
-            tr_id_cnt = 'H0UNCNT0'
+            # 동적으로 추가된 종목도 Nextrade 여부 판별 수행
+            if code not in self.symbol_market_map:
+                await self._detect_symbol_markets([code])
+            
+            market = self.symbol_market_map.get(code, "J")
+            tr_id_cnt = 'H0UNCNT0' if market == "UN" else 'H0STCNT0'
             
             # 웹소켓 구독 등록
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
@@ -300,7 +438,7 @@ class KisCollector(BaseCollector):
                             "input": {
                                 "tr_id": tr_id_cnt,
                                 "tr_key": code
-                            }
+                             }
                         }
                     }
                     await self.ws.send_json(subscribe_msg)
@@ -312,7 +450,8 @@ class KisCollector(BaseCollector):
                 self.available_symbols.remove(code)
                 logger.info(f"[KIS] 동적 수집 종목 제거: {code}")
             
-            tr_id_cnt = 'H0UNCNT0'
+            market = self.symbol_market_map.get(code, "J")
+            tr_id_cnt = 'H0UNCNT0' if market == "UN" else 'H0STCNT0'
             
             # 웹소켓 구독 해제
             if hasattr(self, 'ws') and self.ws and not self.ws.closed:
@@ -390,8 +529,9 @@ class KisCollector(BaseCollector):
                 "custtype": "P"
             }
 
+            market = self.symbol_market_map.get(symbol, "J")
             params = {
-                "FID_COND_MRKT_DIV_CODE": "UN",  # 통합 시장(KRX + NXT)으로 변경하여 대체거래소 연장 거래 수용
+                "FID_COND_MRKT_DIV_CODE": market,  # Nextrade 지원 상태에 따른 동적 시장 설정
                 "FID_INPUT_ISCD": symbol,
                 "FID_INPUT_HOUR_1": hour_str,
                 "FID_PW_DATA_INCU_YN": "Y",

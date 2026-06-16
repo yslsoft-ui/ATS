@@ -244,6 +244,11 @@ const APIClient = (() => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code, name, ...(isActive !== undefined && { is_active: isActive }) })
             }),
+            
+        /**
+         * KIS 특정 종목의 상세정보 조회
+         */
+        fetchKisSymbolDetail: (symbol) => _fetchAPI(`/market/symbols/kis/detail?symbol=${symbol}`),
 
 
 

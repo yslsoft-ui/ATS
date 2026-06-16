@@ -168,6 +168,32 @@
   - **설명**: KIS 국내 주식 등 수집 대상 종목을 동적으로 활성화(On)/비활성화(Off) 처리합니다.
   - **요청 Body (JSON)**: `{"symbol": "005930", "is_active": true}`
 
+- **`GET /market/symbols/kis/detail?symbol={symbol}`**
+  - **설명**: 특정 KIS 한국투자증권 종목의 상세 정보(대체거래소 Nextrade 지원 여부 포함)를 반환합니다. 로컬 DB(`kis_stock_info`)에 캐시된 정보가 있으면 반환하고, 없거나 캐시 유효성 만료 시 KIS API(CTPF1002R)를 직접 호출하여 조회한 뒤 DB에 캐싱하고 반환합니다.
+  - **Query Parameters**:
+    - `symbol` (필수): KIS 종목코드 (예: `005930`)
+  - **응답 (JSON)**:
+    ```json
+    {
+      "status": "success",
+      "data": {
+        "symbol": "005930",
+        "pdno": "005930",
+        "prdt_type_cd": "301",
+        "mket_id_cd": "STK",
+        "scts_grp_secn_opz_val": "001",
+        "stck_shrn_iscd": "005930",
+        "prdt_abrv_name": "삼성전자",
+        "prdt_eng_abrv_name": "SamsungElec",
+        "lstg_dt": "19750611",
+        "cptt_trad_tr_psbl_yn": "Y",
+        "nxt_tr_stop_yn": "N",
+        "last_updated": 1718020000.0,
+        "nxt_eligible": true
+      }
+    }
+    ```
+
 - **`POST /market/sync-assets`**
   - **설명**: 외부 마스터 파일(예: `stock_master.json`)을 기반으로 데이터베이스 자산 목록 및 한글명 매핑 사전을 동기화합니다.
 

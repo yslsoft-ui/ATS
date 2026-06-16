@@ -366,6 +366,118 @@
                 </div>
             </section>
 
+            <!-- KIS 종목 세부정보 뷰 -->
+            <section id="kis-detail-view" style="display: none;">
+                <header class="main-header" style="border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <button id="btn-kis-detail-back" class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px;">← 뒤로가기</button>
+                            <h1 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 1.5rem;">
+                                📊 KIS 종목 상세 정보
+                                <span id="kis-detail-title-name" style="color: #F8FAFC; font-weight: bold;">-</span>
+                                <span id="kis-detail-title-code" style="color: #94A3B8; font-size: 1.1rem; font-family: monospace;">(-)</span>
+                            </h1>
+                        </div>
+                        <div id="kis-detail-actions" style="display: flex; gap: 8px;">
+                            <button id="btn-kis-detail-collect" class="btn btn-primary" style="padding: 6px 14px; font-size: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; border: none; background: #3B82F6; color: #FFFFFF;">수집 활성화</button>
+                            <button id="btn-kis-detail-monitor" class="btn btn-success" style="padding: 6px 14px; font-size: 12px; border-radius: 4px; font-weight: bold; cursor: pointer; border: none; background: #10B981; color: #FFFFFF;">📈 실시간 차트 모니터링</button>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="kis-detail-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px;">
+                    <!-- 1. 대체거래소 (Nextrade) 거래 정보 -->
+                    <div class="kis-detail-card" style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">💡 대체거래소 (Nextrade) 거래 정보</h3>
+                        <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">Nextrade 가능 여부</div>
+                                <div id="kis-detail-nxt-tr-psbl" style="font-weight: bold; font-size: 1.1rem;">-</div>
+                            </div>
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">Nextrade 거래 정지 여부</div>
+                                <div id="kis-detail-nxt-tr-stop" style="font-weight: bold; font-size: 1.1rem;">-</div>
+                            </div>
+                            <div style="grid-column: span 2;">
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">예상 수집 채널 (tr_id)</div>
+                                <div id="kis-detail-sub-tr-id" style="font-family: monospace; font-weight: bold; color: #F59E0B;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. 주식 거래 상태 -->
+                    <div class="kis-detail-card" style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">⚙️ 주식 거래 상태</h3>
+                        <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">거래정지 여부</div>
+                                <div id="kis-detail-tr-stop" style="font-weight: bold;">-</div>
+                            </div>
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">관리종목 여부</div>
+                                <div id="kis-detail-admn-item" style="font-weight: bold;">-</div>
+                            </div>
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">당일 종가</div>
+                                <div id="kis-detail-thdt-clpr" style="font-family: monospace; font-weight: bold; color: #FF4B4B;">-</div>
+                            </div>
+                            <div>
+                                <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">전일 종가</div>
+                                <div id="kis-detail-bfdy-clpr" style="font-family: monospace; font-weight: bold; color: #94A3B8;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. 기업 상세 제원 -->
+                    <div class="kis-detail-card" style="grid-column: span 2; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">🏢 기업 상세 제원</h3>
+                        <div class="info-table-wrapper">
+                            <table class="detail-table" style="width: 100%; border-collapse: collapse;">
+                                <style>
+                                    .detail-table td { padding: 12px 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.05); }
+                                    .detail-table td.label { color: #94A3B8; font-size: 0.9rem; width: 20%; font-weight: 500; }
+                                    .detail-table td.value { color: #F8FAFC; font-weight: bold; font-family: 'Roboto Mono', monospace; font-size: 0.95rem; }
+                                </style>
+                                <tr>
+                                    <td class="label">시장구분</td>
+                                    <td class="value" id="kis-detail-market-id">-</td>
+                                    <td class="label">증권그룹</td>
+                                    <td class="value" id="kis-detail-scty-grp">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">상장주식수</td>
+                                    <td class="value" id="kis-detail-lstg-stqt">-</td>
+                                    <td class="label">상장자본금액</td>
+                                    <td class="value" id="kis-detail-lstg-cptl">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">자본금</td>
+                                    <td class="value" id="kis-detail-cpta">-</td>
+                                    <td class="label">액면가 / 발행가</td>
+                                    <td class="value"><span id="kis-detail-papr">-</span> / <span id="kis-detail-issu-pric">-</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="label">상장일자</td>
+                                    <td class="value" id="kis-detail-lstg-dt">-</td>
+                                    <td class="label">코스피200 여부</td>
+                                    <td class="value" id="kis-detail-k200-yn">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">표준산업분류명</td>
+                                    <td class="value" id="kis-detail-std-idst-name" colspan="3">-</td>
+                                </tr>
+                                <tr>
+                                    <td class="label">지수업종대분류</td>
+                                    <td class="value" id="kis-detail-lcls-name">-</td>
+                                    <td class="label">지수업종중분류</td>
+                                    <td class="value" id="kis-detail-mcls-name">-</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
             <!-- 알림 뷰 (초기엔 숨김) -->
             <section id="alert-view" style="display: none;">
                 <header class="main-header"
@@ -2312,6 +2424,7 @@
     <script src="chart.js"></script>
     <script src="alerts.js"></script>
     <script src="market.js"></script>
+    <script src="kis-detail.js"></script>
     <script src="portfolio-adapter.js"></script>
     <script src="portfolio-chart.js"></script>
     <script src="portfolio-view.js"></script>

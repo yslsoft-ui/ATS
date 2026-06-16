@@ -856,6 +856,124 @@ async def fetch_ranking(request: Request, tr_id: str):
         logger.error(f"Network error calling KIS ranking {tr_id}: {e}")
         raise HTTPException(status_code=500, detail=f"네트워크 오류: {str(e)}")
 
+@router.get("/market/symbols/kis/detail")
+async def get_kis_symbol_detail(request: Request, symbol: str):
+    """KIS 종목의 상세 정보(Nextrade 가능여부 등)를 반환합니다. (DB 조회 및 OpenAPI Fallback)"""
+    system = request.app.state.system
+    db_path = system.db_path
+    from src.database.connection import get_db_conn
+    
+    # 1. DB에서 먼저 조회
+    try:
+        async with get_db_conn(db_path) as db:
+            async with db.execute(
+                "SELECT * FROM kis_stock_info WHERE symbol = ?", (symbol,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row:
+                    # Row 데이터를 dict 형태로 가공하여 반환
+                    data_dict = dict(row)
+                    # 프론트엔드 호환성을 위해 thdt_clpr 등을 문자열 형태로 반환
+                    return data_dict
+    except Exception as e:
+        logger.error(f"[get_kis_symbol_detail] DB 조회 오류 (symbol={symbol}): {e}")
+
+    # 2. DB에 데이터가 없거나 조회에 실패한 경우 KIS OpenAPI 직접 호출하여 DB에 캐싱하고 반환
+    token = await system.cred_provider.get_kis_access_token()
+    if not token:
+        raise HTTPException(status_code=401, detail="KIS access token 발급 실패")
+
+    kis_config = system.config_manager.get('exchanges.kis', {})
+    app_key = kis_config.get('app_key')
+    app_secret = kis_config.get('app_secret')
+    api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+    url = f"{api_url}/uapi/domestic-stock/v1/quotations/search-stock-info"
+
+    headers = {
+        "Content-Type": "application/json",
+        "authorization": f"Bearer {token}",
+        "appkey": str(app_key) if app_key is not None else "",
+        "appsecret": str(app_secret) if app_secret is not None else "",
+        "tr_id": "CTPF1002R",
+        "custtype": "P"
+    }
+    params = {
+        "PRDT_TYPE_CD": "300",
+        "PDNO": symbol
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    logger.error(f"[get_kis_symbol_detail] KIS API 오류: {resp.status} - {text}")
+                    raise HTTPException(status_code=resp.status, detail=f"KIS API 오류: {text}")
+
+                data = await resp.json()
+                if data.get('rt_cd') != '0':
+                    raise HTTPException(status_code=400, detail=f"KIS API 에러: {data.get('msg1')}")
+
+                output = data.get('output', {})
+                if not output:
+                    raise HTTPException(status_code=404, detail="종목 상세 정보가 없습니다.")
+
+                psbl = output.get('cptt_trad_tr_psbl_yn', 'N')
+                stop = output.get('nxt_tr_stop_yn', 'N')
+
+                # DB 저장 시도
+                try:
+                    async with get_db_conn(db_path) as db:
+                        await db.execute("""
+                            INSERT OR REPLACE INTO kis_stock_info (
+                                symbol, prdt_name, prdt_abrv_name, mket_id_cd, scty_grp_id_cd, excg_dvsn_cd,
+                                lstg_stqt, lstg_cptl_amt, cpta, papr, issu_pric, kospi200_item_yn,
+                                scts_mket_lstg_dt, kosdaq_mket_lstg_dt, lstg_abol_dt, std_pdno, prdt_eng_name,
+                                tr_stop_yn, admn_item_yn, thdt_clpr, bfdy_clpr, std_idst_clsf_cd_name,
+                                idx_bztp_lcls_cd_name, idx_bztp_mcls_cd_name, idx_bztp_scls_cd_name,
+                                cptt_trad_tr_psbl_yn, nxt_tr_stop_yn, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                        """, (
+                            symbol,
+                            output.get('prdt_name'),
+                            output.get('prdt_abrv_name'),
+                            output.get('mket_id_cd'),
+                            output.get('scty_grp_id_cd'),
+                            output.get('excg_dvsn_cd'),
+                            int(output.get('lstg_stqt') or 0) if output.get('lstg_stqt') else None,
+                            int(output.get('lstg_cptl_amt') or 0) if output.get('lstg_cptl_amt') else None,
+                            int(output.get('cpta') or 0) if output.get('cpta') else None,
+                            float(output.get('papr') or 0) if output.get('papr') else None,
+                            float(output.get('issu_pric') or 0) if output.get('issu_pric') else None,
+                            output.get('kospi200_item_yn'),
+                            output.get('scts_mket_lstg_dt') or output.get('kosdaq_mket_lstg_dt'),
+                            output.get('kosdaq_mket_lstg_dt'),
+                            output.get('lstg_abol_dt'),
+                            output.get('std_pdno'),
+                            output.get('prdt_eng_name'),
+                            output.get('tr_stop_yn'),
+                            output.get('admn_item_yn'),
+                            float(output.get('thdt_clpr') or 0) if output.get('thdt_clpr') else None,
+                            float(output.get('bfdy_clpr') or 0) if output.get('bfdy_clpr') else None,
+                            output.get('std_idst_clsf_cd_name'),
+                            output.get('idx_bztp_lcls_cd_name'),
+                            output.get('idx_bztp_mcls_cd_name'),
+                            output.get('idx_bztp_scls_cd_name'),
+                            psbl,
+                            stop
+                        ))
+                        await db.commit()
+                except Exception as save_err:
+                    logger.error(f"[get_kis_symbol_detail] DB 캐싱 실패: {save_err}")
+
+                # 반환할 데이터에 updated_at 추가
+                output['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                return output
+    except Exception as e:
+        logger.error(f"[get_kis_symbol_detail] KIS API 호출 예외: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/market/symbols/kis/toggle")
 async def toggle_kis_symbol(request: Request, body: dict):
     """KIS 수집 종목을 토글하고 DB에 동기화한 뒤 ZMQ IPC 메시지를 퍼블리시합니다.

@@ -160,12 +160,17 @@ function renderMarketTable(data) {
             };
         }
 
-        // 클릭 시 모니터링 페이지로 전환
+        // 클릭 시 모니터링 또는 세부정보 뷰로 전환
         tr.addEventListener('click', () => {
-            if (state.currentMarketTab === 'kis' && !isCollected) {
-                showToast("수집 중이 아닌 종목은 모니터링할 수 없습니다. 수집을 먼저 시작하십시오.", "warning");
+            if (state.currentMarketTab === 'kis') {
+                Store.update({
+                    currentExchange: 'kis',
+                    currentSymbol: coin.market
+                });
+                ViewRouter.navigateTo('kis-detail-view');
                 return;
             }
+            
             Store.update({
                 currentExchange: coin.exchange || 'upbit',
                 currentSymbol: coin.market

@@ -14,6 +14,7 @@ async def test_kis_collector_backfill_clipping_and_validation():
     # 1. 수집기 모의 초기화
     processing_queue = asyncio.Queue()
     collector = KisCollector(processing_queue=processing_queue)
+    collector.symbol_market_map = {"005930": "UN"}
     
     # 설정Mock 세팅
     collector.config = {
