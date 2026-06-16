@@ -188,7 +188,7 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    padding: 20px;
+    padding: 0 20px 20px 20px; /* Remove top padding to prevent scroll leak */
     overflow-y: auto;
 }
 
@@ -202,7 +202,6 @@ body {
     z-index: 100;
     background: var(--bg-color) !important; /* Matches theme dark background #0E1117 exactly */
     padding: 20px 0 15px 0;
-    margin-top: -20px; /* Negate .content top padding to block upward row leak completely */
     border-bottom: 1px solid var(--border-color); /* Premium separation line */
 }
 
