@@ -1266,7 +1266,7 @@ class SqliteTradingRepository(BaseTradingRepository):
                             'price': float(r['price'] or 0.0),
                             'quantity': float(r['executed_volume'] or 0.0),
                             'fee': float(r['fee'] or 0.0),
-                            'tax': float(r.get('tax') or 0.0),
+                            'tax': float(r['tax'] if 'tax' in r.keys() else 0.0),
                             'timestamp': ts,
                             'reason': '실거래 체결',
                             'context': {}
