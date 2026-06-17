@@ -32,14 +32,14 @@ async function loadRestoredCandles() {
 
             // 거래소 배지 생성
             let badgeStyle = '';
-            if (c.exchange === 'upbit') badgeStyle = 'background: #1e88e5; color: #ffffff;';
-            else if (c.exchange === 'bithumb') badgeStyle = 'background: #f57c00; color: #ffffff;';
-            else if (c.exchange === 'kis') badgeStyle = 'background: #e53935; color: #ffffff;';
+            if (c.exchange_id === 'upbit') badgeStyle = 'background: #1e88e5; color: #ffffff;';
+            else if (c.exchange_id === 'bithumb') badgeStyle = 'background: #f57c00; color: #ffffff;';
+            else if (c.exchange_id === 'kis') badgeStyle = 'background: #e53935; color: #ffffff;';
             else badgeStyle = 'background: #546e7a; color: #ffffff;';
-            const exBadge = `<span class="badge" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: bold; ${badgeStyle}">${c.exchange.toUpperCase()}</span>`;
+            const exBadge = `<span class="badge" style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: bold; ${badgeStyle}">${c.exchange_id.toUpperCase()}</span>`;
 
             // 한글 코인명 매핑 및 셀 데이터 구성
-            const nameKey = `${c.exchange}:${c.symbol}`;
+            const nameKey = `${c.exchange_id}:${c.symbol}`;
             const coinName = (state.symbolNames && state.symbolNames[nameKey]) ? state.symbolNames[nameKey] : c.symbol;
             const nameCell = `<span style="font-weight: bold; color: #F8FAFC;">${coinName}</span> <span style="font-size: 0.75rem; color: #94A3B8; font-family: 'Roboto Mono', monospace;">(${c.symbol})</span>`;
 

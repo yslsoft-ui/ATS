@@ -218,9 +218,9 @@ const APIClient = (() => {
         /**
          * DB에 누락되었으나 틱으로 복구된 캔들 목록 조회
          */
-        fetchRestoredCandles: (exchange, symbol, limitMinutes = 1440) => {
+        fetchRestoredCandles: (exchange_id, symbol, limitMinutes = 1440) => {
             let url = `/restored-candles?limit_minutes=${limitMinutes}`;
-            if (exchange && exchange !== 'all') url += `&exchange=${exchange}`;
+            if (exchange_id && exchange_id !== 'all') url += `&exchange_id=${exchange_id}`;
             if (symbol && symbol !== 'all') url += `&symbol=${symbol}`;
             return _fetchAPI(url);
         },
