@@ -226,6 +226,24 @@ const APIClient = (() => {
         },
 
         /**
+         * DB의 candles에는 존재하지만 trades에는 체결 틱이 0건인 고스트 캔들 목록 조회
+         */
+        fetchGhostCandles: (exchange_id, symbol, limitMinutes = 1440) => {
+            let url = `/ghost-candles?limit_minutes=${limitMinutes}`;
+            if (exchange_id && exchange_id !== 'all') url += `&exchange_id=${exchange_id}`;
+            if (symbol && symbol !== 'all') url += `&symbol=${symbol}`;
+            return _fetchAPI(url);
+        },
+
+        /**
+         * 특정 캔들 데이터 영구 삭제
+         */
+        deleteCandle: (exchange_id, symbol, interval, timestamp) => {
+            const url = `/candles?exchange_id=${exchange_id}&symbol=${symbol}&interval=${interval}&timestamp=${timestamp}`;
+            return _fetchAPI(url, { method: 'DELETE' });
+        },
+
+        /**
          * KIS 순위분석 항목 목록 조회
          */
         fetchRankingTypes: () => _fetchAPI('/market/ranking/types'),

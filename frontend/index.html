@@ -1729,16 +1729,20 @@
                     </div>
                 </header>
 
+                <div class="market-tabs" style="margin-bottom: 20px;">
+                    <button class="market-tab active" id="btn-tab-missing" onclick="switchRestoredTab('missing')">DB 누락 캔들 (복구 대상)</button>
+                    <button class="market-tab" id="btn-tab-ghost" onclick="switchRestoredTab('ghost')">고스트 캔들 (삭제 대상)</button>
+                </div>
 
-                <div class="restored-summary-banner"
+                <div class="restored-summary-banner" id="restored-info-banner"
                     style="background: rgba(30, 41, 59, 0.4); border: 1px solid rgba(148, 163, 184, 0.15); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <h3 style="margin-top: 0; margin-bottom: 8px; color: #F8FAFC; font-size: 1.05rem;">💡 모니터링 안내</h3>
-                    <p style="margin: 0; color: #94A3B8; font-size: 0.85rem; line-height: 1.5;">
+                    <h3 style="margin-top: 0; margin-bottom: 8px; color: #F8FAFC; font-size: 1.05rem;" id="restored-banner-title">💡 모니터링 안내</h3>
+                    <p style="margin: 0; color: #94A3B8; font-size: 0.85rem; line-height: 1.5;" id="restored-banner-desc">
                         데이터베이스(<code>candles</code> 테이블)에 기록되지 않았으나, 체결 내역(<code>trades</code> 테이블)을 기반으로 임시 복원(재조립) 가능한
                         1분봉 목록입니다.<br>
                         이 목록에 나타나는 캔들들은 DB 적재 유실이 실제로 발생했던 구간을 나타냅니다.
                     </p>
-                    <p
+                    <p id="restored-banner-warning"
                         style="margin: 10px 0 0 0; color: #64748B; font-size: 0.8rem; line-height: 1.6; border-top: 1px solid rgba(148,163,184,0.1); padding-top: 10px;">
                         ⚠️ <strong style="color: #94A3B8;">일시적 깜박임 현상 (정상 동작)</strong><br>
                         매 분이 끝나는 순간, 체결 틱은 즉시 DB에 저장되지만 분봉 캔들은 최대 약 0.5초 후 배치로 기록됩니다.
@@ -1747,20 +1751,20 @@
                     </p>
                 </div>
 
-                <div class="market-table-wrapper" style="max-height: calc(100vh - 280px); overflow-y: auto;">
+                <div class="market-table-wrapper" style="max-height: calc(100vh - 330px); overflow-y: auto;">
                     <table id="restored-table">
                         <thead>
                             <tr>
                                 <th style="width: 60px; text-align: center;">순번</th>
                                 <th style="text-align: center; width: 100px;">거래소</th>
                                 <th style="text-align: left; width: 120px;">종목 (Symbol)</th>
-                                <th style="text-align: left;">복원 시간 (Timestamp)</th>
+                                <th style="text-align: left;" id="restored-time-header">복원 시간 (Timestamp)</th>
                                 <th style="text-align: right;">시가 (Open)</th>
                                 <th style="text-align: right;">고가 (High)</th>
                                 <th style="text-align: right;">저가 (Low)</th>
                                 <th style="text-align: right;">종가 (Close)</th>
                                 <th style="text-align: right;">거래량 (Volume)</th>
-                                <th style="text-align: center; width: 100px;">조립 틱 개수</th>
+                                <th style="text-align: center; width: 100px;" id="restored-action-header">조립 틱 개수</th>
                             </tr>
                         </thead>
                         <tbody id="restored-tbody">

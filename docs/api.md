@@ -178,6 +178,44 @@
       ]
       ```
 
+- **`GET /ghost-candles?exchange_id={exchange_id}&symbol={symbol}&limit_minutes={min}`**
+  - **설명**: DB의 `candles`에는 존재하지만 `trades`에는 체결 틱이 0건인 고스트 캔들 목록을 조회합니다.
+    - **쿼리 파라미터**:
+      - `exchange_id` (선택): 특정 거래소 필터 (`upbit`, `bithumb`, `kis`).
+      - `symbol` (선택): 특정 종목 필터 (예: `BTC`).
+      - `limit_minutes` (선택, 기본값: `1440`): 조회할 과거 범위 (분 단위).
+    - **응답 (JSON)**:
+      ```json
+      [
+        {
+          "exchange_id": "kis",
+          "symbol": "005930",
+          "timestamp": 1781735040,
+          "open": 70000.0,
+          "high": 70500.0,
+          "low": 69900.0,
+          "close": 70200.0,
+          "volume": 1000.0,
+          "tick_count": 0
+        }
+      ]
+      ```
+
+- **`DELETE /candles?exchange_id={exchange_id}&symbol={symbol}&interval={seconds}&timestamp={seconds}`**
+  - **설명**: 지정한 캔들 데이터를 DB에서 영구 삭제합니다.
+    - **쿼리 파라미터 (필수)**:
+      - `exchange_id`: 삭제할 캔들의 거래소 ID.
+      - `symbol`: 삭제할 캔들의 종목 기호.
+      - `interval`: 삭제할 캔들의 분봉 간격 (초 단위, 예: 1분봉은 60).
+      - `timestamp`: 삭제할 캔들의 시작 Unix Timestamp.
+    - **응답 (JSON)**:
+      ```json
+      {
+        "status": "success",
+        "message": "Candle deleted successfully."
+      }
+      ```
+
 - **`GET /market/ranking/types`**
   - **설명**: KIS OpenAPI가 지원하는 22종 순위 분석 항목(시가총액 상위, 배당률 상위, 거래량 급증 등)의 TR_ID와 설명 목록을 반환합니다.
 

@@ -229,14 +229,18 @@ class BaseCollector(ABC):
                     from datetime import datetime
                     kst = ZoneInfo('Asia/Seoul')
                     expected_timestamps = []
+                    current_date = datetime.fromtimestamp(current_time, tz=kst).date()
                     for ts in raw_expected:
                         dt = datetime.fromtimestamp(ts, tz=kst)
+                        # KIS API는 당일 분봉만 제공하므로 당일 타임스탬프만 수집 대상으로 한정
+                        if dt.date() != current_date:
+                            continue
                         # 주말 제외
                         if dt.weekday() >= 5:
                             continue
-                        # KIS 거래 시간(정규+대체): KST 08:30 ~ 20:00 (510분 ~ 1200분)
+                        # KIS 거래 시간(정규+대체): KST 08:00 ~ 20:00 (480분 ~ 1200분)
                         m_val = dt.hour * 60 + dt.minute
-                        if 510 <= m_val < 1200:
+                        if 480 <= m_val < 1200:
                             expected_timestamps.append(ts)
                 else:
                     expected_timestamps = list(raw_expected)

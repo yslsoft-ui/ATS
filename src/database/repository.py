@@ -90,6 +90,31 @@ class BaseMarketDataRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
+    async def get_ghost_candles(
+        self,
+        exchange_id: Optional[str] = None,
+        symbol: Optional[str] = None,
+        limit_minutes: int = 1440
+    ) -> List[Dict[str, Any]]:
+        """
+        DB의 candles 테이블에는 존재하지만, trades 틱 테이블에는 체결 틱이 0건인 고스트 캔들 리스트를 반환합니다.
+        """
+        pass
+
+    @abc.abstractmethod
+    async def delete_candle(
+        self,
+        exchange_id: str,
+        symbol: str,
+        interval: int,
+        timestamp: int
+    ) -> bool:
+        """
+        지정한 캔들 데이터를 DB에서 영구 삭제합니다.
+        """
+        pass
+
+    @abc.abstractmethod
     async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
         0으로 마비된 KIS 실시간 캐시 복구를 위해 DB에서 최근 가격 및 변동 지표 데이터를 획득합니다.
@@ -459,6 +484,92 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             sorted_restored = sorted(restored.values(), key=lambda x: x['timestamp'], reverse=True)
             return sorted_restored
 
+    async def get_ghost_candles(
+        self,
+        exchange_id: Optional[str] = None,
+        symbol: Optional[str] = None,
+        limit_minutes: int = 1440
+    ) -> List[Dict[str, Any]]:
+        end_time = int(time.time() // 60) * 60
+        start_time = end_time - limit_minutes * 60
+        
+        async with get_db_conn(self.db_path) as db:
+            # 1. 대상 범위 내의 모든 1분봉 조회
+            query_candles = """
+                SELECT exchange_id, symbol, timestamp, open, high, low, close, volume 
+                FROM candles 
+                WHERE interval = 60 AND timestamp BETWEEN ? AND ?
+            """
+            params_candles = [start_time, end_time]
+            if exchange_id:
+                query_candles += " AND exchange_id = ?"
+                params_candles.append(exchange_id)
+            if symbol:
+                query_candles += " AND symbol = ?"
+                params_candles.append(symbol)
+                
+            async with db.execute(query_candles, params_candles) as cursor:
+                rows_candles = await cursor.fetchall()
+                
+            if not rows_candles:
+                return []
+                
+            # 2. 대상 범위 내의 trades 틱 그룹화하여 실제 체결이 발생한 분봉 버킷 구하기
+            query_trades = """
+                SELECT exchange_id, symbol, (trade_timestamp / 1000 / 60) * 60 AS bucket
+                FROM trades
+                WHERE trade_timestamp BETWEEN ? AND ?
+            """
+            params_trades = [start_time * 1000, end_time * 1000]
+            if exchange_id:
+                query_trades += " AND exchange_id = ?"
+                params_trades.append(exchange_id)
+            if symbol:
+                query_trades += " AND symbol = ?"
+                params_trades.append(symbol)
+                
+            query_trades += " GROUP BY exchange_id, symbol, bucket"
+            
+            async with db.execute(query_trades, params_trades) as cursor:
+                rows_trades = await cursor.fetchall()
+                valid_buckets = set((r[0], r[1], r[2]) for r in rows_trades)
+                
+            # 3. candles 중 valid_buckets에 없는 건들(즉, 체결 틱이 0건인 건들)만 고스트로 검출
+            ghosts = []
+            for r in rows_candles:
+                ex, sym, ts, op, hp, lp, cp, vol = r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]
+                if (ex, sym, ts) not in valid_buckets:
+                    ghosts.append({
+                        'exchange_id': ex,
+                        'symbol': sym,
+                        'timestamp': ts,
+                        'open': op,
+                        'high': hp,
+                        'low': lp,
+                        'close': cp,
+                        'volume': vol,
+                        'tick_count': 0
+                    })
+                    
+            ghosts.sort(key=lambda x: x['timestamp'], reverse=True)
+            return ghosts
+
+    async def delete_candle(
+        self,
+        exchange_id: str,
+        symbol: str,
+        interval: int,
+        timestamp: int
+    ) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            query = """
+                DELETE FROM candles 
+                WHERE exchange_id = ? AND symbol = ? AND interval = ? AND timestamp = ?
+            """
+            cursor = await db.execute(query, [exchange_id, symbol, interval, timestamp])
+            await db.commit()
+            return cursor.rowcount > 0
+
     async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
         db_price = 0.0
         db_high = 0.0
@@ -676,6 +787,28 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
         limit_minutes: int = 1440
     ) -> List[Dict[str, Any]]:
         return []
+
+    async def get_ghost_candles(
+        self,
+        exchange_id: Optional[str] = None,
+        symbol: Optional[str] = None,
+        limit_minutes: int = 1440
+    ) -> List[Dict[str, Any]]:
+        return []
+
+    async def delete_candle(
+        self,
+        exchange_id: str,
+        symbol: str,
+        interval: int,
+        timestamp: int
+    ) -> bool:
+        key = self._get_key(exchange_id, symbol)
+        if key in self.candles_store:
+            original_len = len(self.candles_store[key])
+            self.candles_store[key] = [c for c in self.candles_store[key] if not (c.get('interval') == interval and c.get('timestamp') == timestamp)]
+            return len(self.candles_store[key]) < original_len
+        return False
 
     async def warm_up_kis_cache(self, symbol: str) -> Optional[Dict[str, Any]]:
         return None

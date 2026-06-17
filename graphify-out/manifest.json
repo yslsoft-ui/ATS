@@ -525,8 +525,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/restored-view.js": {
-    "mtime": 1781690578.5980017,
-    "ast_hash": "23b3a0598546fb7a71cc1aed0833d5d9",
+    "mtime": 1781735893.295771,
+    "ast_hash": "214c57c9e4a6a2072a7aa0b2516123f9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/utils.js": {
@@ -565,8 +565,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/client.js": {
-    "mtime": 1781689895.5124512,
-    "ast_hash": "ee542114e7d775f16fbeb070fc7f5e38",
+    "mtime": 1781735421.9220543,
+    "ast_hash": "8da1e1bcbe687096193bda933ce4abbf",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/kis-detail.js": {
@@ -845,8 +845,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1781702387.6643455,
-    "ast_hash": "4e64500bc59b7aaba700a4e8ddcfe152",
+    "mtime": 1781735045.2741456,
+    "ast_hash": "82f6c073720eb1c8636dd659177d64eb",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_processor.py": {
@@ -1035,8 +1035,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/market.py": {
-    "mtime": 1781689882.1961823,
-    "ast_hash": "d58836525aaf5d03a103d37895ab44db",
+    "mtime": 1781735413.057868,
+    "ast_hash": "f2069102987094b456a5e2ea22463628",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
@@ -1050,8 +1050,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1781690544.9013414,
-    "ast_hash": "919f10aa586b529db17a42f88644fa71",
+    "mtime": 1781735408.361769,
+    "ast_hash": "cf9319d44ba5c0ab38afc657421a04db",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -1234,6 +1234,11 @@
     "ast_hash": "26e08f20f6aee5b2c48c6c5f0d30b8cf",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/tests/test_collector_kis_backfill_today_limit.py": {
+    "mtime": 1781735094.9031866,
+    "ast_hash": "2dd68d38957d1c2842369d4d3ba68205",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/tests/test_collector_legacy_characterization.py": {
     "mtime": 1781413971.5051095,
     "ast_hash": "3fd8f22d3ba3cc5befdb58fa90af1c02",
@@ -1395,8 +1400,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781614693.0390527,
-    "ast_hash": "55ccd156a4c18759173e69ff498537af",
+    "mtime": 1781735441.2624607,
+    "ast_hash": "01255032c1b77aa8b5ef64b35e447e74",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {

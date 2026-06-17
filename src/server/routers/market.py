@@ -123,6 +123,45 @@ async def get_restored_candles(
     )
 
 
+@router.get("/ghost-candles")
+async def get_ghost_candles(
+    exchange_id: Optional[str] = None,
+    symbol: Optional[str] = None,
+    limit_minutes: int = 1440
+):
+    """DB의 candles에는 존재하지만 trades에는 체결 틱이 0건인 고스트 캔들 목록 반환"""
+    if exchange_id and exchange_id not in ("upbit", "bithumb", "kis"):
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
+        
+    return await market_repo.get_ghost_candles(
+        exchange_id=exchange_id,
+        symbol=symbol,
+        limit_minutes=limit_minutes
+    )
+
+
+@router.delete("/candles")
+async def delete_candle(
+    exchange_id: str,
+    symbol: str,
+    interval: int,
+    timestamp: int
+):
+    """지정한 캔들 데이터 영구 삭제"""
+    if exchange_id not in ("upbit", "bithumb", "kis"):
+        raise HTTPException(status_code=400, detail=f"Unsupported exchange_id: '{exchange_id}'")
+        
+    success = await market_repo.delete_candle(
+        exchange_id=exchange_id,
+        symbol=symbol,
+        interval=interval,
+        timestamp=timestamp
+    )
+    if not success:
+        raise HTTPException(status_code=404, detail="Candle not found or already deleted.")
+    return {"status": "success", "message": "Candle deleted successfully."}
+
+
 @router.get("/market/ranking/types")
 async def get_ranking_types():
     """12종 순위 분석 항목의 제목, 설명, 연동할 TR_ID 목록을 반환합니다."""
