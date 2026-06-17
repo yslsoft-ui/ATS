@@ -498,6 +498,7 @@ class KisCollector(BaseCollector):
         candles: List[Candle] = []
         to_time = end_time
         prev_accum_val = None  # 페이지네이션 전체에 걸쳐 누적 거래대금을 추적하여 가짜 캔들 차단
+        active_date = None     # 첫 호출 시 확인된 영업일을 기준 영업일로 고정 (장외 시간/미래 조회 오동작 방지)
 
         if not self.session or self.session.closed:
             self.session = aiohttp.ClientSession()
@@ -559,6 +560,10 @@ class KisCollector(BaseCollector):
                         output2, 
                         key=lambda x: (x.get('stck_bsop_date', ''), x.get('stck_cntg_hour', ''))
                     )
+
+                    # 첫 호출 시 가장 최신 영업일을 기준 영업일로 고정 (장외 시간/미래 조회 오동작 방지)
+                    if active_date is None and output2_sorted:
+                        active_date = output2_sorted[-1].get('stck_bsop_date')
                     
                     batch_candles = []
                     min_ts = to_time
@@ -569,6 +574,10 @@ class KisCollector(BaseCollector):
                         time_str = item.get('stck_cntg_hour', '').zfill(6)
                         
                         if not date_str or not time_str:
+                            continue
+
+                        # 기준 영업일과 일치하지 않는 다른 영업일(미래의 오늘 날짜) 데이터 배제
+                        if active_date and date_str != active_date:
                             continue
 
                         # 누적 거래대금 파싱

@@ -525,8 +525,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/restored-view.js": {
-    "mtime": 1781103006.9345567,
-    "ast_hash": "774d5283b62fa59937343cbccf7bbbde",
+    "mtime": 1781690578.5980017,
+    "ast_hash": "23b3a0598546fb7a71cc1aed0833d5d9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/utils.js": {
@@ -724,6 +724,11 @@
     "ast_hash": "6fc771f4f29893ba5e6f715be2aaa4ef",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/src/engine/test_collector_kis.py": {
+    "mtime": 1781695376.7006512,
+    "ast_hash": "e7e8f672a5dc92160426968a5e78af9e",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/src/engine/collector_upbit.py": {
     "mtime": 1781413952.440493,
     "ast_hash": "c5a4cc1455715507ea561b5e4af3f707",
@@ -805,8 +810,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1781581757.8181112,
-    "ast_hash": "884ce21fd0e17d35d8d82cc842c8ff43",
+    "mtime": 1781695118.3616304,
+    "ast_hash": "e461e383c12e0e68a7b59b5e35e44b6f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/analyzer.py": {
@@ -1045,8 +1050,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1781653873.3781645,
-    "ast_hash": "757e6a408dbf14589614c847aa2b6be2",
+    "mtime": 1781690544.9013414,
+    "ast_hash": "919f10aa586b529db17a42f88644fa71",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -1410,8 +1415,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1781689906.792679,
-    "ast_hash": "284d4d8e8b82cf857c3f5c5c3f29ae58",
+    "mtime": 1781690536.7171807,
+    "ast_hash": "33aae18d5e7663f9d4e2ded94ef1499d",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
