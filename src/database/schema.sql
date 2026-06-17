@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS candles (
     close REAL,
     volume REAL,
     is_closed INTEGER DEFAULT 1,
+    is_backfill INTEGER DEFAULT 0,
     PRIMARY KEY (exchange_id, symbol, interval, timestamp)
 );
 

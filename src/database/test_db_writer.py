@@ -60,6 +60,8 @@ async def setup_test_db(db_path: str):
                 low REAL,
                 close REAL,
                 volume REAL,
+                is_closed INTEGER DEFAULT 1,
+                is_backfill INTEGER DEFAULT 0,
                 PRIMARY KEY (exchange_id, symbol, interval, timestamp)
             )
         ''')

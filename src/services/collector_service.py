@@ -46,12 +46,16 @@ class CandlePublishingQueue:
         self.db_writer.enqueue_candle(item)
         data_dict = asdict(item)
         data_dict['type'] = 'candle'
+        if getattr(item, 'is_backfill', False):
+            data_dict['is_backfill'] = True
         await self.event_bus.publish("market_data", data_dict)
 
     def put_nowait(self, item):
         self.db_writer.enqueue_candle(item)
         data_dict = asdict(item)
         data_dict['type'] = 'candle'
+        if getattr(item, 'is_backfill', False):
+            data_dict['is_backfill'] = True
         asyncio.create_task(self.event_bus.publish("market_data", data_dict))
 
 

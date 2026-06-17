@@ -279,6 +279,8 @@ erDiagram
         real low "저가 (Low)"
         real close "종가 (Close)"
         real volume "누적 체결 거래량"
+        integer is_closed "캔들 마감 여부 (0: 진행중, 1: 마감)"
+        integer is_backfill "백필 수집 여부 (0: 실시간 조립, 1: REST API 백필)"
     }
 
     ALERTS_실시간_알림 {
@@ -378,6 +380,15 @@ erDiagram
 | **low** | REAL | - | 저가 (Low) |
 | **close** | REAL | - | 종가 (Close) |
 | **volume** | REAL | - | 해당 기간 총 누적 거래량 (Volume) |
+| **is_closed** | INTEGER | DEFAULT 1 | 캔들 마감 여부 (0: 진행 중, 1: 마감) |
+| **is_backfill** | INTEGER | DEFAULT 0 | 백필 데이터를 통한 복구 여부 (0: 실시간 조립, 1: REST API 백필) |
+
+> [!NOTE]
+> **is_closed 필드의 실질적 운용 및 주의사항**
+> * **메모리(Memory) 레벨**: 실시간 틱 수집 엔진([CandleGenerator](file:///home/simon/ATS/src/engine/candles.py)) 내부에서는 1분 단위가 완성되기 직전까지 해당 캔들의 `is_closed`가 `False` 상태를 유지하며 틱이 업데이트됩니다. 분 경계를 넘겨 캔들이 완성되는 시점에 `True`로 플래그가 반전됩니다.
+> * **데이터베이스(DB) 레벨**: 현재 수집 파이프라인 구조상 미마감 캔들은 메모리 버퍼에서만 존재하며, DB(`candles` 테이블)로 적재되는 모든 캔들은 적재 시점에 `is_closed = 1(True)` 상태로 강제 전환되어 저장됩니다. 따라서 실제 DB 내 레코드의 `is_closed` 컬럼 값은 현재 아키텍처 기준 항상 `1`로 고정됩니다.
+> * **쿼리 필터링 목적**: 향후 미마감 캔들을 실시간으로 DB에 적재(Upsert)하는 형태로 아키텍처를 확장할 때, 전략 엔진이 미완성된 캔들의 종가를 가져와 지표를 오연산하는 오작동(Look-ahead bias)을 방지하기 위해 조회 쿼리(`WHERE is_closed = 1`)에서 안전장치 필터로 사용되고 있습니다.
+
 
 #### 2.2.5. alerts (급등락 실시간 알림)
 실시간 가격 급등락(Spike) 감지 또는 특정 지표 조건 돌파 시 발생한 이벤트를 영속화합니다.

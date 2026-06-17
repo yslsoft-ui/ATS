@@ -232,6 +232,10 @@ async def _init_db_core(target_path: str):
         await ensure_column(db, 'orders_history', 'tax', 'REAL DEFAULT 0.0')
         await ensure_column(db, 'real_orders', 'tax', 'REAL DEFAULT 0.0')
         
+        # candles 테이블에 is_closed 및 is_backfill 컬럼 추가
+        await ensure_column(db, 'candles', 'is_closed', 'INTEGER DEFAULT 1')
+        await ensure_column(db, 'candles', 'is_backfill', 'INTEGER DEFAULT 0')
+        
         # exchanges 테이블에 korean_name 컬럼 추가 및 데이터 보정
         await ensure_column(db, 'exchanges', 'korean_name', 'TEXT')
         await db.execute("UPDATE exchanges SET korean_name = '업비트' WHERE id = 'upbit'")

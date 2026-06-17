@@ -154,11 +154,11 @@ class DatabaseWriter:
             return
         query = """
         INSERT OR REPLACE INTO candles 
-        (exchange_id, symbol, interval, timestamp, open, high, low, close, volume) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (exchange_id, symbol, interval, timestamp, open, high, low, close, volume, is_closed, is_backfill) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         params = [
-            (c.exchange_id, c.symbol, c.interval, c.timestamp, c.open, c.high, c.low, c.close, c.volume)
+            (c.exchange_id, c.symbol, c.interval, c.timestamp, c.open, c.high, c.low, c.close, c.volume, int(getattr(c, 'is_closed', True)), int(getattr(c, 'is_backfill', False)))
             for c in candles_to_write
         ]
         await db_conn.executemany(query, params)

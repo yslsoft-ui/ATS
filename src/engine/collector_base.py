@@ -300,6 +300,7 @@ class BaseCollector(ABC):
                     for candle in candles:
                         if candle.interval == 60 and candle.timestamp not in existing_segment_timestamps:
                             if self.candle_queue:
+                                candle.is_backfill = True
                                 await self.candle_queue.put(candle)
                                 count += 1
                     

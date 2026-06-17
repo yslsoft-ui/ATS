@@ -20,6 +20,7 @@ import src.engine.collector_kis
 import src.engine.collector_bithumb
 
 from src.database.repository import BaseMarketDataRepository
+from src.engine.candles import Candle
 
 logger = get_logger("strategy_service")
 
@@ -473,6 +474,35 @@ class StrategyService(DaemonService):
                         op_mode = self.config_manager.get("system.operation_mode", "shadow")
                         target_portfolio_id = '1' if op_mode == 'live' else None
                         await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
+
+                elif data.get('type') == 'candle' and data.get('is_backfill') == True:
+                    exchange = data.get('exchange_id')
+                    symbol = data.get('symbol')
+                    interval = data.get('interval', 60)
+                    key = f"{exchange}:{symbol}"
+                    
+                    async with self._lock:
+                        if key in self.trade_engines:
+                            engine = self.trade_engines[key]
+                            context = engine.contexts.get(interval)
+                            if context:
+                                candle = Candle(
+                                    exchange_id=exchange,
+                                    symbol=symbol,
+                                    interval=interval,
+                                    timestamp=data['timestamp'],
+                                    open=data['open'],
+                                    high=data['high'],
+                                    low=data['low'],
+                                    close=data['close'],
+                                    volume=data['volume'],
+                                    buy_volume=data.get('buy_volume', 0.0),
+                                    sell_volume=data.get('sell_volume', 0.0),
+                                    count=data.get('count', 0),
+                                    is_closed=data.get('is_closed', True)
+                                )
+                                context.merge_backfilled_candles([candle])
+                                logger.debug(f"[StrategyService] 백필 캔들 병합 완료: {key} (ts: {candle.timestamp})")
         except asyncio.CancelledError:
             pass
         except Exception as e:

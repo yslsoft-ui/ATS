@@ -118,3 +118,19 @@ class MarketDataContext:
 
         self.indicator_cache[cache_key] = result
         return result
+
+    def merge_backfilled_candles(self, backfilled_candles: List[Candle]):
+        """과거 백필된 캔들들을 기존 메모리 리스트에 병합하고 시간 정렬합니다."""
+        merged = {c.timestamp: c for c in self.candles}
+        for bc in backfilled_candles:
+            if bc.timestamp not in merged or not merged[bc.timestamp].is_closed:
+                merged[bc.timestamp] = bc
+                
+        # 타임스탬프 순으로 정렬하여 다시 리스트로 빌드
+        sorted_candles = [merged[ts] for ts in sorted(merged.keys())]
+        
+        # max_len에 맞춰 자르고 저장
+        self.candles = sorted_candles[-self.max_len:]
+        
+        # 지표 캐시 초기화
+        self.indicator_cache.clear()
