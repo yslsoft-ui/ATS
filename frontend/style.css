@@ -734,6 +734,39 @@ td {
     font-weight: bold;
 }
 
+.monitoring-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 8px;
+}
+
+.monitoring-tab {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.monitoring-tab:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.monitoring-tab.active {
+    background: #F59E0B; /* Amber 메인 포인트 색상 */
+    color: #0F172A;
+    border-color: #F59E0B;
+    font-weight: bold;
+}
+
 .market-search {
     width: 280px;
     padding: 8px 14px;

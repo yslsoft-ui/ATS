@@ -53,7 +53,7 @@
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다. **[NEW]** 누락 캔들과 고스트 캔들(실제 틱이 없으나 DB에는 존재하는 오류 분봉) 탭 전환 기능을 탑재하고, 고스트 캔들 탭에서는 테이블 내 개별 '🗑️ 삭제' 버튼 연동을 통해 DB 데이터를 즉시 영구 클린업할 수 있도록 구현되어 있습니다.
 - **[system-events.js](file:///home/simon/ATS/frontend/system-events.js)**: [NEW] 시스템 감사 로그 통합 조회 페이지입니다. `system_events` 테이블의 모든 감사 로그를 조회하고, 실시간 검색(키워드 필터링) 및 동적 이벤트 타입 필터를 지원하는 전용 감사 로그 뷰 모듈입니다.
-- **[kis-detail.js](file:///home/simon/ATS/frontend/kis-detail.js)**: [NEW] KIS 종목 상세 정보를 조회하고 렌더링하는 전용 모달 뷰 모듈입니다. 대체거래소(Nextrade) 거래 대상 여부 및 거래 정지 여부를 직관적으로 보여주며, KIS 종목 설정 상태를 상세히 노출합니다.
+- **[kis-detail.js](file:///home/simon/ATS/frontend/kis-detail.js)**: KIS 종목 상세 정보를 조회하고 렌더링하는 모듈입니다. 독립 라우트 뷰가 아닌 `monitoring-view` 내부의 '종목 상세정보' 탭 콘텐츠 영역으로 이식되었으며, 주식 종목일 경우 Nextrade 연동 여부 및 기업 상세 제원을 렌더링하고 가상자산일 경우 가이드 메시지를 분기하여 출력합니다.
 - **[market.js](file:///home/simon/ATS/frontend/market.js)**: 마켓(Market) 관리 모듈로, 거래소별 탭(Upbit, Bithumb, KIS)에 맞춰 실시간 시세 및 24h 변동 지표를 테이블 형태로 렌더링합니다. 전역 정렬 기준 필드(`state.marketSortKey`, `state.marketSortOrder`)를 활용해 클라이언트 사이드 실시간 정렬(3단계 순환 토글)을 수행하며, KIS 탭의 미수집 종목은 항상 하단에 고정하는 지능형 정렬이 적용되어 있습니다.
 
 ---

@@ -9,15 +9,41 @@ const KisDetailView = (() => {
      */
     async function loadKisDetail() {
         const symbol = state.currentSymbol;
+        const exchange = state.currentExchange || 'upbit';
+        
+        const kisWrapper = document.getElementById('kis-detail-fields-wrapper');
+        const cryptoWrapper = document.getElementById('crypto-detail-info-wrapper');
+        
         if (!symbol) {
             showToast("선택된 종목이 없습니다.", "error");
-            ViewRouter.navigateTo('market-view');
             return;
         }
 
-        // 제목 및 기본 코드 설정
-        document.getElementById('kis-detail-title-name').innerText = '로딩 중...';
-        document.getElementById('kis-detail-title-code').innerText = `(${symbol})`;
+        // 거래소에 따라 영역 가시성 분기 제어
+        if (exchange !== 'kis') {
+            if (kisWrapper) kisWrapper.style.display = 'none';
+            if (cryptoWrapper) {
+                cryptoWrapper.style.display = 'block';
+                // 텍스트 동적 변경 (선택된 심볼 및 거래소 표시)
+                const descP = cryptoWrapper.querySelector('p');
+                if (descP) {
+                    descP.innerHTML = `
+                        선택하신 종목은 가상자산입니다.<br>
+                        <strong>${symbol} (${exchange.toUpperCase()})</strong>은 가상자산이므로 기업 제원 및 대체거래소(Nextrade) 거래 정보가 제공되지 않습니다.
+                    `;
+                }
+            }
+            return;
+        }
+
+        if (kisWrapper) kisWrapper.style.display = 'block';
+        if (cryptoWrapper) cryptoWrapper.style.display = 'none';
+
+        // 제목 및 기본 코드 설정 (존재 시)
+        const nameEl = document.getElementById('kis-detail-title-name');
+        const codeEl = document.getElementById('kis-detail-title-code');
+        if (nameEl) nameEl.innerText = '로딩 중...';
+        if (codeEl) codeEl.innerText = `(${symbol})`;
 
         // 로딩 표시 처리
         setLoadingState(true);
@@ -33,7 +59,6 @@ const KisDetailView = (() => {
         } catch (e) {
             showToast(`상세 정보 로드 실패: ${e.message}`, "error");
             setLoadingState(false);
-            ViewRouter.navigateTo('market-view');
         }
     }
 
@@ -63,8 +88,11 @@ const KisDetailView = (() => {
      * 서버로부터 수신한 상세 데이터를 엘리먼트에 바인딩합니다.
      */
     function renderDetailData(data) {
-        // 제목 바인딩
-        document.getElementById('kis-detail-title-name').innerText = data.prdt_abrv_name || data.prdt_name || '-';
+        // 제목 바인딩 (존재 시)
+        const titleNameEl = document.getElementById('kis-detail-title-name');
+        if (titleNameEl) {
+            titleNameEl.innerText = data.prdt_abrv_name || data.prdt_name || '-';
+        }
         
         // Nextrade 가능 여부 (cptt_trad_tr_psbl_yn)
         const nxtPsbl = data.cptt_trad_tr_psbl_yn === 'Y';
@@ -156,38 +184,21 @@ const KisDetailView = (() => {
         const isCollected = activeItem ? (activeItem.is_collected !== false) : false;
 
         const collectBtn = document.getElementById('btn-kis-detail-collect');
-        const monitorBtn = document.getElementById('btn-kis-detail-monitor');
 
         if (isCollected) {
             // 수집 중일 때: 해제 버튼
-            collectBtn.innerText = '수집 해제';
-            collectBtn.style.background = '#EF4444'; // Red
-            collectBtn.onclick = () => handleToggleCollection(symbol, data.prdt_abrv_name || data.prdt_name || symbol, false);
-
-            // 모니터링 버튼 활성화
-            monitorBtn.removeAttribute('disabled');
-            monitorBtn.style.opacity = '1';
-            monitorBtn.style.cursor = 'pointer';
-            monitorBtn.onclick = () => {
-                Store.update({
-                    currentExchange: 'kis',
-                    currentSymbol: symbol
-                });
-                ViewRouter.navigateTo('monitoring-view');
-            };
+            if (collectBtn) {
+                collectBtn.innerText = '수집 해제';
+                collectBtn.style.background = '#EF4444'; // Red
+                collectBtn.onclick = () => handleToggleCollection(symbol, data.prdt_abrv_name || data.prdt_name || symbol, false);
+            }
         } else {
             // 수집 중이 아닐 때: 수집 등록 버튼
-            collectBtn.innerText = '수집 시작';
-            collectBtn.style.background = '#3B82F6'; // Blue
-            collectBtn.onclick = () => handleToggleCollection(symbol, data.prdt_abrv_name || data.prdt_name || symbol, true);
-
-            // 모니터링 버튼 비활성화
-            monitorBtn.setAttribute('disabled', 'true');
-            monitorBtn.style.opacity = '0.5';
-            monitorBtn.style.cursor = 'not-allowed';
-            monitorBtn.onclick = () => {
-                showToast("수집 중이 아닌 종목은 실시간 차트를 볼 수 없습니다. 수집을 먼저 시작하십시오.", "warning");
-            };
+            if (collectBtn) {
+                collectBtn.innerText = '수집 시작';
+                collectBtn.style.background = '#3B82F6'; // Blue
+                collectBtn.onclick = () => handleToggleCollection(symbol, data.prdt_abrv_name || data.prdt_name || symbol, true);
+            }
         }
     }
 
@@ -223,31 +234,7 @@ const KisDetailView = (() => {
         }
     }
 
-    /**
-     * 초기 이벤트 바인딩을 수행합니다.
-     */
-    function initEvents() {
-        const backBtn = document.getElementById('btn-kis-detail-back');
-        if (backBtn) {
-            backBtn.onclick = () => {
-                ViewRouter.navigateTo('market-view');
-            };
-        }
-    }
-
-    // 초기 이벤트 리스너 등록
-    document.addEventListener('DOMContentLoaded', () => {
-        initEvents();
-    });
-
     return {
         loadKisDetail
     };
 })();
-
-// 라우터 등록
-if (typeof ViewRouter !== 'undefined') {
-    ViewRouter.registerRoute('kis-detail-view', () => {
-        KisDetailView.loadKisDetail();
-    });
-}

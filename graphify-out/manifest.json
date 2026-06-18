@@ -485,8 +485,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/app.js": {
-    "mtime": 1781585341.762227,
-    "ast_hash": "c2c75f99f7c911f48559fe50ec988841",
+    "mtime": 1781765547.8058019,
+    "ast_hash": "58f54beed1d2570be89bef6bdfd034c5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/system-events.js": {
@@ -545,8 +545,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/market.js": {
-    "mtime": 1781760523.4093423,
-    "ast_hash": "f0b2557b86afe6b861e7bed04e4ebe27",
+    "mtime": 1781765557.618013,
+    "ast_hash": "069176d5f71a85d38c50ae97fc4e219e",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/ranking.js": {
@@ -570,8 +570,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/kis-detail.js": {
-    "mtime": 1781572193.7857666,
-    "ast_hash": "a0054c5eb80ca48387a382a6bd5549ca",
+    "mtime": 1781766147.4506934,
+    "ast_hash": "e1c67a8e95833acc3e4cd45cfb740afd",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/overview.js": {
@@ -1405,8 +1405,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781744688.363808,
-    "ast_hash": "a0c5118d4329a8f5bd425b5fbbee8b68",
+    "mtime": 1781765511.3650186,
+    "ast_hash": "5956325537a83cb0cedf0d8800ce031e",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -1415,8 +1415,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781760530.0815258,
-    "ast_hash": "2aa4878ab628898ad61229b36983facf",
+    "mtime": 1781765565.3261786,
+    "ast_hash": "e69429ad2fa22a91d5044d5b517dc2c9",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {

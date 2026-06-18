@@ -513,6 +513,16 @@ function initViewNavigation() {
     });
 
     ViewRouter.registerRoute('monitoring-view', () => {
+        // 항상 '차트' 탭으로 초기화
+        document.querySelectorAll('.monitoring-tab').forEach(t => t.classList.remove('active'));
+        const defaultTab = document.querySelector('.monitoring-tab[data-tab="chart"]');
+        if (defaultTab) defaultTab.classList.add('active');
+        
+        const chartContent = document.getElementById('monitoring-tab-content-chart');
+        const detailContent = document.getElementById('monitoring-tab-content-detail');
+        if (chartContent) chartContent.style.display = 'block';
+        if (detailContent) detailContent.style.display = 'none';
+
         if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
             setTimeout(() => ChartEngine.resize(), 0);
         }
@@ -529,6 +539,32 @@ function initViewNavigation() {
 
 
 function initTradingControls() {
+    // 모니터링 탭 클릭 스위칭 바인딩
+    document.querySelectorAll('.monitoring-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.monitoring-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            const target = tab.dataset.tab;
+            const chartContent = document.getElementById('monitoring-tab-content-chart');
+            const detailContent = document.getElementById('monitoring-tab-content-detail');
+            
+            if (target === 'chart') {
+                if (chartContent) chartContent.style.display = 'block';
+                if (detailContent) detailContent.style.display = 'none';
+                if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
+                    setTimeout(() => ChartEngine.resize(), 50);
+                }
+            } else {
+                if (chartContent) chartContent.style.display = 'none';
+                if (detailContent) detailContent.style.display = 'block';
+                if (typeof KisDetailView !== 'undefined' && typeof KisDetailView.loadKisDetail === 'function') {
+                    KisDetailView.loadKisDetail();
+                }
+            }
+        });
+    });
+
     const btnTrading = document.getElementById('btn-toggle-trading');
     const tradingStatus = document.getElementById('trading-status');
 
