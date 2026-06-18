@@ -116,6 +116,10 @@ class UserCommandDispatcher:
             raise e
 
     async def _log_event(self, command: UserCommand, status: str, command_id: str, payload: Dict[str, Any], error: str = None):
+        # 단순 조회용 미리보기 명령은 DB 감사 로그 적재 제외
+        if command == UserCommand.CLEANUP_PREVIEW:
+            return
+
         base_event_name = self._EVENT_NAME_MAP.get(command)
         if not base_event_name:
             return

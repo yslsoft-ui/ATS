@@ -495,8 +495,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/settings.js": {
-    "mtime": 1781103663.1816006,
-    "ast_hash": "d6543080b2cef05121622379e833106f",
+    "mtime": 1781743410.03419,
+    "ast_hash": "609980c951fa6a34879d3c368881c7fc",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/strategy.js": {
@@ -765,8 +765,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/command.py": {
-    "mtime": 1781443087.8483875,
-    "ast_hash": "b4abc59e97f72c9de983163657e46127",
+    "mtime": 1781743962.2727132,
+    "ast_hash": "5c78f36d6969a785518cd966ddf49fbd",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/trade_engine.py": {
@@ -1410,8 +1410,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781603156.243965,
-    "ast_hash": "7e68fcfcb1323b1f96060b0e0c18d7fd",
+    "mtime": 1781736220.2943034,
+    "ast_hash": "edb3826bbc51df4cce7bd8160c3c67d8",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
@@ -1425,8 +1425,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1781690536.7171807,
-    "ast_hash": "33aae18d5e7663f9d4e2ded94ef1499d",
+    "mtime": 1781736210.586109,
+    "ast_hash": "3542ab2cbd2a25339eabd4590b03eb11",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
