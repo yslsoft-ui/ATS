@@ -646,13 +646,8 @@ async function loadRealAssets(sync = false) {
         
         // 실시간 더블클릭 차트 이동 콜백 어댑터
         const onAssetDblClick = (asset) => {
-            const targetExchange = asset.exchange || exchange;
-            let symbol;
-            if (targetExchange === 'kis') {
-                symbol = asset.currency;
-            } else {
-                symbol = `KRW-${asset.currency}`;
-            }
+            const targetExchange = asset.exchange_id || exchange;
+            const symbol = asset.currency; // 주식 및 코인 모두 접두어 없이 원래 심볼 그대로 연결
             state.currentSymbol = symbol;
             state.currentExchange = targetExchange;
             updateHeaderInfo(targetExchange, symbol);
@@ -776,7 +771,7 @@ function openRealAssetOrderModal(asset) {
     
     state.realOrderState.asset = asset;
     state.realOrderState.symbol = asset.currency;
-    state.realOrderState.exchange = asset.exchange || state.realAssetExchange || 'upbit';
+    state.realOrderState.exchange = asset.exchange_id || state.realAssetExchange || 'upbit';
     
     // 모달 타이틀 설정
     const orderExchange = document.getElementById('real-order-exchange');

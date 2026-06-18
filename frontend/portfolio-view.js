@@ -258,7 +258,7 @@ const PortfolioView = {
             let balanceStr;
             if (asset.currency === 'KRW') {
                 balanceStr = Math.floor(asset.balance).toLocaleString();
-            } else if (asset.exchange === 'kis') {
+            } else if (asset.exchange_id === 'kis') {
                 balanceStr = Math.floor(asset.balance).toLocaleString();
             } else {
                 balanceStr = asset.balance.toFixed(4);
@@ -276,7 +276,7 @@ const PortfolioView = {
             let iconHtml = '';
             if (asset.currency === 'KRW') {
                 iconHtml = `<img src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%234caf50'/><text x='50%' y='62%' font-size='10' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>₩</text></svg>" style="width:24px; height:24px; border-radius:50%; flex-shrink:0;">`;
-            } else if (asset.exchange === 'kis') {
+            } else if (asset.exchange_id === 'kis') {
                 const iconUrl = `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${asset.currency}.png`;
                 iconHtml = `<img src="${iconUrl}" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'24\\' height=\\'24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%233B82F6\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'8\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'white\\' text-anchor=\\'middle\\'>ST</text></svg>';">`;
             } else {
@@ -292,8 +292,8 @@ const PortfolioView = {
                 </div>
             `;
             
-            const exchangeName = asset.exchange ? asset.exchange.toUpperCase() : 'UPBIT';
-            const exBadgeHtml = `<span class="ctx-badge" style="font-size: 0.65rem; padding: 2px 4px; margin-left: 5px; vertical-align: middle; background: rgba(148, 163, 184, 0.15);">${exchangeName}</span>`;
+            // 거래소 탭으로 구분이 완료되어 뱃지 비노출 처리
+            const exBadgeHtml = '';
 
             tr.innerHTML = `
                 <td>
@@ -335,9 +335,12 @@ const PortfolioView = {
                 });
             }
 
-            // 더블 클릭 시 차트 연동 트리거 호출
-            tr.addEventListener('dblclick', (e) => {
-                e.stopPropagation(); // 단순 클릭 이벤트 전파 차단
+            // 더블 클릭 대신 싱글 클릭 시 차트 연동 트리거 호출
+            tr.addEventListener('click', (e) => {
+                // 주문/이력 액션 버튼 영역 클릭 시 차트 이동 동작을 수행하지 않음
+                if (e.target.closest('.real-asset-actions')) {
+                    return;
+                }
                 if (asset.currency !== 'KRW' && typeof onAssetDblClick === 'function') {
                     onAssetDblClick(asset);
                 }
