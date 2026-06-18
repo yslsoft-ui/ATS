@@ -438,9 +438,10 @@
                 </header>
 
                 <!-- 탭 메뉴 추가 -->
-                <div class="monitoring-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px;">
+                <div class="monitoring-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; align-items: center;">
                     <button class="monitoring-tab active" data-tab="chart">📊 실시간 차트</button>
                     <button class="monitoring-tab" data-tab="detail">ℹ️ 종목 상세정보</button>
+                    <button id="btn-monitoring-back" class="btn btn-secondary" style="margin-left: auto; padding: 6px 12px; font-size: 12px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold; transition: background 0.2s;">↩️ 뒤로가기</button>
                 </div>
 
                 <!-- 탭 콘텐츠 1: 실시간 차트 -->

@@ -539,6 +539,14 @@ function initViewNavigation() {
 
 
 function initTradingControls() {
+    // 뒤로가기 버튼 바인딩
+    const btnMonitoringBack = document.getElementById('btn-monitoring-back');
+    if (btnMonitoringBack) {
+        btnMonitoringBack.addEventListener('click', () => {
+            ViewRouter.back();
+        });
+    }
+
     // 모니터링 탭 클릭 스위칭 바인딩
     document.querySelectorAll('.monitoring-tab').forEach(tab => {
         tab.addEventListener('click', () => {

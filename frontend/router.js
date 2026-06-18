@@ -6,6 +6,8 @@
  */
 const ViewRouter = (() => {
     let currentActiveViewId = 'overview-view'; // 기본 활성 뷰
+    let previousActiveViewId = 'market-view'; // 이전 활성 뷰 (기본값)
+    let monitoringSourceViewId = 'market-view'; // 모니터링 뷰 진입 직전의 소스 뷰 기억
     let routes = {};
 
     /**
@@ -53,6 +55,14 @@ const ViewRouter = (() => {
      * @param {string} viewId - 대상 뷰 컨테이너 DOM ID
      */
     function navigateTo(viewId) {
+        if (currentActiveViewId !== viewId) {
+            previousActiveViewId = currentActiveViewId;
+            
+            // 모니터링 뷰로 이동하는 경우, 이전 뷰가 모니터링 뷰가 아니면 진입 소스 뷰로 기억
+            if (viewId === 'monitoring-view') {
+                monitoringSourceViewId = currentActiveViewId;
+            }
+        }
         const menuItems = document.querySelectorAll('.menu-item');
         const viewIds = Object.keys(routes);
 
@@ -89,11 +99,25 @@ const ViewRouter = (() => {
         return currentActiveViewId;
     }
 
+    /**
+     * 이전 활성 뷰로 화면 전환 (뒤로가기)
+     */
+    function back() {
+        if (currentActiveViewId === 'monitoring-view' && monitoringSourceViewId) {
+            navigateTo(monitoringSourceViewId);
+        } else if (previousActiveViewId) {
+            navigateTo(previousActiveViewId);
+        } else {
+            navigateTo('market-view');
+        }
+    }
+
     return {
         initialize,
         navigateTo,
         getActiveView,
-        registerRoute
+        registerRoute,
+        back
     };
 })();
 
