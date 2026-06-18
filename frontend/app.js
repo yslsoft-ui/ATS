@@ -547,6 +547,18 @@ function initTradingControls() {
         });
     }
 
+    // 모니터링 페이지 주문 버튼 바인딩
+    const btnMonitoringOrder = document.getElementById('btn-monitoring-order');
+    if (btnMonitoringOrder) {
+        btnMonitoringOrder.addEventListener('click', () => {
+            if (typeof openRealAssetOrderModalFromMonitoring === 'function') {
+                openRealAssetOrderModalFromMonitoring();
+            } else {
+                console.error("openRealAssetOrderModalFromMonitoring is not defined");
+            }
+        });
+    }
+
     // 모니터링 탭 클릭 스위칭 바인딩
     document.querySelectorAll('.monitoring-tab').forEach(tab => {
         tab.addEventListener('click', () => {

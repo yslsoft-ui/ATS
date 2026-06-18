@@ -1175,7 +1175,8 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
             return {
                 "total_eval_value": total_eval_value,
                 "formatted_total_value": f"{int(total_eval_value):,}",
-                "assets": asset_list
+                "assets": asset_list,
+                "is_vts": is_vts
             }
     except Exception as e:
         logger.error(f"Error fetching KIS assets: {e}")

@@ -441,6 +441,7 @@
                 <div class="monitoring-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; align-items: center;">
                     <button class="monitoring-tab active" data-tab="chart">📊 실시간 차트</button>
                     <button class="monitoring-tab" data-tab="detail">ℹ️ 종목 상세정보</button>
+                    <button id="btn-monitoring-order" class="btn primary" style="padding: 6px 12px; font-size: 12px; border: none; background: #10B981; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1.0">💸 실계좌 주문</button>
                     <button id="btn-monitoring-back" class="btn btn-secondary" style="margin-left: auto; padding: 6px 12px; font-size: 12px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold; transition: background 0.2s;">↩️ 뒤로가기</button>
                 </div>
 
@@ -2138,10 +2139,11 @@
     <div id="real-asset-order-modal" class="modal-overlay" style="display: none;">
         <div class="real-order-modal-content">
             <div class="modal-header">
-                <div class="asset-title">
-                    <span class="badge exchange-badge" id="real-order-exchange">UPBIT</span>
-                    <span id="real-order-symbol" class="symbol">BTC</span>
+                <div class="asset-title" style="display: flex; align-items: center; gap: 8px;">
+                    <img id="real-order-icon" src="" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0; vertical-align: middle;">
                     <span id="real-order-name" class="name">비트코인</span>
+                    <span id="real-order-symbol" class="symbol" style="color: #94A3B8; font-size: 0.85rem; font-family: 'Roboto Mono', monospace;">BTC</span>
+                    <span class="badge exchange-badge" id="real-order-exchange" style="margin-left: 5px;">UPBIT</span>
                 </div>
                 <button class="close-modal" onclick="closeRealAssetOrderModal()">&times;</button>
             </div>
@@ -2181,6 +2183,23 @@
                                 <span class="label">보유 수량</span>
                                 <span id="real-order-available-qty" class="value">0 BTC</span>
                             </div>
+                        </div>
+
+                        <!-- KIS 전용 거래소 선택 (KRX, NXT, SOR) -->
+                        <div class="order-input-group" id="group-real-order-market" style="display: none;">
+                            <label>거래소 구분</label>
+                            <div class="order-type-select">
+                                <label class="radio-label">
+                                    <input type="radio" name="real-order-market" value="SOR" checked onchange="onRealOrderMarketChange()"> SOR
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="real-order-market" value="KRX" onchange="onRealOrderMarketChange()"> KRX
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" name="real-order-market" value="NXT" onchange="onRealOrderMarketChange()"> NXT
+                                </label>
+                            </div>
+                            <div id="real-order-market-desc" style="font-size: 0.75rem; color: #EF4444; margin-top: 4px; display: none; line-height: 1.3;"></div>
                         </div>
 
                         <!-- 주문 유형 -->

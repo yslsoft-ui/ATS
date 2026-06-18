@@ -364,6 +364,38 @@
   - **설명**: 업비트의 실제 계좌 잔고를 API를 통해 직접 조회하고 실시간 평가가치를 반영해 평가액이 높은 자산 순서대로 정렬해 반환합니다.
     - **원화(KRW) 잔고 절사**: UI상의 깔끔한 시인성 확보를 위해 원화(KRW) 잔고에 한해 소수점 이하 단위를 버림(int 절사)하여 반환합니다.
 
+- **`GET /api/portfolio/assets?exchange_id=kis&mode=active`**
+  - **설명**: 한국투자증권(KIS)의 실제 계좌 자산 목록 및 평가 가치 정보를 조회합니다.
+  - **응답 (JSON)**:
+    ```json
+    {
+      "total_eval_value": 5000000.0,
+      "formatted_total_value": "5,000,000",
+      "assets": [...],
+      "is_vts": false
+    }
+    ```
+
+- **`GET /api/exchanges/kis/symbol-detail?symbol={symbol}`**
+  - **설명**: 한국투자증권(KIS) 국내주식 종목의 상세 정보(한글명, 현재가, 모의투자 여부 등)를 조회합니다.
+  - **응답 (JSON)**: KIS API 상세 정보 필드 및 `is_vts` (모의투자 계좌 여부) 필드 포함.
+
+- **`POST /api/exchanges/{exchange_id}/order`**
+  - **설명**: 지정한 실제 거래소에 매수/매도 실계좌 주문을 제출합니다.
+  - **요청 Body (JSON)**:
+    ```json
+    {
+      "symbol": "005930",
+      "side": "BUY",
+      "order_type": "limit",
+      "price": 70000.0,
+      "volume": 10.0,
+      "excg_id_dvsn_cd": "KRX"
+    }
+    ```
+    - `excg_id_dvsn_cd`: KIS 전용 거래소 구분 필드 (`SOR`, `KRX`, `NXT`). (디폴트 `SOR`)
+    - **시간외 예약 주문 라우팅**: KIS 거래에서 한국 시간(KST) 평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말 시간대에 `KRX` 거래소 구분을 선택하여 발주할 경우, 백엔드에서 주식예약주문 API (`/uapi/domestic-stock/v1/trading/order-resv`, TR_ID: `CTSC0008U`)로 자동 분기 처리됩니다. (단, 모의투자 계좌인 경우 예약 주문은 지원되지 않습니다.)
+
 ---
 
 ### 1.5. 트레이딩 전략 관리 (Strategies)

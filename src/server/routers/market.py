@@ -900,6 +900,11 @@ async def get_kis_symbol_detail(request: Request, symbol: str):
     db_path = system.db_path
     from src.database.connection import get_db_conn
     
+    # KIS 설정에서 모의투자 여부 판단
+    kis_config = system.config_manager.get('exchanges.kis', {})
+    api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+    is_vts = "openapivts" in api_url
+    
     # 1. DB에서 먼저 조회
     try:
         async with get_db_conn(db_path) as db:
@@ -910,7 +915,7 @@ async def get_kis_symbol_detail(request: Request, symbol: str):
                 if row:
                     # Row 데이터를 dict 형태로 가공하여 반환
                     data_dict = dict(row)
-                    # 프론트엔드 호환성을 위해 thdt_clpr 등을 문자열 형태로 반환
+                    data_dict["is_vts"] = is_vts
                     return data_dict
     except Exception as e:
         logger.error(f"[get_kis_symbol_detail] DB 조회 오류 (symbol={symbol}): {e}")
@@ -920,10 +925,8 @@ async def get_kis_symbol_detail(request: Request, symbol: str):
     if not token:
         raise HTTPException(status_code=401, detail="KIS access token 발급 실패")
 
-    kis_config = system.config_manager.get('exchanges.kis', {})
     app_key = kis_config.get('app_key')
     app_secret = kis_config.get('app_secret')
-    api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
     url = f"{api_url}/uapi/domestic-stock/v1/quotations/search-stock-info"
 
     headers = {
@@ -1003,8 +1006,9 @@ async def get_kis_symbol_detail(request: Request, symbol: str):
                 except Exception as save_err:
                     logger.error(f"[get_kis_symbol_detail] DB 캐싱 실패: {save_err}")
 
-                # 반환할 데이터에 updated_at 추가
+                # 반환할 데이터에 updated_at 및 is_vts 추가
                 output['updated_at'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                output['is_vts'] = is_vts
                 return output
     except Exception as e:
         logger.error(f"[get_kis_symbol_detail] KIS API 호출 예외: {e}")
@@ -1151,6 +1155,7 @@ class RealOrderRequest(BaseModel):
     price: Optional[float] = None
     volume: Optional[float] = None
     order_type: str
+    excg_id_dvsn_cd: Optional[str] = None
 
 def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     header = {"alg": "HS256", "typ": "JWT"}
@@ -1595,31 +1600,78 @@ async def place_exchange_order(request: Request, exchange_id: str, body: RealOrd
             ord_qty = str(int(body.volume or 0))
         else:
             raise HTTPException(status_code=400, detail=f"KIS 주문은 limit 또는 market 유형만 지원합니다. (수신: {body.order_type})")
-            
+        import datetime
+        import time
+
+        # 현재 KST 시각 계산
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        now_kst = now_utc + datetime.timedelta(hours=9)
+        current_time_val = now_kst.hour * 100 + now_kst.minute
+        
+        # 예약주문 시간대 체크 (평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말)
+        is_rsvn_time = False
+        is_weekend = now_kst.weekday() in (5, 6)
+        if is_weekend:
+            # 주말: 23:40 ~ 00:10 서버 패치 시간만 제외하고 모두 예약 가능
+            if not (current_time_val >= 2340 or current_time_val < 10):
+                is_rsvn_time = True
+        else:
+            # 평일: 15:40 ~ 23:40, 00:10 ~ 07:30
+            if (current_time_val >= 1540 and current_time_val < 2340) or (current_time_val >= 10 and current_time_val < 730):
+                is_rsvn_time = True
+                
+        # 거래소가 KRX(또는 미지정)이고 예약 주문 시간대인 경우 예약주문으로 처리
+        is_rsvn_order = (not body.excg_id_dvsn_cd or body.excg_id_dvsn_cd == "KRX") and is_rsvn_time
+
+        if is_rsvn_order and is_vts:
+            raise HTTPException(status_code=400, detail="모의투자 계좌는 예약 주문을 지원하지 않습니다. (정규장 시간 내에만 KRX 주문이 가능합니다.)")
+
+        if is_vts and body.excg_id_dvsn_cd in ("SOR", "NXT"):
+            raise HTTPException(status_code=400, detail="모의투자 계좌는 한국거래소(KRX) 주문만 가능합니다. SOR/NXT는 선택할 수 없습니다.")
+
         headers = {
             "content-type": "application/json",
             "authorization": f"Bearer {token}",
             "appkey": kis_app_key,
             "appsecret": kis_app_secret,
-            "tr_id": tr_id,
+            "tr_id": "CTSC0008U" if is_rsvn_order else tr_id,
             "custtype": "P"
         }
         
-        params = {
-            "CANO": cano,
-            "ACNT_PRDT_CD": acnt_prdt_cd,
-            "PDNO": clean_symbol,
-            "ORD_DVSN": ord_dvsn,
-            "ORD_QTY": ord_qty,
-            "ORD_UNPR": ord_unpr,
-            "ALGO_NO": ""
-        }
+        if is_rsvn_order:
+            # 주식예약주문 API용 파라미터 구성 (CTSC0008U)
+            post_payload = {
+                "CANO": cano,
+                "ACNT_PRDT_CD": acnt_prdt_cd,
+                "PDNO": clean_symbol,
+                "ORD_QTY": ord_qty,
+                "ORD_UNPR": ord_unpr,
+                "SLL_BUY_DVSN_CD": "02" if body.side.upper() == "BUY" else "01",
+                "ORD_DVSN_CD": "00" if ord_dvsn == "00" else "01",  # 00: 지정가, 01: 시장가
+                "ORD_OBJT_CBLC_DVSN_CD": "10",
+                "LOAN_DT": "",
+                "RSVN_ORD_END_DT": ""
+            }
+            order_url = f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-resv"
+        else:
+            # 일반 국내주식주문(현금) API용 파라미터 구성
+            params = {
+                "CANO": cano,
+                "ACNT_PRDT_CD": acnt_prdt_cd,
+                "PDNO": clean_symbol,
+                "ORD_DVSN": ord_dvsn,
+                "ORD_QTY": ord_qty,
+                "ORD_UNPR": ord_unpr,
+                "ALGO_NO": ""
+            }
+            if body.excg_id_dvsn_cd:
+                params["EXCG_ID_DVSN_CD"] = body.excg_id_dvsn_cd
+            post_payload = params
+            order_url = f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-cash"
         
         try:
-            import datetime
-            import time
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-cash", json=params, headers=headers) as resp:
+                async with session.post(order_url, json=post_payload, headers=headers) as resp:
                     res_data = await resp.json()
                     if resp.status != 200:
                         raise HTTPException(status_code=resp.status, detail=f"KIS API 오류: {res_data.get('msg1', '네트워크 오류')}")
@@ -1628,7 +1680,11 @@ async def place_exchange_order(request: Request, exchange_id: str, body: RealOrd
                         raise HTTPException(status_code=400, detail=f"KIS 주문 실패: {res_data.get('msg1')}")
                         
                     output = res_data.get("output", {})
-                    odno = output.get("ODNO") or output.get("odno") or f"kis-{int(time.time()*1000)}"
+                    if is_rsvn_order:
+                        rsvn_seq = output.get("RSVN_ORD_SEQ") or output.get("rsvn_ord_seq")
+                        odno = rsvn_seq or f"rsvn-{int(time.time()*1000)}"
+                    else:
+                        odno = output.get("ODNO") or output.get("odno") or f"kis-{int(time.time()*1000)}"
                     
                     try:
                         from src.database.connection import get_db_conn

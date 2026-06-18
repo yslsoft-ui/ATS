@@ -628,6 +628,7 @@ async function loadRealAssets(sync = false) {
         const data = await APIClient.fetchRealAssets(exchange, filter, sync);
         
         if (data && data.assets) {
+            state.realAssets = data.assets;
             const krwAsset = data.assets.find(asset => asset.currency === 'KRW');
             if (krwAsset) {
                 state.realKRWBalance = krwAsset.balance;
@@ -757,7 +758,8 @@ state.realOrderState = {
     symbol: '',
     side: 'BUY',
     asset: null,
-    orderbookTimer: null
+    orderbookTimer: null,
+    isFirstOrderbookLoad: false
 };
 
 /**
@@ -772,6 +774,7 @@ function openRealAssetOrderModal(asset) {
     state.realOrderState.asset = asset;
     state.realOrderState.symbol = asset.currency;
     state.realOrderState.exchange = asset.exchange_id || state.realAssetExchange || 'upbit';
+    state.realOrderState.isFirstOrderbookLoad = true;
     
     // 모달 타이틀 설정
     const orderExchange = document.getElementById('real-order-exchange');
@@ -793,6 +796,124 @@ function openRealAssetOrderModal(asset) {
     
     const isStock = state.realOrderState.exchange === 'kis';
     const unit = isStock ? '주' : asset.currency;
+
+    // KIS 거래소 선택 그룹 제어
+    const marketGroup = document.getElementById('group-real-order-market');
+    const marketDesc = document.getElementById('real-order-market-desc');
+    if (marketGroup) {
+        marketGroup.style.display = isStock ? 'block' : 'none';
+        if (marketDesc) marketDesc.style.display = 'none';
+        
+        const sorRadio = document.querySelector('input[name="real-order-market"][value="SOR"]');
+        const krxRadio = document.querySelector('input[name="real-order-market"][value="KRX"]');
+        const nxtRadio = document.querySelector('input[name="real-order-market"][value="NXT"]');
+        
+        if (isStock) {
+            // 초기 비활성화 및 로딩 상태 노출
+            if (sorRadio) sorRadio.disabled = true;
+            if (krxRadio) krxRadio.disabled = true;
+            if (nxtRadio) nxtRadio.disabled = true;
+            if (marketDesc) {
+                marketDesc.innerText = "거래소 구분 정보 조회 중...";
+                marketDesc.style.color = "#94A3B8";
+                marketDesc.style.display = "block";
+            }
+            
+            APIClient.fetchKisSymbolDetail(asset.currency)
+                .then(detail => {
+                    state.realOrderState.kisDetail = detail; // 캐시 저장
+                    const isVts = detail && detail.is_vts;
+                    const isNxtSupported = detail && detail.cptt_trad_tr_psbl_yn === 'Y';
+                    const isNxtStop = detail && detail.nxt_tr_stop_yn === 'Y';
+                    
+                    // KST 시간 계산 (평일 08:00 ~ 20:00)
+                    const now = new Date();
+                    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+                    const kst = new Date(utc + (3600000 * 9));
+                    const day = kst.getDay(); // 0: 일, 1: 월, ..., 6: 토
+                    const hour = kst.getHours();
+                    const minute = kst.getMinutes();
+                    const isWeekday = day >= 1 && day <= 5;
+                    const timeVal = hour * 100 + minute;
+                    const isNxtTime = isWeekday && (timeVal >= 800 && timeVal < 2000);
+                    
+                    let disabledReason = "";
+                    if (isVts) {
+                        disabledReason = "⚠️ 모의투자 계좌는 대체거래소(NXT) 및 SOR 주문이 불가능합니다. (KRX 고정)";
+                    } else if (!isNxtTime) {
+                        disabledReason = "⚠️ 대체거래소(NXT) 운영 시간(평일 08:00~20:00)이 아닙니다. KRX만 가능합니다.";
+                    } else if (!isNxtSupported) {
+                        disabledReason = "⚠️ 이 종목은 대체거래소(NXT) 거래 지원 대상이 아닙니다. (우선주/ETF/ETN 등 제외)";
+                    } else if (isNxtStop) {
+                        disabledReason = "⚠️ 이 종목은 대체거래소(NXT) 거래정지 상태입니다.";
+                    }
+                    
+                    if (disabledReason) {
+                        if (sorRadio) {
+                            sorRadio.disabled = true;
+                            sorRadio.checked = false;
+                        }
+                        if (nxtRadio) {
+                            nxtRadio.disabled = true;
+                            nxtRadio.checked = false;
+                        }
+                        if (krxRadio) {
+                            krxRadio.disabled = false;
+                            krxRadio.checked = true;
+                        }
+                    } else {
+                        if (sorRadio) {
+                            sorRadio.disabled = false;
+                            sorRadio.checked = true;
+                        }
+                        if (krxRadio) krxRadio.disabled = false;
+                        if (nxtRadio) nxtRadio.disabled = false;
+                    }
+                    
+                    // 상세 정보와 시간대 기반으로 문구 갱신
+                    updateMarketInfo(detail);
+                })
+                .catch(err => {
+                    console.error("Failed to fetch KIS symbol details", err);
+                    state.realOrderState.kisDetail = null;
+                    if (sorRadio) sorRadio.disabled = true;
+                    if (nxtRadio) nxtRadio.disabled = true;
+                    if (krxRadio) {
+                        krxRadio.disabled = false;
+                        krxRadio.checked = true;
+                    }
+                    if (marketDesc) {
+                        marketDesc.innerText = "⚠️ 종목 상세 정보 조회 실패. KRX 주문만 가능합니다.";
+                        marketDesc.style.color = "#EF4444";
+                        marketDesc.style.display = "block";
+                    }
+                });
+        }
+    }
+
+    // 아이콘 이미지 렌더링
+    const orderIcon = document.getElementById('real-order-icon');
+    if (orderIcon) {
+        orderIcon.style.display = 'block';
+        const cleanSymbol = asset.currency.replace(/^(KRW-|UPB-|KIS-)/, '');
+        const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%231E293B' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='9' font-family='sans-serif' font-weight='bold' fill='%2394A3B8' text-anchor='middle'>${cleanSymbol.slice(0, 3)}</text></svg>`;
+        
+        if (cleanSymbol === 'KRW') {
+            orderIcon.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%234caf50'/><text x='50%' y='62%' font-size='10' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>₩</text></svg>`;
+        } else if (isStock) {
+            orderIcon.src = `https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock${cleanSymbol}.png`;
+            orderIcon.onerror = () => {
+                orderIcon.onerror = null;
+                orderIcon.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'><circle cx='12' cy='12' r='10' fill='%233B82F6' stroke='%234b5563' stroke-width='1'/><text x='50%' y='62%' font-size='8' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'>ST</text></svg>`;
+            };
+        } else {
+            orderIcon.src = `https://static.upbit.com/logos/${cleanSymbol}.png`;
+            orderIcon.onerror = () => {
+                orderIcon.onerror = null;
+                orderIcon.src = fallbackSvg;
+            };
+        }
+    }
     
     if (availableQty) {
         availableQty.innerText = `${asset.balance} ${unit}`;
@@ -832,6 +953,81 @@ function openRealAssetOrderModal(asset) {
 }
 
 /**
+ * KIS 거래소 라디오 버튼 및 정보 안내 표시를 갱신합니다.
+ */
+function updateMarketInfo(detail) {
+    const marketVal = document.querySelector('input[name="real-order-market"]:checked')?.value;
+    const marketDesc = document.getElementById('real-order-market-desc');
+    if (!marketDesc) return;
+
+    const isStock = state.realOrderState.exchange === 'kis';
+    if (!isStock) {
+        marketDesc.style.display = 'none';
+        return;
+    }
+
+    // KST 시간 계산 (평일 08:00 ~ 20:00은 NXT 가능, 그 외 시간대는 KRX만 가능)
+    const now = new Date();
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kst = new Date(utc + (3600000 * 9));
+    const day = kst.getDay(); // 0: 일, 1: 월, ..., 6: 토
+    const hour = kst.getHours();
+    const minute = kst.getMinutes();
+    const isWeekday = day >= 1 && day <= 5;
+    const isWeekend = day === 0 || day === 6;
+    const timeVal = hour * 100 + minute;
+    const isNxtTime = isWeekday && (timeVal >= 800 && timeVal < 2000);
+
+    // KST 시간 기준 예약 주문 시간대 계산 (평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말 전체)
+    let isResvTime = false;
+    if (isWeekend) {
+        if (!(timeVal >= 2340 || timeVal < 10)) {
+            isResvTime = true;
+        }
+    } else {
+        if ((timeVal >= 1540 && timeVal < 2340) || (timeVal >= 10 && timeVal < 730)) {
+            isResvTime = true;
+        }
+    }
+
+    // KIS 상세 스펙에 따른 활성화 불가 조건 확인
+    const isVts = detail && detail.is_vts;
+    const isNxtSupported = detail && detail.cptt_trad_tr_psbl_yn === 'Y';
+    const isNxtStop = detail && detail.nxt_tr_stop_yn === 'Y';
+
+    let disabledReason = "";
+    if (isVts) {
+        disabledReason = "⚠️ 모의투자 계좌는 대체거래소(NXT) 및 SOR 주문이 불가능합니다. (KRX 고정)";
+    } else if (!isNxtTime) {
+        disabledReason = "⚠️ 대체거래소(NXT) 운영 시간(평일 08:00~20:00)이 아닙니다. KRX만 가능합니다.";
+    } else if (!isNxtSupported) {
+        disabledReason = "⚠️ 이 종목은 대체거래소(NXT) 거래 지원 대상이 아닙니다. (우선주/ETF/ETN 등 제외)";
+    } else if (isNxtStop) {
+        disabledReason = "⚠️ 이 종목은 대체거래소(NXT) 거래정지 상태입니다.";
+    }
+
+    // 현재 선택값에 맞게 안내 출력
+    if (disabledReason && (marketVal === 'SOR' || marketVal === 'NXT')) {
+        marketDesc.innerText = disabledReason;
+        marketDesc.style.color = "#EF4444"; // 경고: 빨간색
+        marketDesc.style.display = "block";
+    } else if (marketVal === 'KRX' && isResvTime) {
+        marketDesc.innerText = "ℹ️ 현재 장마감 시간대(15:40 ~ 익일 07:30)입니다. KRX 선택 시 다음 영업일 대비 예약 주문으로 접수됩니다.";
+        marketDesc.style.color = "#3B82F6"; // 정보 제공: 파란색
+        marketDesc.style.display = "block";
+    } else {
+        marketDesc.style.display = "none";
+    }
+}
+
+/**
+ * KIS 거래소 라디오 버튼 변경 이벤트 핸들러
+ */
+function onRealOrderMarketChange() {
+    updateMarketInfo(state.realOrderState.kisDetail);
+}
+
+/**
  * 실자산 주문 모달을 닫습니다.
  */
 function closeRealAssetOrderModal() {
@@ -842,6 +1038,63 @@ function closeRealAssetOrderModal() {
         clearTimeout(state.realOrderState.orderbookTimer);
         state.realOrderState.orderbookTimer = null;
     }
+}
+
+/**
+ * 모니터링 페이지의 주문 버튼 클릭 시 호출되어 실시간 자산 목록을 패치한 뒤 주문 모달을 엽니다.
+ */
+async function openRealAssetOrderModalFromMonitoring() {
+    const exchange = state.currentExchange;
+    const symbol = state.currentSymbol;
+    
+    if (symbol === 'KRW') {
+        showAlert("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
+        return;
+    }
+    
+    // KIS/업비트/빗썸 실자산 목록 비동기 선행 패치
+    try {
+        const data = await APIClient.fetchRealAssets(exchange, 'active', false);
+        if (data && data.assets) {
+            state.realAssets = data.assets;
+            const krwAsset = data.assets.find(asset => asset.currency === 'KRW');
+            if (krwAsset) {
+                state.realKRWBalance = krwAsset.balance;
+            }
+        }
+    } catch (e) {
+        console.error("[openRealAssetOrderModalFromMonitoring] 실자산 조회 실패:", e);
+    }
+    
+    // 캐시된 자산 목록에서 현재 종목 조회
+    let asset = null;
+    if (state.realAssets) {
+        asset = state.realAssets.find(a => 
+            (a.exchange_id || exchange).toLowerCase() === exchange.toLowerCase() &&
+            a.currency === symbol
+        );
+    }
+    
+    // 자산 정보가 없는 경우 기본 객체 생성
+    if (!asset) {
+        const key = `${exchange}:${symbol}`;
+        const nameFromSymbols = state.symbolNames && state.symbolNames[key];
+        const nameFromMarket = (window.marketData || []).find(c => c.exchange === exchange && c.market === symbol)?.korean_name;
+        const krName = nameFromSymbols || nameFromMarket || symbol;
+        
+        asset = {
+            currency: symbol,
+            exchange_id: exchange,
+            korean_name: krName,
+            balance: 0.0,
+            avg_buy_price: 0.0,
+            current_price: 0.0,
+            percent: 0.0,
+            formatted_eval_value: "0"
+        };
+    }
+    
+    openRealAssetOrderModal(asset);
 }
 
 /**
@@ -904,7 +1157,7 @@ function renderRealOrderbook(data) {
         const u = units[i];
         const percentage = Math.min(100, (u.ask_size / total_ask_size) * 100);
         html += `
-            <div class="orderbook-row ask" onclick="setOrderPrice(${u.ask_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 8px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(0, 114, 255, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
+            <div class="orderbook-row ask" onclick="setOrderPrice(${u.ask_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 20px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(0, 114, 255, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
                 <span class="price bear" style="color:#0072FF; font-weight:bold;">${u.ask_price.toLocaleString()}</span>
                 <div style="position:relative; width:50%; text-align:right;">
                     <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(0, 114, 255, 0.1); width:${percentage}%;"></div>
@@ -919,7 +1172,7 @@ function renderRealOrderbook(data) {
     const rateClass = data.change_rate >= 0 ? 'bull' : 'bear';
     const rateColor = data.change_rate >= 0 ? '#FF4B4B' : '#0072FF';
     html += `
-        <div class="orderbook-current-price" style="display:flex; justify-content:space-between; align-items:center; padding:6px 8px; background:#1E293B; border-top:1px solid #334155; border-bottom:1px solid #334155; font-size:0.8rem; font-weight:bold; color:#F8FAFC;">
+        <div id="real-orderbook-current-price-row" class="orderbook-current-price" style="display:flex; justify-content:space-between; align-items:center; padding:6px 20px; background:#1E293B; border-top:1px solid #334155; border-bottom:1px solid #334155; font-size:0.8rem; font-weight:bold; color:#F8FAFC;">
             <span class="${rateClass}" style="color:${rateColor}">현재가: ${data.trade_price.toLocaleString()}</span>
             <span class="${rateClass}" style="color:${rateColor}">${changeSign}${(data.change_rate * 100).toFixed(2)}%</span>
         </div>
@@ -930,7 +1183,7 @@ function renderRealOrderbook(data) {
         const u = units[i];
         const percentage = Math.min(100, (u.bid_size / total_bid_size) * 100);
         html += `
-            <div class="orderbook-row bid" onclick="setOrderPrice(${u.bid_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 8px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(255, 75, 75, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
+            <div class="orderbook-row bid" onclick="setOrderPrice(${u.bid_price})" style="cursor:pointer; display:flex; justify-content:space-between; padding:4px 20px; font-family:\'Roboto Mono\', monospace; font-size:0.75rem; background:rgba(255, 75, 75, 0.04); border-bottom:1px solid rgba(148, 163, 184, 0.08);">
                 <span class="price bull" style="color:#FF4B4B; font-weight:bold;">${u.bid_price.toLocaleString()}</span>
                 <div style="position:relative; width:50%; text-align:right;">
                     <div style="position:absolute; right:0; top:0; bottom:0; background:rgba(255, 75, 75, 0.1); width:${percentage}%;"></div>
@@ -941,6 +1194,21 @@ function renderRealOrderbook(data) {
     }
     
     orderbookList.innerHTML = html;
+
+    // 첫 로드 시 현재가가 화면 중간에 오도록 스크롤 조정
+    if (state.realOrderState.isFirstOrderbookLoad) {
+        setTimeout(() => {
+            const currentPriceRow = document.getElementById('real-orderbook-current-price-row');
+            const scrollContainer = document.querySelector('.orderbook-scroll');
+            if (currentPriceRow && scrollContainer) {
+                const containerHeight = scrollContainer.clientHeight;
+                const rowHeight = currentPriceRow.clientHeight;
+                const absoluteRowTop = currentPriceRow.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
+                scrollContainer.scrollTop = absoluteRowTop - (containerHeight / 2) + (rowHeight / 2);
+            }
+        }, 50);
+        state.realOrderState.isFirstOrderbookLoad = false;
+    }
 }
 
 /**
@@ -1235,6 +1503,14 @@ async function executeRealOrder() {
         }
     }
     
+    if (isStock) {
+        const marketRadio = document.querySelector('input[name="real-order-market"]:checked');
+        if (marketRadio) {
+            orderData.excg_id_dvsn_cd = marketRadio.value;
+            confirmMsg += `거래소 구분: ${marketRadio.value}\n`;
+        }
+    }
+    
     if (!confirm(confirmMsg)) {
         return;
     }
@@ -1248,11 +1524,11 @@ async function executeRealOrder() {
     
     try {
         const res = await APIClient.placeRealOrder(exchange, orderData);
-        showAlert("주문이 성공적으로 제출되었습니다.", "success");
+        alert("주문이 성공적으로 제출되었습니다.");
         closeRealAssetOrderModal();
         await loadRealAssets(false);
     } catch (e) {
-        showAlert(e.message || "주문 제출에 실패했습니다.", "error");
+        alert(e.message || "주문 제출에 실패했습니다.");
         console.error(e);
     } finally {
         if (orderBtn) {
@@ -1736,6 +2012,8 @@ window.executeRealOrder = executeRealOrder;
 window.openRealAssetHistoryModal = openRealAssetHistoryModal;
 window.closeRealAssetHistoryModal = closeRealAssetHistoryModal;
 window.setOrderPrice = setOrderPrice;
+window.openRealAssetOrderModalFromMonitoring = openRealAssetOrderModalFromMonitoring;
+window.onRealOrderMarketChange = onRealOrderMarketChange;
 
 if (typeof ViewRouter !== 'undefined') {
     ViewRouter.registerRoute('portfolio-view', () => {
