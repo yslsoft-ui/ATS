@@ -1162,6 +1162,11 @@ td.secondary {
     z-index: 1;
 }
 
+/* 스티키 푸터(tfoot)가 있는 테이블 래퍼는 하단 패딩을 없애 푸터가 바닥에 딱 달라붙게 함 */
+.table-wrapper:has(tfoot) {
+    padding-bottom: 0;
+}
+
 table {
     border-collapse: collapse;
 }
