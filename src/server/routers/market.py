@@ -1156,6 +1156,7 @@ class RealOrderRequest(BaseModel):
     volume: Optional[float] = None
     order_type: str
     excg_id_dvsn_cd: Optional[str] = None
+    is_reservation: Optional[bool] = False
 
 def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     header = {"alg": "HS256", "typ": "JWT"}
@@ -1607,24 +1608,47 @@ async def place_exchange_order(request: Request, exchange_id: str, body: RealOrd
         now_utc = datetime.datetime.now(datetime.timezone.utc)
         now_kst = now_utc + datetime.timedelta(hours=9)
         current_time_val = now_kst.hour * 100 + now_kst.minute
-        
-        # 예약주문 시간대 체크 (평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말)
-        is_rsvn_time = False
         is_weekend = now_kst.weekday() in (5, 6)
-        if is_weekend:
-            # 주말: 23:40 ~ 00:10 서버 패치 시간만 제외하고 모두 예약 가능
-            if not (current_time_val >= 2340 or current_time_val < 10):
-                is_rsvn_time = True
-        else:
-            # 평일: 15:40 ~ 23:40, 00:10 ~ 07:30
-            if (current_time_val >= 1540 and current_time_val < 2340) or (current_time_val >= 10 and current_time_val < 730):
-                is_rsvn_time = True
-                
-        # 거래소가 KRX(또는 미지정)이고 예약 주문 시간대인 경우 예약주문으로 처리
-        is_rsvn_order = (not body.excg_id_dvsn_cd or body.excg_id_dvsn_cd == "KRX") and is_rsvn_time
+        
+        # 종목의 대체거래소(NXT) 지원 여부 확인
+        is_nxt_supported = False
+        try:
+            from src.database.connection import get_db_conn
+            async with get_db_conn(system.db_path) as db:
+                async with db.execute("SELECT cptt_trad_tr_psbl_yn FROM kis_stock_info WHERE symbol = ?", (clean_symbol,)) as cursor:
+                    row = await cursor.fetchone()
+                    if row and row[0] == 'Y':
+                        is_nxt_supported = True
+        except Exception as db_err:
+            logger.error(f"Failed to query DB for KIS stock info in order routing: {db_err}")
 
-        if is_rsvn_order and is_vts:
-            raise HTTPException(status_code=400, detail="모의투자 계좌는 예약 주문을 지원하지 않습니다. (정규장 시간 내에만 KRX 주문이 가능합니다.)")
+        # 예약 주문 유효 시간대 감지
+        is_valid_rsvn_time = False
+        if is_weekend:
+            # 주말: KIS 시스템 점검(23:40 ~ 00:10) 제외하고 모두 예약 가능
+            if not (current_time_val >= 2340 or current_time_val < 10):
+                is_valid_rsvn_time = True
+        else:
+            # 평일: KIS 시스템 점검(23:40 ~ 00:10) 제외하고 판별
+            if not (current_time_val >= 2340 or current_time_val < 10):
+                if is_nxt_supported:
+                    # NXT 지원 종목: 평일 20:00 ~ 익일 08:00
+                    if current_time_val >= 2000 or current_time_val < 800:
+                        is_valid_rsvn_time = True
+                else:
+                    # NXT 미지원 종목: 평일 16:00 ~ 익일 08:00
+                    if current_time_val >= 1600 or current_time_val < 800:
+                        is_valid_rsvn_time = True
+
+        # 요청받은 플래그에 따른 예약 주문 여부 확정
+        is_rsvn_order = body.is_reservation
+
+        if is_rsvn_order:
+            if is_vts:
+                raise HTTPException(status_code=400, detail="모의투자 계좌는 예약 주문을 지원하지 않습니다. (정규장 시간 내에만 KRX 주문이 가능합니다.)")
+            if not is_valid_rsvn_time:
+                time_desc = "20:00 ~ 익일 08:00" if is_nxt_supported else "16:00 ~ 익일 08:00"
+                raise HTTPException(status_code=400, detail=f"현재 예약 주문 가능 시간이 아닙니다. (예약 주문 가능 시간: 평일 {time_desc}, 주말 00:10 ~ 23:40)")
 
         if is_vts and body.excg_id_dvsn_cd in ("SOR", "NXT"):
             raise HTTPException(status_code=400, detail="모의투자 계좌는 한국거래소(KRX) 주문만 가능합니다. SOR/NXT는 선택할 수 없습니다.")

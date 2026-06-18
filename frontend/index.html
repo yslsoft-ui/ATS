@@ -2261,7 +2261,10 @@
                         </div>
 
                         <!-- 주문 실행 버튼 -->
-                        <button id="real-order-btn" class="btn block buy" onclick="executeRealOrder()">매수</button>
+                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                            <button id="real-order-btn" class="btn block buy" style="flex: 1; margin-top: 0;" onclick="executeRealOrder(false)">실계좌 매수</button>
+                            <button id="real-order-resv-btn" class="btn block" style="flex: 1; margin-top: 0; background: #F59E0B; display: none;" onclick="executeRealOrder(true)">예약 매수</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -390,11 +390,14 @@
       "order_type": "limit",
       "price": 70000.0,
       "volume": 10.0,
-      "excg_id_dvsn_cd": "KRX"
+      "excg_id_dvsn_cd": "KRX",
+      "is_reservation": true
     }
     ```
     - `excg_id_dvsn_cd`: KIS 전용 거래소 구분 필드 (`SOR`, `KRX`, `NXT`). (디폴트 `SOR`)
-    - **시간외 예약 주문 라우팅**: KIS 거래에서 한국 시간(KST) 평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말 시간대에 `KRX` 거래소 구분을 선택하여 발주할 경우, 백엔드에서 주식예약주문 API (`/uapi/domestic-stock/v1/trading/order-resv`, TR_ID: `CTSC0008U`)로 자동 분기 처리됩니다. (단, 모의투자 계좌인 경우 예약 주문은 지원되지 않습니다.)
+    - `is_reservation`: (선택) 예약 주문 여부 플래그 (`true`/`false`).
+    - **시간외 예약 주문 라우팅**: `is_reservation`이 `true`로 설정된 경우 백엔드는 KIS 주식예약주문 API (`/uapi/domestic-stock/v1/trading/order-resv`, TR_ID: `CTSC0008U`)로 라우팅합니다.
+      - **서버 사이드 검증**: 예약 주문 가능 시간대(NXT 지원 종목: 평일 20:00~08:00, NXT 미지원 종목: 평일 16:00~08:00, 주말 전체. 단, 23:40~00:10 점검 시간 제외)가 아니거나 모의투자(`is_vts`)인 경우 HTTP 400 에러를 반환합니다.
 
 ---
 

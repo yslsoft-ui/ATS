@@ -555,8 +555,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio.js": {
-    "mtime": 1781785570.3095815,
-    "ast_hash": "212fba64b050acb4c4630095751dc542",
+    "mtime": 1781791275.0219336,
+    "ast_hash": "f139f9ba69a02ba362326dbc9b531ca6",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/portfolio-adapter.test.js": {
@@ -1035,8 +1035,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/market.py": {
-    "mtime": 1781774987.0502343,
-    "ast_hash": "c4b7180a715b9fe075c7b562a4c8c06c",
+    "mtime": 1781791336.7356136,
+    "ast_hash": "591c8df6bdddaa7ac2d923c3f86bda46",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
@@ -1147,6 +1147,11 @@
   "/home/simon/ATS/tests/conftest.py": {
     "mtime": 1781533678.2279325,
     "ast_hash": "f4b0ce7bafda41760b55bc9832805414",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/tests/test_market_router.py": {
+    "mtime": 1781791322.0632143,
+    "ast_hash": "7151a429ddc3e233070c117e7f851bd5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_circuit_breaker.py": {
@@ -1405,8 +1410,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1781774997.9425354,
-    "ast_hash": "13a2baa062c141c2b0f8c25262c77e42",
+    "mtime": 1781791222.7925103,
+    "ast_hash": "df4cd30106c01ba9f9207c223e59968f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -1415,8 +1420,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781765565.3261786,
-    "ast_hash": "e69429ad2fa22a91d5044d5b517dc2c9",
+    "mtime": 1781788936.0816257,
+    "ast_hash": "eac6b3d1476fc45ea305a43d83f314d5",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
@@ -1430,8 +1435,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1781746135.8418007,
-    "ast_hash": "47ad483d74e55badfc13fb40e8297811",
+    "mtime": 1781791288.0862892,
+    "ast_hash": "6bf1372b88b95a2b8a67f3337a72786d",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {

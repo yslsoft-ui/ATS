@@ -956,17 +956,28 @@ function openRealAssetOrderModal(asset) {
  * KIS 거래소 라디오 버튼 및 정보 안내 표시를 갱신합니다.
  */
 function updateMarketInfo(detail) {
-    const marketVal = document.querySelector('input[name="real-order-market"]:checked')?.value;
     const marketDesc = document.getElementById('real-order-market-desc');
+    const orderBtn = document.getElementById('real-order-btn');
+    const resvBtn = document.getElementById('real-order-resv-btn');
     if (!marketDesc) return;
 
-    const isStock = state.realOrderState.exchange === 'kis';
+    const exchange = state.realOrderState.exchange || 'upbit';
+    const isStock = exchange === 'kis';
+
     if (!isStock) {
         marketDesc.style.display = 'none';
+        if (resvBtn) resvBtn.style.display = 'none';
+        if (orderBtn) {
+            orderBtn.disabled = false;
+            const side = state.realOrderState.side;
+            orderBtn.innerText = side === 'BUY' ? '실계좌 매수' : '실계좌 매도';
+        }
         return;
     }
 
-    // KST 시간 계산 (평일 08:00 ~ 20:00은 NXT 가능, 그 외 시간대는 KRX만 가능)
+    if (resvBtn) resvBtn.style.display = 'block';
+
+    // KST 시간 계산
     const now = new Date();
     const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
     const kst = new Date(utc + (3600000 * 9));
@@ -976,24 +987,16 @@ function updateMarketInfo(detail) {
     const isWeekday = day >= 1 && day <= 5;
     const isWeekend = day === 0 || day === 6;
     const timeVal = hour * 100 + minute;
-    const isNxtTime = isWeekday && (timeVal >= 800 && timeVal < 2000);
 
-    // KST 시간 기준 예약 주문 시간대 계산 (평일 15:40 ~ 23:40 및 00:10 ~ 07:30, 또는 주말 전체)
-    let isResvTime = false;
-    if (isWeekend) {
-        if (!(timeVal >= 2340 || timeVal < 10)) {
-            isResvTime = true;
-        }
-    } else {
-        if ((timeVal >= 1540 && timeVal < 2340) || (timeVal >= 10 && timeVal < 730)) {
-            isResvTime = true;
-        }
-    }
-
-    // KIS 상세 스펙에 따른 활성화 불가 조건 확인
     const isVts = detail && detail.is_vts;
     const isNxtSupported = detail && detail.cptt_trad_tr_psbl_yn === 'Y';
     const isNxtStop = detail && detail.nxt_tr_stop_yn === 'Y';
+    const isNxtTime = isWeekday && (timeVal >= 800 && timeVal < 2000);
+
+    // 라디오 버튼 상태 업데이트
+    const sorRadio = document.querySelector('input[name="real-order-market"][value="SOR"]');
+    const krxRadio = document.querySelector('input[name="real-order-market"][value="KRX"]');
+    const nxtRadio = document.querySelector('input[name="real-order-market"][value="NXT"]');
 
     let disabledReason = "";
     if (isVts) {
@@ -1006,14 +1009,97 @@ function updateMarketInfo(detail) {
         disabledReason = "⚠️ 이 종목은 대체거래소(NXT) 거래정지 상태입니다.";
     }
 
-    // 현재 선택값에 맞게 안내 출력
-    if (disabledReason && (marketVal === 'SOR' || marketVal === 'NXT')) {
-        marketDesc.innerText = disabledReason;
-        marketDesc.style.color = "#EF4444"; // 경고: 빨간색
+    if (disabledReason) {
+        if (sorRadio) sorRadio.disabled = true;
+        if (nxtRadio) nxtRadio.disabled = true;
+        if ((sorRadio && sorRadio.checked) || (nxtRadio && nxtRadio.checked)) {
+            if (krxRadio) krxRadio.checked = true;
+        }
+    } else {
+        if (sorRadio) sorRadio.disabled = false;
+        if (nxtRadio) nxtRadio.disabled = false;
+    }
+    if (krxRadio) krxRadio.disabled = false;
+
+    // 현재 체크된 라디오 버튼의 값 획득
+    const marketVal = document.querySelector('input[name="real-order-market"]:checked')?.value || 'KRX';
+
+    // 점검 시간 여부 (23:40 ~ 00:10)
+    const isMaintenance = (timeVal >= 2340 || timeVal < 10);
+
+    // 버튼 활성화 여부 판별
+    let isNormalEnabled = false;
+    let isResvEnabled = false;
+    let infoText = "";
+
+    if (isVts) {
+        // 모의투자는 평일 09:00 ~ 15:30에만 일반 주문 가능, 예약 주문 절대 불가
+        const isVtsTime = isWeekday && (timeVal >= 900 && timeVal < 1530);
+        if (isVtsTime) {
+            isNormalEnabled = true;
+        } else {
+            infoText = "⚠️ 모의투자는 정규장 시간(평일 09:00 ~ 15:30)에만 거래가 가능합니다.";
+        }
+    } else {
+        // 실계좌
+        if (isWeekend) {
+            if (isMaintenance) {
+                infoText = "⚠️ KIS 시스템 점검 시간(23:40 ~ 00:10)에는 예약 주문이 불가능합니다.";
+            } else {
+                isResvEnabled = true;
+                infoText = "ℹ️ 주말에는 다음 영업일 대비 예약 주문만 가능합니다.";
+            }
+        } else {
+            // 평일
+            if (isMaintenance) {
+                infoText = "⚠️ KIS 시스템 점검 시간(23:40 ~ 00:10)에는 예약 주문이 불가능합니다.";
+            } else {
+                if (isNxtSupported) {
+                    // NXT 지원 종목
+                    if (marketVal === 'SOR' || marketVal === 'NXT') {
+                        // SOR/NXT: 08:00 ~ 20:00에 일반 주문 활성화
+                        if (timeVal >= 800 && timeVal < 2000) {
+                            isNormalEnabled = true;
+                        } else {
+                            // 20:00 ~ 08:00 (NXT 마감)
+                            infoText = "⚠️ 대체거래소(NXT) 운영 시간(평일 08:00 ~ 20:00)이 종료되었습니다.";
+                        }
+                    } else {
+                        // KRX 선택
+                        if (timeVal >= 800 && timeVal < 1600) {
+                            // 08:00 ~ 16:00: KRX 일반 주문 가능
+                            isNormalEnabled = true;
+                        } else {
+                            // 16:00 ~ 익일 08:00: 예약 주문 가능
+                            isResvEnabled = true;
+                            infoText = "ℹ️ 한국거래소(KRX) 장마감 시간대입니다. 예약 주문만 접수할 수 있습니다.";
+                        }
+                    }
+                } else {
+                    // NXT 미지원 종목
+                    if (timeVal >= 800 && timeVal < 1600) {
+                        isNormalEnabled = true;
+                    } else {
+                        isResvEnabled = true;
+                        infoText = "ℹ️ 한국거래소(KRX) 장마감 시간대입니다. 예약 주문만 접수할 수 있습니다.";
+                    }
+                }
+            }
+        }
+    }
+
+    // 버튼 상태 제어
+    if (orderBtn) orderBtn.disabled = !isNormalEnabled;
+    if (resvBtn) resvBtn.disabled = !isResvEnabled;
+
+    // 안내 텍스트 노출 제어
+    if (infoText) {
+        marketDesc.innerText = infoText;
+        marketDesc.style.color = infoText.startsWith("⚠️") ? "#EF4444" : "#3B82F6";
         marketDesc.style.display = "block";
-    } else if (marketVal === 'KRX' && isResvTime) {
-        marketDesc.innerText = "ℹ️ 현재 장마감 시간대(15:40 ~ 익일 07:30)입니다. KRX 선택 시 다음 영업일 대비 예약 주문으로 접수됩니다.";
-        marketDesc.style.color = "#3B82F6"; // 정보 제공: 파란색
+    } else if (disabledReason && (marketVal === 'SOR' || marketVal === 'NXT')) {
+        marketDesc.innerText = disabledReason;
+        marketDesc.style.color = "#EF4444";
         marketDesc.style.display = "block";
     } else {
         marketDesc.style.display = "none";
@@ -1102,6 +1188,9 @@ async function openRealAssetOrderModalFromMonitoring() {
  */
 async function pollRealOrderbook() {
     if (!state.realOrderState.asset) return;
+    
+    // 실시간으로 시간 및 경계 시각 체크에 따른 버튼 상태 업데이트 실행
+    updateMarketInfo(state.realOrderState.kisDetail);
     
     try {
         const exchange = state.realOrderState.exchange || 'upbit';
@@ -1231,20 +1320,35 @@ function setOrderSide(side) {
     const buyTab = document.getElementById('order-tab-buy');
     const sellTab = document.getElementById('order-tab-sell');
     const orderBtn = document.getElementById('real-order-btn');
+    const resvBtn = document.getElementById('real-order-resv-btn');
     
-    if (buyTab && sellTab && orderBtn) {
+    if (buyTab && sellTab) {
         if (side === 'BUY') {
             buyTab.classList.add('active');
             sellTab.classList.remove('active');
-            orderBtn.innerText = '실계좌 매수 주문';
-            orderBtn.className = 'btn block buy';
-            orderBtn.style.background = '#FF4B4B';
+            if (orderBtn) {
+                orderBtn.innerText = '실계좌 매수';
+                orderBtn.className = 'btn block buy';
+                orderBtn.style.background = '#FF4B4B';
+            }
+            if (resvBtn) {
+                resvBtn.innerText = '예약 매수';
+                resvBtn.className = 'btn block';
+                resvBtn.style.background = '#F59E0B';
+            }
         } else {
             sellTab.classList.add('active');
             buyTab.classList.remove('active');
-            orderBtn.innerText = '실계좌 매도 주문';
-            orderBtn.className = 'btn block sell';
-            orderBtn.style.background = '#0072FF';
+            if (orderBtn) {
+                orderBtn.innerText = '실계좌 매도';
+                orderBtn.className = 'btn block sell';
+                orderBtn.style.background = '#0072FF';
+            }
+            if (resvBtn) {
+                resvBtn.innerText = '예약 매도';
+                resvBtn.className = 'btn block';
+                resvBtn.style.background = '#D946EF';
+            }
         }
     }
     
@@ -1433,7 +1537,7 @@ function setOrderRatio(ratio) {
 /**
  * 주문을 실제로 거래소에 제출합니다.
  */
-async function executeRealOrder() {
+async function executeRealOrder(isReservation = false) {
     const asset = state.realOrderState.asset;
     if (!asset) return;
     
@@ -1453,13 +1557,17 @@ async function executeRealOrder() {
     let orderData = {
         symbol: isStock ? asset.currency : `KRW-${asset.currency}`,
         side: side,
-        order_type: orderType
+        order_type: orderType,
+        is_reservation: isReservation
     };
     
-    let confirmMsg = `[실계좌 주문 경고]\n정말로 실제 자산을 사용해 주문하시겠습니까?\n\n`;
+    let confirmMsg = `[실계좌 ${isReservation ? '예약 ' : ''}주문 경고]\n정말로 실제 자산을 사용해 주문하시겠습니까?\n\n`;
     confirmMsg += `거래소: ${exchange.toUpperCase()}\n`;
     confirmMsg += `종목: ${asset.korean_name} (${asset.currency})\n`;
     confirmMsg += `구분: ${side === 'BUY' ? '매수' : '매도'} / ${orderType === 'limit' ? '지정가' : '시장가'}\n`;
+    if (isReservation) {
+        confirmMsg += `유형: 예약 주문\n`;
+    }
     
     const unit = isStock ? '주' : asset.currency;
     
@@ -1516,10 +1624,17 @@ async function executeRealOrder() {
     }
     
     const orderBtn = document.getElementById('real-order-btn');
+    const resvBtn = document.getElementById('real-order-resv-btn');
     const originalText = orderBtn ? orderBtn.innerText : '';
+    const originalResvText = resvBtn ? resvBtn.innerText : '';
+    
     if (orderBtn) {
         orderBtn.disabled = true;
-        orderBtn.innerText = "⏳ 주문 제출 중...";
+        if (!isReservation) orderBtn.innerText = "⏳ 주문 제출 중...";
+    }
+    if (resvBtn) {
+        resvBtn.disabled = true;
+        if (isReservation) resvBtn.innerText = "⏳ 예약 제출 중...";
     }
     
     try {
@@ -1535,6 +1650,12 @@ async function executeRealOrder() {
             orderBtn.disabled = false;
             orderBtn.innerText = originalText;
         }
+        if (resvBtn) {
+            resvBtn.disabled = false;
+            resvBtn.innerText = originalResvText;
+        }
+        // 최종 상태를 다시 시간에 맞게 동기화
+        updateMarketInfo(state.realOrderState.kisDetail);
     }
 }
 
