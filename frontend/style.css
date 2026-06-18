@@ -2566,18 +2566,20 @@ table tbody tr td:last-child { border-top-right-radius: 8px; border-bottom-right
 }
 
 .card-value {
-    font-size: 1.8rem;
-    font-weight: 700;
+    font-size: 1.6rem;
+    font-weight: 800;
     font-family: 'Roboto Mono', 'Source Code Pro', monospace;
     color: #F8FAFC;
     line-height: 1.2;
     margin-bottom: 6px;
     transition: color 0.15s ease;
+    text-align: right;
 }
 
 .card-sub-label {
     font-size: 0.72rem;
     color: #64748B;
+    text-align: right;
 }
 
 /* 가로형 자산 비중 바 (Stacked Progress Bar) */

@@ -114,7 +114,7 @@ const OverviewEngine = (() => {
         // 총 평가 자산
         const totalValueEl = document.getElementById(`overview-${type}-total-value`);
         if (totalValueEl) {
-            updateValueWithFlash(totalValueEl, Math.round(totalValue).toLocaleString() + ' 원');
+            updateValueWithFlash(totalValueEl, Math.round(totalValue).toLocaleString() + '원');
         }
 
         // ROI
@@ -127,13 +127,13 @@ const OverviewEngine = (() => {
         const roiDiffEl = document.getElementById(`overview-${type}-roi-diff`);
         if (roiDiffEl) {
             const diff = totalValue - initialCash;
-            roiDiffEl.innerText = `원금 대비 변동: ${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()} 원`;
+            roiDiffEl.innerText = `수익금: ${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()}원`;
         }
 
         // 보유 현금
         const cashEl = document.getElementById(`overview-${type}-cash`);
         if (cashEl) {
-            updateValueWithFlash(cashEl, Math.round(cash).toLocaleString() + ' 원');
+            updateValueWithFlash(cashEl, Math.round(cash).toLocaleString() + '원');
         }
         const cashRatioEl = document.getElementById(`overview-${type}-cash-ratio`);
         if (cashRatioEl && totalValue > 0) {
@@ -144,7 +144,7 @@ const OverviewEngine = (() => {
         // 보유종목 평가액
         const assetsValueEl = document.getElementById(`overview-${type}-assets-value`);
         if (assetsValueEl) {
-            updateValueWithFlash(assetsValueEl, Math.round(assetsValue).toLocaleString() + ' 원');
+            updateValueWithFlash(assetsValueEl, Math.round(assetsValue).toLocaleString() + '원');
         }
         const assetsRatioEl = document.getElementById(`overview-${type}-assets-ratio`);
         if (assetsRatioEl && totalValue > 0) {
@@ -162,19 +162,19 @@ const OverviewEngine = (() => {
 
         const initialCashEl = document.getElementById(`overview-${type}-initial-cash`);
         if (initialCashEl) {
-            updateValueWithFlash(initialCashEl, Math.round(initial).toLocaleString() + ' 원');
+            updateValueWithFlash(initialCashEl, Math.round(initial).toLocaleString() + '원');
         }
 
         const fee = summary.fee !== undefined ? summary.fee : 0.0;
         const totalFeeEl = document.getElementById(`overview-${type}-total-fee`);
         if (totalFeeEl) {
-            updateValueWithFlash(totalFeeEl, Math.round(fee).toLocaleString() + ' 원');
+            updateValueWithFlash(totalFeeEl, Math.round(fee).toLocaleString() + '원');
         }
 
         const tax = summary.tax !== undefined ? summary.tax : 0.0;
         const totalTaxEl = document.getElementById(`overview-${type}-total-tax`);
         if (totalTaxEl) {
-            updateValueWithFlash(totalTaxEl, Math.round(tax).toLocaleString() + ' 원');
+            updateValueWithFlash(totalTaxEl, Math.round(tax).toLocaleString() + '원');
         }
     }
 
@@ -325,7 +325,7 @@ const OverviewEngine = (() => {
                 segEl.style.width = `${seg.ratio}%`;
                 segEl.style.backgroundColor = seg.color;
                 
-                const tooltipText = `${seg.name}: ${Math.round(seg.value).toLocaleString()} 원 (${seg.ratio.toFixed(1)}%)`;
+                const tooltipText = `${seg.name}: ${Math.round(seg.value).toLocaleString()}원 (${seg.ratio.toFixed(1)}%)`;
                 segEl.setAttribute('data-tooltip', tooltipText);
 
                 if (seg.ratio >= 8.0) {
