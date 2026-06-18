@@ -132,10 +132,10 @@ class CollectorService(DaemonService):
                 'processing_queue': proc_queue,
                 'db_queue': tick_queue,
                 'candle_queue': candle_queue,
-                'repository': None,
+                'repository': self.repository,
                 'portfolio_manager': None,
                 'on_data_callback': None,
-                'on_signal_callback': None,
+                'on_signal_callback': lambda sig: asyncio.create_task(self.event_bus.publish("collector_signal", sig)),
                 'on_status_callback': None
             }
             collector = CollectorRegistry.create(exchange_id, **common_kwargs)

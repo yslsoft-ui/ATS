@@ -23,6 +23,8 @@ class KisCollector(BaseCollector):
         self.rank_task: Optional[asyncio.Task] = None
         self.symbol_market_map: Dict[str, str] = {}
         self.last_event_symbol: Optional[str] = None
+        self.vi_active_symbols = set()
+        self.suspended_symbols = set()
 
     @property
     def exchange_id(self) -> str:
@@ -151,20 +153,46 @@ class KisCollector(BaseCollector):
                             korean_name = stock_mapper.get_name('kis', symbol_code)
                             self.last_event_symbol = symbol_code
                             
-                            if trht_yn == 'Y':
-                                self.status = "SUSPENDED"
-                                self.status_reason = f"[{symbol_code}] {korean_name} 거래정지: {susp_reason}"
-                                logger.warning(f"[KIS] {symbol_code} ({korean_name}) 거래정지(SUSPENDED) 감지: {susp_reason} (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
-                            elif vi_cls_code not in ('N', ''):
-                                self.status = "SUSPENDED"
-                                self.status_reason = f"[{symbol_code}] {korean_name} VI 발동 (VI구분: {vi_cls_code})"
-                                logger.warning(f"[KIS] {symbol_code} ({korean_name}) 변동성완화장치(VI) 발동 감지 (장운영구분: {mkop_cls_code}, tr_id: {tr_id})")
+                            # 1. 시장 전체 거래정지 / 서킷브레이크 판단 (수집기 전역 상태 제어)
+                            if mkop_cls_code in ('164', '174', '184'):
+                                if self.status != "SUSPENDED":
+                                    self.status = "SUSPENDED"
+                                    self.status_reason = f"시장 전체 정지 / 서킷브레이커 발동 (코드: {mkop_cls_code})"
+                                    logger.warning(f"[KIS] 시장 전체 정지(SUSPENDED) 감지! 장운영구분: {mkop_cls_code}")
                             else:
-                                # 정상 복구
                                 if self.status == "SUSPENDED":
                                     self.status = "RUNNING"
                                     self.status_reason = None
-                                    logger.info(f"[KIS] {symbol_code} ({korean_name}) 거래 정지/VI 해제. RUNNING 복구.")
+                                    logger.info(f"[KIS] 시장 전체 정지 해제. RUNNING 복구.")
+                                    
+                            # 2. 개별 종목별 거래정지 감지 및 이벤트 기록
+                            if trht_yn == 'Y':
+                                if symbol_code not in self.suspended_symbols:
+                                    self.suspended_symbols.add(symbol_code)
+                                    msg = f"[{symbol_code}] {korean_name} 거래정지: {susp_reason}"
+                                    logger.warning(f"[KIS] 개별 종목 거래정지 감지: {msg}")
+                                    asyncio.create_task(self._record_stock_event('STOCK_SUSPENDED', symbol_code, msg))
+                            else:
+                                if symbol_code in self.suspended_symbols:
+                                    self.suspended_symbols.remove(symbol_code)
+                                    msg = f"[{symbol_code}] {korean_name} 거래정지 해제"
+                                    logger.info(f"[KIS] 개별 종목 거래정지 해제 감지: {msg}")
+                                    asyncio.create_task(self._record_stock_event('STOCK_RESUMED', symbol_code, msg))
+                                    
+                            # 3. 개별 종목별 VI 발동 감지 및 이벤트 기록
+                            if vi_cls_code not in ('N', ''):
+                                if symbol_code not in self.vi_active_symbols:
+                                    self.vi_active_symbols.add(symbol_code)
+                                    msg = f"[{symbol_code}] {korean_name} VI 발동 (구분코드: {vi_cls_code})"
+                                    logger.warning(f"[KIS] 개별 종목 VI 발동 감지: {msg}")
+                                    asyncio.create_task(self._record_stock_event('STOCK_VI_ACTIVATED', symbol_code, msg))
+                            else:
+                                if symbol_code in self.vi_active_symbols:
+                                    self.vi_active_symbols.remove(symbol_code)
+                                    msg = f"[{symbol_code}] {korean_name} VI 해제"
+                                    logger.info(f"[KIS] 개별 종목 VI 해제 감지: {msg}")
+                                    asyncio.create_task(self._record_stock_event('STOCK_VI_RELEASED', symbol_code, msg))
+                                    
                     except Exception as e:
                         logger.error(f"[KIS] 장운영정보 파싱 에러 (tr_id={tr_id}): {e}")
                     return None
@@ -233,12 +261,40 @@ class KisCollector(BaseCollector):
                         'trade_timestamp': trade_timestamp,
                         'high_price': high,
                         'low_price': low,
-                        'acc_trade_price_24h': acc_price
+                        'acc_trade_price_24h': acc_price,
+                        'is_vi': symbol_code in self.vi_active_symbols,
+                        'is_suspended': symbol_code in self.suspended_symbols
                     }
                     tick_list.append(tick_data)
                 
                 return tick_list if tick_list else None
         return None
+
+    async def _record_stock_event(self, event_type: str, symbol_code: str, message: str):
+        # 1. DB 기록
+        if self.repository:
+            try:
+                await self.repository.insert_system_event(
+                    event_type=event_type,
+                    target=symbol_code,
+                    message=message
+                )
+            except Exception as e:
+                logger.error(f"[KIS] Failed to insert stock system event: {e}")
+        
+        # 2. ZMQ/Websocket 발행 (on_signal_callback 호출)
+        if self.on_signal_callback:
+            try:
+                payload = {
+                    "type": "stock_event",
+                    "event_type": event_type,
+                    "target": symbol_code,
+                    "message": message,
+                    "timestamp": int(time.time() * 1000)
+                }
+                self.on_signal_callback(payload)
+            except Exception as e:
+                logger.error(f"[KIS] Failed to trigger stock event signal callback: {e}")
 
     async def _pre_connect_check(self) -> float:
         kis_config = self.config.get('exchanges', {}).get('kis', {}) if hasattr(self, 'config') and self.config else {}

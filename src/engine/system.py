@@ -191,7 +191,8 @@ class TradingSystem:
                 'timestamp': data.get('trade_timestamp') if data.get('trade_timestamp') is not None else prev.get('timestamp'),
                 'high_price': data.get('high_price') if data.get('high_price') is not None else prev.get('high_price'),
                 'low_price': data.get('low_price') if data.get('low_price') is not None else prev.get('low_price'),
-                'acc_trade_price_24h': data.get('acc_trade_price_24h') if data.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0)
+                'acc_trade_price_24h': data.get('acc_trade_price_24h') if data.get('acc_trade_price_24h') is not None else prev.get('acc_trade_price_24h', 0),
+                'is_vi': data.get('is_vi') if data.get('is_vi') is not None else prev.get('is_vi', False)
             }
             
             # 브로드캐스트 데이터에도 change_price 필드 공통화 적용

@@ -14,3 +14,7 @@ class MarketTickerDTO(BaseModel):
     high_price: float = 0.0
     low_price: float = 0.0
     is_collected: bool = True  # KIS 동적 수집 여부 체크용 (업비트/빗썸은 상시 수집이므로 True 기본값)
+    is_caution: bool = False   # 유의종목 여부
+    is_alert: bool = False     # 주의종목 / 경보제 여부
+    is_vi: bool = False        # 국내주식 VI 발동 여부
+    caution_reasons: list = [] # 상세 경보/유의 사유 목록

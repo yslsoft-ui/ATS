@@ -3596,6 +3596,42 @@ table tbody tr.selected {
     font-weight: bold;
 }
 
+/* 마켓 리스트 특수 뱃지 스타일 (유의/주의/VI) */
+.market-badge {
+    font-size: 0.65rem;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-weight: bold;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+    vertical-align: middle;
+    cursor: help;
+}
+
+/* 유의 종목 - Soft Red */
+.badge-caution {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #EF4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
+/* 주의 종목 / 경보제 - Amber/Yellow */
+.badge-alert {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #F59E0B !important;
+    border: 1px solid rgba(245, 158, 11, 0.35) !important;
+}
+
+/* 개별 VI 발동 종목 - Soft Red */
+.badge-vi {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #EF4444 !important;
+    border: 1px solid rgba(239, 68, 68, 0.35) !important;
+}
+
 
 
 

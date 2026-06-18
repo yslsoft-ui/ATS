@@ -96,6 +96,8 @@ class KisMarketAdapter(MarketAdapter):
             high_price = float(latest.get('high_price') or 0.0) if latest else 0.0
             low_price = float(latest.get('low_price') or 0.0) if latest else 0.0
 
+            is_vi = bool(latest.get('is_vi', False)) if latest else False
+
             dto_list.append(MarketTickerDTO(
                 exchange="kis",
                 market=s_code,
@@ -106,7 +108,8 @@ class KisMarketAdapter(MarketAdapter):
                 acc_trade_price_24h=acc_trade_price_24h,
                 high_price=high_price,
                 low_price=low_price,
-                is_collected=True
+                is_collected=True,
+                is_vi=is_vi
             ))
         return dto_list
 

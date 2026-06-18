@@ -505,6 +505,16 @@
                     </div>
                     <input type="text" id="market-search" class="dark-input market-search"
                         placeholder="종목명 또는 코드 검색...">
+                    <!-- 서킷브레이크 발동 시 나타날 경고 배너 -->
+                    <div id="market-circuit-breaker-banner" style="display: none; width: 100%; box-sizing: border-box; background: rgba(239, 68, 68, 0.15); border: 1px solid #EF4444; border-radius: 6px; padding: 12px 15px; margin-top: 15px; align-items: center; gap: 10px; flex-shrink: 0; clear: both;">
+                        <span style="font-size: 1.2rem;">🚨</span>
+                        <div style="flex-grow: 1; text-align: left;">
+                            <strong style="color: #FF4B4B; font-size: 0.95rem;">[비상] 국내 주식 시장 전체 거래 정지 (서킷브레이크 발동)</strong>
+                            <p style="margin: 3px 0 0 0; color: #E2E8F0; font-size: 0.8rem; line-height: 1.4;">
+                                국내 주식(KRW) 시장 전역에 서킷브레이커 또는 임시 정지 조치가 취해졌습니다. 수집이 일시 정지되며 주문 체결 처리가 지연될 수 있습니다.
+                            </p>
+                        </div>
+                    </div>
                     <!-- 마켓 메타 정보 및 수동 새로고침 위젯 (flex layout 개행 분리) -->
                     <div class="market-meta-bar"
                         style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding: 10px 15px; background: #1E293B; border: 1px solid #334155; border-radius: 6px; width: 100%; box-sizing: border-box; flex-shrink: 0; clear: both;">

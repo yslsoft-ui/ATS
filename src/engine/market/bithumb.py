@@ -16,8 +16,8 @@ class BithumbMarketAdapter(MarketAdapter):
         bithumb_config = system.config_manager.get('exchanges.bithumb', {})
         bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com/v1')
         
-        # 1. 빗썸 실시간 마켓 전체 목록 수집
-        url_all = f"{bithumb_api_url}/market/all?is_details=false"
+        # 1. 빗썸 실시간 마켓 전체 목록 수집 (유의 종목 파악을 위해 isDetails=true 추가)
+        url_all = f"{bithumb_api_url}/market/all?isDetails=true"
         async with session.get(url_all) as resp:
             if resp.status != 200:
                 raise Exception(f"Failed to fetch Bithumb markets list: status {resp.status}")
@@ -26,6 +26,34 @@ class BithumbMarketAdapter(MarketAdapter):
         krw_markets = [m for m in all_markets if m['market'].startswith('KRW-')]
         market_codes = [m['market'] for m in krw_markets]
         market_map = {m['market']: m['korean_name'] for m in krw_markets}
+        
+        # 유의종목 맵
+        caution_map = {m['market']: (m.get('market_warning') == 'CAUTION') for m in krw_markets}
+
+        # 1.5. 빗썸 주의 종목 / 경보제 상태 조회
+        alert_markets = set()
+        bithumb_alerts = {}
+        warning_type_map = {
+            "PRICE_SUDDEN_FLUCTUATION": "가격 급등락",
+            "PRICE_DIFFERENCE_HIGH": "글로벌 시세 차이",
+            "SPECIFIC_ACCOUNT_HIGH_TRANSACTION": "소수계정 거래 집중",
+            "TRADING_VOLUME_SUDDEN_FLUCTUATION": "거래량 급등",
+            "DEPOSIT_AMOUNT_SUDDEN_FLUCTUATION": "입금량 급등"
+        }
+        try:
+            url_warning = f"{bithumb_api_url}/market/virtual_asset_warning"
+            async with session.get(url_warning) as w_resp:
+                if w_resp.status == 200:
+                    warnings = await w_resp.json()
+                    for item in warnings:
+                        if isinstance(item, dict) and 'market' in item:
+                            m_code = item['market']
+                            alert_markets.add(m_code)
+                            w_type = item.get('warning_type')
+                            if w_type:
+                                bithumb_alerts.setdefault(m_code, []).append(warning_type_map.get(w_type, "주의"))
+        except Exception as e:
+            logger.error(f"Failed to fetch Bithumb virtual asset warnings: {e}")
 
         # 전종목을 한 번에 단일 호출
         bithumb_tickers = []
@@ -67,6 +95,13 @@ class BithumbMarketAdapter(MarketAdapter):
                 if stock_mapper.get_name('bithumb', s_code) != korean_name:
                     await stock_mapper.add_mapping_async('bithumb', s_code, korean_name, system.db_path)
                 
+                reasons = []
+                is_caution = caution_map.get(code, False)
+                if is_caution:
+                    reasons.append("투자유의")
+                if code in bithumb_alerts:
+                    reasons.extend(bithumb_alerts[code])
+
                 dto_list.append(MarketTickerDTO(
                     exchange="bithumb",
                     market=s_code,
@@ -76,6 +111,9 @@ class BithumbMarketAdapter(MarketAdapter):
                     change_price=latest.get('change_price', 0.0),
                     acc_trade_price_24h=latest.get('acc_trade_price_24h', 0.0),
                     high_price=latest.get('high_price', 0.0),
-                    low_price=latest.get('low_price', 0.0)
+                    low_price=latest.get('low_price', 0.0),
+                    is_caution=is_caution,
+                    is_alert=(code in alert_markets),
+                    caution_reasons=reasons
                 ))
         return dto_list

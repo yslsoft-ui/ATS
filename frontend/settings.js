@@ -534,6 +534,8 @@ async function updateSystemEvents() {
                 case 'DAEMON_START':
                 case 'COLLECTOR_START':
                 case 'EXCHANGE_RESUMED':
+                case 'STOCK_RESUMED':
+                case 'STOCK_VI_RELEASED':
                     badgeClass = 'status-on';
                     break;
                 case 'DAEMON_STOP':
@@ -541,6 +543,8 @@ async function updateSystemEvents() {
                     badgeClass = 'status-neutral';
                     break;
                 case 'EXCHANGE_SUSPENDED':
+                case 'STOCK_SUSPENDED':
+                case 'STOCK_VI_ACTIVATED':
                     badgeClass = 'status-suspended';
                     break;
                 case 'EXCHANGE_ERROR':

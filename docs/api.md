@@ -120,11 +120,34 @@
 자산 종목 조회, 실시간/역사적 캔들 정보 및 KIS 순위 데이터를 제공합니다.
 
 - **`GET /market`**
-  - **설명**: 감시 대상 마켓의 전체 종목 실시간 가격 변동 현황(한글명, 현재가, 변동률, 변동액, 거래대금)을 조회합니다.
+  - **설명**: 감시 대상 마켓의 전체 종목 실시간 가격 변동 현황 및 거래소별 경보 상태(유의, 주의, VI 발동 여부 및 사유)를 조회합니다.
   - **응답 (JSON)**:
     ```json
     {
-      "upbit:BTC": { "price": 98550000.0, "change_rate": 0.05, "volume_power": 112.5, "korean_name": "비트코인" }
+      "tickers": [
+        {
+          "exchange": "upbit",
+          "market": "BTC",
+          "korean_name": "비트코인",
+          "trade_price": 98550000.0,
+          "signed_change_rate": 0.05,
+          "change_price": 450000.0,
+          "acc_trade_price_24h": 123456789.0,
+          "high_price": 99000000.0,
+          "low_price": 97000000.0,
+          "is_collected": true,
+          "is_caution": false,
+          "is_alert": false,
+          "is_vi": false,
+          "caution_reasons": []
+        }
+      ],
+      "latency": {
+        "upbit": 120,
+        "bithumb": 80,
+        "kis": 150
+      },
+      "timestamp": "2026-06-18 10:25:28"
     }
     ```
 

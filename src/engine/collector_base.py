@@ -61,6 +61,7 @@ class BaseCollector(ABC):
         self.on_data_callback = on_data_callback
         self.on_signal_callback = on_signal_callback
         self.on_status_callback = on_status_callback
+        self.repository = kwargs.get('repository')
         
         self.task: Optional[asyncio.Task] = None
         self.is_running = False

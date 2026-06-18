@@ -47,6 +47,18 @@ function renderMarketTable(data) {
     if (!tbody) return;
     tbody.innerHTML = '';
     
+    // 서킷브레이커 상단 배너 제어
+    const cbBanner = document.getElementById('market-circuit-breaker-banner');
+    if (cbBanner) {
+        const statuses = Store.get('collectorStatuses') || {};
+        const kisStatus = statuses.kis || {};
+        if (state.currentMarketTab === 'kis' && kisStatus.status === 'SUSPENDED') {
+            cbBanner.style.display = 'flex';
+        } else {
+            cbBanner.style.display = 'none';
+        }
+    }
+    
     // thead 동적 구성
     if (thead) {
         if (state.currentMarketTab === 'kis') {
@@ -133,12 +145,32 @@ function renderMarketTable(data) {
             `;
         }
 
+        let badgeHtml = '';
+        if (exchange === 'upbit' || exchange === 'bithumb') {
+            if (coin.is_caution) {
+                const reasons = coin.caution_reasons || [];
+                const label = reasons.length > 0 ? `유의 (${reasons.join(', ')})` : '유의';
+                badgeHtml = `<span class="market-badge badge-caution" title="유의 종목 상세 사유: ${reasons.join(', ')}">${label}</span>`;
+            } else if (coin.is_alert) {
+                const reasons = coin.caution_reasons || [];
+                const label = reasons.length > 0 ? `주의 (${reasons.join(', ')})` : '주의';
+                badgeHtml = `<span class="market-badge badge-alert" title="주의/경보 상세 사유: ${reasons.join(', ')}">${label}</span>`;
+            }
+        } else if (exchange === 'kis') {
+            if (coin.is_vi) {
+                badgeHtml = `<span class="market-badge badge-vi" title="개별 종목 변동성완화장치(VI) 발동 중">VI</span>`;
+            }
+        }
+
         trHtml += `
             <td class="rank">${idx + 1}</td>
             <td class="coin-cell">
                 <img src="${iconUrl}" alt="${ticker}" class="coin-icon">
                 <div class="coin-names">
-                    <span class="coin-kr">${coin.korean_name}</span>
+                    <span class="coin-kr" style="display: inline-flex; align-items: center; gap: 4px;">
+                        ${coin.korean_name}
+                        ${badgeHtml}
+                    </span>
                     <span class="coin-code">${ticker}</span>
                 </div>
             </td>
