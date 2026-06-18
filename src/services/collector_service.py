@@ -136,7 +136,8 @@ class CollectorService(DaemonService):
                 'portfolio_manager': None,
                 'on_data_callback': None,
                 'on_signal_callback': lambda sig: asyncio.create_task(self.event_bus.publish("collector_signal", sig)),
-                'on_status_callback': None
+                'on_status_callback': None,
+                'on_backfill_complete': lambda sym, exch=exchange_id: asyncio.create_task(self._on_backfill_complete(exch, sym))
             }
             collector = CollectorRegistry.create(exchange_id, **common_kwargs)
             if collector:
@@ -309,6 +310,10 @@ class CollectorService(DaemonService):
                 collector = self.collectors.get(exchange)
                 if collector and hasattr(collector, 'update_subscription'):
                     await collector.update_subscription(code, is_collected)
+                    # 프로세서 종목 리로드 호출 (전략 엔진 동적 초기화/해제 보장)
+                    processor = self.processors.get(exchange)
+                    if processor:
+                        await processor.reload_symbols(self.full_config, collector.available_symbols)
                     # 버전 증가 및 1회성 동기화 전송
                     self.symbols_version[exchange] = self.symbols_version.setdefault(exchange, 1) + 1
                     await self.publish_symbols_sync(exchange)
@@ -550,6 +555,20 @@ class CollectorService(DaemonService):
             pass
         except Exception as e:
             logger.error(f"[CollectorService] periodic symbols sync loop error: {e}")
+
+    async def _on_backfill_complete(self, exchange_id: str, symbol: str):
+        """특정 종목의 백필이 완료되었을 때 실행되는 콜백으로, 해당 종목의 전략 엔진을 워밍업합니다."""
+        logger.info(f"[CollectorService] {exchange_id.upper()} {symbol} 백필 완료 → 전략 엔진 워밍업 실행")
+        processor = self.processors.get(exchange_id)
+        if processor and symbol in processor.trade_engines:
+            engine = processor.trade_engines[symbol]
+            try:
+                await engine.warm_up(self.db_path)
+                logger.info(f"[CollectorService] {exchange_id.upper()} {symbol} 전략 엔진 워밍업 성공 완료")
+            except Exception as e:
+                logger.error(f"[CollectorService] {exchange_id.upper()} {symbol} 전략 엔진 워밍업 실패: {e}")
+        else:
+            logger.warning(f"[CollectorService] {exchange_id.upper()} {symbol}의 전략 엔진을 찾을 수 없어 워밍업을 스킵합니다.")
 
     def _get_rss_memory(self) -> float:
         """/proc/self/status 파일에서 데몬 프로세스의 현재 RSS 메모리(MB)를 안전하게 파싱합니다."""

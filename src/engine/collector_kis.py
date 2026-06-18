@@ -475,6 +475,8 @@ class KisCollector(BaseCollector):
             if code not in self.available_symbols:
                 self.available_symbols.append(code)
                 logger.info(f"[KIS] 동적 수집 종목 추가: {code}")
+                # 신규 등록 종목에 대한 즉시 백필 기동 (백그라운드 비동기 태스크)
+                asyncio.create_task(self.backfill_symbol(code, self.config))
             
             # 동적으로 추가된 종목도 Nextrade 여부 판별 수행
             if code not in self.symbol_market_map:

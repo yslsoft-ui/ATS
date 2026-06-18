@@ -75,6 +75,9 @@
 ### 2.4. 비동기 백필 및 벌크 최적화 전략 (Backfill Optimization)
 
 * **비동기 백필 기동:** 수집기가 구동될 때 과거 누락된 1분봉 데이터를 동기화하는 백필 작업이 실시간 수집을 차단하지 않도록 `asyncio.create_task(self.backfill_candles(config))`로 비동기 실행합니다. 이를 통해 구동 즉시 1~2초 내에 실시간 소켓 연결이 맺어지며 데이터 수집이 시작되고, 과거 누락분은 백그라운드에서 병행 수집됩니다.
+* **동적 수집 종목 백필 (Dynamic Backfill on Registration):** 데몬 실행 중 웹 UI나 API를 통해 신규 종목의 수집이 동적으로 활성화(`update_symbols`)되거나, 전체 종목 동기화(`sync-assets`) 시점에 신규 추가된 종목들에 대해서도 `asyncio.create_task(self.backfill_symbol(code, self.config))`를 통해 백그라운드에서 즉시 과거 1분봉 백필을 수행합니다.
+* **백필 완료 후 전략 엔진 자동 워밍업 (Warm-up Linkage):** 특정 종목의 백필이 완료되면 `on_backfill_complete` 콜백을 통해 `CollectorService`에 완료 이벤트가 전달되고, 서비스 레이어에서 해당 종목의 `TradeEngine`에 대해 즉각 `warm_up(db_path)`을 비동기로 실행합니다. 이를 통해 신규 등록된 종목에서도 과거 데이터 공백 없이 즉시 이동평균선(SMA), RSI 등 기술 지표 계산이 정상 가동됩니다.
+* **Upbit 및 Bithumb 동적 구독 갱신 지원:** `BaseCollector`에 공통 `update_subscription`를 정의하여, 기존 KIS 수집기뿐만 아니라 업비트와 빗썸 수집기에서도 개별 종목이 수집 토글되었을 때 웹소켓 실시간 구독 목록을 동적으로 재구독 및 동적 백필하도록 확장했습니다.
 * **벌크 병합 백필 (Bulk Merged Backfill):** 디스크 DB에 듬성듬성 비어있는 과거 누락 캔들을 채울 때, 개별 틈새(Gap)마다 요청을 쪼개어 API를 날리지 않고, 전체 누락 타임스탬프 중 `[min_missing, max_missing]`의 단일 대형 구간을 계산하여 단 1회의 벌크 API 호출로 데이터를 수집합니다. 수집된 캔들 중 이미 로컬 DB에 존재하는 데이터는 메모리 상에서 중복 필터링(Duplicate Filtering)하여 순수 누락 데이터만 저장함으로써 API 호출 횟수를 최대 90% 이상 획기적으로 절감했습니다.
 * **지능적 탐색 범위 축소 (Intelligent Lookback Reduction):** 데몬 재기동 시 고정된 과거 24시간 전체 범위를 맹목적으로 백필하는 낭비를 방지하기 위해, 각 종목별 DB 내 최신 캔들 시각(`MAX(timestamp)`)을 사전에 조회합니다. 이후 백필 조사 구간의 시작점(`max_lookback`)을 `max(기본 24시간 전, DB 최신 캔들 시각)`으로 제한하여 탐색 범위를 지능적으로 축소하고, 불필요한 거래소 API 호출 트래픽 및 DB 쿼리 부하를 줄였습니다.
 * **재연결 및 안정성 전략**

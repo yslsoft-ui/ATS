@@ -62,6 +62,7 @@ class BaseCollector(ABC):
         self.on_signal_callback = on_signal_callback
         self.on_status_callback = on_status_callback
         self.repository = kwargs.get('repository')
+        self.on_backfill_complete = kwargs.get('on_backfill_complete')
         
         self.task: Optional[asyncio.Task] = None
         self.is_running = False
@@ -139,8 +140,11 @@ class BaseCollector(ABC):
     async def reload_symbols(self, config: Dict[str, Any] = None):
         """DB에서 활성 종목을 실시간 재조회하여 소켓 구독 목록을 실시간으로 갱신합니다."""
         # 1. DB에서 active 종목 재조회
+        old_symbols = set(self.available_symbols)
         new_symbols = await self._fetch_active_symbols_from_db(config or self.config)
         self.available_symbols = new_symbols
+        
+        added_symbols = [s for s in new_symbols if s not in old_symbols]
         
         # 2. WebSocket 구독 재전송
         if self.ws and not self.ws.closed:
@@ -149,6 +153,12 @@ class BaseCollector(ABC):
                 logger.info(f"[{self.exchange_id.upper()}] 활성 구독 목록 실시간 리로드 완료: {len(self.available_symbols)}개 종목")
             except Exception as e:
                 logger.error(f"[{self.exchange_id.upper()}] 실시간 구독 리로드 실패: {e}")
+
+        # 새로 추가된 종목에 대해 비동기 백필 실행
+        if added_symbols:
+            logger.info(f"[{self.exchange_id.upper()}] 실시간 리로드 중 신규 추가 종목 감지되어 백필을 실행합니다: {added_symbols}")
+            for symbol in added_symbols:
+                asyncio.create_task(self.backfill_symbol(symbol, config or self.config))
 
     def _group_consecutive_timestamps(self, timestamps: List[int], interval=60) -> List[tuple]:
         """연속된 타임스탬프들을 시작과 끝 시각의 튜플 리스트로 그룹화합니다."""
@@ -178,8 +188,8 @@ class BaseCollector(ABC):
         """각 거래소별 REST API를 호출하여 누락된 1분봉 데이터를 조회하여 반환합니다."""
         pass
 
-    async def backfill_candles(self, config: Dict[str, Any]):
-        """로컬 DB의 누락된 빈 틈(gap)들을 탐색하여 누락된 분봉을 수집하고 백필합니다."""
+    async def backfill_symbol(self, symbol: str, config: Dict[str, Any]):
+        """특정 종목에 대해 로컬 DB의 누락된 빈 틈(gap)들을 탐색하여 과거 1분봉 데이터를 수집하고 백필합니다."""
         bf_config = config.get('collector', {}).get('backfill', {})
         if not bf_config.get('enabled', True):
             logger.info(f"[{self.exchange_id.upper()}] 백필 기능이 비활성화되어 있습니다.")
@@ -187,103 +197,98 @@ class BaseCollector(ABC):
 
         db_path = config.get('db_path', 'data/backtest.db')
         max_hours = bf_config.get('max_hours', 24)
-        
-        # 거래소별 Throttling 딜레이 추출
-        delays = bf_config.get('delays', {})
-        delay = delays.get(self.exchange_id, 0.2)
-
-        logger.info(f"[{self.exchange_id.upper()}] 백필 작업 기동. 대상 종목: {self.available_symbols}, 최대 복구: {max_hours}시간, API 딜레이: {delay}초")
 
         from src.database.connection import get_db_conn
         
         current_time = int(time.time() // 60) * 60
-        default_max_lookback = current_time - (max_hours * 3600)
+        max_lookback = current_time - (max_hours * 3600)
 
-        for symbol in self.available_symbols:
-            if not self.is_running:
-                break
-            
+        try:
+            # 0. DB 내 해당 종목의 최신 캔들 시각을 조회하여 백필 룩백 범위를 좁힙니다.
+            last_db_time = None
             try:
-                # 0. DB 내 해당 종목의 최신 캔들 시각을 조회하여 백필 룩백 범위를 좁힙니다.
-                last_db_time = None
-                try:
-                    async with get_db_conn(db_path) as db:
-                        cursor = await db.execute(
-                            "SELECT MAX(timestamp) FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60",
-                            (self.exchange_id, symbol)
-                        )
-                        row = await cursor.fetchone()
-                        if row and row[0]:
-                            last_db_time = row[0]
-                except Exception as e:
-                    logger.error(f"[{self.exchange_id.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
+                async with get_db_conn(db_path) as db:
+                    cursor = await db.execute(
+                        "SELECT MAX(timestamp) FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60",
+                        (self.exchange_id, symbol)
+                    )
+                    row = await cursor.fetchone()
+                    if row and row[0]:
+                        last_db_time = row[0]
+            except Exception as e:
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 최근 DB 캔들 조회 실패: {e}")
 
-                # 중간에 뚫린 구멍(Gap)을 완벽하게 메우기 위해 백필 룩백의 시작점은 항상 기본 최대 탐색 시각(예: 24시간 전)으로 고정합니다.
-                max_lookback = default_max_lookback
+            # 1. 기대 타임스탬프 목록 생성 (마감된 분봉까지만 조회: 현재 분의 1분 전까지)
+            end_time = current_time - 60
+            raw_expected = range(max_lookback, end_time + 60, 60)
 
-                # 1. 기대 타임스탬프 목록 생성 (마감된 분봉까지만 조회: 현재 분의 1분 전까지)
-                end_time = current_time - 60
-                raw_expected = range(max_lookback, end_time + 60, 60)
-
-                if self.exchange_id == 'kis':
-                    from zoneinfo import ZoneInfo
-                    from datetime import datetime
-                    kst = ZoneInfo('Asia/Seoul')
-                    expected_timestamps = []
-                    current_date = datetime.fromtimestamp(current_time, tz=kst).date()
-                    for ts in raw_expected:
-                        dt = datetime.fromtimestamp(ts, tz=kst)
-                        # KIS API는 당일 분봉만 제공하므로 당일 타임스탬프만 수집 대상으로 한정
-                        if dt.date() != current_date:
-                            continue
-                        # 주말 제외
-                        if dt.weekday() >= 5:
-                            continue
-                        # KIS 거래 시간(정규+대체): KST 08:00 ~ 20:00 (480분 ~ 1200분)
-                        m_val = dt.hour * 60 + dt.minute
-                        if 480 <= m_val < 1200:
-                            expected_timestamps.append(ts)
-                else:
-                    expected_timestamps = list(raw_expected)
-
-                if not expected_timestamps:
-                    continue
-
-                # 2. DB에 이미 존재하는 타임스탬프 조회
-                existing_timestamps = set()
-                try:
-                    async with get_db_conn(db_path) as db:
-                        cursor = await db.execute(
-                            "SELECT timestamp FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
-                            (self.exchange_id, symbol, max_lookback, end_time)
-                        )
-                        rows = await cursor.fetchall()
-                        existing_timestamps = {r[0] for r in rows}
-                except Exception as e:
-                    logger.error(f"[{self.exchange_id.upper()}] {symbol} DB 조회 실패: {e}")
-                    continue
-
-                # 3. 누락된 타임스탬프 추출
-                missing_timestamps = [ts for ts in expected_timestamps if ts not in existing_timestamps]
-                if not missing_timestamps:
-                    logger.debug(f"[{self.exchange_id.upper()}] {symbol} 백필 불필요 (누락된 구간 없음)")
-                    continue
-
-                # 4. 전체 누락 구간의 최소값과 최대값 추출 (잘게 쪼개지 않고 전체 범위를 한 번에 벌크 호출)
-                start_t = min(missing_timestamps)
-                end_t = max(missing_timestamps)
-
-                logger.info(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 구간: "
-                            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_t))} ~ "
-                            f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_t))} (누락 캔들수: {len(missing_timestamps)}개)")
-
-                try:
-                    # 거래소별 REST API 호출
-                    candles = await self._fetch_historical_candles(symbol, start_t, end_t)
-                    if not candles:
-                        logger.debug(f"[{self.exchange_id.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다. (구간: {start_t} ~ {end_t})")
+            if self.exchange_id == 'kis':
+                from zoneinfo import ZoneInfo
+                from datetime import datetime
+                kst = ZoneInfo('Asia/Seoul')
+                expected_timestamps = []
+                current_date = datetime.fromtimestamp(current_time, tz=kst).date()
+                for ts in raw_expected:
+                    dt = datetime.fromtimestamp(ts, tz=kst)
+                    # KIS API는 당일 분봉만 제공하므로 당일 타임스탬프만 수집 대상으로 한정
+                    if dt.date() != current_date:
                         continue
+                    # 주말 제외
+                    if dt.weekday() >= 5:
+                        continue
+                    # KIS 거래 시간(정규+대체): KST 08:00 ~ 20:00 (480분 ~ 1200분)
+                    m_val = dt.hour * 60 + dt.minute
+                    if 480 <= m_val < 1200:
+                        expected_timestamps.append(ts)
+            else:
+                expected_timestamps = list(raw_expected)
 
+            if not expected_timestamps:
+                return
+
+            # 2. DB에 이미 존재하는 타임스탬프 조회
+            existing_timestamps = set()
+            try:
+                async with get_db_conn(db_path) as db:
+                    cursor = await db.execute(
+                        "SELECT timestamp FROM candles WHERE exchange_id = ? AND symbol = ? AND interval = 60 AND timestamp >= ? AND timestamp <= ?",
+                        (self.exchange_id, symbol, max_lookback, end_time)
+                    )
+                    rows = await cursor.fetchall()
+                    existing_timestamps = {r[0] for r in rows}
+            except Exception as e:
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} DB 조회 실패: {e}")
+                return
+
+            # 3. 누락된 타임스탬프 추출
+            missing_timestamps = [ts for ts in expected_timestamps if ts not in existing_timestamps]
+            if not missing_timestamps:
+                logger.debug(f"[{self.exchange_id.upper()}] {symbol} 백필 불필요 (누락된 구간 없음)")
+                # 이미 디비에 다 차있어도 콜백은 호출해 주는 것이 혹시 모를 타이밍 이슈(전략 warm_up) 방지에 좋음
+                if hasattr(self, 'on_backfill_complete') and self.on_backfill_complete:
+                    try:
+                        if asyncio.iscoroutinefunction(self.on_backfill_complete):
+                            await self.on_backfill_complete(symbol)
+                        else:
+                            self.on_backfill_complete(symbol)
+                    except Exception as cb_err:
+                        logger.error(f"[{self.exchange_id.upper()}] 백필 완료 콜백 실행 오류 ({symbol}): {cb_err}")
+                return
+
+            # 4. 전체 누락 구간의 최소값과 최대값 추출 (잘게 쪼개지 않고 전체 범위를 한 번에 벌크 호출)
+            start_t = min(missing_timestamps)
+            end_t = max(missing_timestamps)
+
+            logger.info(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 구간: "
+                        f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(start_t))} ~ "
+                        f"{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(end_t))} (누락 캔들수: {len(missing_timestamps)}개)")
+
+            try:
+                # 거래소별 REST API 호출
+                candles = await self._fetch_historical_candles(symbol, start_t, end_t)
+                if not candles:
+                    logger.debug(f"[{self.exchange_id.upper()}] {symbol} 복구할 과거 캔들이 존재하지 않습니다. (구간: {start_t} ~ {end_t})")
+                else:
                     # 시간 순서로 정렬
                     candles.sort(key=lambda x: x.timestamp)
 
@@ -311,14 +316,65 @@ class BaseCollector(ABC):
                     
                     logger.info(f"[{self.exchange_id.upper()}] {symbol} 백필 캔들 큐 적재 완료: {count}개 (API 반환: {len(candles)}개)")
 
-                except Exception as e:
-                    logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 중 에러 발생: {e}")
+                # 백필 완료 콜백 실행
+                if hasattr(self, 'on_backfill_complete') and self.on_backfill_complete:
+                    try:
+                        if asyncio.iscoroutinefunction(self.on_backfill_complete):
+                            await self.on_backfill_complete(symbol)
+                        else:
+                            self.on_backfill_complete(symbol)
+                    except Exception as cb_err:
+                        logger.error(f"[{self.exchange_id.upper()}] 백필 완료 콜백 실행 오류 ({symbol}): {cb_err}")
 
             except Exception as e:
-                logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
-            finally:
-                # 종목 간 Throttling 딜레이 적용
-                await asyncio.sleep(delay)
+                logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 수행 중 에러 발생: {e}")
+
+        except Exception as e:
+            logger.error(f"[{self.exchange_id.upper()}] {symbol} 백필 과정에서 에러 발생: {e}")
+
+    async def backfill_candles(self, config: Dict[str, Any]):
+        """로컬 DB의 누락된 빈 틈(gap)들을 탐색하여 누락된 분봉을 수집하고 백필합니다."""
+        bf_config = config.get('collector', {}).get('backfill', {})
+        if not bf_config.get('enabled', True):
+            logger.info(f"[{self.exchange_id.upper()}] 백필 기능이 비활성화되어 있습니다.")
+            return
+
+        db_path = config.get('db_path', 'data/backtest.db')
+        max_hours = bf_config.get('max_hours', 24)
+        
+        # 거래소별 Throttling 딜레이 추출
+        delays = bf_config.get('delays', {})
+        delay = delays.get(self.exchange_id, 0.2)
+
+        logger.info(f"[{self.exchange_id.upper()}] 백필 작업 기동. 대상 종목: {self.available_symbols}, 최대 복구: {max_hours}시간, API 딜레이: {delay}초")
+
+        for symbol in self.available_symbols:
+            if not self.is_running:
+                break
+            await self.backfill_symbol(symbol, config)
+            # 종목 간 Throttling 딜레이 적용
+            await asyncio.sleep(delay)
+
+    async def update_subscription(self, code: str, is_collected: bool):
+        """ZMQ IPC 시그널 수신 시 동적으로 실시간 웹소켓 구독을 추가/해제하고 백필을 트리거합니다."""
+        if is_collected:
+            if code not in self.available_symbols:
+                self.available_symbols.append(code)
+                logger.info(f"[{self.exchange_id.upper()}] 동적 수집 종목 추가: {code}")
+                # 신규 등록 종목에 대한 즉시 백필 기동 (백그라운드 비동기 태스크)
+                asyncio.create_task(self.backfill_symbol(code, self.config))
+        else:
+            if code in self.available_symbols:
+                self.available_symbols.remove(code)
+                logger.info(f"[{self.exchange_id.upper()}] 동적 수집 종목 제거: {code}")
+
+        # WebSocket 구독 갱신 (전체 구독 목록을 다시 전송하는 거래소용)
+        if self.ws and not self.ws.closed:
+            try:
+                await self._subscribe(self.ws, self.config)
+                logger.info(f"[{self.exchange_id.upper()}] 웹소켓 실시간 구독 갱신 완료 ({code})")
+            except Exception as e:
+                logger.error(f"[{self.exchange_id.upper()}] 웹소켓 구독 갱신 실패 ({code}): {e}")
 
     @abstractmethod
     def _get_websocket_url(self, config: Dict[str, Any]) -> str:

@@ -810,8 +810,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_kis.py": {
-    "mtime": 1781746022.6631992,
-    "ast_hash": "2ae53256aa9e5fa5f6e21bcf3bf8015f",
+    "mtime": 1781754706.648539,
+    "ast_hash": "85f32bada7aa489969fdd2335bf7a541",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/analyzer.py": {
@@ -845,8 +845,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/collector_base.py": {
-    "mtime": 1781745983.8863072,
-    "ast_hash": "c0dc6e1c67897949d8a7e22770df659b",
+    "mtime": 1781754678.3519695,
+    "ast_hash": "e744434cde63d8411d6f18c114f7bcd1",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/engine/market_data_processor.py": {
@@ -1125,8 +1125,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
-    "mtime": 1781745997.9266303,
-    "ast_hash": "41d9ae9581b7f0daeebe7eb50b427388",
+    "mtime": 1781754697.0443456,
+    "ast_hash": "838f9a3f997363644c24fc97df8f6bcc",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/shadow_eval_service.py": {
@@ -1435,8 +1435,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
-    "mtime": 1781603167.3401995,
-    "ast_hash": "3a7b6faede7f891f39645e784c54bf85",
+    "mtime": 1781751578.9131498,
+    "ast_hash": "b1466c19f02cb2e861d8697a9c00e160",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/backtest-engine-design.md": {
@@ -1445,8 +1445,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1781705541.880704,
-    "ast_hash": "6d79d3d65a5b6034ead64dfee835607c",
+    "mtime": 1781751574.449056,
+    "ast_hash": "7c11d358c1dfa19b53bad31279ba86ca",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
