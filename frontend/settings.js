@@ -2,6 +2,7 @@
  * 설정 화면 제어 및 수집기 상태 관리 모듈
  */
 let lastSeenErrors = {};
+let lastSeenSuspended = { upbit: false, bithumb: false, kis: false };
 const exchangeState = {
     upbit: { isRunning: false },
     bithumb: { isRunning: false },
@@ -93,6 +94,17 @@ function renderCollectorStatuses(statuses) {
                 errorEl.innerText = `⚠️ 정지 사유: ${status.status_reason}`;
                 errorEl.style.color = '#F59E0B';
                 errorEl.style.display = 'block';
+                
+                // SUSPENDED 상태로 최초 진입 시 토스트 알림 고지 (중복 노출 방지)
+                if (!lastSeenSuspended[exch]) {
+                    const reason = status.status_reason ? `: ${status.status_reason}` : '';
+                    if (typeof showToast === 'function') {
+                        showToast(`⚠️ [${exch.toUpperCase()}] 변동성 완화장치(VI) 등으로 인해 수집이 일시 정지(SUSPENDED)되었습니다${reason}`, 'warning');
+                    } else {
+                        showAlert({ msg: `⚠️ [${exch.toUpperCase()}] 수집 일시 정지${reason}`, alert_type: 'warning' });
+                    }
+                    lastSeenSuspended[exch] = true;
+                }
             } else if (error) {
                 errorEl.innerText = error;
                 errorEl.style.color = '#FF4B4B';
@@ -101,13 +113,16 @@ function renderCollectorStatuses(statuses) {
                     showAlert({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${error}`, alert_type: 'error' });
                     lastSeenErrors[exch] = error;
                 }
+                lastSeenSuspended[exch] = false;
             } else {
                 errorEl.style.display = 'none';
                 lastSeenErrors[exch] = null;
+                lastSeenSuspended[exch] = false;
             }
         }
 
-        if (!isRunning || error || status.status === 'SUSPENDED') {
+        // SUSPENDED 상태는 시장 메커니즘 정지(VI 등)이므로 비상 경고 배너 대상에서 제외
+        if (status.status !== 'SUSPENDED' && (!isRunning || error)) {
             hasEmergency = true;
         }
     });
