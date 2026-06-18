@@ -28,7 +28,9 @@
         alertFilter: 'high',
         alertHistory: [],
         symbolNames: {},
-        collectorStatuses: {}
+        collectorStatuses: {},
+        marketSortKey: null,
+        marketSortOrder: 'none'
     };
 
 

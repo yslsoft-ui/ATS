@@ -774,6 +774,29 @@ td {
     z-index: 1;
 }
 
+#market-table thead th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#market-table thead th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.sort-icon {
+    font-size: 0.72rem;
+    margin-left: 4px;
+    color: var(--text-muted, #64748B);
+    display: inline-block;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.sort-icon.active {
+    color: #F59E0B; /* Amber 포인트 컬러 */
+}
+
 .market-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     cursor: pointer;

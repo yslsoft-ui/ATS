@@ -66,35 +66,72 @@ function renderMarketTable(data) {
                 <tr>
                     <th style="width: 65px; text-align: center;">수집</th>
                     <th style="width: 50px; text-align: center;">#</th>
-                    <th>종목</th>
-                    <th style="text-align:right">현재가</th>
-                    <th style="text-align:right">변동률(24h)</th>
-                    <th style="text-align:right">변동액(24h)</th>
-                    <th style="text-align:right">고가</th>
-                    <th style="text-align:right">저가</th>
-                    <th style="text-align:right">거래대금(24h)</th>
+                    <th class="sortable" data-key="korean_name">종목 ${getSortIcon('korean_name')}</th>
+                    <th class="sortable" style="text-align:right" data-key="trade_price">현재가 ${getSortIcon('trade_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="signed_change_rate">변동률(24h) ${getSortIcon('signed_change_rate')}</th>
+                    <th class="sortable" style="text-align:right" data-key="change_price">변동액(24h) ${getSortIcon('change_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="high_price">고가 ${getSortIcon('high_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="low_price">저가 ${getSortIcon('low_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="acc_trade_price_24h">거래대금(24h) ${getSortIcon('acc_trade_price_24h')}</th>
                 </tr>
             `;
         } else {
             thead.innerHTML = `
                 <tr>
                     <th>#</th>
-                    <th>종목</th>
-                    <th style="text-align:right">현재가</th>
-                    <th style="text-align:right">변동률(24h)</th>
-                    <th style="text-align:right">변동액(24h)</th>
-                    <th style="text-align:right">고가</th>
-                    <th style="text-align:right">저가</th>
-                    <th style="text-align:right">거래대금(24h)</th>
+                    <th class="sortable" data-key="korean_name">종목 ${getSortIcon('korean_name')}</th>
+                    <th class="sortable" style="text-align:right" data-key="trade_price">현재가 ${getSortIcon('trade_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="signed_change_rate">변동률(24h) ${getSortIcon('signed_change_rate')}</th>
+                    <th class="sortable" style="text-align:right" data-key="change_price">변동액(24h) ${getSortIcon('change_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="high_price">고가 ${getSortIcon('high_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="low_price">저가 ${getSortIcon('low_price')}</th>
+                    <th class="sortable" style="text-align:right" data-key="acc_trade_price_24h">거래대금(24h) ${getSortIcon('acc_trade_price_24h')}</th>
                 </tr>
             `;
         }
+
+        // 헤더 클릭 이벤트 바인딩
+        thead.querySelectorAll('.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const key = th.dataset.key;
+                toggleSort(key);
+            });
+        });
     }
     
     // 현재 선택된 탭에 맞는 거래소 데이터만 필터링
     const filteredByExch = data.filter(c => c.exchange === state.currentMarketTab);
+
+    // 전역 정렬 기준에 따른 정렬 수행 (미수집 종목은 항상 하단에 배치)
+    let sortedData = [...filteredByExch];
+    if (state.marketSortKey && state.marketSortOrder !== 'none') {
+        sortedData.sort((a, b) => {
+            const aCol = a.is_collected !== false;
+            const bCol = b.is_collected !== false;
+            if (aCol !== bCol) {
+                return aCol ? -1 : 1; // 수집중인 종목이 앞으로, 미수집이 뒤로
+            }
+
+            let valA = a[state.marketSortKey];
+            let valB = b[state.marketSortKey];
+
+            if (valA === undefined || valA === null) valA = 0;
+            if (valB === undefined || valB === null) valB = 0;
+
+            if (state.marketSortKey === 'korean_name') {
+                const strA = String(valA);
+                const strB = String(valB);
+                return state.marketSortOrder === 'asc' ? strA.localeCompare(strB, 'ko') : strB.localeCompare(strA, 'ko');
+            } else {
+                const numA = Number(valA);
+                const numB = Number(valB);
+                if (numA === numB) return 0;
+                return state.marketSortOrder === 'asc' ? numA - numB : numB - numA;
+            }
+        });
+    }
     
-    filteredByExch.forEach((coin, idx) => {
+    sortedData.forEach((coin, idx) => {
         const ticker = coin.market;
         const exchange = coin.exchange || 'upbit';
         let iconUrl = '';
@@ -263,6 +300,44 @@ function renderMarketTable(data) {
     
     const countEl = document.getElementById('market-count');
     if (countEl) countEl.innerText = `${filteredByExch.length} 종목`;
+}
+
+/**
+ * 정렬 기준 컬럼과 방향을 순환 토글하고 테이블을 재렌더링합니다.
+ * @param {string} key - 정렬 기준 필드명
+ */
+function toggleSort(key) {
+    if (state.marketSortKey === key) {
+        if (state.marketSortOrder === 'desc') {
+            state.marketSortOrder = 'asc';
+        } else if (state.marketSortOrder === 'asc') {
+            state.marketSortKey = null;
+            state.marketSortOrder = 'none';
+        } else {
+            state.marketSortOrder = 'desc';
+        }
+    } else {
+        state.marketSortKey = key;
+        state.marketSortOrder = 'desc';
+    }
+    renderMarketTable(marketData);
+}
+
+/**
+ * 현재 정렬 상태에 적합한 인디케이터 아이콘 HTML을 반환합니다.
+ * @param {string} key - 정렬 기준 필드명
+ */
+function getSortIcon(key) {
+    if (state.marketSortKey !== key) {
+        return '<span class="sort-icon">⇅</span>';
+    }
+    if (state.marketSortOrder === 'asc') {
+        return '<span class="sort-icon active">▲</span>';
+    }
+    if (state.marketSortOrder === 'desc') {
+        return '<span class="sort-icon active">▼</span>';
+    }
+    return '<span class="sort-icon">⇅</span>';
 }
 
 /**
