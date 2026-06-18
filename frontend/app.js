@@ -568,22 +568,41 @@ function initTradingControls() {
             const target = tab.dataset.tab;
             const chartContent = document.getElementById('monitoring-tab-content-chart');
             const detailContent = document.getElementById('monitoring-tab-content-detail');
+            const outstandingContent = document.getElementById('monitoring-tab-content-outstanding');
+            
+            // 모든 콘텐츠 숨김
+            if (chartContent) chartContent.style.display = 'none';
+            if (detailContent) detailContent.style.display = 'none';
+            if (outstandingContent) outstandingContent.style.display = 'none';
             
             if (target === 'chart') {
                 if (chartContent) chartContent.style.display = 'block';
-                if (detailContent) detailContent.style.display = 'none';
                 if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
                     setTimeout(() => ChartEngine.resize(), 50);
                 }
-            } else {
-                if (chartContent) chartContent.style.display = 'none';
+            } else if (target === 'detail') {
                 if (detailContent) detailContent.style.display = 'block';
                 if (typeof KisDetailView !== 'undefined' && typeof KisDetailView.loadKisDetail === 'function') {
                     KisDetailView.loadKisDetail();
                 }
+            } else if (target === 'outstanding') {
+                if (outstandingContent) outstandingContent.style.display = 'block';
+                if (typeof loadOutstandingOrders === 'function') {
+                    loadOutstandingOrders();
+                }
             }
         });
     });
+
+    // 미체결 내역 새로고침 버튼 바인딩
+    const btnRefreshOutstanding = document.getElementById('btn-refresh-outstanding');
+    if (btnRefreshOutstanding) {
+        btnRefreshOutstanding.addEventListener('click', () => {
+            if (typeof loadOutstandingOrders === 'function') {
+                loadOutstandingOrders();
+            }
+        });
+    }
 
     const btnTrading = document.getElementById('btn-toggle-trading');
     const tradingStatus = document.getElementById('trading-status');
@@ -675,6 +694,14 @@ function initTradingControls() {
             
             loadHistory();
             loadRecentTrades();
+
+            // 미체결/예약 내역 탭이 활성화되어 있다면 내역도 재조회
+            const outstandingTab = document.querySelector('.monitoring-tab[data-tab="outstanding"]');
+            if (outstandingTab && outstandingTab.classList.contains('active')) {
+                if (typeof loadOutstandingOrders === 'function') {
+                    loadOutstandingOrders();
+                }
+            }
         }
         
         if (key === 'wsConnected') {

@@ -44,8 +44,9 @@
 ### 2.3. 컴포넌트 & 뷰 레이어 (Views & Visualization)
 - **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Lightweight Charts를 사용하여 Candlestick 차트를 그리며, SMA/볼린저 밴드 오버레이 및 RSI 보조 지표를 별도 서브 차트에 고속 렌더링합니다.
 - **[overview.js](file:///home/simon/ATS/frontend/overview.js)**: 실시간 운용 대시보드(Overview) 뷰 렌더러로, `simulation` 및 `live` 뷰 각각에 대해 6대 성과 메트릭 카드(ROI, 원금, 총 자산, 현금, 종목 평가액, 누적 수수료) 및 거래소별 자산 배분 비중 바를 독립적으로 렌더링합니다. 또한 각 거래소 블록 클릭 시 대시보드 하단에 상세 테이블 영역을 동적으로 활성화하고, `portfolio-view.js`의 테이블 렌더링 로직을 재사용하여 상세 종목 현황 및 종목별 거래내역을 연동 렌더링합니다. (기존 하단에 존재하던 보유 포지션 및 피드 패널은 대시보드 뷰 간략화 및 자산 요약 중심 렌더링을 위해 삭제되었습니다.)
-- **[portfolio.js](file:///home/simon/ATS/frontend/portfolio.js)**: 실계좌 자산 관리 및 수동 주문(주문 모달, 호가창) 전반을 관장하는 모듈입니다.
-  - 주요 기능: 거래소별 실자산 조회, 거래 이력 모달 제어, 호가창(Orderbook) 실시간 렌더링 및 스크롤 센터링, 실계좌 주문 전송 및 거래소별 분기 제어(시간외 KIS 예약 주문 자동 분기 등), 주문 결과에 대한 브라우저 표준 피드백 제공.
+- **[portfolio.js](file:///home/simon/ATS/frontend/portfolio.js)**: 실계좌 자산 관리, 수동 주문(주문 모달, 호가창), 미체결 및 예약 주문 관리를 관장하는 모듈입니다.
+  - 주요 기능: 거래소별 실자산 조회, 거래 이력 모달 제어, 호가창(Orderbook) 실시간 렌더링 및 스크롤 센터링, 실계좌 주문 전송 및 제어, 주문 결과 피드백 제공.
+  - 미체결 및 예약 내역 제어: `loadOutstandingOrders()`를 통해 각 거래소별 미체결 및 KIS 예약 주문을 조회하여 테이블에 실시간 렌더링하며, `cancelOutstandingOrder()`를 통해 사용자가 확인을 거친 후 일반 미체결 또는 예약 주문을 원격 취소하고 로컬 DB와 잔고를 최신화하도록 구현되었습니다.
 - **[portfolio-view.js](file:///home/simon/ATS/frontend/portfolio-view.js)**: 포트폴리오의 실물 보유 현황 및 가상 투자 운용 상태를 표와 폼으로 렌더링합니다.
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.

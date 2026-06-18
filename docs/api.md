@@ -510,6 +510,63 @@
     }
     ```
 
+- **`GET /api/exchanges/{exchange_id}/outstanding`**
+  - **설명**: 지정한 거래소(upbit / bithumb / kis)의 미체결 일반 주문 및 미처리 예약 주문 목록을 조회합니다. KIS의 경우 일반 미체결과 함께 예약 미처리 주문도 통합하여 반환합니다.
+  - **Path Parameters**:
+    - `exchange_id`: 거래소 ID (`upbit`, `bithumb`, `kis`)
+  - **Query Parameters**:
+    - `symbol`: 종목코드 (선택, e.g. `BTC` 또는 `005930`. 생략 시 전체 조회)
+  - **Response (JSON Array)**:
+    ```json
+    [
+      {
+        "uuid": "kis-normal-odno",
+        "symbol": "KRW-005930",
+        "side": "BUY",
+        "price": 75000.0,
+        "volume": 10.0,
+        "remaining_volume": 10.0,
+        "executed_volume": 0.0,
+        "created_at": "20260618 13:30:00",
+        "is_reservation": false,
+        "excg_id_dvsn_cd": "KRX"
+      },
+      {
+        "uuid": "kis-resv-seq",
+        "symbol": "KRW-005930",
+        "side": "BUY",
+        "price": 74000.0,
+        "volume": 5.0,
+        "remaining_volume": 5.0,
+        "executed_volume": 0.0,
+        "created_at": "20260618 20:30:00",
+        "is_reservation": true,
+        "rsvn_ord_ord_dt": "20260619",
+        "excg_id_dvsn_cd": "KRX"
+      }
+    ]
+    ```
+
+- **`POST /api/exchanges/{exchange_id}/cancel`**
+  - **설명**: 지정한 거래소(upbit / bithumb / kis)의 미체결 일반 주문 또는 예약 주문을 취소 처리합니다. 성공 시 로컬 DB(`real_orders`)의 상태도 `'cancel'`로 즉시 업데이트합니다.
+  - **Path Parameters**:
+    - `exchange_id`: 거래소 ID (`upbit`, `bithumb`, `kis`)
+  - **Request Body (JSON)**:
+    ```json
+    {
+      "uuid": "kis-cancel-uuid",
+      "symbol": "005930",
+      "is_reservation": false,
+      "excg_id_dvsn_cd": "KRX",
+      "rsvn_ord_ord_dt": null
+    }
+    ```
+    - `uuid`: 주문번호 또는 예약 순번 (필수)
+    - `symbol`: 종목코드 (필수, e.g. `BTC`, `005930`)
+    - `is_reservation`: KIS 예약 주문 취소 여부 (선택, 기본값 false)
+    - `excg_id_dvsn_cd`: KIS 일반 취소 시 거래소 구분 (`KRX`, `NXT`, `SOR`, 기본값 'KRX')
+    - `rsvn_ord_ord_dt`: KIS 예약 취소 시 필수 예약주문일자 (`YYYYMMDD`, 기본값 null)
+
 ---
 
 ## 2. WebSocket 실시간 스트리밍 프로토콜

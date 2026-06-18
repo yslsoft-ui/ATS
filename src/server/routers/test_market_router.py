@@ -150,7 +150,7 @@ async def test_get_exchange_orderbook():
             return mock_req
 
     with patch('aiohttp.ClientSession', MockClientSession):
-        res = await get_exchange_orderbook(request, exchange="upbit", symbol="BTC")
+        res = await get_exchange_orderbook(request, exchange_id="upbit", symbol="BTC")
         assert res["orderbook"]["market"] == "KRW-BTC"
         assert res["trade_price"] == 49500000.0
         assert len(res["orderbook"]["orderbook_units"]) == 1
@@ -198,7 +198,7 @@ async def test_place_exchange_order_limit():
 
     with patch('aiohttp.ClientSession', MockClientSession), \
          patch('os.getenv', return_value="dummy_key"):
-        res = await place_exchange_order(request, exchange="upbit", body=body)
+        res = await place_exchange_order(request, exchange_id="upbit", body=body)
         assert res["uuid"] == "dummy-uuid"
         assert res["ord_type"] == "limit"
 
@@ -219,7 +219,7 @@ async def test_get_exchange_orders(tmp_path):
         await db.execute("""
             CREATE TABLE IF NOT EXISTS real_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 uuid TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -234,7 +234,7 @@ async def test_get_exchange_orders(tmp_path):
         """)
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             "upbit",
@@ -250,7 +250,7 @@ async def test_get_exchange_orders(tmp_path):
         ))
         await db.commit()
         
-    res = await get_exchange_orders(request, exchange="upbit", symbol="BTC")
+    res = await get_exchange_orders(request, exchange_id="upbit", symbol="BTC")
     assert len(res) == 1
     assert res[0]["uuid"] == "dummy-order-uuid"
     assert res[0]["side"] == "BUY"
@@ -405,4 +405,330 @@ async def test_get_kis_symbol_detail_from_api_fallback(tmp_path):
                 assert row is not None
                 assert row["prdt_abrv_name"] == "삼성전자"
                 assert row["cptt_trad_tr_psbl_yn"] == "Y"
+
+
+from src.server.routers.market import get_exchange_outstanding_orders, cancel_exchange_order, CancelOrderRequest
+
+@pytest.mark.asyncio
+async def test_get_exchange_outstanding_orders_upbit():
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    
+    mock_outstanding_response = [
+        {
+            "uuid": "upbit-order-uuid",
+            "market": "KRW-BTC",
+            "side": "bid",
+            "price": "50000000.0",
+            "volume": "0.01",
+            "remaining_volume": "0.01",
+            "executed_volume": "0.0",
+            "created_at": "2026-06-18T23:17:00+09:00"
+        }
+    ]
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.json.return_value = mock_outstanding_response
+    
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def get(self, url, **kwargs):
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+            
+    with patch('aiohttp.ClientSession', MockClientSession), \
+         patch('os.getenv', return_value="dummy_key"):
+        res = await get_exchange_outstanding_orders(request, exchange_id="upbit", symbol="BTC")
+        assert len(res) == 1
+        assert res[0]["uuid"] == "upbit-order-uuid"
+        assert res[0]["side"] == "BUY"
+        assert res[0]["remaining_volume"] == 0.01
+        assert res[0]["is_reservation"] is False
+        assert res[0]["state"] == "wait"
+
+
+@pytest.mark.asyncio
+async def test_get_exchange_outstanding_orders_kis():
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.cred_provider.get_kis_access_token = AsyncMock(return_value="mock_token")
+    request.app.state.system.config_manager.get.side_effect = lambda key, default=None: {
+        'app_key': 'mock_key',
+        'app_secret': 'mock_secret',
+        'account_no': '12345678-01',
+        'api_url': 'https://openapi.koreainvestment.com:9443'
+    } if key == 'exchanges.kis' else default
+
+    mock_daily_ccld = {
+        "rt_cd": "0",
+        "output1": [
+            {
+                "odno": "kis-normal-odno",
+                "pdno": "005930",
+                "sll_buy_dvsn_cd": "02",
+                "ord_unpr": "75000",
+                "ord_qty": "10",
+                "rmn_qty": "10",
+                "tot_ccld_qty": "0",
+                "ord_dt": "20260618",
+                "ord_tmd": "133000",
+                "excg_id_dvsn_cd": "KRX"
+            }
+        ]
+    }
+    
+    mock_resv_ccnl = {
+        "rt_cd": "0",
+        "output": [
+            {
+                "rsvn_ord_seq": "kis-resv-seq",
+                "pdno": "005930",
+                "sll_buy_dvsn_cd": "02",
+                "ord_rsvn_unpr": "74000",
+                "ord_rsvn_qty": "5",
+                "rsvn_ord_rcit_dt": "20260618",
+                "rsvn_ord_rcit_tmd": "203000",
+                "rsvn_ord_ord_dt": "20260619"
+            }
+        ]
+    }
+
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def get(self, url, **kwargs):
+            mock_resp = AsyncMock()
+            mock_resp.status = 200
+            if "inquire-daily-ccld" in url:
+                mock_resp.json.return_value = mock_daily_ccld
+            elif "order-resv-ccnl" in url:
+                mock_resp.json.return_value = mock_resv_ccnl
+            
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+
+    with patch('aiohttp.ClientSession', MockClientSession):
+        res = await get_exchange_outstanding_orders(request, exchange_id="kis", symbol="005930")
+        assert len(res) == 2
+        
+        normal = next(r for r in res if not r["is_reservation"])
+        assert normal["uuid"] == "kis-normal-odno"
+        assert normal["remaining_volume"] == 10.0
+        assert normal["state"] == "wait"
+        
+        resv = next(r for r in res if r["is_reservation"])
+        assert resv["uuid"] == "kis-resv-seq"
+        assert resv["remaining_volume"] == 5.0
+        assert resv["rsvn_ord_ord_dt"] == "20260619"
+        assert resv["state"] == "wait"
+
+
+@pytest.mark.asyncio
+async def test_get_exchange_outstanding_orders_with_cancelled(tmp_path):
+    db_file = tmp_path / "test_ats.db"
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.db_path = str(db_file)
+    
+    # Setup database with cancelled order
+    import aiosqlite
+    async with aiosqlite.connect(str(db_file)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS real_orders (
+                exchange_id TEXT,
+                uuid TEXT PRIMARY KEY,
+                symbol TEXT,
+                side TEXT,
+                price REAL,
+                volume REAL,
+                executed_volume REAL,
+                fee REAL,
+                state TEXT,
+                created_at TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        await db.execute("""
+            INSERT INTO real_orders (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, ("upbit", "cancelled-uuid", "BTC", "SELL", 52000000.0, 0.02, 0.0, 0.0, "cancel", "2026-06-18 23:20:00"))
+        await db.commit()
+
+    mock_outstanding_response = [
+        {
+            "uuid": "upbit-active-uuid",
+            "market": "KRW-BTC",
+            "side": "bid",
+            "price": "50000000.0",
+            "volume": "0.01",
+            "remaining_volume": "0.01",
+            "executed_volume": "0.0",
+            "created_at": "2026-06-18T23:17:00+09:00"
+        }
+    ]
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.json.return_value = mock_outstanding_response
+    
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def get(self, url, **kwargs):
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+            
+    with patch('aiohttp.ClientSession', MockClientSession), \
+         patch('os.getenv', return_value="dummy_key"):
+        res = await get_exchange_outstanding_orders(request, exchange_id="upbit", symbol="BTC")
+        # Should return both active and cancelled order
+        assert len(res) == 2
+        
+        active = next(o for o in res if o["state"] == "wait")
+        assert active["uuid"] == "upbit-active-uuid"
+        
+        cancelled = next(o for o in res if o["state"] == "cancel")
+        assert cancelled["uuid"] == "cancelled-uuid"
+        assert cancelled["remaining_volume"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_cancel_exchange_order_upbit(tmp_path):
+    db_file = tmp_path / "test_ats.db"
+    
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.db_path = str(db_file)
+    
+    import aiosqlite
+    async with aiosqlite.connect(str(db_file)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS real_orders (
+                exchange_id TEXT,
+                uuid TEXT PRIMARY KEY,
+                symbol TEXT,
+                side TEXT,
+                price REAL,
+                volume REAL,
+                executed_volume REAL,
+                fee REAL,
+                state TEXT,
+                created_at TEXT
+            )
+        """)
+        await db.execute("INSERT INTO real_orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         ("upbit", "cancel-uuid", "BTC", "BUY", 50000000.0, 0.01, 0.0, 0.0, "wait", "2026-06-18"))
+        await db.commit()
+
+    body = CancelOrderRequest(
+        uuid="cancel-uuid",
+        symbol="BTC",
+        is_reservation=False
+    )
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.json.return_value = {"uuid": "cancel-uuid", "state": "cancel"}
+    
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def delete(self, url, **kwargs):
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+
+    with patch('aiohttp.ClientSession', MockClientSession), \
+         patch('os.getenv', return_value="dummy_key"):
+        res = await cancel_exchange_order(request, exchange_id="upbit", body=body)
+        assert res["uuid"] == "cancel-uuid"
+        
+        async with aiosqlite.connect(str(db_file)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT state FROM real_orders WHERE uuid = ?", ("cancel-uuid",)) as cursor:
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row["state"] == "cancel"
+
+
+@pytest.mark.asyncio
+async def test_cancel_exchange_order_kis(tmp_path):
+    db_file = tmp_path / "test_ats.db"
+    
+    request = MagicMock(spec=Request)
+    request.app.state.system = MagicMock()
+    request.app.state.system.db_path = str(db_file)
+    request.app.state.system.cred_provider.get_kis_access_token = AsyncMock(return_value="mock_token")
+    request.app.state.system.config_manager.get.side_effect = lambda key, default=None: {
+        'app_key': 'mock_key',
+        'app_secret': 'mock_secret',
+        'account_no': '12345678-01',
+        'api_url': 'https://openapi.koreainvestment.com:9443'
+    } if key == 'exchanges.kis' else default
+
+    import aiosqlite
+    async with aiosqlite.connect(str(db_file)) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS real_orders (
+                exchange_id TEXT,
+                uuid TEXT PRIMARY KEY,
+                symbol TEXT,
+                side TEXT,
+                price REAL,
+                volume REAL,
+                executed_volume REAL,
+                fee REAL,
+                state TEXT,
+                created_at TEXT
+            )
+        """)
+        await db.execute("INSERT OR IGNORE INTO real_orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         ("kis", "kis-cancel-uuid", "005930", "BUY", 75000.0, 10.0, 0.0, 0.0, "wait", "2026-06-18"))
+        await db.commit()
+
+    body = CancelOrderRequest(
+        uuid="kis-cancel-uuid",
+        symbol="005930",
+        is_reservation=False,
+        excg_id_dvsn_cd="KRX"
+    )
+    
+    mock_resp = AsyncMock()
+    mock_resp.status = 200
+    mock_resp.json.return_value = {"rt_cd": "0", "msg1": "정상처리", "output": {"ODNO": "kis-cancel-uuid"}}
+    
+    class MockClientSession:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        def post(self, url, json=None, headers=None, **kwargs):
+            mock_req = AsyncMock()
+            mock_req.__aenter__ = AsyncMock(return_value=mock_resp)
+            return mock_req
+
+    with patch('aiohttp.ClientSession', MockClientSession):
+        res = await cancel_exchange_order(request, exchange_id="kis", body=body)
+        assert res["rt_cd"] == "0"
+        
+        async with aiosqlite.connect(str(db_file)) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("SELECT state FROM real_orders WHERE uuid = ?", ("kis-cancel-uuid",)) as cursor:
+                row = await cursor.fetchone()
+                assert row is not None
+                assert row["state"] == "cancel"
+
 

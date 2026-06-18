@@ -1158,6 +1158,13 @@ class RealOrderRequest(BaseModel):
     excg_id_dvsn_cd: Optional[str] = None
     is_reservation: Optional[bool] = False
 
+class CancelOrderRequest(BaseModel):
+    uuid: str
+    symbol: str
+    is_reservation: Optional[bool] = False
+    excg_id_dvsn_cd: Optional[str] = "KRX"
+    rsvn_ord_ord_dt: Optional[str] = None
+
 def _create_upbit_jwt(access_key, secret_key, query_hash=None):
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
@@ -1871,6 +1878,550 @@ async def get_system_event_types(request: Request):
     except Exception as e:
         logger.error(f"Failed to fetch system event types: {e}")
         raise HTTPException(status_code=500, detail=f"이벤트 타입 목록 조회 실패: {str(e)}")
+
+
+@router.get("/api/exchanges/{exchange_id}/outstanding")
+async def get_exchange_outstanding_orders(request: Request, exchange_id: str, symbol: Optional[str] = None):
+    """
+    거래소별(업비트/빗썸/KIS) 미체결 및 예약(미처리) 주문 목록을 가져옵니다.
+    """
+    exchange = exchange_id.lower()
+    if exchange not in ('upbit', 'bithumb', 'kis'):
+        raise HTTPException(status_code=400, detail=f"현재 미체결 주문 조회는 업비트, 빗썸, KIS만 지원합니다.")
+        
+    system = request.app.state.system
+    clean_symbol = symbol.replace("KRW-", "").upper() if symbol else ""
+    
+    exchange_orders = []
+    
+    # 1. 업비트 미체결 주문 조회
+    if exchange == 'upbit':
+        access_key = os.getenv("UPBIT_ACCESS_KEY")
+        secret_key = os.getenv("UPBIT_SECRET_KEY")
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            raise HTTPException(status_code=400, detail="업비트 API 키가 설정되지 않았습니다.")
+            
+        api_url = system.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+        base_url = api_url.rstrip('/')
+        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        params = {"state": "wait"}
+        if clean_symbol:
+            params["market"] = f"KRW-{clean_symbol}"
+            
+        import urllib.parse
+        import hashlib
+        query_string = urllib.parse.urlencode(params).encode("utf-8")
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        
+        token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{upbit_v1_url}/orders", params=params, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                        raise HTTPException(status_code=resp.status, detail=f"업비트 API 오류: {err_msg}")
+                    
+                    processed = []
+                    for o in res_data:
+                        processed.append({
+                            "uuid": o.get("uuid"),
+                            "symbol": o.get("market"),
+                            "side": "BUY" if o.get("side") == "bid" else "SELL",
+                            "price": float(o.get("price") or 0.0),
+                            "volume": float(o.get("volume") or 0.0),
+                            "remaining_volume": float(o.get("remaining_volume") or 0.0),
+                            "executed_volume": float(o.get("executed_volume") or 0.0),
+                            "created_at": o.get("created_at"),
+                            "is_reservation": False,
+                            "excg_id_dvsn_cd": None,
+                            "state": "wait"
+                        })
+                    exchange_orders = processed
+        except Exception as e:
+            logger.error(f"Error fetching upbit outstanding orders: {e}")
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    # 2. 빗썸 미체결 주문 조회
+    elif exchange == 'bithumb':
+        access_key = os.getenv("BITHUMB_API_KEY")
+        secret_key = os.getenv("BITHUMB_SECRET_KEY")
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            raise HTTPException(status_code=400, detail="빗썸 API 키가 설정되지 않았습니다.")
+            
+        bithumb_config = system.config_manager.get('exchanges.bithumb', {})
+        api_url = bithumb_config.get('api_url', 'https://api.bithumb.com')
+        base_url = api_url.rstrip('/')
+        bithumb_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        params = {"state": "wait"}
+        if clean_symbol:
+            params["market"] = f"KRW-{clean_symbol}"
+            
+        import urllib.parse
+        import hashlib
+        query_string = urllib.parse.urlencode(params).encode("utf-8")
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        
+        token = _create_bithumb_jwt(access_key, secret_key, query_hash=query_hash)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{bithumb_v1_url}/orders", params=params, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                        raise HTTPException(status_code=resp.status, detail=f"빗썸 API 오류: {err_msg}")
+                    
+                    processed = []
+                    for o in res_data:
+                        processed.append({
+                            "uuid": o.get("uuid"),
+                            "symbol": o.get("market"),
+                            "side": "BUY" if o.get("side") == "bid" else "SELL",
+                            "price": float(o.get("price") or 0.0),
+                            "volume": float(o.get("volume") or 0.0),
+                            "remaining_volume": float(o.get("remaining_volume") or 0.0),
+                            "executed_volume": float(o.get("executed_volume") or 0.0),
+                            "created_at": o.get("created_at"),
+                            "is_reservation": False,
+                            "excg_id_dvsn_cd": None,
+                            "state": "wait"
+                        })
+                    exchange_orders = processed
+        except Exception as e:
+            logger.error(f"Error fetching bithumb outstanding orders: {e}")
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    # 3. KIS 미체결/예약 주문 조회
+    elif exchange == 'kis':
+        kis_config = system.config_manager.get('exchanges.kis', {})
+        kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+        kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+        kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+        
+        if not kis_app_key or not kis_app_secret or not kis_account_no:
+            raise HTTPException(status_code=400, detail="KIS API 키 또는 계좌 정보가 설정되지 않았습니다.")
+            
+        kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+        is_vts = "openapivts" in kis_api_url
+        
+        token = await system.cred_provider.get_kis_access_token()
+        if not token:
+            raise HTTPException(status_code=401, detail="KIS 토큰 발급에 실패했습니다.")
+            
+        kis_account_no = str(kis_account_no).strip()
+        if '-' in kis_account_no:
+            cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+        else:
+            cano = kis_account_no[:8]
+            acnt_prdt_cd = kis_account_no[8:]
+        if not acnt_prdt_cd:
+            acnt_prdt_cd = "01"
+            
+        now_kst = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=9)
+        today_str = now_kst.strftime("%Y%m%d")
+        start_str = (now_kst - datetime.timedelta(days=30)).strftime("%Y%m%d")
+        
+        normal_orders = []
+        
+        # 3.1. KIS 일반 미체결 주문 조회 (inquire-daily-ccld, CCLD_DVSN='02')
+        tr_id = "VTTC0081R" if is_vts else "TTTC0081R"
+        headers = {
+            "content-type": "application/json",
+            "authorization": f"Bearer {token}",
+            "appkey": kis_app_key,
+            "appsecret": kis_app_secret,
+            "tr_id": tr_id,
+            "custtype": "P"
+        }
+        params = {
+            "CANO": cano,
+            "ACNT_PRDT_CD": acnt_prdt_cd,
+            "INQR_STRT_DT": start_str,
+            "INQR_END_DT": today_str,
+            "SLL_BUY_DVSN_CD": "00",
+            "INQR_DVSN": "00",
+            "PDNO": clean_symbol,
+            "CCLD_DVSN": "02",  # '02' 미체결
+            "ORD_GNO_BRNO": "",
+            "ODNO": "",
+            "INQR_DVSN_3": "00",
+            "INQR_DVSN_1": "",
+            "EXCG_ID_DVSN_CD": "KRX" if is_vts else "ALL",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": ""
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-daily-ccld", headers=headers, params=params) as resp:
+                    res_data = await resp.json()
+                    if resp.status == 200 and res_data.get("rt_cd") == "0":
+                        output1 = res_data.get("output1", [])
+                        for o in output1:
+                            rmn_qty = float(o.get("rmn_qty") or 0.0)
+                            if rmn_qty <= 0:
+                                continue
+                            
+                            # KIS 주문시각 포맷 가공 (HHMMSS -> HH:MM:SS)
+                            tmd = o.get("ord_tmd", "000000").strip()
+                            formatted_time = f"{tmd[:2]}:{tmd[2:4]}:{tmd[4:6]}" if len(tmd) == 6 else tmd
+                            
+                            normal_orders.append({
+                                "uuid": o.get("odno"),
+                                "symbol": f"KRW-{o.get('pdno', '').strip()}",
+                                "side": "BUY" if o.get("sll_buy_dvsn_cd") == "02" else "SELL",
+                                "price": float(o.get("ord_unpr") or 0.0),
+                                "volume": float(o.get("ord_qty") or 0.0),
+                                "remaining_volume": rmn_qty,
+                                "executed_volume": float(o.get("tot_ccld_qty") or 0.0),
+                                "created_at": f"{o.get('ord_dt')} {formatted_time}",
+                                "is_reservation": False,
+                                "excg_id_dvsn_cd": o.get("excg_id_dvsn_cd", "KRX").strip(),
+                                "state": "wait"
+                            })
+                    else:
+                        logger.error(f"KIS normal outstanding orders query failed: {res_data.get('msg1')}")
+        except Exception as e:
+            logger.error(f"Error querying KIS normal outstanding orders: {e}")
+            
+        # 3.2. KIS 예약 미처리 주문 조회 (order-resv-ccnl, CTSC0004R)
+        reservation_orders = []
+        if not is_vts:
+            end_str = (now_kst + datetime.timedelta(days=7)).strftime("%Y%m%d")
+            resv_headers = {
+                "content-type": "application/json",
+                "authorization": f"Bearer {token}",
+                "appkey": kis_app_key,
+                "appsecret": kis_app_secret,
+                "tr_id": "CTSC0004R",
+                "custtype": "P"
+            }
+            resv_params = {
+                "RSVN_ORD_ORD_DT": today_str,
+                "RSVN_ORD_END_DT": end_str,
+                "RSVN_ORD_SEQ": "",
+                "TMNL_MDIA_KIND_CD": "00",
+                "CANO": cano,
+                "ACNT_PRDT_CD": acnt_prdt_cd,
+                "PRCS_DVSN_CD": "2",  # '2' 미처리내역
+                "CNCL_YN": "Y",      # 'Y' 유효한 주문만
+                "PDNO": clean_symbol,
+                "SLL_BUY_DVSN_CD": "",
+                "CTX_AREA_FK200": "",
+                "CTX_AREA_NK200": ""
+            }
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-resv-ccnl", headers=resv_headers, params=resv_params) as resp:
+                        res_data = await resp.json()
+                        if resp.status == 200 and res_data.get("rt_cd") == "0":
+                            output = res_data.get("output", [])
+                            for o in output:
+                                ord_qty = float(o.get("ord_rsvn_qty") or 0.0)
+                                if ord_qty <= 0:
+                                    continue
+                                
+                                rcit_tmd = o.get("rsvn_ord_rcit_tmd", "000000").strip()
+                                formatted_rcit_time = f"{rcit_tmd[:2]}:{rcit_tmd[2:4]}:{rcit_tmd[4:6]}" if len(rcit_tmd) == 6 else rcit_tmd
+                                
+                                reservation_orders.append({
+                                    "uuid": o.get("rsvn_ord_seq"),
+                                    "symbol": f"KRW-{o.get('pdno', '').strip()}",
+                                    "side": "BUY" if o.get("sll_buy_dvsn_cd") == "02" else "SELL",
+                                    "price": float(o.get("ord_rsvn_unpr") or 0.0),
+                                    "volume": ord_qty,
+                                    "remaining_volume": ord_qty,
+                                    "executed_volume": 0.0,
+                                    "created_at": f"{o.get('rsvn_ord_rcit_dt')} {formatted_rcit_time}",
+                                    "is_reservation": True,
+                                    "rsvn_ord_ord_dt": o.get("rsvn_ord_ord_dt"),
+                                    "excg_id_dvsn_cd": "KRX",
+                                    "state": "wait"
+                                })
+                        else:
+                            logger.error(f"KIS reservation orders query failed: {res_data.get('msg1')}")
+            except Exception as e:
+                logger.error(f"Error querying KIS reservation orders: {e}")
+                
+        exchange_orders = normal_orders + reservation_orders
+
+    # 4. DB에서 최근 12시간 이내에 취소된 주문 조회하여 통합
+    cancelled_orders = []
+    try:
+        from src.database.connection import get_db_conn
+        async with get_db_conn(system.db_path) as db:
+            query = """
+                SELECT uuid, symbol, side, price, volume, executed_volume, created_at, state
+                FROM real_orders
+                WHERE exchange_id = ? AND state = 'cancel' AND updated_at >= datetime('now', '-12 hour')
+            """
+            params = [exchange]
+            if clean_symbol:
+                query += " AND symbol = ?"
+                params.append(clean_symbol)
+            query += " ORDER BY updated_at DESC"
+            
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                for r in rows:
+                    sym_format = f"KRW-{r['symbol']}" if exchange in ('upbit', 'bithumb') else r['symbol']
+                    
+                    is_res = False
+                    if exchange == 'kis':
+                        uuid_str = str(r['uuid'])
+                        if 'rsvn' in uuid_str or (uuid_str.isdigit() and len(uuid_str) <= 8):
+                            is_res = True
+                            
+                    cancelled_orders.append({
+                        "uuid": r["uuid"],
+                        "symbol": sym_format,
+                        "side": r["side"],
+                        "price": float(r["price"] or 0.0),
+                        "volume": float(r["volume"] or 0.0),
+                        "remaining_volume": 0.0,
+                        "executed_volume": float(r["executed_volume"] or 0.0),
+                        "created_at": r["created_at"],
+                        "is_reservation": is_res,
+                        "excg_id_dvsn_cd": "KRX",
+                        "state": "cancel"
+                    })
+    except Exception as db_err:
+        logger.error(f"Failed to query recently cancelled orders from DB: {db_err}")
+        
+    return exchange_orders + cancelled_orders
+
+
+@router.post("/api/exchanges/{exchange_id}/cancel")
+async def cancel_exchange_order(request: Request, exchange_id: str, body: CancelOrderRequest):
+    """
+    미체결 또는 예약 주문을 취소 처리합니다.
+    """
+    exchange = exchange_id.lower()
+    if exchange not in ('upbit', 'bithumb', 'kis'):
+        raise HTTPException(status_code=400, detail=f"현재 주문 취소는 업비트, 빗썸, KIS만 지원합니다.")
+        
+    system = request.app.state.system
+    clean_symbol = body.symbol.replace("KRW-", "").upper()
+    
+    # 1. 업비트 주문 취소
+    if exchange == 'upbit':
+        access_key = os.getenv("UPBIT_ACCESS_KEY")
+        secret_key = os.getenv("UPBIT_SECRET_KEY")
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            raise HTTPException(status_code=400, detail="업비트 API 키가 설정되지 않았습니다.")
+            
+        api_url = system.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+        base_url = api_url.rstrip('/')
+        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        params = {"uuid": body.uuid}
+        
+        import urllib.parse
+        import hashlib
+        query_string = urllib.parse.urlencode(params).encode("utf-8")
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        
+        token = _create_upbit_jwt(access_key, secret_key, query_hash=query_hash)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.delete(f"{upbit_v1_url}/order", params=params, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                        raise HTTPException(status_code=resp.status, detail=f"업비트 취소 오류: {err_msg}")
+                    
+                    # 로컬 DB 실시간 반영
+                    try:
+                        from src.database.connection import get_db_conn
+                        async with get_db_conn(system.db_path) as db:
+                            await db.execute("UPDATE real_orders SET state = 'cancel' WHERE exchange_id = 'upbit' AND uuid = ?", (body.uuid,))
+                            await db.commit()
+                    except Exception as db_err:
+                        logger.error(f"Failed to update upbit order state to cancel in local DB: {db_err}")
+                        
+                    return res_data
+        except Exception as e:
+            logger.error(f"Error canceling upbit order: {e}")
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    # 2. 빗썸 주문 취소
+    elif exchange == 'bithumb':
+        access_key = os.getenv("BITHUMB_API_KEY")
+        secret_key = os.getenv("BITHUMB_SECRET_KEY")
+        if not access_key or not secret_key or "your_access_key" in access_key:
+            raise HTTPException(status_code=400, detail="빗썸 API 키가 설정되지 않았습니다.")
+            
+        bithumb_config = system.config_manager.get('exchanges.bithumb', {})
+        api_url = bithumb_config.get('api_url', 'https://api.bithumb.com')
+        base_url = api_url.rstrip('/')
+        bithumb_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
+        
+        params = {"uuid": body.uuid}
+        
+        import urllib.parse
+        import hashlib
+        query_string = urllib.parse.urlencode(params).encode("utf-8")
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+        
+        token = _create_bithumb_jwt(access_key, secret_key, query_hash=query_hash)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.delete(f"{bithumb_v1_url}/order", params=params, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status not in (200, 201):
+                        err_msg = res_data.get('error', {}).get('message', '알 수 없는 오류')
+                        raise HTTPException(status_code=resp.status, detail=f"빗썸 취소 오류: {err_msg}")
+                    
+                    # 로컬 DB 실시간 반영
+                    try:
+                        from src.database.connection import get_db_conn
+                        async with get_db_conn(system.db_path) as db:
+                            await db.execute("UPDATE real_orders SET state = 'cancel' WHERE exchange_id = 'bithumb' AND uuid = ?", (body.uuid,))
+                            await db.commit()
+                    except Exception as db_err:
+                        logger.error(f"Failed to update bithumb order state to cancel in local DB: {db_err}")
+                        
+                    return res_data
+        except Exception as e:
+            logger.error(f"Error canceling bithumb order: {e}")
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail=str(e))
+            
+    # 3. KIS 주문/예약 취소
+    elif exchange == 'kis':
+        kis_config = system.config_manager.get('exchanges.kis', {})
+        kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+        kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+        kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+        
+        if not kis_app_key or not kis_app_secret or not kis_account_no:
+            raise HTTPException(status_code=400, detail="KIS API 키 또는 계좌 정보가 설정되지 않았습니다.")
+            
+        kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
+        is_vts = "openapivts" in kis_api_url
+        
+        token = await system.cred_provider.get_kis_access_token()
+        if not token:
+            raise HTTPException(status_code=401, detail="KIS 토큰 발급에 실패했습니다.")
+            
+        kis_account_no = str(kis_account_no).strip()
+        if '-' in kis_account_no:
+            cano, acnt_prdt_cd = kis_account_no.split('-', 1)
+        else:
+            cano = kis_account_no[:8]
+            acnt_prdt_cd = kis_account_no[8:]
+        if not acnt_prdt_cd:
+            acnt_prdt_cd = "01"
+            
+        if body.is_reservation:
+            if is_vts:
+                raise HTTPException(status_code=400, detail="모의투자 계좌는 예약 주문 취소를 지원하지 않습니다.")
+            if not body.rsvn_ord_ord_dt:
+                raise HTTPException(status_code=400, detail="예약 취소 시 예약주문일자(rsvn_ord_ord_dt)는 필수입니다.")
+                
+            headers = {
+                "content-type": "application/json",
+                "authorization": f"Bearer {token}",
+                "appkey": kis_app_key,
+                "appsecret": kis_app_secret,
+                "tr_id": "CTSC0009U",
+                "custtype": "P"
+            }
+            post_payload = {
+                "CANO": cano,
+                "ACNT_PRDT_CD": acnt_prdt_cd,
+                "RSVN_ORD_ORD_DT": body.rsvn_ord_ord_dt,
+                "RSVN_ORD_SEQ": body.uuid,
+                "RSVN_ORD_ORGNO": "00"
+            }
+            order_url = f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-resv-rvsecncl"
+        else:
+            tr_id = "VTTC0013U" if is_vts else "TTTC0013U"
+            headers = {
+                "content-type": "application/json",
+                "authorization": f"Bearer {token}",
+                "appkey": kis_app_key,
+                "appsecret": kis_app_secret,
+                "tr_id": tr_id,
+                "custtype": "P"
+            }
+            post_payload = {
+                "CANO": cano,
+                "ACNT_PRDT_CD": acnt_prdt_cd,
+                "KRX_FWDG_ORD_ORGNO": "",
+                "ORGN_ODNO": body.uuid,
+                "ORD_DVSN": "00",
+                "RVSE_CNCL_DVSN_CD": "02",
+                "ORD_QTY": "0",
+                "ORD_UNPR": "0",
+                "QTY_ALL_ORD_YN": "Y"
+            }
+            if body.excg_id_dvsn_cd:
+                post_payload["EXCG_ID_DVSN_CD"] = body.excg_id_dvsn_cd
+                
+            order_url = f"{kis_api_url}/uapi/domestic-stock/v1/trading/order-rvsecncl"
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(order_url, json=post_payload, headers=headers) as resp:
+                    res_data = await resp.json()
+                    if resp.status != 200:
+                        raise HTTPException(status_code=resp.status, detail=f"KIS API 오류: {res_data.get('msg1', '네트워크 오류')}")
+                    if res_data.get("rt_cd") != "0":
+                        raise HTTPException(status_code=400, detail=f"KIS 주문 취소 실패: {res_data.get('msg1')}")
+                        
+                    # 로컬 DB 실시간 반영
+                    try:
+                        from src.database.connection import get_db_conn
+                        async with get_db_conn(system.db_path) as db:
+                            await db.execute("UPDATE real_orders SET state = 'cancel' WHERE exchange_id = 'kis' AND uuid = ?", (body.uuid,))
+                            await db.commit()
+                    except Exception as db_err:
+                        logger.error(f"Failed to update KIS order state to cancel in local DB: {db_err}")
+                        
+                    return res_data
+        except Exception as e:
+            logger.error(f"Error canceling KIS order: {e}")
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=500, detail=str(e))
 
 
 

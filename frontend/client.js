@@ -129,6 +129,22 @@ const APIClient = (() => {
             }),
 
         /**
+         * 실제 거래소의 미체결 및 예약 주문 내역 조회
+         */
+        fetchOutstandingOrders: (exchange, symbol = '') => 
+            _fetchAPI(`/api/exchanges/${exchange}/outstanding${symbol ? `?symbol=${symbol}` : ''}`),
+
+        /**
+         * 실제 거래소의 미체결 또는 예약 주문 취소
+         */
+        cancelRealOrder: (exchange, cancelData) => 
+            _fetchAPI(`/api/exchanges/${exchange}/cancel`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cancelData)
+            }),
+
+        /**
          * 전체 실시간 마켓 현황 및 가격 통계 조회
          */
         fetchMarketData: () => _fetchAPI(`/market`),

@@ -2118,6 +2118,156 @@ window.loadPortfolioHistoryList = loadPortfolioHistoryList;
 window.deletePortfolioHistory = deletePortfolioHistory;
 window.endSimulationSession = endSimulationSession;
 
+/**
+ * 현재 선택된 거래소 및 종목의 미체결/예약 주문 내역을 패치하여 화면에 렌더링합니다.
+ */
+async function loadOutstandingOrders() {
+    const tbody = document.getElementById('outstanding-orders-tbody');
+    if (!tbody) return;
+    
+    const exchange = state.currentExchange;
+    const symbol = state.currentSymbol;
+    
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">
+                <span class="spinner-small" style="display: inline-block; vertical-align: middle; margin-right: 5px;"></span>
+                내역 조회 중...
+            </td>
+        </tr>
+    `;
+    
+    try {
+        const orders = await APIClient.fetchOutstandingOrders(exchange, symbol);
+        
+        if (!orders || orders.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">
+                        미체결 또는 대기 중인 예약 주문이 없습니다.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+            tr.style.transition = 'background 0.2s';
+            tr.onmouseover = () => tr.style.background = 'rgba(255, 255, 255, 0.02)';
+            tr.onmouseout = () => tr.style.background = 'transparent';
+            
+            // 구분 (매수/매도 + 일반/예약)
+            const typeText = order.is_reservation ? '예약' : '일반';
+            const typeColor = order.is_reservation ? '#F59E0B' : '#94A3B8';
+            
+            const sideText = order.side === 'BUY' ? '매수' : '매도';
+            const sideColor = order.side === 'BUY' ? '#FF4B4B' : '#0072FF';
+            
+            // 포맷 가격/수량
+            const formattedPrice = Number(order.price).toLocaleString();
+            const formattedVol = Number(order.volume).toLocaleString(undefined, { maximumFractionDigits: 6 });
+            const formattedRem = Number(order.remaining_volume).toLocaleString(undefined, { maximumFractionDigits: 6 });
+            
+            // 거래소 구분 뱃지 (NXT/SOR/KRX)
+            let excgBadge = '';
+            if (exchange.toLowerCase() === 'kis' && order.excg_id_dvsn_cd) {
+                const badgeColor = order.excg_id_dvsn_cd === 'NXT' ? '#10B981' : 
+                                   order.excg_id_dvsn_cd === 'SOR' ? '#8B5CF6' : '#64748B';
+                excgBadge = `<span style="font-size: 0.75rem; padding: 2px 4px; border-radius: 3px; background: ${badgeColor}; color: white; margin-left: 5px; font-weight: bold;">${order.excg_id_dvsn_cd}</span>`;
+            }
+            
+            // 취소 완료 상태 처리
+            const isCancelled = order.state === 'cancel';
+            if (isCancelled) {
+                tr.style.opacity = '0.55';
+            }
+            
+            const remColor = isCancelled ? '#64748B' : '#F59E0B';
+            
+            let cancelActionHtml = '';
+            if (isCancelled) {
+                cancelActionHtml = `<span style="font-size: 0.75rem; color: #94A3B8; background: rgba(255, 255, 255, 0.05); padding: 2px 6px; border-radius: 4px; font-weight: bold;">취소됨</span>`;
+            } else {
+                cancelActionHtml = `
+                    <button class="btn danger" style="padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer; border: none; background: #EF4444; color: white;" 
+                        onclick="cancelOutstandingOrder('${order.uuid}', ${order.is_reservation}, '${order.excg_id_dvsn_cd || ''}', '${order.rsvn_ord_ord_dt || ''}', '${order.symbol}')">
+                        취소
+                    </button>
+                `;
+            }
+
+            tr.innerHTML = `
+                <td style="padding: 10px 5px;">
+                    <span style="color: ${sideColor}; font-weight: bold;">${sideText}</span>
+                    <span style="font-size: 0.75rem; color: ${typeColor}; background: rgba(255,255,255,0.05); padding: 2px 4px; border-radius: 3px; margin-left: 5px;">${typeText}</span>
+                </td>
+                <td style="padding: 10px 5px; font-family: monospace;">${order.is_reservation ? 'RSVN' : 'NORMAL'}</td>
+                <td style="padding: 10px 5px; font-weight: bold;">
+                    KRW-${order.symbol.replace('KRW-', '')}
+                    ${excgBadge}
+                </td>
+                <td style="padding: 10px 5px; text-align: right; font-family: 'Roboto Mono', monospace;">${formattedPrice}</td>
+                <td style="padding: 10px 5px; text-align: right; font-family: 'Roboto Mono', monospace;">${formattedVol}</td>
+                <td style="padding: 10px 5px; text-align: right; font-family: 'Roboto Mono', monospace; color: ${remColor}; font-weight: bold;">${formattedRem}</td>
+                <td style="padding: 10px 5px; font-size: 0.8rem; color: #94A3B8;">${order.created_at}</td>
+                <td style="padding: 10px 5px; text-align: center;">
+                    ${cancelActionHtml}
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (e) {
+        console.error("[loadOutstandingOrders] 조회 실패:", e);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 20px; color: #EF4444; font-weight: bold;">
+                    ⚠️ 미체결 내역 조회 실패: ${e.message || e}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+/**
+ * 미체결 또는 예약 주문을 취소 처리합니다.
+ */
+async function cancelOutstandingOrder(uuid, isReservation, excgIdDvsnCd, rsvnOrdOrdDt, symbol) {
+    const typeStr = isReservation ? '예약' : '일반 미체결';
+    if (!confirm(`정말로 이 ${typeStr} 주문을 취소하시겠습니까?`)) {
+        return;
+    }
+    
+    const exchange = state.currentExchange;
+    
+    try {
+        const payload = {
+            uuid: uuid,
+            symbol: symbol,
+            is_reservation: !!isReservation,
+            excg_id_dvsn_cd: excgIdDvsnCd || 'KRX',
+            rsvn_ord_ord_dt: rsvnOrdOrdDt || null
+        };
+        
+        await APIClient.cancelRealOrder(exchange, payload);
+        
+        showAlert(`주문 취소가 완료되었습니다. (ID: ${uuid})`, "success");
+        
+        // 내역 새로고침
+        await loadOutstandingOrders();
+        
+        // 자산 갱신
+        if (typeof loadRealAssets === 'function') {
+            await loadRealAssets(true);
+        }
+    } catch (e) {
+        console.error("[cancelOutstandingOrder] 취소 실패:", e);
+        showAlert(`주문 취소 실패: ${e.message || e}`, "danger");
+    }
+}
+
 // 실자산 및 실계좌 관련 신규 바인딩
 window.changeRealAssetFilter = changeRealAssetFilter;
 window.changeRealAssetExchange = changeRealAssetExchange;
@@ -2135,6 +2285,8 @@ window.closeRealAssetHistoryModal = closeRealAssetHistoryModal;
 window.setOrderPrice = setOrderPrice;
 window.openRealAssetOrderModalFromMonitoring = openRealAssetOrderModalFromMonitoring;
 window.onRealOrderMarketChange = onRealOrderMarketChange;
+window.loadOutstandingOrders = loadOutstandingOrders;
+window.cancelOutstandingOrder = cancelOutstandingOrder;
 
 if (typeof ViewRouter !== 'undefined') {
     ViewRouter.registerRoute('portfolio-view', () => {

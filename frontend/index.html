@@ -441,6 +441,7 @@
                 <div class="monitoring-tabs" style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; align-items: center;">
                     <button class="monitoring-tab active" data-tab="chart">📊 실시간 차트</button>
                     <button class="monitoring-tab" data-tab="detail">ℹ️ 종목 상세정보</button>
+                    <button class="monitoring-tab" data-tab="outstanding">📋 주문(예약)내역</button>
                     <button id="btn-monitoring-order" class="btn primary" style="padding: 6px 12px; font-size: 12px; border: none; background: #10B981; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1.0">💸 실계좌 주문</button>
                     <button id="btn-monitoring-back" class="btn btn-secondary" style="margin-left: auto; padding: 6px 12px; font-size: 12px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold; transition: background 0.2s;">↩️ 뒤로가기</button>
                 </div>
@@ -610,6 +611,37 @@
                             선택하신 종목은 가상자산입니다.<br>
                             가상자산은 기업 제원 및 대체거래소(Nextrade) 거래 정보가 존재하지 않으므로 상세 정보를 제공하지 않습니다.
                         </p>
+                    </div>
+                </div>
+
+                <!-- 탭 콘텐츠 3: 주문(예약)내역 -->
+                <div id="monitoring-tab-content-outstanding" style="display: none; padding-top: 10px;">
+                    <div style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span>📋 미체결 및 예약 주문 내역</span>
+                            <button id="btn-refresh-outstanding" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold;">🔄 새로고침</button>
+                        </h3>
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table id="outstanding-orders-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1); color: #94A3B8; font-size: 0.85rem;">
+                                        <th style="padding: 10px 5px;">구분</th>
+                                        <th style="padding: 10px 5px;">유형</th>
+                                        <th style="padding: 10px 5px;">종목</th>
+                                        <th style="padding: 10px 5px; text-align: right;">주문가격</th>
+                                        <th style="padding: 10px 5px; text-align: right;">주문수량</th>
+                                        <th style="padding: 10px 5px; text-align: right;">미체결수량</th>
+                                        <th style="padding: 10px 5px;">주문일시</th>
+                                        <th style="padding: 10px 5px; text-align: center;">취소</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="outstanding-orders-tbody" style="font-size: 0.9rem; color: #E2E8F0;">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">내역이 존재하지 않거나 조회를 시작하지 않았습니다.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </section>
