@@ -77,6 +77,34 @@ def calculate_macd(prices: np.ndarray, fast_period: int = 12, slow_period: int =
         'hist': round(float(macd_hist), 4)
     }
 
+def calculate_ema(prices: np.ndarray, window: int) -> Optional[float]:
+    """지수 이동평균(EMA)을 계산합니다."""
+    if len(prices) < window:
+        return None
+    alpha = 2 / (window + 1)
+    ema = prices[0]
+    for p in prices[1:]:
+        ema = (p * alpha) + (ema * (1 - alpha))
+    return float(ema)
+
+def calculate_atr(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, window: int) -> Optional[float]:
+    """평균 실거래 범위(ATR)를 계산합니다."""
+    if len(highs) < window + 1:
+        return None
+    
+    tr_values = []
+    for i in range(1, len(highs)):
+        h = highs[i]
+        l = lows[i]
+        prev_c = closes[i - 1]
+        tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+        tr_values.append(tr)
+        
+    if len(tr_values) < window:
+        return None
+        
+    return float(np.mean(tr_values[-window:]))
+
 class IndicatorCalculator:
     """
     틱(Tick) 단위로 유입되는 실시간 데이터를 효율적으로 처리하기 위해
@@ -94,18 +122,20 @@ class IndicatorCalculator:
         prices_arr = np.array(self.prices)
 
         if len(self.prices) < self.window_size:
-            return {'sma': None, 'rsi': None, 'macd': None, 'bb': None}
+            return {'sma': None, 'rsi': None, 'macd': None, 'bb': None, 'ema': None}
 
         sma = calculate_sma(prices_arr, self.window_size)
         rsi = calculate_rsi(prices_arr, self.window_size)
         bb = calculate_bollinger_bands(prices_arr, self.window_size)
         macd = calculate_macd(prices_arr)
+        ema = calculate_ema(prices_arr, self.window_size)
 
         return {
             'sma': round(sma, 4) if sma is not None else None,
             'rsi': round(rsi, 4) if rsi is not None else None,
             'bb': bb if bb['upper'] is not None else None,
-            'macd': macd if macd['line'] is not None else None
+            'macd': macd if macd['line'] is not None else None,
+            'ema': round(ema, 4) if ema is not None else None
         }
 
     @staticmethod
@@ -117,15 +147,34 @@ class IndicatorCalculator:
 
         df = pd.DataFrame([vars(c) if hasattr(c, '__dict__') else c for c in candles])
 
+        # 1. SMA (20) 및 Bollinger Bands (20, 2)
         df['sma'] = df['close'].rolling(window=20).mean()
         std = df['close'].rolling(window=20).std()
         df['bb_upper'] = df['sma'] + (2 * std)
         df['bb_lower'] = df['sma'] - (2 * std)
 
+        # 2. RSI (14)
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
+
+        # 3. EMA (20)
+        df['ema'] = df['close'].ewm(span=20, adjust=False).mean()
+
+        # 4. MACD (12, 26, 9)
+        ema12 = df['close'].ewm(span=12, adjust=False).mean()
+        ema26 = df['close'].ewm(span=26, adjust=False).mean()
+        df['macd_line'] = ema12 - ema26
+        df['macd_signal'] = df['macd_line'].ewm(span=9, adjust=False).mean()
+        df['macd_hist'] = df['macd_line'] - df['macd_signal']
+
+        # 5. ATR (14)
+        high_low = df['high'] - df['low']
+        high_prev_close = (df['high'] - df['close'].shift(1)).abs()
+        low_prev_close = (df['low'] - df['close'].shift(1)).abs()
+        tr = pd.concat([high_low, high_prev_close, low_prev_close], axis=1).max(axis=1)
+        df['atr'] = tr.rolling(window=14).mean()
 
         return df

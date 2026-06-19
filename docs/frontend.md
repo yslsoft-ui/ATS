@@ -42,7 +42,7 @@
 - **[stream.js](file:///home/simon/ATS/frontend/stream.js)**: 백엔드 `/ws` 엔드포인트와 WebSocket을 개설 및 복구 관리하며, 체결 틱(`tick`), 캔들 업데이트(`candle`) 및 시스템 경보 데이터를 실시간 수신하여 `store.js` 및 컴포넌트로 전달합니다.
 
 ### 2.3. 컴포넌트 & 뷰 레이어 (Views & Visualization)
-- **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Lightweight Charts를 사용하여 Candlestick 차트를 그리며, SMA/볼린저 밴드 오버레이 및 RSI 보조 지표를 별도 서브 차트에 고속 렌더링합니다.
+- **[chart.js](file:///home/simon/ATS/frontend/chart.js)**: Lightweight Charts를 사용하여 Candlestick 차트를 그리며, SMA/EMA/볼린저 밴드 오버레이 및 거래량, MACD, RSI, ATR 보조 지표를 각각 독립적인 Y축 가격 스케일 및 정교한 수직 마진 분할(메인 50%, 거래량 15%, MACD 15%, ATR 10%, RSI 10%)을 통해 겹침 없이 고속 렌더링합니다.
 - **[overview.js](file:///home/simon/ATS/frontend/overview.js)**: 실시간 운용 대시보드(Overview) 뷰 렌더러로, `simulation` 및 `live` 뷰 각각에 대해 6대 성과 메트릭 카드(ROI, 원금, 총 자산, 현금, 종목 평가액, 누적 수수료) 및 거래소별 자산 배분 비중 바를 독립적으로 렌더링합니다. 또한 각 거래소 블록 클릭 시 대시보드 하단에 상세 테이블 영역을 동적으로 활성화하고, `portfolio-view.js`의 테이블 렌더링 로직을 재사용하여 상세 종목 현황 및 종목별 거래내역을 연동 렌더링합니다. (기존 하단에 존재하던 보유 포지션 및 피드 패널은 대시보드 뷰 간략화 및 자산 요약 중심 렌더링을 위해 삭제되었습니다.)
 - **[portfolio.js](file:///home/simon/ATS/frontend/portfolio.js)**: 실계좌 자산 관리, 수동 주문(주문 모달, 호가창), 미체결 및 예약 주문 관리를 관장하는 모듈입니다.
   - 주요 기능: 거래소별 실자산 조회, 거래 이력 모달 제어, 호가창(Orderbook) 실시간 렌더링 및 스크롤 센터링, 실계좌 주문 전송 및 제어, 주문 결과 피드백 제공.

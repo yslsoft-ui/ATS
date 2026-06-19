@@ -643,7 +643,7 @@ function initTradingControls() {
         }
     });
 
-    ['show-sma', 'show-bb', 'show-volume', 'show-rsi'].forEach(id => {
+    ['show-sma', 'show-ema', 'show-bb', 'show-volume', 'show-rsi', 'show-macd', 'show-atr'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
             el.addEventListener('change', () => {

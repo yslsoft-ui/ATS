@@ -10,6 +10,11 @@
     let _bbUpperSeries = null;
     let _bbLowerSeries = null;
     let _rsiSeries = null;
+    let _emaSeries = null;
+    let _macdLineSeries = null;
+    let _macdSignalSeries = null;
+    let _macdHistSeries = null;
+    let _atrSeries = null;
 
     let _clickCallback = null;
 
@@ -44,7 +49,7 @@
                 leftPriceScale: {
                     visible: true,
                     borderColor: '#333',
-                    scaleMargins: { top: 0.05, bottom: 0.35 },
+                    scaleMargins: { top: 0.05, bottom: 0.50 },
                 },
                 rightPriceScale: {
                     visible: false,
@@ -56,8 +61,21 @@
                     barSpacing: state.savedBarSpacing,
                     tickMarkFormatter: (time, tickMarkType, locale) => {
                         const date = new Date(time * 1000);
-                        const options = { timeZone: 'Asia/Seoul', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
-                        return date.toLocaleTimeString('ko-KR', options);
+                        const parts = new Intl.DateTimeFormat('ko-KR', {
+                            timeZone: 'Asia/Seoul',
+                            hour12: false,
+                            year: 'numeric', month: '2-digit', day: '2-digit',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        }).formatToParts(date);
+                        
+                        const val = {};
+                        parts.forEach(p => val[p.type] = p.value);
+                        
+                        if (tickMarkType <= 2) {
+                            return `${val.month}/${val.day}`;
+                        } else {
+                            return `${val.hour}:${val.minute}:${val.second}`;
+                        }
                     },
                 },
                 localization: {
@@ -89,14 +107,18 @@
             _volumeSeries = _chart.addHistogramSeries({
                 color: '#26a69a',
                 priceFormat: { type: 'volume' },
-                priceScaleId: '', // 서브 레이어
+                priceScaleId: 'volume-left',
             });
 
-            _volumeSeries.priceScale().applyOptions({
-                scaleMargins: { top: 0.7, bottom: 0.15 },
+            _chart.priceScale('volume-left').applyOptions({
+                scaleMargins: { top: 0.50, bottom: 0.35 },
+                visible: false,
+                alignLabels: true,
+                position: 'left',
             });
 
             _smaSeries = _chart.addLineSeries({ color: '#FFA500', lineWidth: 2, title: 'SMA(20)', priceScaleId: 'left' });
+            _emaSeries = _chart.addLineSeries({ color: '#06B6D4', lineWidth: 2, title: 'EMA(20)', priceScaleId: 'left' });
             _bbUpperSeries = _chart.addLineSeries({ color: 'rgba(173, 216, 230, 0.4)', lineWidth: 1, lineStyle: 2, priceScaleId: 'left' });
             _bbLowerSeries = _chart.addLineSeries({ color: 'rgba(173, 216, 230, 0.4)', lineWidth: 1, lineStyle: 2, priceScaleId: 'left' });
 
@@ -108,11 +130,31 @@
             });
 
             _chart.priceScale('rsi-left').applyOptions({
-                scaleMargins: { top: 0.85, bottom: 0 },
+                scaleMargins: { top: 0.90, bottom: 0 },
                 visible: false,
                 alignLabels: true,
                 position: 'left',
             });
+
+            // MACD 스케일 및 시리즈 설정
+            _chart.priceScale('macd-left').applyOptions({
+                scaleMargins: { top: 0.65, bottom: 0.20 },
+                visible: false,
+                alignLabels: true,
+                position: 'left',
+            });
+            _macdLineSeries = _chart.addLineSeries({ color: '#3B82F6', lineWidth: 1.5, title: 'MACD(12,26)', priceScaleId: 'macd-left' });
+            _macdSignalSeries = _chart.addLineSeries({ color: '#F59E0B', lineWidth: 1.5, title: 'Signal(9)', priceScaleId: 'macd-left' });
+            _macdHistSeries = _chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'macd-left' });
+
+            // ATR 스케일 및 시리즈 설정
+            _chart.priceScale('atr-left').applyOptions({
+                scaleMargins: { top: 0.80, bottom: 0.10 },
+                visible: false,
+                alignLabels: true,
+                position: 'left',
+            });
+            _atrSeries = _chart.addLineSeries({ color: '#10B981', lineWidth: 1.5, title: 'ATR(14)', priceScaleId: 'atr-left' });
 
             // 클릭 리스너 연결 (drillDown 등)
             _chart.subscribeClick(param => {
@@ -183,7 +225,12 @@
 
                 const data = param.seriesData.get(_candleSeries);
                 const smaData = param.seriesData.get(_smaSeries);
+                const emaData = param.seriesData.get(_emaSeries);
                 const rsiData = param.seriesData.get(_rsiSeries);
+                const macdLineData = param.seriesData.get(_macdLineSeries);
+                const macdSignalData = param.seriesData.get(_macdSignalSeries);
+                const macdHistData = param.seriesData.get(_macdHistSeries);
+                const atrData = param.seriesData.get(_atrSeries);
 
                 const allLocal = [...state.candles, state.currentCandle].filter(c => c);
                 const rawCandle = allLocal.find(c => c.timestamp === param.time);
@@ -209,8 +256,13 @@
                     }
                 }
 
-                if (smaData) html += `<div class="tooltip-row"><span>SMA</span><b style="color:#FFA500">${smaData.value.toFixed(0)}</b></div>`;
+                if (smaData) html += `<div class="tooltip-row"><span>SMA</span><b style="color:#FFA500">${smaData.value.toLocaleString(undefined, {maximumFractionDigits: 1})}</b></div>`;
+                if (emaData) html += `<div class="tooltip-row"><span>EMA</span><b style="color:#06B6D4">${emaData.value.toLocaleString(undefined, {maximumFractionDigits: 1})}</b></div>`;
                 if (rsiData) html += `<div class="tooltip-row"><span>RSI</span><b style="color:#FF00FF">${rsiData.value.toFixed(2)}</b></div>`;
+                if (macdLineData && macdSignalData && macdHistData) {
+                    html += `<div class="tooltip-row"><span>MACD</span><b style="color:#3B82F6">${macdLineData.value.toFixed(1)}</b> / <b style="color:#F59E0B">${macdSignalData.value.toFixed(1)}</b> / <b class="${macdHistData.value >= 0 ? 'bull' : 'bear'}">${macdHistData.value.toFixed(1)}</b></div>`;
+                }
+                if (atrData) html += `<div class="tooltip-row"><span>ATR</span><b style="color:#10B981">${atrData.value.toLocaleString(undefined, {maximumFractionDigits: 1})}</b></div>`;
 
                 tooltip.innerHTML = html;
 
@@ -240,9 +292,14 @@
                 _candleSeries.setData([]);
                 _volumeSeries.setData([]);
                 _smaSeries.setData([]);
+                _emaSeries.setData([]);
                 _bbUpperSeries.setData([]);
                 _bbLowerSeries.setData([]);
                 _rsiSeries.setData([]);
+                _macdLineSeries.setData([]);
+                _macdSignalSeries.setData([]);
+                _macdHistSeries.setData([]);
+                _atrSeries.setData([]);
                 showNoDataOverlay(true);
                 return;
             } else {
@@ -269,9 +326,12 @@
             });
 
             const showSma = document.getElementById('show-sma')?.checked;
+            const showEma = document.getElementById('show-ema')?.checked;
             const showBb = document.getElementById('show-bb')?.checked;
             const showVol = document.getElementById('show-volume')?.checked;
             const showRsi = document.getElementById('show-rsi')?.checked;
+            const showMacd = document.getElementById('show-macd')?.checked;
+            const showAtr = document.getElementById('show-atr')?.checked;
 
             let lastAssignedColor = 'rgba(255, 75, 75, 0.5)';
             let lastAssignedCandleColor = '#FF4B4B';
@@ -358,6 +418,16 @@
                     _smaSeries.setData([]);
                 }
 
+                // EMA 세팅
+                if (showEma) {
+                    const emaData = uniqueCandles
+                        .filter(c => c.ema && !isNaN(c.ema))
+                        .map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.ema) }));
+                    _emaSeries.setData(emaData);
+                } else {
+                    _emaSeries.setData([]);
+                }
+
                 // Bollinger Bands 세팅
                 if (showBb) {
                     const upperData = uniqueCandles.filter(c => c.bb_upper && !isNaN(c.bb_upper)).map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.bb_upper) }));
@@ -373,10 +443,66 @@
                 if (showRsi) {
                     const rsiData = uniqueCandles.filter(c => c.rsi && !isNaN(c.rsi)).map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.rsi) }));
                     _rsiSeries.setData(rsiData);
-                    _chart.priceScale('rsi-left').applyOptions({ visible: true });
+                    _chart.priceScale('rsi-left').applyOptions({
+                        visible: true,
+                        scaleMargins: { top: 0.90, bottom: 0.00 }
+                    });
                 } else {
                     _rsiSeries.setData([]);
-                    _chart.priceScale('rsi-left').applyOptions({ visible: false });
+                    _chart.priceScale('rsi-left').applyOptions({
+                        visible: false,
+                        scaleMargins: { top: 0.90, bottom: 0.00 }
+                    });
+                }
+
+                // MACD 세팅
+                if (showMacd) {
+                    const macdLineData = uniqueCandles
+                        .filter(c => c.macd_line !== undefined && c.macd_line !== null)
+                        .map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.macd_line) }));
+                    const macdSignalData = uniqueCandles
+                        .filter(c => c.macd_signal !== undefined && c.macd_signal !== null)
+                        .map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.macd_signal) }));
+                    const macdHistData = uniqueCandles
+                        .filter(c => c.macd_hist !== undefined && c.macd_hist !== null)
+                        .map(c => {
+                            const val = parseFloat(c.macd_hist);
+                            const color = val >= 0 ? 'rgba(255, 75, 75, 0.5)' : 'rgba(0, 114, 255, 0.5)';
+                            return { time: parseInt(c.timestamp), value: val, color: color };
+                        });
+                    _macdLineSeries.setData(macdLineData);
+                    _macdSignalSeries.setData(macdSignalData);
+                    _macdHistSeries.setData(macdHistData);
+                    _chart.priceScale('macd-left').applyOptions({
+                        visible: true,
+                        scaleMargins: { top: 0.65, bottom: 0.20 }
+                    });
+                } else {
+                    _macdLineSeries.setData([]);
+                    _macdSignalSeries.setData([]);
+                    _macdHistSeries.setData([]);
+                    _chart.priceScale('macd-left').applyOptions({
+                        visible: false,
+                        scaleMargins: { top: 0.65, bottom: 0.20 }
+                    });
+                }
+
+                // ATR 세팅
+                if (showAtr) {
+                    const atrData = uniqueCandles
+                        .filter(c => c.atr !== undefined && c.atr !== null)
+                        .map(c => ({ time: parseInt(c.timestamp), value: parseFloat(c.atr) }));
+                    _atrSeries.setData(atrData);
+                    _chart.priceScale('atr-left').applyOptions({
+                        visible: true,
+                        scaleMargins: { top: 0.80, bottom: 0.10 }
+                    });
+                } else {
+                    _atrSeries.setData([]);
+                    _chart.priceScale('atr-left').applyOptions({
+                        visible: false,
+                        scaleMargins: { top: 0.80, bottom: 0.10 }
+                    });
                 }
 
             } catch (e) {
@@ -409,7 +535,18 @@
         toggleIndicator(type, isVisible) {
             if (type === 'rsi') {
                 _chart.priceScale('rsi-left').applyOptions({
-                    visible: isVisible
+                    visible: isVisible,
+                    scaleMargins: { top: 0.90, bottom: 0.00 }
+                });
+            } else if (type === 'macd') {
+                _chart.priceScale('macd-left').applyOptions({
+                    visible: isVisible,
+                    scaleMargins: { top: 0.65, bottom: 0.20 }
+                });
+            } else if (type === 'atr') {
+                _chart.priceScale('atr-left').applyOptions({
+                    visible: isVisible,
+                    scaleMargins: { top: 0.80, bottom: 0.10 }
                 });
             }
             // 전체 다시 그리기 트리거

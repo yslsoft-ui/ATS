@@ -65,6 +65,79 @@ const IndicatorEngine = {
         } else {
             rsi = 50.0;
         }
+
+        // 4. EMA (20) 계산
+        let ema = null;
+        const emaPeriod = 20;
+        const emaAlpha = 2 / (emaPeriod + 1);
+        if (n >= emaPeriod) {
+            let currentEma = closes[0];
+            for (let i = 1; i < n; i++) {
+                currentEma = closes[i] * emaAlpha + currentEma * (1 - emaAlpha);
+            }
+            ema = currentEma;
+        }
+
+        // 5. MACD (12, 26, 9) 계산
+        const ema12Period = 12;
+        const ema26Period = 26;
+        const alpha12 = 2 / (ema12Period + 1);
+        const alpha26 = 2 / (ema26Period + 1);
+        
+        let ema12History = [];
+        let ema26History = [];
+        let curEma12 = closes[0];
+        let curEma26 = closes[0];
+        
+        ema12History.push(curEma12);
+        ema26History.push(curEma26);
+        
+        for (let i = 1; i < n; i++) {
+            curEma12 = closes[i] * alpha12 + curEma12 * (1 - alpha12);
+            curEma26 = closes[i] * alpha26 + curEma26 * (1 - alpha26);
+            ema12History.push(curEma12);
+            ema26History.push(curEma26);
+        }
+        
+        let macdLines = [];
+        for (let i = 0; i < n; i++) {
+            macdLines.push(ema12History[i] - ema26History[i]);
+        }
+        
+        let macd_line = macdLines[n - 1];
+        let macd_signal = null;
+        let macd_hist = null;
+        
+        const signalPeriod = 9;
+        const alphaSignal = 2 / (signalPeriod + 1);
+        if (n >= ema26Period) {
+            let curSignal = macdLines[0];
+            for (let i = 1; i < n; i++) {
+                curSignal = macdLines[i] * alphaSignal + curSignal * (1 - alphaSignal);
+            }
+            macd_signal = curSignal;
+            macd_hist = macd_line - macd_signal;
+        }
+
+        // 6. ATR (14) 계산
+        const highs = [...history.slice(-100).map(c => c.high), currentCandle.high];
+        const lows = [...history.slice(-100).map(c => c.low), currentCandle.low];
+        let trs = [];
+        for (let i = 1; i < n; i++) {
+            const h = highs[i];
+            const l = lows[i];
+            const prev_c = closes[i - 1];
+            const tr = Math.max(h - l, Math.abs(h - prev_c), Math.abs(l - prev_c));
+            trs.push(tr);
+        }
+        
+        let atr = null;
+        const atrPeriod = 14;
+        if (trs.length >= atrPeriod) {
+            const recentTrs = trs.slice(-atrPeriod);
+            const sum = recentTrs.reduce((acc, val) => acc + val, 0);
+            atr = sum / atrPeriod;
+        }
         
         // 불변성을 위해 새로운 캔들 객체 반환
         return {
@@ -72,7 +145,12 @@ const IndicatorEngine = {
             sma: sma !== null ? Math.round(sma * 10000) / 10000 : null,
             bb_upper: bb_upper !== null ? Math.round(bb_upper * 10000) / 10000 : null,
             bb_lower: bb_lower !== null ? Math.round(bb_lower * 10000) / 10000 : null,
-            rsi: rsi !== null ? Math.round(rsi * 10000) / 10000 : null
+            rsi: rsi !== null ? Math.round(rsi * 10000) / 10000 : null,
+            ema: ema !== null ? Math.round(ema * 10000) / 10000 : null,
+            macd_line: macd_line !== null ? Math.round(macd_line * 10000) / 10000 : null,
+            macd_signal: macd_signal !== null ? Math.round(macd_signal * 10000) / 10000 : null,
+            macd_hist: macd_hist !== null ? Math.round(macd_hist * 10000) / 10000 : null,
+            atr: atr !== null ? Math.round(atr * 10000) / 10000 : null
         };
     }
 };
