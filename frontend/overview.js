@@ -279,29 +279,18 @@ const OverviewEngine = (() => {
                 `;
             }
 
-            if (totalVal <= 0) {
-                barContainer.innerHTML = `<div style="width: 100%; text-align: center; line-height: 24px; color: #64748B; font-size: 0.75rem;">보유 자산 정보가 없습니다.</div>`;
+            if (calculatedTotal <= 0) {
+                barContainer.innerHTML = `<div style="width: 100%; text-align: center; line-height: 24px; color: #64748B; font-size: 0.75rem;">보유 종목 정보가 없습니다.</div>`;
                 return;
             }
 
-            // 비중 세그먼트 빌드
+            // 비중 세그먼트 빌드 (현금 제외)
             let segments = [];
-            
-            // 현금 세그먼트 추가
-            if (exCash > 0) {
-                const cashRatio = (exCash / totalVal) * 100;
-                segments.push({
-                    name: '원화 현금',
-                    value: exCash,
-                    ratio: cashRatio,
-                    color: '#10B981' // 현금은 항상 초록색 테마
-                });
-            }
             
             // 종목 추가
             exPositions.forEach((pos, idx) => {
                 const evalValue = pos.eval_value !== undefined ? pos.eval_value : (pos.quantity * (pos.current_price ?? pos.avg_price));
-                const ratio = (evalValue / totalVal) * 100;
+                const ratio = (evalValue / calculatedTotal) * 100;
                 
                 const korName = pos.korean_name;
                 const displayName = (korName && korName !== pos.symbol) ? `${korName}(${pos.symbol})` : pos.symbol;
