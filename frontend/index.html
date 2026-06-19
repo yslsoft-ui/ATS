@@ -442,6 +442,7 @@
                     <button class="monitoring-tab active" data-tab="chart">📊 실시간 차트</button>
                     <button class="monitoring-tab" data-tab="detail">ℹ️ 종목 상세정보</button>
                     <button class="monitoring-tab" data-tab="outstanding">📋 주문(예약)내역</button>
+                    <button class="monitoring-tab" data-tab="real-history">📖 거래이력</button>
                     <button id="btn-monitoring-order" class="btn primary" style="padding: 6px 12px; font-size: 12px; border: none; background: #10B981; color: white; cursor: pointer; border-radius: 4px; font-weight: bold; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.9" onmouseout="this.style.opacity=1.0">💸 실계좌 주문</button>
                     <button id="btn-monitoring-back" class="btn btn-secondary" style="margin-left: auto; padding: 6px 12px; font-size: 12px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold; transition: background 0.2s;">↩️ 뒤로가기</button>
                 </div>
@@ -638,6 +639,78 @@
                                 <tbody id="outstanding-orders-tbody" style="font-size: 0.9rem; color: #E2E8F0;">
                                     <tr>
                                         <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">내역이 존재하지 않거나 조회를 시작하지 않았습니다.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 탭 콘텐츠 4: 거래이력 -->
+                <div id="monitoring-tab-content-history" style="display: none; padding-top: 10px;">
+                    <div style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                        <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem; display: flex; align-items: center; justify-content: space-between;">
+                            <span>📖 거래 체결 이력 및 손익 현황</span>
+                            <button id="btn-refresh-history" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px; border: 1px solid #475569; background: #0F172A; color: #F8FAFC; cursor: pointer; border-radius: 4px; font-weight: bold;">🔄 새로고침</button>
+                        </h3>
+                        
+                        <!-- 가치 평가 요약 카드 영역 -->
+                        <div class="real-history-summary"
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 15px; background: rgba(15, 23, 42, 0.3); padding: 12px; border-radius: 8px; border: 1px solid rgba(148, 163, 184, 0.15);">
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">총 매수액</span>
+                                <span id="monitoring-hist-total-buy" class="value"
+                                    style="font-weight: bold; color: #FF4B4B; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">총 매도액</span>
+                                <span id="monitoring-hist-total-sell" class="value"
+                                    style="font-weight: bold; color: #0072FF; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">평가액</span>
+                                <span id="monitoring-hist-eval-value" class="value"
+                                    style="font-weight: bold; color: #F59E0B; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">총 수수료</span>
+                                <span id="monitoring-hist-total-fee" class="value"
+                                    style="font-weight: bold; color: #94A3B8; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">총 거래세</span>
+                                <span id="monitoring-hist-total-tax" class="value"
+                                    style="font-weight: bold; color: #94A3B8; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">실현 손익</span>
+                                <span id="monitoring-hist-total-pnl" class="value"
+                                    style="font-weight: bold; color: #F8FAFC; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0 원</span>
+                            </div>
+                            <div class="metric" style="display: flex; flex-direction: column; gap: 4px;">
+                                <span class="label" style="font-size: 0.72rem; color: #94A3B8;">실현 수익률</span>
+                                <span id="monitoring-hist-total-roi" class="value"
+                                    style="font-weight: bold; color: #F8FAFC; font-family: 'Roboto Mono', monospace; font-size: 0.9rem;">0.00%</span>
+                            </div>
+                        </div>
+
+                        <div class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                            <table id="monitoring-history-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1); color: #94A3B8; font-size: 0.85rem;">
+                                        <th style="padding: 10px 5px;">체결시간</th>
+                                        <th style="padding: 10px 5px;">구분</th>
+                                        <th style="padding: 10px 5px; text-align: right;">체결가 (KRW)</th>
+                                        <th style="padding: 10px 5px; text-align: right;">수량</th>
+                                        <th style="padding: 10px 5px; text-align: right;">수수료 (KRW)</th>
+                                        <th style="padding: 10px 5px; text-align: right;">거래세 (KRW)</th>
+                                        <th style="padding: 10px 5px; text-align: center;">상태</th>
+                                        <th style="padding: 10px 5px; text-align: right;">총액 (KRW)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monitoring-history-tbody" style="font-size: 0.9rem; color: #E2E8F0;">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">거래 체결 이력이 존재하지 않거나 조회를 시작하지 않았습니다.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1374,25 +1447,21 @@
 
                 <div class="portfolio-grid">
                     <div class="portfolio-card allocation-card" style="grid-column: span 3; width: 100%;">
-                        <h3>실시간 보유 자산 분포 (평가액 많은 순 정렬)</h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); margin-bottom: 20px; background: #161B22; padding-top: 5px; margin-top: -5px; flex-wrap: wrap; gap: 10px;">
+                            <h3 id="real-assets-title" style="margin-bottom: 0; padding-bottom: 10px; margin-top: 0; padding-top: 0; background: transparent;">실시간 보유 자산 분포 (평가액 많은 순 정렬)</h3>
+                            <div id="real-cash-balance-wrapper" style="font-size: 0.95rem; color: #94A3B8; padding-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <span id="real-cash-balance-label">보유 현금:</span>
+                                <span id="real-cash-balance" style="font-family: 'Roboto Mono', monospace; font-weight: bold; color: #F8FAFC;">-</span>
+                            </div>
+                        </div>
                         <div class="table-wrapper" style="max-height: 750px;">
                             <table id="real-assets-table">
                                 <thead>
-                                    <tr>
-                                        <th>종목명 (코드)</th>
-                                        <th style="text-align:right">보유 잔고 (수량)</th>
-                                        <th style="text-align:right">평균 매수가</th>
-                                        <th style="text-align:right">현재가</th>
-                                        <th style="text-align:right">평가금액</th>
-                                        <th style="text-align:right">자산 비중 (게이지)</th>
-                                        <th style="text-align:center; width: 140px;">액션</th>
-                                    </tr>
+                                    <!-- 헤더는 portfolio-view.js에서 동적으로 렌더링됩니다 -->
                                 </thead>
                                 <tbody id="real-assets-tbody">
                                     <tr>
-                                        <td colspan="7"
-                                            style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">자산을 로딩
-                                            중입니다...</td>
+                                        <td style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">자산을 로딩 중입니다...</td>
                                     </tr>
                                 </tbody>
                             </table>

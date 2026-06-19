@@ -36,7 +36,7 @@ async def test_get_upbit_assets_liquidated(tmp_path):
         await db.execute("""
             CREATE TABLE IF NOT EXISTS real_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 uuid TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -44,6 +44,7 @@ async def test_get_upbit_assets_liquidated(tmp_path):
                 volume REAL DEFAULT 0.0,
                 executed_volume REAL DEFAULT 0.0,
                 fee REAL DEFAULT 0.0,
+                tax REAL DEFAULT 0.0,
                 state TEXT NOT NULL,
                 created_at DATETIME,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -53,28 +54,28 @@ async def test_get_upbit_assets_liquidated(tmp_path):
         # KAVA 매수 주문 (체결가 1000, 10개) -> 처분 완료 자산 매각가 쿼리에서 스킵되어야 함
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ("upbit", "kava-buy-uuid", "KAVA", "BUY", 1000.0, 10.0, 10.0, 5.0, "done", "2023-05-10T12:00:00+09:00"))
         
         # KAVA 매도 주문 (체결가 1500, 10개) -> 처분 완료 자산 매각가로 확인되어야 함
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ("upbit", "kava-sell-uuid", "KAVA", "SELL", 1500.0, 10.0, 10.0, 7.5, "done", "2023-05-10T12:30:00+09:00"))
 
         # VTHO 최종 분할 매도 주문 1 (이전 시각)
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ("upbit", "vtho-sell-uuid-old", "VTHO", "SELL", 5.0, 1000.0, 1000.0, 2.5, "done", "2023-05-10T11:00:00+09:00"))
 
         # VTHO 최종 매도 주문 2 (최신 시각, 체결가 8.0, 2000개)
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ("upbit", "vtho-sell-uuid-new", "VTHO", "SELL", 8.0, 2000.0, 2000.0, 8.0, "done", "2023-05-10T13:00:00+09:00"))
 
@@ -134,10 +135,10 @@ async def test_get_upbit_assets_liquidated(tmp_path):
 
         # VTHO 검증
         vtho = next(x for x in assets if x["currency"] == "VTHO")
-        # 분할 매도 중 최신 매도 주문(8.0) 및 매도 총액(8.0 * 2000 = 16000)이 나와야 함
+        # 분할 매도 중 최신 매도 주문(8.0) 및 매도 총액(누적 21,000)이 나와야 함
         assert vtho["avg_buy_price"] == 8.0
-        assert vtho["eval_value"] == 16000.0
-        assert vtho["formatted_eval_value"] == "16,000"
+        assert vtho["eval_value"] == 21000.0
+        assert vtho["formatted_eval_value"] == "21,000"
 
 
 @pytest.mark.asyncio
@@ -149,7 +150,7 @@ async def test_sync_real_orders_on_conflict(tmp_path):
         await db.execute("""
             CREATE TABLE IF NOT EXISTS real_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 uuid TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -157,6 +158,7 @@ async def test_sync_real_orders_on_conflict(tmp_path):
                 volume REAL DEFAULT 0.0,
                 executed_volume REAL DEFAULT 0.0,
                 fee REAL DEFAULT 0.0,
+                tax REAL DEFAULT 0.0,
                 state TEXT NOT NULL,
                 created_at DATETIME,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -165,7 +167,7 @@ async def test_sync_real_orders_on_conflict(tmp_path):
         # 초기 KAVA 매도 주문 상태는 wait이고 executed_volume = 0.0임
         await db.execute("""
             INSERT INTO real_orders 
-            (exchange, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
+            (exchange_id, uuid, symbol, side, price, volume, executed_volume, fee, state, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, ("upbit", "kava-uuid", "KAVA", "SELL", 0.0, 226.5, 0.0, 0.0, "wait", "2026-06-01T16:09:43+09:00"))
         await db.commit()
@@ -246,7 +248,7 @@ async def test_sync_real_orders_include_partially_executed_cancel(tmp_path):
         await db.execute("""
             CREATE TABLE IF NOT EXISTS real_orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                exchange TEXT NOT NULL,
+                exchange_id TEXT NOT NULL,
                 uuid TEXT UNIQUE NOT NULL,
                 symbol TEXT NOT NULL,
                 side TEXT NOT NULL,
@@ -254,6 +256,7 @@ async def test_sync_real_orders_include_partially_executed_cancel(tmp_path):
                 volume REAL DEFAULT 0.0,
                 executed_volume REAL DEFAULT 0.0,
                 fee REAL DEFAULT 0.0,
+                tax REAL DEFAULT 0.0,
                 state TEXT NOT NULL,
                 created_at DATETIME,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

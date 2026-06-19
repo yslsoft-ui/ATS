@@ -360,12 +360,12 @@
   - **설명**: 모든 종료된 모의투자 및 과거 백테스트 이력을 DB와 메모리에서 일괄 영구 삭제합니다.
   - **응답 (JSON)**: `{"status": "success", "message": "모든 이력이 성공적으로 삭제되었습니다."}`
 
-- **`GET /api/exchanges/upbit/assets`**
-  - **설명**: 업비트의 실제 계좌 잔고를 API를 통해 직접 조회하고 실시간 평가가치를 반영해 평가액이 높은 자산 순서대로 정렬해 반환합니다.
-    - **원화(KRW) 잔고 절사**: UI상의 깔끔한 시인성 확보를 위해 원화(KRW) 잔고에 한해 소수점 이하 단위를 버림(int 절사)하여 반환합니다.
-
-- **`GET /api/portfolio/assets?exchange_id=kis&mode=active`**
-  - **설명**: 한국투자증권(KIS)의 실제 계좌 자산 목록 및 평가 가치 정보를 조회합니다.
+- **`GET /api/exchanges/{exchange_id}/assets?mode={mode}&sync={sync}`**
+  - **설명**: 업비트(`upbit`), 빗썸(`bithumb`), 또는 한국투자증권(`kis`)의 실제 계좌 자산 목록 및 평가 가치 정보를 조회합니다.
+  - **요청 매개변수**:
+    - `exchange_id` (Path): 거래소 식별자 (`upbit` / `bithumb` / `kis`)
+    - `mode` (Query): 자산 필터링 모드 (`active` - 보유 자산, `liquidated` - 처분 완료 자산)
+    - `sync` (Query, 선택): 거래소 API로부터 실시간 데이터 즉시 갱신 여부 (`true` / `false`)
   - **응답 (JSON)**:
     ```json
     {

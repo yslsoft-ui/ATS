@@ -304,6 +304,56 @@ async def _sync_real_orders(access_key: str, secret_key: str, api_url: str, forc
                     logger.error(f"Failed to fetch order page {page} for state {state_val}: {e}")
                     break
 
+async def _get_real_asset_stats(db_conn, exchange_id: str, symbol: str) -> dict:
+    """
+    로컬 DB real_orders 테이블에서 특정 거래소 및 종목의 누적 통계를 조회하여 반환합니다.
+    """
+    query = """
+        SELECT 
+            SUM(CASE WHEN side = 'BUY' THEN executed_volume * price ELSE 0.0 END) as total_buy_amount,
+            SUM(CASE WHEN side = 'SELL' THEN executed_volume * price ELSE 0.0 END) as total_sell_amount,
+            SUM(CASE WHEN side = 'SELL' THEN executed_volume ELSE 0.0 END) as total_sell_volume,
+            SUM(fee) as total_fee,
+            SUM(tax) as total_tax
+        FROM real_orders
+        WHERE exchange_id = ? AND symbol = ? AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+    """
+    
+    last_sell_price = 0.0
+    query_last_sell = """
+        SELECT price 
+        FROM real_orders 
+        WHERE exchange_id = ? AND symbol = ? AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
+        ORDER BY created_at DESC 
+        LIMIT 1
+    """
+    
+    async with db_conn.execute(query_last_sell, (exchange_id, symbol.upper())) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            last_sell_price = float(row[0] or 0.0)
+
+    async with db_conn.execute(query, (exchange_id, symbol.upper())) as cursor:
+        row = await cursor.fetchone()
+        if row:
+            return {
+                "total_buy_amount": float(row["total_buy_amount"] or 0.0),
+                "total_sell_amount": float(row["total_sell_amount"] or 0.0),
+                "total_sell_volume": float(row["total_sell_volume"] or 0.0),
+                "total_fee": float(row["total_fee"] or 0.0),
+                "total_tax": float(row["total_tax"] or 0.0),
+                "last_sell_price": last_sell_price
+            }
+    return {
+        "total_buy_amount": 0.0,
+        "total_sell_amount": 0.0,
+        "total_sell_volume": 0.0,
+        "total_fee": 0.0,
+        "total_tax": 0.0,
+        "last_sell_price": 0.0
+    }
+
+
 @router.get("/api/exchanges/upbit/assets")
 async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = False):
     """업비트 실제 잔고를 조회하고 실시간 시세를 반영하여 평가금액이 높은 순서대로 정렬해 반환합니다. (처분 완료 자산 필터 지원)"""
@@ -365,34 +415,12 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                 
                 # 로컬 DB real_orders에서 거래 이력이 있는 코인 조회
                 traded_coins = []
-                sell_info = {}
                 async with get_db_conn() as db:
                     async with db.execute(
                         "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'upbit' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
                     ) as cursor:
                         rows = await cursor.fetchall()
                         traded_coins = [r['symbol'].upper() for r in rows]
-
-                    # 각 코인별 가장 최근의 매도 완료/부분체결 취소 체결 데이터 조회
-                    query = """
-                        SELECT r.symbol, r.price, r.executed_volume
-                        FROM real_orders r
-                        INNER JOIN (
-                            SELECT symbol, MAX(created_at) as max_created_at
-                            FROM real_orders
-                            WHERE exchange_id = 'upbit' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
-                            GROUP BY symbol
-                        ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                        WHERE r.exchange_id = 'upbit' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
-                    """
-                    async with db.execute(query) as cursor:
-                        rows = await cursor.fetchall()
-                        for r in rows:
-                            sym = r['symbol'].upper()
-                            sell_info[sym] = {
-                                "price": float(r['price'] or 0.0),
-                                "volume": float(r['executed_volume'] or 0.0)
-                            }
 
                 # 처분된 코인 목록 도출 (KRW 제외)
                 liquidated_coins = sorted(list((set(traded_coins) - active_set) - {"KRW"}))
@@ -409,32 +437,43 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                                     prices[t['market']] = float(t['trade_price'])
 
                 asset_list = []
-                for currency in liquidated_coins:
-                    symbol = f"KRW-{currency}"
-                    if symbol in valid_krw_markets:
-                        current_price = prices.get(symbol, 0.0)
-                    else:
-                        current_price = 0.0
-                    
-                    korean_name = stock_mapper.get_name('upbit', currency)
-                    
-                    # 최종 매각 정보 조회 (기본값은 0.0)
-                    info = sell_info.get(currency.upper(), {"price": 0.0, "volume": 0.0})
-                    sell_price = info["price"]
-                    sell_volume = info["volume"]
-                    sell_value = sell_price * sell_volume
-                    
-                    asset_list.append({
-                        "currency": currency,
-                        "korean_name": korean_name,
-                        "balance": 0.0,
-                        "avg_buy_price": sell_price,
-                        "current_price": current_price,
-                        "eval_value": sell_value,
-                        "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
-                        "percent": 0.0,
-                        "exchange_id": "upbit"
-                    })
+                async with get_db_conn() as db:
+                    for currency in liquidated_coins:
+                        symbol = f"KRW-{currency}"
+                        if symbol in valid_krw_markets:
+                            current_price = prices.get(symbol, 0.0)
+                        else:
+                            current_price = 0.0
+                        
+                        korean_name = stock_mapper.get_name('upbit', currency)
+                        
+                        # 누적 통계 조회
+                        stats = await _get_real_asset_stats(db, "upbit", currency)
+                        eval_value = stats["total_sell_amount"]
+                        realized_pnl = stats["total_sell_amount"] - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                        total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                        realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                        
+                        asset_list.append({
+                            "currency": currency,
+                            "korean_name": korean_name,
+                            "balance": 0.0,
+                            "avg_buy_price": stats["last_sell_price"],
+                            "current_price": current_price,
+                            "eval_value": eval_value,
+                            "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
+                            "percent": 0.0,
+                            "exchange_id": "upbit",
+                            "total_buy_amount": stats["total_buy_amount"],
+                            "total_sell_amount": stats["total_sell_amount"],
+                            "total_fee": stats["total_fee"],
+                            "total_tax": stats["total_tax"],
+                            "realized_pnl": realized_pnl,
+                            "realized_roi": realized_roi
+                        })
+                
+                # 처분완료 자산은 실현손익 내림차순 정렬이 기본
+                asset_list.sort(key=lambda x: x["realized_pnl"], reverse=True)
                 
                 return {
                     "total_eval_value": 0.0,
@@ -478,47 +517,66 @@ async def get_upbit_assets(request: Request, mode: str = "active", sync: bool = 
                 asset_list = []
                 total_eval_value = 0.0
                 
-                for a in accounts:
-                    currency = a['currency']
-                    balance = float(a['balance']) + float(a['locked'])
-                    avg_buy_price = float(a['avg_buy_price'])
-                    
-                    if balance <= 0:
-                        continue
-                    
-                    if currency == 'KRW':
-                        current_price = 1.0
-                        balance = int(balance)
-                        eval_value = balance
-                        korean_name = "원화"
-                    else:
-                        if currency in krw_supported:
-                            symbol = f"KRW-{currency}"
-                            current_price = prices.get(symbol, avg_buy_price)
-                            eval_value = balance * current_price
-                        elif currency in btc_supported:
-                            symbol = f"BTC-{currency}"
-                            btc_price = prices.get(symbol, 0.0)
-                            current_price = btc_price * btc_krw_price
-                            eval_value = balance * current_price
-                            # 업비트 avg_buy_price는 이미 KRW 기준이므로 환산 생략
+                async with get_db_conn() as db:
+                    for a in accounts:
+                        currency = a['currency']
+                        balance = float(a['balance']) + float(a['locked'])
+                        avg_buy_price = float(a['avg_buy_price'])
+                        
+                        if balance <= 0:
+                            continue
+                        
+                        if currency == 'KRW':
+                            current_price = 1.0
+                            balance = int(balance)
+                            eval_value = balance
+                            korean_name = "원화"
+                            stats = {
+                                "total_buy_amount": 0.0,
+                                "total_sell_amount": 0.0,
+                                "total_fee": 0.0,
+                                "total_tax": 0.0
+                            }
+                            realized_pnl = 0.0
+                            realized_roi = 0.0
                         else:
-                            current_price = 0.0
-                            eval_value = 0.0
-                        korean_name = stock_mapper.get_name('upbit', currency)
+                            if currency in krw_supported:
+                                symbol = f"KRW-{currency}"
+                                current_price = prices.get(symbol, avg_buy_price)
+                                eval_value = balance * current_price
+                            elif currency in btc_supported:
+                                symbol = f"BTC-{currency}"
+                                btc_price = prices.get(symbol, 0.0)
+                                current_price = btc_price * btc_krw_price
+                                eval_value = balance * current_price
+                            else:
+                                current_price = 0.0
+                                eval_value = 0.0
+                            korean_name = stock_mapper.get_name('upbit', currency)
                             
-                    total_eval_value += eval_value
-                    
-                    asset_list.append({
-                        "currency": currency,
-                        "korean_name": korean_name,
-                        "balance": balance,
-                        "avg_buy_price": avg_buy_price,
-                        "current_price": current_price,
-                        "eval_value": eval_value,
-                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
-                        "exchange_id": "upbit"
-                    })
+                            stats = await _get_real_asset_stats(db, "upbit", currency)
+                            realized_pnl = stats["total_sell_amount"] + eval_value - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                            total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                            realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                                
+                        total_eval_value += eval_value
+                        
+                        asset_list.append({
+                            "currency": currency,
+                            "korean_name": korean_name,
+                            "balance": balance,
+                            "avg_buy_price": avg_buy_price,
+                            "current_price": current_price,
+                            "eval_value": eval_value,
+                            "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
+                            "exchange_id": "upbit",
+                            "total_buy_amount": stats["total_buy_amount"],
+                            "total_sell_amount": stats["total_sell_amount"],
+                            "total_fee": stats["total_fee"],
+                            "total_tax": stats["total_tax"],
+                            "realized_pnl": realized_pnl,
+                            "realized_roi": realized_roi
+                        })
                     
                 for asset in asset_list:
                     asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
@@ -835,33 +893,12 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
             if mode == "liquidated":
                 active_set = {a['currency'].upper() for a in accounts if float(a['balance']) + float(a['locked']) > 0}
                 traded_coins = []
-                sell_info = {}
                 async with get_db_conn() as db:
                     async with db.execute(
                         "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'bithumb' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
                     ) as cursor:
                         rows = await cursor.fetchall()
                         traded_coins = [r['symbol'].upper() for r in rows]
-
-                    query = """
-                        SELECT r.symbol, r.price, r.executed_volume
-                        FROM real_orders r
-                        INNER JOIN (
-                            SELECT symbol, MAX(created_at) as max_created_at
-                            FROM real_orders
-                            WHERE exchange_id = 'bithumb' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
-                            GROUP BY symbol
-                        ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                        WHERE r.exchange_id = 'bithumb' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
-                    """
-                    async with db.execute(query) as cursor:
-                        rows = await cursor.fetchall()
-                        for r in rows:
-                            sym = r['symbol'].upper()
-                            sell_info[sym] = {
-                                "price": float(r['price'] or 0.0),
-                                "volume": float(r['executed_volume'] or 0.0)
-                            }
 
                 liquidated_coins = sorted(list((set(traded_coins) - active_set) - {"KRW"}))
                 prices = {}
@@ -876,30 +913,42 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                                     prices[t['market']] = float(t['trade_price'])
 
                 asset_list = []
-                for currency in liquidated_coins:
-                    symbol = f"KRW-{currency}"
-                    if symbol in valid_krw_markets:
-                        current_price = prices.get(symbol, 0.0)
-                    else:
-                        current_price = 0.0
-                    
-                    korean_name = stock_mapper.get_name('bithumb', currency)
-                    info = sell_info.get(currency.upper(), {"price": 0.0, "volume": 0.0})
-                    sell_price = info["price"]
-                    sell_volume = info["volume"]
-                    sell_value = sell_price * sell_volume
-                    
-                    asset_list.append({
-                        "currency": currency,
-                        "korean_name": korean_name,
-                        "balance": 0.0,
-                        "avg_buy_price": sell_price,
-                        "current_price": current_price,
-                        "eval_value": sell_value,
-                        "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
-                        "percent": 0.0,
-                        "exchange_id": "bithumb"
-                    })
+                async with get_db_conn() as db:
+                    for currency in liquidated_coins:
+                        symbol = f"KRW-{currency}"
+                        if symbol in valid_krw_markets:
+                            current_price = prices.get(symbol, 0.0)
+                        else:
+                            current_price = 0.0
+                        
+                        korean_name = stock_mapper.get_name('bithumb', currency)
+                        
+                        stats = await _get_real_asset_stats(db, "bithumb", currency)
+                        eval_value = 0.0
+                        realized_pnl = stats["total_sell_amount"] - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                        total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                        realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                        
+                        asset_list.append({
+                            "currency": currency,
+                            "korean_name": korean_name,
+                            "balance": 0.0,
+                            "avg_buy_price": 0.0,
+                            "current_price": current_price,
+                            "eval_value": 0.0,
+                            "formatted_eval_value": "0",
+                            "percent": 0.0,
+                            "exchange_id": "bithumb",
+                            "total_buy_amount": stats["total_buy_amount"],
+                            "total_sell_amount": stats["total_sell_amount"],
+                            "total_fee": stats["total_fee"],
+                            "total_tax": stats["total_tax"],
+                            "realized_pnl": realized_pnl,
+                            "realized_roi": realized_roi
+                        })
+                
+                # 처분완료 자산은 실현손익 내림차순 정렬이 기본
+                asset_list.sort(key=lambda x: x["realized_pnl"], reverse=True)
                 
                 return {
                     "total_eval_value": 0.0,
@@ -941,46 +990,66 @@ async def get_bithumb_assets(request: Request, mode: str = "active", sync: bool 
                 asset_list = []
                 total_eval_value = 0.0
                 
-                for a in accounts:
-                    currency = a['currency']
-                    balance = float(a['balance']) + float(a['locked'])
-                    avg_buy_price = float(a['avg_buy_price'])
-                    
-                    if balance <= 0:
-                        continue
-                    
-                    if currency == 'KRW':
-                        current_price = 1.0
-                        balance = int(balance)
-                        eval_value = balance
-                        korean_name = "원화"
-                    else:
-                        if currency in krw_supported:
-                            symbol = f"KRW-{currency}"
-                            current_price = prices.get(symbol, avg_buy_price)
-                            eval_value = balance * current_price
-                        elif currency in btc_supported:
-                            symbol = f"BTC-{currency}"
-                            btc_price = prices.get(symbol, 0.0)
-                            current_price = btc_price * btc_krw_price
-                            eval_value = balance * current_price
+                async with get_db_conn() as db:
+                    for a in accounts:
+                        currency = a['currency']
+                        balance = float(a['balance']) + float(a['locked'])
+                        avg_buy_price = float(a['avg_buy_price'])
+                        
+                        if balance <= 0:
+                            continue
+                        
+                        if currency == 'KRW':
+                            current_price = 1.0
+                            balance = int(balance)
+                            eval_value = balance
+                            korean_name = "원화"
+                            stats = {
+                                "total_buy_amount": 0.0,
+                                "total_sell_amount": 0.0,
+                                "total_fee": 0.0,
+                                "total_tax": 0.0
+                            }
+                            realized_pnl = 0.0
+                            realized_roi = 0.0
                         else:
-                            current_price = 0.0
-                            eval_value = 0.0
-                        korean_name = stock_mapper.get_name('bithumb', currency)
+                            if currency in krw_supported:
+                                symbol = f"KRW-{currency}"
+                                current_price = prices.get(symbol, avg_buy_price)
+                                eval_value = balance * current_price
+                            elif currency in btc_supported:
+                                symbol = f"BTC-{currency}"
+                                btc_price = prices.get(symbol, 0.0)
+                                current_price = btc_price * btc_krw_price
+                                eval_value = balance * current_price
+                            else:
+                                current_price = 0.0
+                                eval_value = 0.0
+                            korean_name = stock_mapper.get_name('bithumb', currency)
                             
-                    total_eval_value += eval_value
-                    
-                    asset_list.append({
-                        "currency": currency,
-                        "korean_name": korean_name,
-                        "balance": balance,
-                        "avg_buy_price": avg_buy_price,
-                        "current_price": current_price,
-                        "eval_value": eval_value,
-                        "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
-                        "exchange_id": "bithumb"
-                    })
+                            stats = await _get_real_asset_stats(db, "bithumb", currency)
+                            realized_pnl = stats["total_sell_amount"] + eval_value - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                            total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                            realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                                
+                        total_eval_value += eval_value
+                        
+                        asset_list.append({
+                            "currency": currency,
+                            "korean_name": korean_name,
+                            "balance": balance,
+                            "avg_buy_price": avg_buy_price,
+                            "current_price": current_price,
+                            "eval_value": eval_value,
+                            "formatted_eval_value": f"{int(eval_value):,}" if eval_value >= 1.0 else f"{eval_value:.4f}",
+                            "exchange_id": "bithumb",
+                            "total_buy_amount": stats["total_buy_amount"],
+                            "total_sell_amount": stats["total_sell_amount"],
+                            "total_fee": stats["total_fee"],
+                            "total_tax": stats["total_tax"],
+                            "realized_pnl": realized_pnl,
+                            "realized_roi": realized_roi
+                        })
                     
                 for asset in asset_list:
                     asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0
@@ -1079,7 +1148,6 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
             # 처분 완료 자산 조회
             active_set = {item.get('pdno', '').strip().lstrip('A') for item in output1 if float(item.get('hldg_qty', 0)) > 0}
             traded_stocks = []
-            sell_info = {}
             async with get_db_conn() as db:
                 async with db.execute(
                     "SELECT DISTINCT symbol FROM real_orders WHERE exchange_id = 'kis' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))"
@@ -1087,45 +1155,38 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                     rows = await cursor.fetchall()
                     traded_stocks = [r['symbol'].upper() for r in rows]
 
-                query = """
-                    SELECT r.symbol, r.price, r.executed_volume
-                    FROM real_orders r
-                    INNER JOIN (
-                        SELECT symbol, MAX(created_at) as max_created_at
-                        FROM real_orders
-                        WHERE exchange_id = 'kis' AND side = 'SELL' AND (state = 'done' OR (state = 'cancel' AND executed_volume > 0))
-                        GROUP BY symbol
-                    ) temp ON r.symbol = temp.symbol AND r.created_at = temp.max_created_at
-                    WHERE r.exchange_id = 'kis' AND r.side = 'SELL' AND (r.state = 'done' OR (r.state = 'cancel' AND r.executed_volume > 0))
-                """
-                async with db.execute(query) as cursor:
-                    rows = await cursor.fetchall()
-                    for r in rows:
-                        sym = r['symbol'].upper()
-                        sell_info[sym] = {
-                            "price": float(r['price'] or 0.0),
-                            "volume": float(r['executed_volume'] or 0.0)
-                        }
-
             liquidated_stocks = sorted(list(set(traded_stocks) - active_set))
-            for stock in liquidated_stocks:
-                korean_name = stock_mapper.get_name('kis', stock)
-                info = sell_info.get(stock, {"price": 0.0, "volume": 0.0})
-                sell_price = info["price"]
-                sell_volume = info["volume"]
-                sell_value = sell_price * sell_volume
-                
-                asset_list.append({
-                    "currency": stock,
-                    "korean_name": korean_name,
-                    "balance": 0.0,
-                    "avg_buy_price": sell_price,
-                    "current_price": 0.0,
-                    "eval_value": sell_value,
-                    "formatted_eval_value": f"{int(sell_value):,}" if sell_value >= 1.0 else f"{sell_value:.4f}",
-                    "percent": 0.0,
-                    "exchange_id": "kis"
-                })
+            async with get_db_conn() as db:
+                for stock in liquidated_stocks:
+                    korean_name = stock_mapper.get_name('kis', stock)
+                    
+                    stats = await _get_real_asset_stats(db, "kis", stock)
+                    eval_value = 0.0
+                    realized_pnl = stats["total_sell_amount"] - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                    total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                    realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                    
+                    asset_list.append({
+                        "currency": stock,
+                        "korean_name": korean_name,
+                        "balance": 0.0,
+                        "avg_buy_price": 0.0,
+                        "current_price": 0.0,
+                        "eval_value": 0.0,
+                        "formatted_eval_value": "0",
+                        "percent": 0.0,
+                        "exchange_id": "kis",
+                        "total_buy_amount": stats["total_buy_amount"],
+                        "total_sell_amount": stats["total_sell_amount"],
+                        "total_fee": stats["total_fee"],
+                        "total_tax": stats["total_tax"],
+                        "realized_pnl": realized_pnl,
+                        "realized_roi": realized_roi
+                    })
+            
+            # 실현손익 내림차순 정렬 기본
+            asset_list.sort(key=lambda x: x["realized_pnl"], reverse=True)
+            
             return {
                 "total_eval_value": 0.0,
                 "formatted_total_value": "0",
@@ -1141,31 +1202,49 @@ async def get_kis_assets(request: Request, mode: str = "active", sync: bool = Fa
                 "current_price": 1.0,
                 "eval_value": float(kis_cash),
                 "formatted_eval_value": f"{kis_cash:,}",
-                "exchange_id": "kis"
+                "exchange_id": "kis",
+                "total_buy_amount": 0.0,
+                "total_sell_amount": 0.0,
+                "total_fee": 0.0,
+                "total_tax": 0.0,
+                "realized_pnl": 0.0,
+                "realized_roi": 0.0
             })
             
-            for item in output1:
-                qty = float(item.get('hldg_qty', 0))
-                if qty <= 0:
-                    continue
-                pdno = item.get('pdno', '').strip().lstrip('A')
-                avg_price = float(item.get('pchs_avg_pric', 0))
-                current_price = float(item.get('prpr', 0))
-                eval_amt = float(item.get('evlu_amt', 0))
-                prdt_name = item.get('prdt_name', '').strip() or stock_mapper.get_name('kis', pdno)
-                
-                total_eval_value += eval_amt
-                
-                asset_list.append({
-                    "currency": pdno,
-                    "korean_name": prdt_name,
-                    "balance": qty,
-                    "avg_buy_price": avg_price,
-                    "current_price": current_price,
-                    "eval_value": eval_amt,
-                    "formatted_eval_value": f"{int(eval_amt):,}",
-                    "exchange_id": "kis"
-                })
+            async with get_db_conn() as db:
+                for item in output1:
+                    qty = float(item.get('hldg_qty', 0))
+                    if qty <= 0:
+                        continue
+                    pdno = item.get('pdno', '').strip().lstrip('A')
+                    avg_price = float(item.get('pchs_avg_pric', 0))
+                    current_price = float(item.get('prpr', 0))
+                    eval_amt = float(item.get('evlu_amt', 0))
+                    prdt_name = item.get('prdt_name', '').strip() or stock_mapper.get_name('kis', pdno)
+                    
+                    total_eval_value += eval_amt
+                    
+                    stats = await _get_real_asset_stats(db, "kis", pdno)
+                    realized_pnl = stats["total_sell_amount"] + eval_amt - stats["total_buy_amount"] - stats["total_fee"] - stats["total_tax"]
+                    total_cost = stats["total_buy_amount"] + stats["total_fee"] + stats["total_tax"]
+                    realized_roi = (realized_pnl / total_cost * 100) if total_cost > 0 else 0.0
+                    
+                    asset_list.append({
+                        "currency": pdno,
+                        "korean_name": prdt_name,
+                        "balance": qty,
+                        "avg_buy_price": avg_price,
+                        "current_price": current_price,
+                        "eval_value": eval_amt,
+                        "formatted_eval_value": f"{int(eval_amt):,}",
+                        "exchange_id": "kis",
+                        "total_buy_amount": stats["total_buy_amount"],
+                        "total_sell_amount": stats["total_sell_amount"],
+                        "total_fee": stats["total_fee"],
+                        "total_tax": stats["total_tax"],
+                        "realized_pnl": realized_pnl,
+                        "realized_roi": realized_roi
+                    })
                 
             for asset in asset_list:
                 asset["percent"] = round((asset["eval_value"] / total_eval_value * 100), 2) if total_eval_value > 0 else 0.0

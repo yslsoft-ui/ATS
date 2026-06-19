@@ -520,8 +520,12 @@ function initViewNavigation() {
         
         const chartContent = document.getElementById('monitoring-tab-content-chart');
         const detailContent = document.getElementById('monitoring-tab-content-detail');
+        const outstandingContent = document.getElementById('monitoring-tab-content-outstanding');
+        const historyContent = document.getElementById('monitoring-tab-content-history');
         if (chartContent) chartContent.style.display = 'block';
         if (detailContent) detailContent.style.display = 'none';
+        if (outstandingContent) outstandingContent.style.display = 'none';
+        if (historyContent) historyContent.style.display = 'none';
 
         if (typeof ChartEngine !== 'undefined' && typeof ChartEngine.resize === 'function') {
             setTimeout(() => ChartEngine.resize(), 0);
@@ -569,11 +573,13 @@ function initTradingControls() {
             const chartContent = document.getElementById('monitoring-tab-content-chart');
             const detailContent = document.getElementById('monitoring-tab-content-detail');
             const outstandingContent = document.getElementById('monitoring-tab-content-outstanding');
+            const historyContent = document.getElementById('monitoring-tab-content-history');
             
             // 모든 콘텐츠 숨김
             if (chartContent) chartContent.style.display = 'none';
             if (detailContent) detailContent.style.display = 'none';
             if (outstandingContent) outstandingContent.style.display = 'none';
+            if (historyContent) historyContent.style.display = 'none';
             
             if (target === 'chart') {
                 if (chartContent) chartContent.style.display = 'block';
@@ -590,6 +596,11 @@ function initTradingControls() {
                 if (typeof loadOutstandingOrders === 'function') {
                     loadOutstandingOrders();
                 }
+            } else if (target === 'real-history') {
+                if (historyContent) historyContent.style.display = 'block';
+                if (typeof loadRealOrderHistory === 'function') {
+                    loadRealOrderHistory();
+                }
             }
         });
     });
@@ -600,6 +611,16 @@ function initTradingControls() {
         btnRefreshOutstanding.addEventListener('click', () => {
             if (typeof loadOutstandingOrders === 'function') {
                 loadOutstandingOrders();
+            }
+        });
+    }
+
+    // 거래 이력 새로고침 버튼 바인딩
+    const btnRefreshHistory = document.getElementById('btn-refresh-history');
+    if (btnRefreshHistory) {
+        btnRefreshHistory.addEventListener('click', () => {
+            if (typeof loadRealOrderHistory === 'function') {
+                loadRealOrderHistory();
             }
         });
     }
@@ -700,6 +721,14 @@ function initTradingControls() {
             if (outstandingTab && outstandingTab.classList.contains('active')) {
                 if (typeof loadOutstandingOrders === 'function') {
                     loadOutstandingOrders();
+                }
+            }
+
+            // 거래이력 탭이 활성화되어 있다면 내역도 재조회
+            const historyTab = document.querySelector('.monitoring-tab[data-tab="real-history"]');
+            if (historyTab && historyTab.classList.contains('active')) {
+                if (typeof loadRealOrderHistory === 'function') {
+                    loadRealOrderHistory();
                 }
             }
         }

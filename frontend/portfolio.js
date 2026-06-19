@@ -599,6 +599,13 @@ function closeAssetModal() {
 /**
  * 업비트 API를 통해 실제 잔고를 불러와 화면에 요약 정보를 출력합니다.
  */
+// 글로벌 상태에 정렬 변수 초기화
+if (typeof state.realAssetsSortKey === 'undefined') state.realAssetsSortKey = null;
+if (typeof state.realAssetsSortDir === 'undefined') state.realAssetsSortDir = null;
+
+/**
+ * 업비트 API를 통해 실제 잔고를 불러와 화면에 요약 정보를 출력합니다.
+ */
 async function loadRealAssets(sync = false) {
     const tbody = document.getElementById('real-assets-tbody');
     const totalValueEl = document.getElementById('real-total-value');
@@ -608,20 +615,19 @@ async function loadRealAssets(sync = false) {
     
     const exchange = state.realAssetExchange || 'upbit';
     const exchangeName = (exchange === 'upbit' ? '업비트' : (exchange === 'bithumb' ? '빗썸' : '한국투자증권(KIS)'));
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; ${exchangeName} API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);">&#x23F3; ${exchangeName} API에서 자산 명세를 안전하게 조회 중입니다...</td></tr>`;
     
     try {
         const filter = state.realAssetFilter || 'active';
         
-        // 테이블 헤더 텍스트 동적 변경 (보유자산 vs 처분완료자산)
-        const thElements = document.querySelectorAll('#real-assets-table th');
-        if (thElements.length >= 5) {
-            if (filter === 'liquidated') {
-                thElements[2].innerText = '매각 체결가';
-                thElements[4].innerText = '매각 총액';
+        // 정렬 상태가 세팅되지 않은 경우 기본 정렬 설정
+        if (state.realAssetsSortKey === null) {
+            if (filter === 'active') {
+                state.realAssetsSortKey = 'eval_value';
+                state.realAssetsSortDir = 'desc';
             } else {
-                thElements[2].innerText = '평균 매수가';
-                thElements[4].innerText = '평가금액';
+                state.realAssetsSortKey = 'realized_pnl';
+                state.realAssetsSortDir = 'desc';
             }
         }
 
@@ -632,6 +638,31 @@ async function loadRealAssets(sync = false) {
             const krwAsset = data.assets.find(asset => asset.currency === 'KRW');
             if (krwAsset) {
                 state.realKRWBalance = krwAsset.balance;
+            } else {
+                state.realKRWBalance = 0;
+            }
+        } else {
+            state.realAssets = [];
+            state.realKRWBalance = 0;
+        }
+
+        // 보유 현금(예수금) 전용 UI 연동 및 레이블 갱신
+        const cashBalanceEl = document.getElementById('real-cash-balance');
+        const cashLabelEl = document.getElementById('real-cash-balance-label');
+        if (cashBalanceEl) {
+            cashBalanceEl.innerText = `${Math.floor(state.realKRWBalance || 0).toLocaleString()} 원`;
+        }
+        if (cashLabelEl) {
+            cashLabelEl.innerText = `${exchangeName} 보유 현금:`;
+        }
+
+        // 실시간 자산 목록 타이틀 동적 업데이트
+        const titleEl = document.getElementById('real-assets-title');
+        if (titleEl) {
+            if (filter === 'active') {
+                titleEl.innerText = '실시간 보유 자산 분포';
+            } else {
+                titleEl.innerText = '처분 완료 자산 목록';
             }
         }
 
@@ -645,8 +676,8 @@ async function loadRealAssets(sync = false) {
             }
         }
         
-        // 실시간 더블클릭 차트 이동 콜백 어댑터
-        const onAssetDblClick = (asset) => {
+        // 실시간 클릭 차트 이동 콜백 어댑터
+        const onAssetClick = (asset) => {
             const targetExchange = asset.exchange_id || exchange;
             const symbol = asset.currency; // 주식 및 코인 모두 접두어 없이 원래 심볼 그대로 연결
             state.currentSymbol = symbol;
@@ -666,19 +697,103 @@ async function loadRealAssets(sync = false) {
             showAlert(`${asset.korean_name} 차트로 이동합니다.`, 'info');
         };
 
-        const onOrderClick = (asset) => {
-            openRealAssetOrderModal(asset);
-        };
+        // 데이터 정렬 처리 후 렌더링 호출
+        renderSortedRealAssets(onAssetClick);
 
-        const onHistoryClick = (asset) => {
-            openRealAssetHistoryModal(asset);
-        };
-
-        PortfolioView.renderRealAssetsTable('real-assets-tbody', data, totalValueEl, assetCountEl, onOrderClick, onHistoryClick, onAssetDblClick);
     } catch (e) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:#FF4B4B;">&#x26A0;&#xFE0F; 자산 조회 실패 (API 키 권한 또는 인터넷 연결 상태를 확인하세요)</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:#FF4B4B;">&#x26A0;&#xFE0F; 자산 조회 실패 (API 키 권한 또는 인터넷 연결 상태를 확인하세요)</td></tr>';
         console.error("Asset load failed", e);
     }
+}
+
+/**
+ * 캐싱된 자산 데이터를 현재 정렬 조건에 맞게 정렬하여 렌더링합니다.
+ */
+function renderSortedRealAssets(onAssetClick) {
+    const filter = state.realAssetFilter || 'active';
+    let assets = [...(state.realAssets || [])];
+    
+    // KRW(원화) 자산은 테이블 목록에서 제외하고 예수금 카드로만 표시
+    assets = assets.filter(a => a.currency !== 'KRW');
+
+    // 보유자산(active)일 때 원화 제외 순수 투자자산 기준 비중(percent) 재계산
+    if (filter === 'active') {
+        const totalCoinEval = assets.reduce((sum, a) => sum + (a.eval_value || 0), 0);
+        assets.forEach(a => {
+            a.percent = totalCoinEval > 0 ? parseFloat((a.eval_value / totalCoinEval * 100).toFixed(2)) : 0.0;
+        });
+    }
+
+    if (state.realAssetsSortKey && state.realAssetsSortDir) {
+        const key = state.realAssetsSortKey;
+        const dir = state.realAssetsSortDir;
+        
+        assets.sort((a, b) => {
+            let valA = a[key];
+            let valB = b[key];
+            
+            // undefined 나 null 방어
+            if (valA === undefined || valA === null) valA = 0;
+            if (valB === undefined || valB === null) valB = 0;
+            
+            // 문자열 정렬 지원 (종목명 등)
+            if (typeof valA === 'string') {
+                return dir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+            
+            // 숫자 정렬
+            return dir === 'asc' ? valA - valB : valB - valA;
+        });
+    } else {
+        // 정렬이 해제(null)된 상태일 때는 기본 정렬
+        if (filter === 'active') {
+            assets.sort((a, b) => (b.eval_value || 0) - (a.eval_value || 0));
+        } else {
+            assets.sort((a, b) => (b.realized_pnl || 0) - (a.realized_pnl || 0));
+        }
+    }
+    
+    const assetCountEl = document.getElementById('real-asset-count');
+    if (assetCountEl) {
+        assetCountEl.innerText = `${assets.length} 개 종목`;
+    }
+    
+    PortfolioView.renderRealAssetsTable('real-assets-tbody', assets, filter, state.realAssetsSortKey, state.realAssetsSortDir, onAssetClick);
+    
+    // 정렬 이벤트 바인딩
+    bindRealAssetsSortEvents(onAssetClick);
+}
+
+/**
+ * 테이블 헤더 클릭 시 정렬을 트리거하는 이벤트를 바인딩합니다.
+ */
+function bindRealAssetsSortEvents(onAssetClick) {
+    const thElements = document.querySelectorAll('#real-assets-table th[data-sort]');
+    thElements.forEach(th => {
+        // 기존 리스너 중복 방지를 위해 복제 후 재등록
+        const newTh = th.cloneNode(true);
+        th.parentNode.replaceChild(newTh, th);
+        
+        newTh.addEventListener('click', () => {
+            const sortKey = newTh.getAttribute('data-sort');
+            if (!sortKey) return;
+            
+            if (state.realAssetsSortKey === sortKey) {
+                if (state.realAssetsSortDir === 'desc') {
+                    state.realAssetsSortDir = 'asc';
+                } else if (state.realAssetsSortDir === 'asc') {
+                    state.realAssetsSortDir = null; // 정렬 해제 (기본 정렬로 복귀)
+                } else {
+                    state.realAssetsSortDir = 'desc';
+                }
+            } else {
+                state.realAssetsSortKey = sortKey;
+                state.realAssetsSortDir = 'desc'; // 새 컬럼 클릭 시 내림차순 우선
+            }
+            
+            renderSortedRealAssets(onAssetClick);
+        });
+    });
 }
 
 /**
@@ -686,6 +801,9 @@ async function loadRealAssets(sync = false) {
  */
 function changeRealAssetFilter(filter) {
     state.realAssetFilter = filter;
+    state.realAssetsSortKey = null; // 정렬 리셋
+    state.realAssetsSortDir = null;
+    
     const activeBtn = document.getElementById('btn-real-asset-filter-active');
     const liquidatedBtn = document.getElementById('btn-real-asset-filter-liquidated');
     if (activeBtn && liquidatedBtn) {
@@ -713,6 +831,8 @@ function changeRealAssetFilter(filter) {
  */
 function changeRealAssetExchange(exchange) {
     state.realAssetExchange = exchange;
+    state.realAssetsSortKey = null; // 정렬 리셋
+    state.realAssetsSortDir = null;
     
     // 거래소 버튼 활성화 UI 갱신
     const exchanges = ['upbit', 'bithumb', 'kis'];
@@ -2285,8 +2405,207 @@ window.closeRealAssetHistoryModal = closeRealAssetHistoryModal;
 window.setOrderPrice = setOrderPrice;
 window.openRealAssetOrderModalFromMonitoring = openRealAssetOrderModalFromMonitoring;
 window.onRealOrderMarketChange = onRealOrderMarketChange;
+/**
+ * 현재 선택된 거래소 및 종목의 실거래 체결 이력 및 가치 평가 메트릭스를 패치하여 화면에 렌더링합니다.
+ */
+async function loadRealOrderHistory() {
+    const tbody = document.getElementById('monitoring-history-tbody');
+    if (!tbody) return;
+    
+    // 요약 메트릭스 카드 엘리먼트들
+    const totalBuyEl = document.getElementById('monitoring-hist-total-buy');
+    const totalSellEl = document.getElementById('monitoring-hist-total-sell');
+    const evalValueEl = document.getElementById('monitoring-hist-eval-value');
+    const totalFeeEl = document.getElementById('monitoring-hist-total-fee');
+    const totalTaxEl = document.getElementById('monitoring-hist-total-tax');
+    const totalPnlEl = document.getElementById('monitoring-hist-total-pnl');
+    const totalRoiEl = document.getElementById('monitoring-hist-total-roi');
+    
+    // 요약 메트릭스 초기화
+    if (totalBuyEl) totalBuyEl.innerText = '0 원';
+    if (totalSellEl) totalSellEl.innerText = '0 원';
+    if (evalValueEl) evalValueEl.innerText = '0 원';
+    if (totalFeeEl) totalFeeEl.innerText = '0 원';
+    if (totalTaxEl) totalTaxEl.innerText = '0 원';
+    if (totalPnlEl) {
+        totalPnlEl.innerText = '0 원';
+        totalPnlEl.style.color = '#F8FAFC';
+    }
+    if (totalRoiEl) {
+        totalRoiEl.innerText = '0.00%';
+        totalRoiEl.style.color = '#F8FAFC';
+    }
+    
+    const exchange = state.currentExchange;
+    const symbol = state.currentSymbol;
+    const symbolParam = exchange === 'kis' ? symbol : `KRW-${symbol}`;
+    
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">
+                <span class="spinner-small" style="display: inline-block; vertical-align: middle; margin-right: 5px;"></span>
+                내역 조회 중...
+            </td>
+        </tr>
+    `;
+    
+    try {
+        // 1. 자산 정보 조회 (잔고 획득 및 평단 계산용)
+        let asset = null;
+        try {
+            const activeAssets = await APIClient.fetchRealAssets(exchange, 'active', false);
+            if (activeAssets && activeAssets.assets) {
+                asset = activeAssets.assets.find(a => a.currency === symbol);
+            }
+            if (!asset) {
+                const liqAssets = await APIClient.fetchRealAssets(exchange, 'liquidated', false);
+                if (liqAssets && liqAssets.assets) {
+                    asset = liqAssets.assets.find(a => a.currency === symbol);
+                }
+            }
+        } catch (assetErr) {
+            console.error("Failed to load asset details for metrics:", assetErr);
+        }
+        
+        // 2. 체결 이력 및 호가창 정보(현재가 확인용) 병렬 조회
+        const [orders, orderbookRes] = await Promise.all([
+            APIClient.fetchRealOrderHistory(exchange, symbolParam),
+            APIClient.fetchOrderbook(exchange, symbolParam).catch(() => null)
+        ]);
+        
+        const currentPrice = (orderbookRes && orderbookRes.trade_price) ? orderbookRes.trade_price : (asset ? (asset.current_price || 0) : 0);
+        
+        if (!orders || orders.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="text-align: center; padding: 20px; color: #94A3B8;">
+                        최근 체결 완료된 거래 내역이 없습니다.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let totalBuyAmount = 0;
+        let totalSellAmount = 0;
+        let paidFee = 0;
+        let paidTax = 0;
+        
+        tbody.innerHTML = '';
+        orders.forEach(order => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+            tr.style.transition = 'background 0.2s';
+            tr.onmouseover = () => tr.style.background = 'rgba(255, 255, 255, 0.02)';
+            tr.onmouseout = () => tr.style.background = 'transparent';
+            
+            let timeStr = '-';
+            if (order.created_at) {
+                const d = new Date(order.created_at);
+                const pad = (n) => String(n).padStart(2, '0');
+                if (!isNaN(d.getTime())) {
+                    timeStr = `${d.getFullYear()}. ${d.getMonth() + 1}. ${d.getDate()}. ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+                } else {
+                    timeStr = order.created_at;
+                }
+            }
+            
+            const sideText = order.side === 'BUY' ? '매수' : '매도';
+            const typeClass = order.side === 'BUY' ? 'bull' : 'bear';
+            
+            const priceStr = order.price ? order.price.toLocaleString() : '-';
+            const volumeStr = order.executed_volume ? order.executed_volume.toString() : '0';
+            const feeVal = order.fee || 0;
+            const feeStr = feeVal > 0 ? `${feeVal.toLocaleString()} 원` : '0 원';
+            const taxVal = order.tax || 0;
+            const taxStr = taxVal > 0 ? `${taxVal.toLocaleString()} 원` : '0 원';
+            
+            const stateStr = order.state === 'done' ? '완료' : (order.state === 'cancel' ? '취소' : order.state);
+            const rawTotal = (order.price && order.executed_volume) ? (order.price * order.executed_volume) : 0;
+            const totalStr = rawTotal ? Math.floor(rawTotal).toLocaleString() : '0';
+            
+            // 체결 완료 상태일 때만 합산 연산
+            if (order.state === 'done') {
+                paidFee += feeVal;
+                paidTax += taxVal;
+                if (order.side === 'BUY') {
+                    totalBuyAmount += rawTotal;
+                } else if (order.side === 'SELL') {
+                    totalSellAmount += rawTotal;
+                }
+            }
+            
+            tr.innerHTML = `
+                <td style="padding:10px 5px; font-size:0.75rem; color:#94A3B8;">${timeStr}</td>
+                <td style="padding:10px 5px; font-weight:bold; font-size:0.75rem;" class="${typeClass}">${sideText}</td>
+                <td style="padding:10px 5px; text-align:right;" class="num">${priceStr}</td>
+                <td style="padding:10px 5px; text-align:right;" class="num">${volumeStr}</td>
+                <td style="padding:10px 5px; text-align:right; color:#94A3B8;" class="num">${feeStr}</td>
+                <td style="padding:10px 5px; text-align:right; color:#94A3B8;" class="num">${taxStr}</td>
+                <td style="padding:10px 5px; text-align:center; font-size:0.72rem; color:#94A3B8;">${stateStr}</td>
+                <td style="padding:10px 5px; text-align:right; font-weight:bold; color:#F8FAFC;" class="num">${totalStr} 원</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // 6개 요약 정보 계산 및 바인딩
+        const balance = asset ? (asset.balance || 0) : 0;
+        const evalValue = currentPrice * balance; // 실시간 평가액
+        
+        // 수수료 및 거래세율 (코인 0.05%, KIS 0.015% 등)
+        const estSellFee = evalValue * (exchange === 'kis' ? 0.00015 : 0.0005);
+        const estSellTax = evalValue * (exchange === 'kis' ? 0.0020 : 0.0);
+        
+        const totalFee = paidFee + estSellFee;
+        const totalTax = paidTax + estSellTax;
+        
+        // 실현 손익 = 총 매도액 + 평가액 - 총 매수액 - 총 수수료 - 총 거래세
+        const pnl = totalSellAmount + evalValue - totalBuyAmount - totalFee - totalTax;
+        // 실현 수익률 = 실현 손익 / 총 매수액 * 100
+        const roi = totalBuyAmount > 0 ? ((pnl / totalBuyAmount) * 100) : 0;
+        
+        if (totalBuyEl) totalBuyEl.innerText = `${Math.floor(totalBuyAmount).toLocaleString()} 원`;
+        if (totalSellEl) totalSellEl.innerText = `${Math.floor(totalSellAmount).toLocaleString()} 원`;
+        if (evalValueEl) evalValueEl.innerText = `${Math.floor(evalValue).toLocaleString()} 원`;
+        if (totalFeeEl) totalFeeEl.innerText = `${Math.floor(totalFee).toLocaleString()} 원`;
+        if (totalTaxEl) totalTaxEl.innerText = `${Math.floor(totalTax).toLocaleString()} 원`;
+        
+        if (totalPnlEl) {
+            totalPnlEl.innerText = `${pnl >= 0 ? '+' : ''}${Math.floor(pnl).toLocaleString()} 원`;
+            if (pnl > 0) {
+                totalPnlEl.style.color = '#FF4B4B';
+            } else if (pnl < 0) {
+                totalPnlEl.style.color = '#0072FF';
+            } else {
+                totalPnlEl.style.color = '#F8FAFC';
+            }
+        }
+        
+        if (totalRoiEl) {
+            totalRoiEl.innerText = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
+            if (roi > 0) {
+                totalRoiEl.style.color = '#FF4B4B';
+            } else if (roi < 0) {
+                totalRoiEl.style.color = '#0072FF';
+            } else {
+                totalRoiEl.style.color = '#F8FAFC';
+            }
+        }
+    } catch (e) {
+        console.error("[loadRealOrderHistory] 조회 실패:", e);
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align: center; padding: 20px; color: #EF4444; font-weight: bold;">
+                    ⚠️ 거래 이력 조회 실패: ${e.message || e}
+                </td>
+            </tr>
+        `;
+    }
+}
+
 window.loadOutstandingOrders = loadOutstandingOrders;
 window.cancelOutstandingOrder = cancelOutstandingOrder;
+window.loadRealOrderHistory = loadRealOrderHistory;
 
 if (typeof ViewRouter !== 'undefined') {
     ViewRouter.registerRoute('portfolio-view', () => {

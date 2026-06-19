@@ -223,54 +223,68 @@ const PortfolioView = {
     /**
      * 업비트 API를 통해 받아온 실제 잔고 정보를 렌더링합니다.
      */
-    renderRealAssetsTable(tbodyId, data, totalValueEl, assetCountEl, onOrderClick, onHistoryClick, onAssetDblClick) {
+    renderRealAssetsTable(tbodyId, assets, filter, sortKey, sortDir, onAssetClick) {
         const tbody = document.getElementById(tbodyId);
         if (!tbody) return;
 
-        if (!data || !data.assets) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:rgba(255,255,255,0.4);;">자산 내역이 비어있거나 키를 확인하세요.</td></tr>';
-            return;
+        // 1. 헤더 동적 구성 및 렌더링
+        const thead = document.querySelector('#real-assets-table thead');
+        if (thead) {
+            let headers = [];
+            if (filter === 'active') {
+                headers = [
+                    { text: '종목명 (코드)', sort: 'korean_name', style: '' },
+                    { text: '총 매수액', sort: 'total_buy_amount', style: 'text-align:right;' },
+                    { text: '총 매도액', sort: 'total_sell_amount', style: 'text-align:right;' },
+                    { text: '평가금액', sort: 'eval_value', style: 'text-align:right;' },
+                    { text: '총 수수료', sort: 'total_fee', style: 'text-align:right;' },
+                    { text: '총 거래세', sort: 'total_tax', style: 'text-align:right;' },
+                    { text: '실현손익', sort: 'realized_pnl', style: 'text-align:right;' },
+                    { text: '실현수익률', sort: 'realized_roi', style: 'text-align:right;' },
+                    { text: '자산비중 (게이지)', sort: 'percent', style: 'text-align:right; width: 140px;' }
+                ];
+            } else {
+                headers = [
+                    { text: '종목명 (코드)', sort: 'korean_name', style: '' },
+                    { text: '총 매수액', sort: 'total_buy_amount', style: 'text-align:right;' },
+                    { text: '총 매도액', sort: 'total_sell_amount', style: 'text-align:right;' },
+                    { text: '총 수수료', sort: 'total_fee', style: 'text-align:right;' },
+                    { text: '총 거래세', sort: 'total_tax', style: 'text-align:right;' },
+                    { text: '실현손익', sort: 'realized_pnl', style: 'text-align:right;' },
+                    { text: '실현수익률', sort: 'realized_roi', style: 'text-align:right;' },
+                    { text: '실현수익률 (게이지)', sort: 'realized_roi', style: 'text-align:right; width: 140px;' }
+                ];
+            }
+
+            let headerHtml = '<tr>';
+            headers.forEach(h => {
+                let arrow = '';
+                if (sortKey === h.sort && sortDir) {
+                    arrow = sortDir === 'asc' ? ' ▲' : ' ▼';
+                }
+                headerHtml += `<th data-sort="${h.sort}" style="${h.style} cursor:pointer; user-select:none;">${h.text}${arrow}</th>`;
+            });
+            headerHtml += '</tr>';
+            thead.innerHTML = headerHtml;
         }
 
-        // 헤더 메트릭스 업데이트
-        if (totalValueEl) totalValueEl.innerText = `${data.formatted_total_value} 원`;
-        if (assetCountEl) assetCountEl.innerText = `${data.assets.length} 개 종목`;
-        
         tbody.innerHTML = '';
         
-        if (data.assets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">보유 자산이 없습니다.</td></tr>';
+        if (!assets || assets.length === 0) {
+            const colspanVal = filter === 'active' ? 9 : 8;
+            tbody.innerHTML = `<tr><td colspan="${colspanVal}" style="text-align:center;padding:20px;">보유하거나 거래한 자산이 없습니다.</td></tr>`;
             return;
         }
 
-        data.assets.forEach(asset => {
+        const formatKRW = (val) => {
+            if (val === undefined || val === null) return '-';
+            return `${Math.floor(val).toLocaleString()} 원`;
+        };
+
+        assets.forEach(asset => {
             const tr = document.createElement('tr');
             tr.className = 'market-row';
-            
-            // 평가 수익률 연산
-            let roiHtml = '-';
-            if (asset.avg_buy_price > 0 && asset.currency !== 'KRW') {
-                const roi = ((asset.current_price - asset.avg_buy_price) / asset.avg_buy_price * 100).toFixed(2);
-                roiHtml = `<span class="${roi >= 0 ? 'bull' : 'bear'}">${roi >= 0 ? '+' : ''}${roi}%</span>`;
-            }
-            
-            // 수량 정밀도 처리
-            let balanceStr;
-            if (asset.currency === 'KRW') {
-                balanceStr = Math.floor(asset.balance).toLocaleString();
-            } else if (asset.exchange_id === 'kis') {
-                balanceStr = Math.floor(asset.balance).toLocaleString();
-            } else {
-                balanceStr = asset.balance.toFixed(4);
-            }
-                
-            // 게이지 비주얼 바 렌더링
-            const barHtml = `
-                <div class="progress-bar-container">
-                    <div class="progress-bar-fill" style="width: ${asset.percent}%"></div>
-                    <span class="progress-bar-text">${asset.percent}%</span>
-                </div>
-            `;
+            tr.style.cursor = 'pointer';
             
             // 코인/주식 로고 아이콘 URL 및 Fallback SVG 처리
             let iconHtml = '';
@@ -284,65 +298,78 @@ const PortfolioView = {
                 iconHtml = `<img src="${iconUrl}" style="width:24px; height:24px; border-radius:50%; background:#1E293B; flex-shrink:0;" onerror="this.onerror=null; this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' width=\\'24\\' height=\\'24\\'><circle cx=\\'12\\' cy=\\'12\\' r=\\'10\\' fill=\\'%231E293B\\' stroke=\\'%234b5563\\' stroke-width=\\'1\\'/><text x=\\'50%\\' y=\\'62%\\' font-size=\\'9\\' font-family=\\'sans-serif\\' font-weight=\\'bold\\' fill=\\'%2394A3B8\\' text-anchor=\\'middle\\'>${asset.currency.slice(0, 3)}</text></svg>';">`;
             }
 
-            const isOrderDisabled = asset.currency === 'KRW' || asset.current_price <= 0;
-            const actionsHtml = `
-                <div class="real-asset-actions">
-                    <button class="btn-action-order" ${isOrderDisabled ? 'disabled' : ''}>주문</button>
-                    <button class="btn-action-history">이력</button>
-                </div>
-            `;
-            
-            // 거래소 탭으로 구분이 완료되어 뱃지 비노출 처리
-            const exBadgeHtml = '';
+            // 수익률 및 손익의 상승(Bull)/하락(Bear) 색상 매핑
+            let roiClass = '';
+            if (asset.realized_roi > 0) roiClass = 'bull';
+            else if (asset.realized_roi < 0) roiClass = 'bear';
+            const roiText = (asset.realized_roi >= 0 ? '+' : '') + asset.realized_roi.toFixed(2) + '%';
+            const roiHtml = `<span class="${roiClass}" style="font-family:'Roboto Mono', monospace; font-weight:bold;">${roiText}</span>`;
 
-            tr.innerHTML = `
+            let pnlClass = '';
+            if (asset.realized_pnl > 0) pnlClass = 'bull';
+            else if (asset.realized_pnl < 0) pnlClass = 'bear';
+            const pnlHtml = `<span class="${pnlClass}" style="font-family:'Roboto Mono', monospace; font-weight:bold;">${formatKRW(asset.realized_pnl)}</span>`;
+
+            // 공통 컬럼 정의
+            const nameCol = `
                 <td>
                     <div style="display:flex; align-items:center; gap: 10px;">
                         ${iconHtml}
                         <div style="display:flex; flex-direction:column; line-height:1.2;">
-                            <span style="font-weight:bold; color:#F8FAFC; font-size:0.9rem;">${asset.korean_name}${exBadgeHtml}</span>
+                            <span style="font-weight:bold; color:#F8FAFC; font-size:0.9rem;">${asset.korean_name}</span>
                             <span style="font-size:0.72rem; color:#94A3B8; font-family:'Roboto Mono', monospace;">${asset.currency}</span>
                         </div>
                     </div>
                 </td>
-                <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${balanceStr}</td>
-                <td class="num" style="text-align:right;">${asset.avg_buy_price > 0 ? (asset.avg_buy_price >= 100 ? Math.floor(asset.avg_buy_price).toLocaleString() : asset.avg_buy_price.toLocaleString()) : '-'}</td>
-                <td class="num" style="text-align:right;">${asset.current_price > 0 ? (asset.current_price >= 100 ? Math.floor(asset.current_price).toLocaleString() : asset.current_price.toLocaleString()) : '-'}</td>
-                <td class="num" style="text-align:right; font-weight:bold; color:#F8FAFC;">${asset.formatted_eval_value} 원</td>
-                <td>${barHtml}</td>
-                <td>${actionsHtml}</td>
             `;
-            
-            // 주문 버튼 클릭 리스너
-            const orderBtn = tr.querySelector('.btn-action-order');
-            if (orderBtn) {
-                orderBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (typeof onOrderClick === 'function') {
-                        onOrderClick(asset);
-                    }
-                });
+
+            if (filter === 'active') {
+                // 보유자산 비중 게이지
+                const barHtml = `
+                    <div class="progress-bar-container" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 16px; position: relative; overflow: hidden;">
+                        <div class="progress-bar-fill" style="width: ${asset.percent}%; background: var(--accent-color); height: 100%; transition: width 0.3s ease;"></div>
+                        <span class="progress-bar-text" style="position: absolute; width: 100%; text-align: center; top: 0; left: 0; font-size: 0.75rem; line-height: 16px; color: white; font-family:'Roboto Mono', monospace; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">${asset.percent}%</span>
+                    </div>
+                `;
+
+                tr.innerHTML = `
+                    ${nameCol}
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_buy_amount)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_sell_amount)}</td>
+                    <td class="num" style="text-align:right; font-weight:bold; color:#F8FAFC; font-family:'Roboto Mono', monospace;">${formatKRW(asset.eval_value)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_fee)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_tax)}</td>
+                    <td class="num" style="text-align:right;">${pnlHtml}</td>
+                    <td class="num" style="text-align:right;">${roiHtml}</td>
+                    <td>${barHtml}</td>
+                `;
+            } else {
+                // 처분완료자산 실현수익률 게이지
+                const fillWidth = Math.min(100, Math.abs(asset.realized_roi || 0));
+                const barColor = (asset.realized_roi || 0) >= 0 ? '#FF4B4B' : '#0072FF';
+                const roiBarHtml = `
+                    <div class="progress-bar-container" style="background: rgba(255,255,255,0.05); border-radius: 4px; height: 16px; position: relative; overflow: hidden;">
+                        <div class="progress-bar-fill" style="width: ${fillWidth}%; background: ${barColor}; height: 100%; transition: width 0.3s ease;"></div>
+                        <span class="progress-bar-text" style="position: absolute; width: 100%; text-align: center; top: 0; left: 0; font-size: 0.75rem; line-height: 16px; color: white; font-family:'Roboto Mono', monospace; font-weight: bold; text-shadow: 0 1px 2px rgba(0,0,0,0.8);">${roiText}</span>
+                    </div>
+                `;
+
+                tr.innerHTML = `
+                    ${nameCol}
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_buy_amount)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_sell_amount)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_fee)}</td>
+                    <td class="num" style="text-align:right; font-family:'Roboto Mono', monospace;">${formatKRW(asset.total_tax)}</td>
+                    <td class="num" style="text-align:right;">${pnlHtml}</td>
+                    <td class="num" style="text-align:right;">${roiHtml}</td>
+                    <td>${roiBarHtml}</td>
+                `;
             }
 
-            // 이력 버튼 클릭 리스너
-            const historyBtn = tr.querySelector('.btn-action-history');
-            if (historyBtn) {
-                historyBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (typeof onHistoryClick === 'function') {
-                        onHistoryClick(asset);
-                    }
-                });
-            }
-
-            // 더블 클릭 대신 싱글 클릭 시 차트 연동 트리거 호출
-            tr.addEventListener('click', (e) => {
-                // 주문/이력 액션 버튼 영역 클릭 시 차트 이동 동작을 수행하지 않음
-                if (e.target.closest('.real-asset-actions')) {
-                    return;
-                }
-                if (asset.currency !== 'KRW' && typeof onAssetDblClick === 'function') {
-                    onAssetDblClick(asset);
+            // 행 클릭 시 차트 연동 트리거 호출
+            tr.addEventListener('click', () => {
+                if (asset.currency !== 'KRW' && typeof onAssetClick === 'function') {
+                    onAssetClick(asset);
                 }
             });
             
