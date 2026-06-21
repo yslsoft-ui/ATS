@@ -157,7 +157,8 @@ async def test_portfolio_report_data_generation():
     # 2. 리포트 데이터 테스트
     report = await pm.get_portfolio_report_data("test_report_id", system)
     assert report["status"] == "success"
-    assert report["id"] == "test_report_id"
+    from src.engine.portfolio import get_integer_portfolio_id
+    assert report["id"] == get_integer_portfolio_id("test_report_id")
     assert report["initial_cash"] == 1000000
     assert report["cash"] == 1000000
     assert report["summary"]["initial_cash"] == 1000000

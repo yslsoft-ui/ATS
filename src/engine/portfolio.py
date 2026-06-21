@@ -621,19 +621,23 @@ class PortfolioManager:
         }
         self.collector_statuses: Dict[str, Dict[str, Any]] = {}
         self.broadcast_callback = None
+        self.account_adapters: Dict[str, Any] = {} # [NEW] 거래소별 계좌 잔고 조회 어댑터 등록
+
+    def register_account_adapter(self, exchange_id: str, adapter):
+        """거래소별 계좌 잔고 조회 어댑터를 명시적으로 등록합니다."""
+        self.account_adapters[exchange_id.lower()] = adapter
 
     def add_portfolio(self, portfolio: Portfolio):
         self.portfolios[portfolio.id] = portfolio
 
     async def sync_live_portfolio_from_exchange(self, system):
         """
-        'live' 포트폴리오에 대해 실제 업비트 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다.
+        'live' 포트폴리오에 대해 실제 거래소 지갑 자산과 연동하여 현금 및 보유 포지션을 갱신합니다.
+        (ExchangeAccountAdapter 심(Seam)을 통해 잔고 조회 및 미체결 조회를 DTO로 정규화하여 획득합니다.)
         """
         import os
         import time
-        import aiohttp
         from pathlib import Path
-        from src.engine.utils.stock_mapper import stock_mapper
         
         portfolio = self.portfolios.get('1') or self.portfolios.get(1)
         if not portfolio:
@@ -656,326 +660,161 @@ class PortfolioManager:
                         k, v = line.split('=', 1)
                         os.environ[k.strip()] = v.strip()
 
-        access_key = os.getenv("UPBIT_ACCESS_KEY")
-        secret_key = os.getenv("UPBIT_SECRET_KEY")
-        
-        if not access_key or not secret_key or "your_access_key" in access_key:
-            logger.warning("sync_live_portfolio_from_exchange: API keys are missing in env. Cannot sync.")
-            return
-            
-        api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
-        base_url = api_url.rstrip('/')
-        upbit_v1_url = base_url if base_url.endswith('/v1') else f"{base_url}/v1"
-        
-        try:
-            from src.server.routers.portfolio import _sync_real_orders
-            await _sync_real_orders(access_key, secret_key, api_url, force_sync=True)
-        except Exception as e:
-            logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real orders: {e}")
-            
-        new_positions = {}
+        # 거래소 어댑터 명시적 등록 자동 Fallback 보장
+        # 1. Upbit Adapter
+        if 'upbit' not in self.account_adapters:
+            access_key = os.getenv("UPBIT_ACCESS_KEY")
+            secret_key = os.getenv("UPBIT_SECRET_KEY")
+            if access_key and secret_key and "your_access_key" not in access_key:
+                api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+                from src.engine.account_adapter import UpbitAccountAdapter
+                self.register_account_adapter('upbit', UpbitAccountAdapter(access_key, secret_key, api_url))
 
-        try:
-            token = _create_upbit_jwt(access_key, secret_key)
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/json"
-            }
-            
-            timeout = aiohttp.ClientTimeout(total=5.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(f"{upbit_v1_url}/accounts", headers=headers) as resp:
-                     if resp.status != 200:
-                         logger.error(f"sync_live_portfolio_from_exchange: API error {resp.status}")
-                         return
-                     accounts = await resp.json()
+        # 2. Bithumb Adapter
+        if 'bithumb' not in self.account_adapters:
+            bithumb_config = self.config_manager.get('exchanges.bithumb', {})
+            bithumb_access_key = os.getenv("BITHUMB_API_KEY") or bithumb_config.get('api_key')
+            bithumb_secret_key = os.getenv("BITHUMB_SECRET_KEY") or bithumb_config.get('api_secret')
+            if bithumb_access_key and bithumb_secret_key and "your_access_key" not in bithumb_access_key:
+                bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com')
+                from src.engine.account_adapter import BithumbAccountAdapter
+                self.register_account_adapter('bithumb', BithumbAccountAdapter(bithumb_access_key, bithumb_secret_key, bithumb_api_url))
 
-                # 업비트 전체 마켓 리스트 및 BTC 원화 가격 조회
-                all_markets = []
-                async with session.get(f"{upbit_v1_url}/market/all") as m_resp:
-                    if m_resp.status == 200:
-                        all_markets = await m_resp.json()
-
-                krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
-                btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
-
-                btc_krw_price = 0.0
-                async with session.get(f"{upbit_v1_url}/ticker?markets=KRW-BTC") as t_resp:
-                    if t_resp.status == 200:
-                        tickers = await t_resp.json()
-                        if tickers:
-                            btc_krw_price = float(tickers[0]['trade_price'])
-                    
-            for a in accounts:
-                currency = a['currency']
-                balance = float(a['balance']) + float(a['locked'])
-                avg_buy_price = float(a['avg_buy_price'])
-                
-                if balance <= 0.0:
-                    continue
-                    
-                if currency == 'KRW':
-                    balance = int(balance)
-                    if portfolio.exchange_cash is None:
-                        portfolio.exchange_cash = {}
-                    portfolio.exchange_cash['upbit'] = balance
-                else:
-                    symbol = currency.upper()
-                    pos_key = ('upbit', symbol)
-                    new_positions[pos_key] = Position(
-                        exchange_id='upbit',
-                        symbol=symbol,
-                        quantity=balance,
-                        avg_price=avg_buy_price,
-                        updated_at=time.time()
-                    )
-            
-            # 최초 동기화 시 현재의 총자산 가치로 초기 자본을 계산하되, 상장폐지/거래불가 종목은 제외합니다.
-            if not portfolio.exchange_initial_cash.get('upbit'):
-                tot_val = portfolio.exchange_cash.get('upbit', 0.0)
-                for a in accounts:
-                    curr = a['currency']
-                    if curr != 'KRW':
-                        if curr not in krw_supported and curr not in btc_supported:
-                            continue
-                        bal = float(a['balance']) + float(a['locked'])
-                        avg_p = float(a['avg_buy_price'])
-                        tot_val += bal * avg_p
-                if tot_val > 0.0:
-                    portfolio.exchange_initial_cash['upbit'] = tot_val
-
-
-            
-        except Exception as e:
-            logger.error(f"sync_live_portfolio_from_exchange (Upbit): Exception occurred: {e}")
-
-        # Bithumb 실거래 잔고 동기화
-        bithumb_config = self.config_manager.get('exchanges.bithumb', {})
-        bithumb_enabled = bithumb_config.get('enabled', False)
-        bithumb_access_key = os.getenv("BITHUMB_API_KEY") or bithumb_config.get('api_key')
-        bithumb_secret_key = os.getenv("BITHUMB_SECRET_KEY") or bithumb_config.get('api_secret')
-        
-        if bithumb_enabled and bithumb_access_key and bithumb_secret_key:
-            try:
-                bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com').rstrip('/')
-                bithumb_v1_url = bithumb_api_url if bithumb_api_url.endswith('/v1') else f"{bithumb_api_url}/v1"
-                
-                from src.server.routers.portfolio import _sync_real_bithumb_orders
-                await _sync_real_bithumb_orders(bithumb_access_key, bithumb_secret_key, bithumb_v1_url, force_sync=True)
-                
-                token = _create_bithumb_jwt(bithumb_access_key, bithumb_secret_key)
-                headers = {
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/json"
-                }
-                
-                timeout = aiohttp.ClientTimeout(total=5.0)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(f"{bithumb_v1_url}/accounts", headers=headers) as resp:
-                        if resp.status == 200:
-                            b_accounts = await resp.json()
-                            
-                            all_markets = []
-                            async with session.get(f"{bithumb_v1_url}/market/all") as m_resp:
-                                if m_resp.status == 200:
-                                    all_markets = await m_resp.json()
-                            krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
-                            btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
- 
-                            query_markets = ["KRW-BTC"]
-                            for a in b_accounts:
-                                currency = a['currency']
-                                if currency == 'KRW':
-                                    continue
-                                if currency in krw_supported:
-                                    query_markets.append(f"KRW-{currency}")
-                                elif currency in btc_supported:
-                                    query_markets.append(f"BTC-{currency}")
- 
-                            query_markets = list(set(query_markets))
-                            prices = {}
-                            if query_markets:
-                                for i in range(0, len(query_markets), 100):
-                                    batch = ','.join(query_markets[i:i+100])
-                                    async with session.get(f"{bithumb_v1_url}/ticker?markets={batch}") as t_resp:
-                                        if t_resp.status == 200:
-                                            tickers = await t_resp.json()
-                                            for t in tickers:
-                                                prices[t['market']] = float(t['trade_price'])
- 
-                            btc_krw_price = prices.get("KRW-BTC", 0.0)
-                            
-                            for a in b_accounts:
-                                currency = a['currency']
-                                balance = float(a['balance']) + float(a['locked'])
-                                avg_buy_price = float(a['avg_buy_price'])
-                                
-                                if balance <= 0.0:
-                                    continue
-                                    
-                                if currency == 'KRW':
-                                    balance = int(balance)
-                                    if portfolio.exchange_cash is None:
-                                        portfolio.exchange_cash = {}
-                                    portfolio.exchange_cash['bithumb'] = balance
-                                else:
-                                    symbol = currency.upper()
-                                    pos_key = ('bithumb', symbol)
-                                    
-                                    if currency in krw_supported:
-                                        curr_price = prices.get(f"KRW-{currency}", avg_buy_price)
-                                    elif currency in btc_supported:
-                                        curr_price = prices.get(f"BTC-{currency}", 0.0) * btc_krw_price
-                                    else:
-                                        curr_price = 0.0
-                                        
-                                    if system and hasattr(system, 'latest_prices'):
-                                        system.latest_prices[f"bithumb:{symbol}"] = {
-                                            "trade_price": curr_price,
-                                            "timestamp": time.time()
-                                        }
-                                        
-                                    new_positions[pos_key] = Position(
-                                        exchange_id='bithumb',
-                                        symbol=symbol,
-                                        quantity=balance,
-                                        avg_price=avg_buy_price,
-                                        updated_at=time.time()
-                                    )
-                            logger.info("sync_live_portfolio_from_exchange: Bithumb portfolio sync complete.")
-            except Exception as e:
-                logger.error(f"sync_live_portfolio_from_exchange (Bithumb): Exception occurred: {e}")
-        else:
-            logger.warning(
-                f"sync_live_portfolio_from_exchange: Bithumb sync skipped. "
-                f"enabled={bithumb_enabled}, "
-                f"has_access_key={bool(bithumb_access_key)}, "
-                f"has_secret_key={bool(bithumb_secret_key)}"
-            )
-
-        # KIS 실거래 잔고 동기화
-        kis_config = self.config_manager.get('exchanges.kis', {})
-        kis_enabled = kis_config.get('enabled', False)
-        
-        kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
-        kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
-        kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
-        
-        if kis_enabled and kis_app_key and kis_app_secret and kis_account_no:
-            try:
+        # 3. KIS Adapter
+        if 'kis' not in self.account_adapters:
+            kis_config = self.config_manager.get('exchanges.kis', {})
+            kis_app_key = os.getenv("KIS_APP_KEY") or kis_config.get('app_key')
+            kis_app_secret = os.getenv("KIS_APP_SECRET") or kis_config.get('app_secret')
+            kis_account_no = os.getenv("KIS_ACCOUNT_NO") or kis_config.get('account_no')
+            if kis_app_key and kis_app_secret and kis_account_no:
                 from src.engine.credentials import CredentialProvider
                 cred_provider = CredentialProvider(self.config_manager.config)
-                kis_token = await cred_provider.get_kis_access_token()
+                kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')
+                from src.engine.account_adapter import KisAccountAdapter
+                self.register_account_adapter('kis', KisAccountAdapter(
+                    app_key=kis_app_key,
+                    app_secret=kis_app_secret,
+                    account_no=kis_account_no,
+                    cred_provider=cred_provider,
+                    api_url=kis_api_url
+                ))
+
+        new_positions = {}
+        
+        # 1. Upbit 동기화
+        upbit_adapter = self.account_adapters.get('upbit')
+        if upbit_adapter:
+            try:
+                # 주문 이력 동기화 (기존 DB 영속 및 대조 작업 실행)
+                try:
+                    access_key = os.getenv("UPBIT_ACCESS_KEY")
+                    secret_key = os.getenv("UPBIT_SECRET_KEY")
+                    api_url = self.config_manager.get('exchanges.upbit.api_url', 'https://api.upbit.com')
+                    from src.server.routers.portfolio import _sync_real_orders
+                    await _sync_real_orders(access_key, secret_key, api_url, force_sync=True)
+                except Exception as e:
+                    logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real Upbit orders: {e}")
+
+                snapshot = await upbit_adapter.fetch_snapshot()
+                if portfolio.exchange_cash is None:
+                    portfolio.exchange_cash = {}
+                portfolio.exchange_cash['upbit'] = snapshot.available_cash
                 
-                if kis_token:
-                    kis_account_no = str(kis_account_no).strip()
-                    if '-' in kis_account_no:
-                        cano, acnt_prdt_cd = kis_account_no.split('-', 1)
-                    else:
-                        cano = kis_account_no[:8]
-                        acnt_prdt_cd = kis_account_no[8:]
-                        
-                    if not acnt_prdt_cd:
-                        acnt_prdt_cd = "01"
-                        
-                    kis_api_url = kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443').rstrip('/')
-                    
-                    headers = {
-                        "content-type": "application/json",
-                        "authorization": f"Bearer {kis_token}",
-                        "appkey": kis_app_key,
-                        "appsecret": kis_app_secret,
-                        "tr_id": "TTTC8434R"
-                    }
-                    
-                    params = {
-                        "CANO": cano,
-                        "ACNT_PRDT_CD": acnt_prdt_cd,
-                        "AFHR_FLPR_YN": "N",
-                        "OFL_YN": "",
-                        "INQR_DVSN": "02",
-                        "UNPR_DVSN": "01",
-                        "FUND_STTL_ICLD_YN": "N",
-                        "FNCG_AMT_AUTO_RDPT_YN": "N",
-                        "PRCS_DVSN": "01",
-                        "CTX_AREA_FK100": "",
-                        "CTX_AREA_NK100": ""
-                    }
-                    
-                    timeout = aiohttp.ClientTimeout(total=5.0)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(f"{kis_api_url}/uapi/domestic-stock/v1/trading/inquire-balance", headers=headers, params=params) as resp:
-                            if resp.status == 200:
-                                data = await resp.json()
-                                if data.get('rt_cd') == '0':
-                                    output2 = data.get('output2', [])
-                                    if output2:
-                                        kis_cash = int(float(output2[0].get('dnca_tot_amt', 0)))
-                                        if portfolio.exchange_cash is None:
-                                            portfolio.exchange_cash = {}
-                                        portfolio.exchange_cash['kis'] = kis_cash
-                                        
-                                    output1 = data.get('output1', [])
-                                    for item in output1:
-                                        qty = float(item.get('hldg_qty', 0))
-                                        if qty <= 0:
-                                            continue
-                                        pdno = item.get('pdno', '').strip().lstrip('A')
-                                        avg_price = float(item.get('pchs_avg_pric', 0))
-                                        current_price = float(item.get('prpr', 0))
-                                        
-                                        # 실시간 메모리 캐시 갱신
-                                        if system and hasattr(system, 'latest_prices'):
-                                            system.latest_prices[f"kis:{pdno}"] = {
-                                                "trade_price": current_price,
-                                                "timestamp": time.time()
-                                            }
-                                        
-                                        pos_key = ('kis', pdno)
-                                        new_positions[pos_key] = Position(
-                                            exchange_id='kis',
-                                            symbol=pdno,
-                                            quantity=qty,
-                                            avg_price=avg_price,
-                                            updated_at=time.time()
-                                        )
-                                    logger.info("sync_live_portfolio_from_exchange: KIS portfolio sync complete.")
-                                else:
-                                    logger.error(f"sync_live_portfolio_from_exchange: KIS API error: {data.get('msg1')}")
-                            else:
-                                err_txt = await resp.text()
-                                logger.error(f"sync_live_portfolio_from_exchange: KIS API status {resp.status} - {err_txt}")
-                else:
-                    logger.error("sync_live_portfolio_from_exchange: Failed to acquire KIS token.")
+                for pos in snapshot.positions:
+                    pos_key = ('upbit', pos.symbol)
+                    new_positions[pos_key] = Position(
+                        exchange_id='upbit',
+                        symbol=pos.symbol,
+                        quantity=pos.quantity,
+                        avg_price=pos.avg_buy_price,
+                        updated_at=time.time()
+                    )
+                
+                # 최초 동기화 원금 가치 산출
+                if not portfolio.exchange_initial_cash.get('upbit'):
+                    tot_val = snapshot.available_cash + sum(pos.quantity * pos.avg_buy_price for pos in snapshot.positions)
+                    if tot_val > 0.0:
+                        portfolio.exchange_initial_cash['upbit'] = tot_val
+                        logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for upbit to {tot_val}")
             except Exception as e:
-                logger.error(f"sync_live_portfolio_from_exchange: KIS sync failed: {e}")
+                logger.error(f"sync_live_portfolio_from_exchange (Upbit): Sync failed: {e}")
+
+        # 2. Bithumb 동기화
+        bithumb_adapter = self.account_adapters.get('bithumb')
+        if bithumb_adapter:
+            try:
+                # 주문 이력 동기화 (기존 DB 영속 및 대조 작업 실행)
+                try:
+                    bithumb_config = self.config_manager.get('exchanges.bithumb', {})
+                    bithumb_access_key = os.getenv("BITHUMB_API_KEY") or bithumb_config.get('api_key')
+                    bithumb_secret_key = os.getenv("BITHUMB_SECRET_KEY") or bithumb_config.get('api_secret')
+                    bithumb_api_url = bithumb_config.get('api_url', 'https://api.bithumb.com')
+                    bithumb_v1_url = bithumb_api_url if bithumb_api_url.endswith('/v1') else f"{bithumb_api_url}/v1"
+                    from src.server.routers.portfolio import _sync_real_bithumb_orders
+                    await _sync_real_bithumb_orders(bithumb_access_key, bithumb_secret_key, bithumb_v1_url, force_sync=True)
+                except Exception as e:
+                    logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real Bithumb orders: {e}")
+
+                snapshot = await bithumb_adapter.fetch_snapshot()
+                if portfolio.exchange_cash is None:
+                    portfolio.exchange_cash = {}
+                portfolio.exchange_cash['bithumb'] = snapshot.available_cash
+                
+                for pos in snapshot.positions:
+                    pos_key = ('bithumb', pos.symbol)
+                    new_positions[pos_key] = Position(
+                        exchange_id='bithumb',
+                        symbol=pos.symbol,
+                        quantity=pos.quantity,
+                        avg_price=pos.avg_buy_price,
+                        updated_at=time.time()
+                    )
+                
+                if not portfolio.exchange_initial_cash.get('bithumb'):
+                    tot_val = snapshot.available_cash + sum(pos.quantity * pos.avg_buy_price for pos in snapshot.positions)
+                    if tot_val > 0.0:
+                        portfolio.exchange_initial_cash['bithumb'] = tot_val
+                        logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for bithumb to {tot_val}")
+            except Exception as e:
+                logger.error(f"sync_live_portfolio_from_exchange (Bithumb): Sync failed: {e}")
+
+        # 3. KIS 동기화
+        kis_adapter = self.account_adapters.get('kis')
+        if kis_adapter:
+            try:
+                # 주문 이력 동기화
+                try:
+                    from src.server.routers.portfolio import _sync_real_kis_orders
+                    await _sync_real_kis_orders(system, force_sync=True)
+                except Exception as e:
+                    logger.error(f"sync_live_portfolio_from_exchange: Failed to sync real KIS orders: {e}")
+
+                snapshot = await kis_adapter.fetch_snapshot()
+                if portfolio.exchange_cash is None:
+                    portfolio.exchange_cash = {}
+                portfolio.exchange_cash['kis'] = snapshot.available_cash
+                
+                for pos in snapshot.positions:
+                    pos_key = ('kis', pos.symbol)
+                    new_positions[pos_key] = Position(
+                        exchange_id='kis',
+                        symbol=pos.symbol,
+                        quantity=pos.quantity,
+                        avg_price=pos.avg_buy_price,
+                        updated_at=time.time()
+                    )
+                
+                if not portfolio.exchange_initial_cash.get('kis'):
+                    tot_val = snapshot.available_cash + sum(pos.quantity * pos.avg_buy_price for pos in snapshot.positions)
+                    if tot_val > 0.0:
+                        portfolio.exchange_initial_cash['kis'] = tot_val
+                        logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for kis to {tot_val}")
+            except Exception as e:
+                logger.error(f"sync_live_portfolio_from_exchange (KIS): Sync failed: {e}")
 
         # 최종 통합 갱신 및 DB 저장
         portfolio.positions = new_positions
-            
-        # 실거래(live) 거래소별 초기 원금 동적 세팅
-        if not hasattr(portfolio, 'exchange_initial_cash') or portfolio.exchange_initial_cash is None:
-            portfolio.exchange_initial_cash = {}
-            
-        for ex_id in ['upbit', 'bithumb', 'kis']:
-            if portfolio.exchange_cash and ex_id in portfolio.exchange_cash:
-                ex_cash = portfolio.exchange_cash[ex_id]
-                ex_pos_val = 0.0
-                
-                # new_positions에서 해당 거래소의 포지션만 골라서 평가액 계산
-                for (ex_k, sym), pos in new_positions.items():
-                    if ex_k == ex_id:
-                        # 평단가 기준으로 평가액 가산
-                        ex_pos_val += pos.quantity * pos.avg_price
-                
-                total_ex_val = ex_cash + ex_pos_val
-                
-                # 기존에 등록된 원금이 없거나 0원인 경우에만 현재 총자산 가치로 초기 투자금 설정
-                current_init = portfolio.exchange_initial_cash.get(ex_id, 0.0)
-                if current_init <= 0.0:
-                    portfolio.exchange_initial_cash[ex_id] = total_ex_val
-                    logger.info(f"sync_live_portfolio_from_exchange: Set initial cash for {ex_id} to {total_ex_val}")
-                    
+        
         try:
             await self.save_to_db('1')
         except Exception as e:

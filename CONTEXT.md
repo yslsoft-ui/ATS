@@ -311,6 +311,14 @@ Pareto 랭킹 연산의 병목 및 진동을 차단하기 위해, 국면 확률 
 
 **Auto-universe Synchronization (자동 수집 종목 동기화)**: 수동 자산 동기화 요청 없이, 백그라운드 데몬이 주기적으로 거래소 데이터(공지사항 및 마켓 리스트)를 폴링하여 신규 상장/상장폐지 대상을 감지 및 감시 유니버스에 자동으로 반영하는 프로세스.
 
+**AccountSnapshotDTO (계좌 스냅샷 DTO)**: 특정 시점(`fetched_at_ms`)에 거래소 계좌로부터 조회한 가용 현금(`available_cash`), 결제 대기 자금(T+1, T+2), 보유 종목 잔고 튜플(`PositionBalanceDTO`) 및 미체결 주문 튜플(`OpenOrderDTO`)을 정규화하여 담은 불변 데이터 전송 객체.
+
+**PositionBalanceDTO (포지션 잔고 DTO)**: 특정 거래소 계좌 내 종목의 보유 수량, 평균 매수가 및 기타 메타데이터를 정규화한 불변 데이터 전송 객체.
+
+**OpenOrderDTO (미체결 주문 DTO)**: 거래소 내에 체결 대기 중인 주문의 식별자, 주문 유형(매수/매도), 가격, 총 수량, 잔여 수량(`remaining_quantity`), 체결 상태(`status`) 및 주문 시각 등의 상태를 정규화한 불변 데이터 전송 객체.
+
+**ExchangeAccountAdapter (거래소 계좌 어댑터)**: 각 거래소의 고유 API 및 네트워크 프로토콜을 이용해 자산 정보를 직접 조회한 뒤, 시스템 규격에 맞춰 `AccountSnapshotDTO`로 정규화하여 반환해주는 추상화 레이어(Seam).
+
 ## Flagged ambiguities
 
 - "Trade"는 업비트 API에서 **Tick**을 의미하지만, 시스템 내에서는 **Trade Simulation**의 실행 단위(거래)와 혼동될 수 있으므로 개별 데이터는 **Tick**으로 통일합니다.
