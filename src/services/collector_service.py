@@ -900,7 +900,11 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 빗썸 공지사항 폴링 루프 내 예외: {e}")
                 
-            interval = self.config_manager.get("collector.scheduler.bithumb_notice_poll_interval", 43200)
+            interval = self.config_manager.get("collector.scheduler.bithumb_notice_poll_interval")
+            if interval is None:
+                raise ValueError("설정 파일(config/settings.yaml)에 'collector.scheduler.bithumb_notice_poll_interval' 설정이 누락되었습니다. (Fail-Fast)")
+            if not isinstance(interval, int) or interval <= 0:
+                raise ValueError(f"올바르지 않은 빗썸 공지 폴링 주기 설정값: {interval} (양의 정수여야 합니다.)")
             await asyncio.sleep(interval)
 
     async def _periodic_upbit_market_poll_loop(self):
@@ -957,7 +961,11 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 업비트 실시간 상장 감지 루프 내 예외: {e}")
                 
-            interval = self.config_manager.get("collector.scheduler.upbit_market_poll_interval", 3600)
+            interval = self.config_manager.get("collector.scheduler.upbit_market_poll_interval")
+            if interval is None:
+                raise ValueError("설정 파일(config/settings.yaml)에 'collector.scheduler.upbit_market_poll_interval' 설정이 누락되었습니다. (Fail-Fast)")
+            if not isinstance(interval, int) or interval <= 0:
+                raise ValueError(f"올바르지 않은 업비트 마켓 감시 주기 설정값: {interval} (양의 정수여야 합니다.)")
             await asyncio.sleep(interval)
 
     async def _periodic_kis_mst_sync_loop(self):
@@ -967,7 +975,11 @@ class CollectorService(DaemonService):
         
         while True:
             try:
-                interval = self.config_manager.get("collector.scheduler.kis_mst_sync_interval", 86400)
+                interval = self.config_manager.get("collector.scheduler.kis_mst_sync_interval")
+                if interval is None:
+                    raise ValueError("설정 파일(config/settings.yaml)에 'collector.scheduler.kis_mst_sync_interval' 설정이 누락되었습니다. (Fail-Fast)")
+                if not isinstance(interval, int) or interval <= 0:
+                    raise ValueError(f"올바르지 않은 KIS 마스터 동기화 주기 설정값: {interval} (양의 정수여야 합니다.)")
                 # 기동 후 최초 대기 (데몬 기동 시 즉시 자산 동기화 스킵 조건 준수)
                 await asyncio.sleep(interval)
                 
