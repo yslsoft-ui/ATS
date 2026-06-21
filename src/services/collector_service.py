@@ -900,7 +900,8 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 빗썸 공지사항 폴링 루프 내 예외: {e}")
                 
-            await asyncio.sleep(43200)
+            interval = self.config_manager.get("collector.scheduler.bithumb_notice_poll_interval", 43200)
+            await asyncio.sleep(interval)
 
     async def _periodic_upbit_market_poll_loop(self):
         """1시간마다 업비트 market/all API를 폴링하여 신규 상장 종목이 즉시 출현했는지 감지합니다."""
@@ -956,7 +957,8 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 업비트 실시간 상장 감지 루프 내 예외: {e}")
                 
-            await asyncio.sleep(3600)
+            interval = self.config_manager.get("collector.scheduler.upbit_market_poll_interval", 3600)
+            await asyncio.sleep(interval)
 
     async def _periodic_kis_mst_sync_loop(self):
         """24시간마다 한국투자증권 마스터 파일 동기화를 돌려 신규 상장/상폐 여부를 감지합니다."""
@@ -965,8 +967,9 @@ class CollectorService(DaemonService):
         
         while True:
             try:
+                interval = self.config_manager.get("collector.scheduler.kis_mst_sync_interval", 86400)
                 # 기동 후 최초 대기 (데몬 기동 시 즉시 자산 동기화 스킵 조건 준수)
-                await asyncio.sleep(86400)
+                await asyncio.sleep(interval)
                 
                 sync_results = await sync_exchange_assets(self.db_path)
                 

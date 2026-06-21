@@ -120,6 +120,42 @@ system:
     symbol_cooldown_seconds: 3600  # 종목이 후보군에서 제외/강등된 후 재승격 신청 시까지의 쿨다운 (초)
     daily_proposal_limit: 100      # 일일 최대 생성 가능한 AI 제안 개수 한도
 
+  # 공통 청산 규칙 설정 (엔진 전역 적용)
+  exit_rules:
+    stop_loss_pct: 2.0         # 손절 임계값 (%, 0이면 비활성)
+    trailing_stop_pct: 1.5     # 트레일링 스탑 활성화 (%, 0이면 비활성)
+    time_limit_seconds: 300   # 시간 제한 탈출 (초, 0이면 비활성)
+    stop_loss_basis: "net_pnl" # 손절 기준 ("price": 단순 가격, "net_pnl": 매매 비용 반영 순손익률)
+    breakeven_activation_pct: 0.5 # 본전이동 활성화 기준 순손익률 (%)
+
+  # 거래소별 실시간 매매비용(수수료, 세금, 슬리피지 및 안전마진) 설정
+  # slippage_pct는 매수와 매도 각각에 1회씩 적용되는 예상 불리 체결률입니다.
+  execution_cost:
+    default:
+      buy_fee_pct: 0.0
+      sell_fee_pct: 0.0
+      sell_tax_pct: 0.0
+      slippage_pct: 0.0
+      safety_buffer_pct: 0.0
+    upbit:
+      buy_fee_pct: 0.05
+      sell_fee_pct: 0.05
+      sell_tax_pct: 0.0
+      slippage_pct: 0.05
+      safety_buffer_pct: 0.02
+    bithumb:
+      buy_fee_pct: 0.25
+      sell_fee_pct: 0.25
+      sell_tax_pct: 0.0
+      slippage_pct: 0.05
+      safety_buffer_pct: 0.02
+    kis:
+      buy_fee_pct: 0.015
+      sell_fee_pct: 0.015
+      sell_tax_pct: 0.20
+      slippage_pct: 0.05
+      safety_buffer_pct: 0.02
+
 
 # ------------------------------------------------------------------------------
 # 2. 데이터 수집기 (Collector) 설정
@@ -143,14 +179,26 @@ collector:
       bithumb: 0.2
       kis: 0.2
 
+  # --- 수집기 상태 모니터링 및 제어 관련 임계값 (ms) ---
+  daemon_detail_stale_ms: 15000
+  active_symbols_stale_ms: 75000
+  request_symbols_sync_cooldown_ms: 10000
+  control_ack_timeout_ms: 5000
+
+  # 자동 상장/상장폐지 감지 스케줄러 설정 (초 단위)
+  scheduler:
+    bithumb_notice_poll_interval: 43200   # 빗썸 공지 폴링 주기 (12시간 = 43200초)
+    upbit_market_poll_interval: 3600      # 업비트 마켓 리스트 감지 주기 (1시간 = 3600초)
+    kis_mst_sync_interval: 86400         # KIS 마스터 파일 동기화 주기 (24시간 = 86400초)
+
 
 # ------------------------------------------------------------------------------
 # 3. 트레이딩 전략별 파라미터 및 활성화 설정
 # ------------------------------------------------------------------------------
 strategies:
   # RSI (Relative Strength Index) 기반 모멘텀 전략
-  rsistrategy:
-    enabled: true
+  RSIStrategy:
+    enabled: false
     params:
       rsi_window: 14      # RSI 지표의 롤링 계산 윈도우 크기
       buy_threshold: 30   # 과매도(매수 시그널) 임계치
@@ -163,22 +211,22 @@ strategies:
           sell_threshold: 65
 
   # MACD (Moving Average Convergence Divergence) 추세추종 전략
-  macdstrategy:
+  MACDStrategy:
     enabled: false
     params:
-      fast_period: 12     # 단기 지수이동평균 기간
-      slow_period: 26     # 장기 지수이동평균 기간
-      signal_period: 9    # MACD 시그널선 기간
+      fast_period: 13 # 단기 지수이동평균 기간
+      slow_period: 26 # 장기 지수이동평균 기간
+      signal_period: 9 # MACD 시그널선 기간
 
   # 거래대금/거래량 가중 강도 기반 전략
-  volumepowerstrategy:
+  VolumePowerStrategy:
     enabled: false
     params:
       buy_threshold: 120.0
       sell_threshold: 80.0
 
   # 순차적 다중 전략 검증 체인 (RSI 진입 후 MACD 확인 등)
-  sequentialstrategy:
+  SequentialStrategy:
     enabled: false
     params:
       first_strategy_id: rsi_strategy
@@ -186,7 +234,7 @@ strategies:
       wait_candles: 3
 
   # 갑작스러운 거래량 급증 및 가격 돌파 감지 전략
-  momentumspikestrategy:
+  MomentumSpikeStrategy:
     enabled: false
     params:
       lookback_periods: 20       # 기준 윈도우 크기
@@ -197,27 +245,27 @@ strategies:
       trailing_stop_pct: 1.5     # 트레일링 스탑 비율 (%)
 
   # 시장 패닉(가격 폭락 및 투매 발생) 시 역추세 진입 전략
-  panicstrategy:
+  PanicStrategy:
     enabled: false
     params:
       vol_multiplier: 3.0
       drop_threshold: 0.02
 
   # 가격 추세 왜곡 감지 및 반등 추종 전략
-  trendbendstrategy:
+  TrendBendStrategy:
     enabled: false
     params:
       lookback: 5
 
   # 단순 모멘텀 추종 전략
-  momentumstrategy:
+  MomentumStrategy:
     enabled: false
     params:
       period: 15
 
   # 볼린저 밴드 및 RSI, 스탑로스를 결합한 단기 모멘텀 복합 전략
-  shorttermmomentumstrategy:
-    enabled: false
+  ShortTermMomentumStrategy:
+    enabled: true
     params:
       fast_window: 5
       slow_window: 20
@@ -255,7 +303,7 @@ exchanges:
     api_url: https://openapi.koreainvestment.com:9443
     websocket_url: ws://ops.koreainvestment.com:21000
     market_hours:                    # 정규 거래 가능 시간대
-      start_time: 07:50
+      start_time: '07:50'
       end_time: '20:10'
 
   # 빗썸 (Bithumb) 가상자산 거래소 설정
