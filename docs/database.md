@@ -45,6 +45,7 @@
 | `UNIVERSE_GUARD_STATE` | 유니버스 가드 상태 | 쿨다운/한도 제한 등으로 실시간 매매 대상에서 일시 차단된 종목 감시 상태 |
 | `KIS_STOCK_INFO` | KIS 주식 상세 캐시 | KIS OpenAPI에서 조회한 종목별 세부 제원(Nextrade 연동 여부 포함) 캐시 |
 | `SYSTEM_EVENTS` | 시스템 이벤트 | 데몬 기동/종료, 에러, 사용자 수동 제어 등 시스템 운영 이력 및 감사 로그 |
+| `PLANNED_ASSET_EVENTS` | 상장/상폐 예정 이벤트 | 신규 상장이나 상장폐지가 예정된 자산의 스케줄 일정 및 FSM 처리 상태 관리 |
 
 ```mermaid
 erDiagram
@@ -70,6 +71,7 @@ erDiagram
     PROPOSAL_REEVALUATION_JOBS_재평가_작업_큐 ||--o{ PROPOSAL_EVALUATION_RUNS_재평가_실행_이력 : "비동기 평가 Job 실행"
     
     ASSET_MASTER_자산_마스터 ||--o| KIS_STOCK_INFO_KIS_주식_상세_캐시 : "KIS 주식 상세 제원 캐시"
+    EXCHANGES_거래소 ||--o{ PLANNED_ASSET_EVENTS_예정_이벤트 : "상장/상폐 일정 예고"
 ```
 
 ---
@@ -232,6 +234,7 @@ erDiagram
     EXCHANGES_거래소 ||--o{ TRADES_실시간_체결 : "실시간 틱 수집"
     EXCHANGES_거래소 ||--o{ CANDLES_분봉_캔들 : "OHLCV 캔들 취합"
     EXCHANGES_거래소 ||--o{ ALERTS_실시간_알림 : "급등락 경보 발생"
+    EXCHANGES_거래소 ||--o{ PLANNED_ASSET_EVENTS_예정_이벤트 : "상장/상폐 일정 예고"
     ASSET_MASTER_자산_마스터 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "거래 자산 메타 매핑"
     ASSET_MASTER_자산_마스터 ||--o| KIS_STOCK_INFO_KIS_주식_상세_캐시 : "KIS 주식 상세 제원 캐시"
 
@@ -321,6 +324,18 @@ erDiagram
         text cptt_trad_tr_psbl_yn "NXT 거래가능 여부"
         text nxt_tr_stop_yn "NXT 거래정지 여부"
         datetime updated_at "캐시 갱신 시각"
+    }
+
+    PLANNED_ASSET_EVENTS_예정_이벤트 {
+        integer id PK "일련번호 (자동 증가)"
+        text exchange_id "거래소 ID"
+        text symbol "자산 심볼 코드"
+        text event_type "이벤트 종류 (listing / delisting)"
+        datetime scheduled_at "실행 예정 일시"
+        text notice_url "공지사항 상세 링크 URL"
+        text status "FSM 상태 (PLANNED / EXECUTED / CANCELLED)"
+        datetime created_at "등록 일시"
+        datetime updated_at "수정 일시"
     }
 ```
 
@@ -435,6 +450,21 @@ erDiagram
 | **cptt_trad_tr_psbl_yn**| TEXT | - | Nextrade 거래 종목 여부 (Y: 거래가능, N: 불가능) |
 | **nxt_tr_stop_yn** | TEXT | - | Nextrade 거래 정지 여부 (Y: 거래정지, N: 정상) |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 캐시 레코드 최종 동기화 시각 |
+
+#### 2.2.7. planned_asset_events (상장 및 상장폐지 예정 이벤트)
+신규로 상장되거나 상장폐지가 예정된 개별 자산의 스케줄 정보와 FSM 처리 상태를 영속 관리합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 이벤트 고유 ID (정수) |
+| **exchange_id** | TEXT | NOT NULL | 해당 거래소 ID (`upbit`, `bithumb`, `kis`) |
+| **symbol** | TEXT | NOT NULL | 대상 자산 심볼 |
+| **event_type** | TEXT | NOT NULL CHECK (event_type IN ('listing', 'delisting')) | 이벤트 구분 (`listing`: 상장, `delisting`: 상장폐지) |
+| **scheduled_at** | DATETIME | NOT NULL | 실행 예정 일시 (YYYY-MM-DD HH:MM:SS) |
+| **notice_url** | TEXT | - | 예정 공지사항 상세 웹페이지 주소 |
+| **status** | TEXT | NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED', 'EXECUTED', 'CANCELLED')) | FSM 처리 상태 (`PLANNED`, `EXECUTED`, `CANCELLED`) |
+| **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 레코드 최초 생성 일시 |
+| **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 레코드 최종 수정 일시 |
 
 ---
 

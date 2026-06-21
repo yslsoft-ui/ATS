@@ -467,3 +467,21 @@ CREATE TABLE IF NOT EXISTS kis_stock_info (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 25. planned_asset_events
+CREATE TABLE IF NOT EXISTS planned_asset_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    exchange_id TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    event_type TEXT NOT NULL CHECK (event_type IN ('listing', 'delisting')),
+    scheduled_at DATETIME NOT NULL,
+    notice_url TEXT,
+    status TEXT NOT NULL DEFAULT 'PLANNED' CHECK (status IN ('PLANNED', 'EXECUTED', 'CANCELLED')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_planned_events_lookup ON planned_asset_events (exchange_id, symbol, status);
+CREATE INDEX IF NOT EXISTS idx_planned_events_schedule ON planned_asset_events (status, scheduled_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_planned_events_unique ON planned_asset_events (exchange_id, symbol, event_type, scheduled_at);
+
+

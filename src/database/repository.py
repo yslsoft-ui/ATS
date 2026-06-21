@@ -1097,6 +1097,65 @@ class BaseTradingRepository(abc.ABC):
         """제안의 자동 승격 판단을 위해 promotion_event_log에서 가장 최근에 기록된 feature_snapshot의 JSON 파싱된 데이터를 반환합니다."""
         pass
 
+    @abc.abstractmethod
+    async def insert_planned_asset_event(
+        self,
+        exchange_id: str,
+        symbol: str,
+        event_type: str,
+        scheduled_at: str,
+        notice_url: Optional[str] = None
+    ) -> int:
+        """신규 상장/상폐 예정 이벤트를 planned_asset_events 테이블에 등록합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_planned_asset_events(
+        self,
+        status: Optional[str] = None,
+        exchange_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """특정 상태 및 거래소의 예정 이벤트 목록을 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_executable_planned_events(
+        self,
+        before_minutes: int = 30
+    ) -> List[Dict[str, Any]]:
+        """실행 시점(scheduled_at - before_minutes)에 도달한 PLANNED 이벤트를 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def update_planned_event_status(
+        self,
+        event_id: int,
+        status: str
+    ) -> bool:
+        """예정 이벤트의 진행 상태를 업데이트합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def update_exchange_asset_status(
+        self,
+        exchange_id: str,
+        symbol: str,
+        is_active: int,
+        is_delisted: int = 0
+    ) -> bool:
+        """exchange_assets 테이블의 자산 활성화 및 상장폐지 상태를 업데이트합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def upsert_asset_master_if_not_exists(
+        self,
+        symbol: str,
+        korean_name: str,
+        asset_type: str
+    ) -> bool:
+        """asset_master 테이블에 자산이 없을 경우 추가합니다."""
+        pass
+
 
 
 
@@ -2443,6 +2502,120 @@ class SqliteTradingRepository(BaseTradingRepository):
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
+    async def insert_planned_asset_event(
+        self,
+        exchange_id: str,
+        symbol: str,
+        event_type: str,
+        scheduled_at: str,
+        notice_url: Optional[str] = None
+    ) -> int:
+        async with get_db_conn(self.db_path) as db:
+            cursor = await db.execute('''
+                INSERT OR IGNORE INTO planned_asset_events (exchange_id, symbol, event_type, scheduled_at, notice_url, status)
+                VALUES (?, ?, ?, ?, ?, 'PLANNED')
+            ''', (exchange_id, symbol, event_type, scheduled_at, notice_url))
+            inserted_id = cursor.lastrowid
+            row_count = cursor.rowcount
+            await db.commit()
+            return inserted_id if row_count > 0 else 0
+
+    async def get_planned_asset_events(
+        self,
+        status: Optional[str] = None,
+        exchange_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        async with get_db_conn(self.db_path) as db:
+            query = "SELECT * FROM planned_asset_events WHERE 1=1"
+            params = []
+            if status:
+                query += " AND status = ?"
+                params.append(status)
+            if exchange_id:
+                query += " AND exchange_id = ?"
+                params.append(exchange_id)
+            query += " ORDER BY scheduled_at ASC"
+            async with db.execute(query, params) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def get_executable_planned_events(
+        self,
+        before_minutes: int = 30
+    ) -> List[Dict[str, Any]]:
+        import datetime
+        limit_time = (datetime.datetime.now() + datetime.timedelta(minutes=before_minutes)).strftime('%Y-%m-%d %H:%M:%S')
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute('''
+                SELECT * FROM planned_asset_events 
+                WHERE status = 'PLANNED' AND scheduled_at <= ?
+                ORDER BY scheduled_at ASC
+            ''', (limit_time,)) as cursor:
+                rows = await cursor.fetchall()
+                return [dict(r) for r in rows]
+
+    async def update_planned_event_status(
+        self,
+        event_id: int,
+        status: str
+    ) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            cursor = await db.execute('''
+                UPDATE planned_asset_events 
+                SET status = ?, updated_at = datetime('now', 'localtime')
+                WHERE id = ?
+            ''', (status, event_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def update_exchange_asset_status(
+        self,
+        exchange_id: str,
+        symbol: str,
+        is_active: int,
+        is_delisted: int = 0
+    ) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute('''
+                SELECT 1 FROM exchange_assets WHERE exchange_id = ? AND symbol = ?
+            ''', (exchange_id, symbol)) as cursor:
+                exists = await cursor.fetchone()
+            
+            if exists:
+                cursor = await db.execute('''
+                    UPDATE exchange_assets 
+                    SET is_active = ?, is_delisted = ?, updated_at = datetime('now', 'localtime')
+                    WHERE exchange_id = ? AND symbol = ?
+                ''', (is_active, is_delisted, exchange_id, symbol))
+            else:
+                cursor = await db.execute('''
+                    INSERT INTO exchange_assets (exchange_id, symbol, is_active, is_delisted, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                ''', (exchange_id, symbol, is_active, is_delisted))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def upsert_asset_master_if_not_exists(
+        self,
+        symbol: str,
+        korean_name: str,
+        asset_type: str
+    ) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute('''
+                SELECT 1 FROM asset_master WHERE symbol = ?
+            ''', (symbol,)) as cursor:
+                exists = await cursor.fetchone()
+            
+            if not exists:
+                cursor = await db.execute('''
+                    INSERT INTO asset_master (symbol, korean_name, asset_type, created_at, updated_at)
+                    VALUES (?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))
+                ''', (symbol, korean_name, asset_type))
+                await db.commit()
+                return cursor.rowcount > 0
+            return False
+
 
 class InMemoryTradingRepository(BaseTradingRepository):
     """
@@ -2478,6 +2651,9 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.next_proposal_id = 1
         self.next_eval_id = 1
         self.next_history_id = 1
+        self.planned_asset_events: List[Dict[str, Any]] = []
+        self.exchange_assets: Dict[tuple, Dict[str, Any]] = {}
+        self.asset_master: Dict[str, Dict[str, Any]] = {}
 
     async def save_portfolio(self, portfolio: Any):
         self.portfolios[portfolio.id] = portfolio
@@ -3121,6 +3297,110 @@ class InMemoryTradingRepository(BaseTradingRepository):
             "model_version": latest_log.get("model_version"),
             "scaler_version": latest_log.get("scaler_version")
         }
+
+    async def insert_planned_asset_event(
+        self,
+        exchange_id: str,
+        symbol: str,
+        event_type: str,
+        scheduled_at: str,
+        notice_url: Optional[str] = None
+    ) -> int:
+        for ev in self.planned_asset_events:
+            if ev["exchange_id"] == exchange_id and ev["symbol"] == symbol and ev["event_type"] == event_type and ev["scheduled_at"] == scheduled_at:
+                return 0
+        new_id = len(self.planned_asset_events) + 1
+        self.planned_asset_events.append({
+            "id": new_id,
+            "exchange_id": exchange_id,
+            "symbol": symbol,
+            "event_type": event_type,
+            "scheduled_at": scheduled_at,
+            "notice_url": notice_url,
+            "status": "PLANNED",
+            "created_at": scheduled_at,
+            "updated_at": scheduled_at
+        })
+        return new_id
+
+    async def get_planned_asset_events(
+        self,
+        status: Optional[str] = None,
+        exchange_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        res = []
+        for ev in self.planned_asset_events:
+            if status and ev["status"] != status:
+                continue
+            if exchange_id and ev["exchange_id"] != exchange_id:
+                continue
+            res.append(dict(ev))
+        res.sort(key=lambda x: x["scheduled_at"])
+        return res
+
+    async def get_executable_planned_events(
+        self,
+        before_minutes: int = 30
+    ) -> List[Dict[str, Any]]:
+        import datetime
+        limit_time = (datetime.datetime.now() + datetime.timedelta(minutes=before_minutes)).strftime('%Y-%m-%d %H:%M:%S')
+        res = []
+        for ev in self.planned_asset_events:
+            if ev["status"] == "PLANNED" and ev["scheduled_at"] <= limit_time:
+                res.append(dict(ev))
+        res.sort(key=lambda x: x["scheduled_at"])
+        return res
+
+    async def update_planned_event_status(
+        self,
+        event_id: int,
+        status: str
+    ) -> bool:
+        for ev in self.planned_asset_events:
+            if ev["id"] == event_id:
+                ev["status"] = status
+                import datetime
+                ev["updated_at"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                return True
+        return False
+
+    async def update_exchange_asset_status(
+        self,
+        exchange_id: str,
+        symbol: str,
+        is_active: int,
+        is_delisted: int = 0
+    ) -> bool:
+        key = (exchange_id, symbol)
+        import datetime
+        now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.exchange_assets[key] = {
+            "exchange_id": exchange_id,
+            "symbol": symbol,
+            "is_active": is_active,
+            "is_delisted": is_delisted,
+            "updated_at": now_str
+        }
+        return True
+
+    async def upsert_asset_master_if_not_exists(
+        self,
+        symbol: str,
+        korean_name: str,
+        asset_type: str
+    ) -> bool:
+        if symbol not in self.asset_master:
+            import datetime
+            now_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.asset_master[symbol] = {
+                "symbol": symbol,
+                "korean_name": korean_name,
+                "asset_type": asset_type,
+                "created_at": now_str,
+                "updated_at": now_str
+            }
+            return True
+        return False
 
 
 

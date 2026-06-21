@@ -160,6 +160,29 @@
     ]
     ```
 
+- **`GET /market/planned-events?status={status}&exchange_id={exchange_id}`**
+  - **설명**: 신규 상장 및 상장폐지가 예정된 이벤트 목록을 조회합니다.
+  - **쿼리 파라미터**:
+    - `status` (선택): FSM 처리 상태 (`PLANNED`, `EXECUTED`, `CANCELLED`).
+    - `exchange_id` (선택): 거래소 식별자 (`upbit`, `bithumb`, `kis`).
+  - **응답 (JSON)**:
+    ```json
+    [
+      {
+        "id": 1,
+        "exchange_id": "bithumb",
+        "symbol": "RE",
+        "event_type": "listing",
+        "scheduled_at": "2026-06-21 23:12:04",
+        "notice_url": "https://feed.bithumb.com/notice/1653785",
+        "status": "PLANNED",
+        "created_at": "2026-06-19 14:12:04",
+        "updated_at": "2026-06-19 14:12:04",
+        "korean_name": "리"
+      }
+    ]
+    ```
+
 - **`GET /candles?exchange={exchange_id}&symbol={symbol}&interval={seconds}&limit={count}&start_ts={seconds}&end_ts={seconds}`**
   - **설명**: 특정 종목의 OHLCV 캔들스틱 목록을 반환합니다.
     - **60초 미만 저분봉(1초, 3초, 5초 등) 지원:** 저분봉 요청 시 DB에 캔들을 항시 쓰지 않고, 요청이 들어온 시점에 체결(`trades`) 테이블의 Raw 틱데이터를 디스크로부터 읽어 메모리 상에서 초 단위로 실시간 즉석 조립(Aggregation)하여 반환합니다.

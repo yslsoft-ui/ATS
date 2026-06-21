@@ -411,7 +411,19 @@ const APIClient = (() => {
         /**
          * DB에 적재된 고유 시스템 이벤트 타입 리스트 조회
          */
-        fetchSystemEventTypes: () => _fetchAPI('/api/system/event-types')
+        fetchSystemEventTypes: () => _fetchAPI('/api/system/event-types'),
+
+        /**
+         * 상장 및 상장폐지 예정 이벤트 목록 조회
+         */
+        fetchPlannedEvents: (status = '', exchangeId = '') => {
+            let url = '/market/planned-events';
+            const params = [];
+            if (status) params.push(`status=${status}`);
+            if (exchangeId) params.push(`exchange_id=${exchangeId}`);
+            if (params.length > 0) url += `?${params.join('&')}`;
+            return _fetchAPI(url);
+        }
     };
 })();
 

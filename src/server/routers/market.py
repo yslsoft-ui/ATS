@@ -162,6 +162,24 @@ async def delete_candle(
     return {"status": "success", "message": "Candle deleted successfully."}
 
 
+@router.get("/market/planned-events")
+async def get_planned_events(
+    request: Request,
+    status: Optional[str] = None,
+    exchange_id: Optional[str] = None
+):
+    """상장 및 상장폐지 예정 이벤트 목록을 조회합니다."""
+    system = request.app.state.system
+    try:
+        events = await system.repository.get_planned_asset_events(status=status, exchange_id=exchange_id)
+        for ev in events:
+            ev["korean_name"] = stock_mapper.get_name(ev["exchange_id"], ev["symbol"]) or ev["symbol"]
+        return events
+    except Exception as e:
+        logger.error(f"[get_planned_events] Failed to load planned events: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal database error: {e}")
+
+
 @router.get("/market/ranking/types")
 async def get_ranking_types():
     """12종 순위 분석 항목의 제목, 설명, 연동할 TR_ID 목록을 반환합니다."""

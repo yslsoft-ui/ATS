@@ -257,6 +257,46 @@ window.showAlert = showAlert;
 window.toggleAlerts = toggleAlerts;
 window.clearAlertHistory = clearAlertHistory;
 
+/**
+ * 상장 및 상장폐지 예정 이벤트를 확인하여 대시보드 상단에 고정형 배너를 노출합니다.
+ */
+async function checkUpcomingAssetEvents() {
+    try {
+        const events = await APIClient.fetchPlannedEvents('PLANNED');
+        if (!events || events.length === 0) {
+            const existing = document.getElementById('planned-events-banner');
+            if (existing) existing.remove();
+            return;
+        }
+
+        const existing = document.getElementById('planned-events-banner');
+        if (existing) existing.remove();
+
+        const eventTexts = events.map(ev => {
+            const typeKo = ev.event_type === 'listing' ? '상장' : '상장폐지';
+            const exchKo = ev.exchange_id === 'bithumb' ? '빗썸' : (ev.exchange_id === 'upbit' ? '업비트' : '한국투자증권');
+            return `[${exchKo}] ${ev.symbol}(${ev.korean_name}) ${typeKo} 예정 (${ev.scheduled_at})`;
+        });
+
+        const banner = document.createElement('div');
+        banner.id = 'planned-events-banner';
+        banner.className = 'planned-events-banner';
+        banner.innerHTML = `
+            <div class="banner-content">
+                <span class="banner-icon">🔔</span>
+                <span class="banner-text"><strong>상장/상장폐지 일정 안내:</strong> ${eventTexts.join(' | ')}</span>
+            </div>
+            <button class="banner-close-btn" onclick="document.getElementById('planned-events-banner').remove()">&times;</button>
+        `;
+
+        document.body.prepend(banner);
+    } catch (e) {
+        console.error("[checkUpcomingAssetEvents] Failed to fetch or render planned events:", e);
+    }
+}
+
+window.checkUpcomingAssetEvents = checkUpcomingAssetEvents;
+
 if (typeof ViewRouter !== 'undefined') {
     ViewRouter.registerRoute('alert-view', () => {
         loadAlertHistory();

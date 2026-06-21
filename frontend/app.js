@@ -106,6 +106,15 @@ async function loadMoreHistory() {
 
 // --- 실시간 캔들 생성 및 업데이트 로직 (PUSH) ---
 function processTick(tick) {
+    if (tick.type === 'toast_alert') {
+        const alertType = tick.event_type && (tick.event_type.includes('delisted') || tick.event_type.includes('delisting')) ? 'error' : 'success';
+        showToast(tick.message, alertType, true);
+        if (typeof checkUpcomingAssetEvents === 'function') {
+            checkUpcomingAssetEvents();
+        }
+        return;
+    }
+
     if (typeof OverviewEngine !== 'undefined') {
         OverviewEngine.update(tick);
     }
@@ -797,6 +806,10 @@ async function init() {
 
     if (typeof OverviewEngine !== 'undefined') {
         OverviewEngine.initialize();
+    }
+
+    if (typeof checkUpcomingAssetEvents === 'function') {
+        checkUpcomingAssetEvents();
     }
 }
 

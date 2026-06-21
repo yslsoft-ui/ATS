@@ -177,6 +177,12 @@ class CollectorService(DaemonService):
         # [V2] 시장 상태 요약 수집 루프 백그라운드 태스크 기동
         self._tasks.append(asyncio.create_task(self._periodic_market_regime_summarizer_loop()))
 
+        # [NEW] 상장/상폐 자동 동기화 및 스케줄러 백그라운드 태스크 기동
+        self._tasks.append(asyncio.create_task(self._periodic_bithumb_notice_poll_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_upbit_market_poll_loop()))
+        self._tasks.append(asyncio.create_task(self._periodic_kis_mst_sync_loop()))
+        self._tasks.append(asyncio.create_task(self._planned_events_executor_loop()))
+
     async def stop(self):
         # 0. 백그라운드 태스크 정리 (periodic_symbols_sync_loop 포함 안전하게 cancel & gather)
         for task in self._tasks:
@@ -741,3 +747,317 @@ class CollectorService(DaemonService):
                 await asyncio.sleep(sleep_time)
         except asyncio.CancelledError:
             pass
+
+    async def _periodic_bithumb_notice_poll_loop(self):
+        """10분마다 빗썸 공지사항 API를 폴링하여 신규 상장/상폐 이벤트를 감지하고 DB에 등록합니다."""
+        logger.info("[CollectorService] 빗썸 공지사항 폴링 루프 기동")
+        import urllib.request
+        import urllib.error
+        import re
+        import json
+        import html as html_lib
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://feed.bithumb.com/"
+        }
+        
+        registered_urls = set()
+        try:
+            events = await self.repository.get_planned_asset_events()
+            for ev in events:
+                if ev.get("notice_url"):
+                    registered_urls.add(ev["notice_url"])
+        except Exception as e:
+            logger.error(f"[CollectorService] 빗썸 예정 이벤트 초기 로드 실패: {e}")
+
+        def _parse_time(body_text: str) -> Optional[str]:
+            m1 = re.search(r'(\d{4})\.\s*(\d{2})\.\s*(\d{2})\s*\(.*?\)\s*(\d{1,2})시', body_text)
+            if m1:
+                year, month, day, hour = m1.groups()
+                return f"{year}-{month.zfill(2)}-{day.zfill(2)} {hour.zfill(2)}:00:00"
+            m2 = re.search(r'(\d{4})\.\s*(\d{2})\.\s*(\d{2})\s*\(.*?\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})', body_text)
+            if m2:
+                year, month, day, ampm, hour_str, minute = m2.groups()
+                hour = int(hour_str)
+                if ampm == "오후" and hour < 12:
+                    hour += 12
+                elif ampm == "오전" and hour == 12:
+                    hour = 0
+                return f"{year}-{month.zfill(2)}-{day.zfill(2)} {str(hour).zfill(2)}:{minute.zfill(2)}:00"
+            return None
+
+        def _parse_symbol_and_name(title_str: str) -> tuple[Optional[str], Optional[str]]:
+            match = re.search(r'([가-힣A-Za-z0-9\s]+)\(([A-Za-z0-9/_-]+)\)', title_str)
+            if match:
+                return match.group(2).upper(), match.group(1).strip()
+            return None, None
+
+        while True:
+            try:
+                req = urllib.request.Request("https://api.bithumb.com/v1/notices?count=10", headers=headers)
+                loop = asyncio.get_event_loop()
+                def _fetch():
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        return resp.read().decode('utf-8')
+                
+                response_body = await loop.run_in_executor(None, _fetch)
+                notices = json.loads(response_body)
+                
+                for n in notices:
+                    categories = n.get("categories", [])
+                    title = n.get("title", "")
+                    pc_url = n.get("pc_url", "")
+                    
+                    is_listing = "마켓 추가" in categories or "신규상장" in categories or "원화 마켓 추가" in title
+                    is_delisting = "거래지원종료" in categories or "거래지원종료" in title
+                    
+                    if not (is_listing or is_delisting):
+                        continue
+                    if pc_url in registered_urls:
+                        continue
+                    
+                    logger.info(f"[CollectorService] 빗썸 새로운 공지 감지: {title} ({pc_url})")
+                    
+                    detail_req = urllib.request.Request(pc_url, headers=headers)
+                    def _fetch_detail():
+                        with urllib.request.urlopen(detail_req, timeout=10) as resp:
+                            return resp.read().decode('utf-8')
+                            
+                    detail_html = await loop.run_in_executor(None, _fetch_detail)
+                    
+                    match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', detail_html)
+                    if not match:
+                        logger.warning(f"[CollectorService] __NEXT_DATA__ 파싱 실패: {pc_url}")
+                        continue
+                        
+                    data = json.loads(match.group(1))
+                    
+                    content_val = None
+                    def _find_content_field(obj):
+                        nonlocal content_val
+                        if isinstance(obj, dict):
+                            for k, v in obj.items():
+                                if k == "content" and isinstance(v, str):
+                                    content_val = v
+                                    return
+                                else:
+                                    _find_content_field(v)
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                _find_content_field(item)
+                                
+                    _find_content_field(data)
+                    
+                    if not content_val:
+                        logger.warning(f"[CollectorService] content 필드 누락: {pc_url}")
+                        continue
+                        
+                    unescaped_content = html_lib.unescape(content_val)
+                    clean_text = re.sub(r'<[^>]+>', '\n', unescaped_content)
+                    
+                    scheduled_at = _parse_time(clean_text)
+                    symbol, kor_name = _parse_symbol_and_name(title)
+                    
+                    if not symbol or not scheduled_at:
+                        logger.warning(f"[CollectorService] 시간/심볼 파싱 실패. symbol={symbol}, scheduled_at={scheduled_at}")
+                        continue
+                    
+                    event_type = 'listing' if is_listing else 'delisting'
+                    
+                    event_id = await self.repository.insert_planned_asset_event(
+                        exchange_id='bithumb',
+                        symbol=symbol,
+                        event_type=event_type,
+                        scheduled_at=scheduled_at,
+                        notice_url=pc_url
+                    )
+                    
+                    if event_id > 0:
+                        registered_urls.add(pc_url)
+                        logger.info(f"[CollectorService] 빗썸 예정 이벤트 등록 성공. ID={event_id}, 심볼={symbol}, 예정시각={scheduled_at}")
+                        
+                        if event_type == 'listing' and kor_name:
+                            await self.repository.upsert_asset_master_if_not_exists(symbol, kor_name, 'crypto')
+                        
+                        toast_msg = f"[빗썸] {symbol}({kor_name or ''}) {'신규상장' if event_type=='listing' else '거래지원종료'} 예정 ({scheduled_at})"
+                        await self.event_bus.publish("collector_signal", {
+                            "type": "toast_alert",
+                            "exchange": "bithumb",
+                            "symbol": symbol,
+                            "event_type": f"{event_type}_scheduled",
+                            "message": toast_msg,
+                            "scheduled_at": scheduled_at
+                        })
+                        
+                        event_code = "ASSET_LISTING_SCHEDULED" if event_type == 'listing' else "ASSET_DELISTING_SCHEDULED"
+                        await self.record_exchange_event(event_code, "bithumb", toast_msg)
+                        
+            except urllib.error.HTTPError as e:
+                logger.warning(f"[CollectorService] 빗썸 공지 API HTTP 오류: {e.code} - {e.reason}")
+            except Exception as e:
+                logger.exception(f"[CollectorService] 빗썸 공지사항 폴링 루프 내 예외: {e}")
+                
+            await asyncio.sleep(600)
+
+    async def _periodic_upbit_market_poll_loop(self):
+        """1분마다 업비트 market/all API를 폴링하여 신규 상장 종목이 즉시 출현했는지 감지합니다."""
+        logger.info("[CollectorService] 업비트 실시간 상장 감지 루프 기동")
+        import aiohttp
+        
+        while True:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get("https://api.upbit.com/v1/market/all") as response:
+                        if response.status != 200:
+                            logger.warning(f"[CollectorService] 업비트 market/all API 오류: Status {response.status}")
+                            await asyncio.sleep(60)
+                            continue
+                        markets = await response.json()
+                
+                krw_markets = {}
+                for m in markets:
+                    market_id = m.get("market", "")
+                    if market_id.startswith("KRW-"):
+                        symbol = market_id.replace("KRW-", "")
+                        krw_markets[symbol] = m.get("korean_name", "")
+                
+                upbit_collector = self.collectors.get("upbit")
+                if upbit_collector:
+                    known_symbols = set(getattr(upbit_collector, 'available_symbols', []))
+                    new_symbols = set(krw_markets.keys()) - known_symbols
+                    if new_symbols:
+                        for sym in new_symbols:
+                            korean_name = krw_markets[sym]
+                            logger.info(f"[CollectorService] 업비트 신규 종목 감지: {sym} ({korean_name})")
+                            
+                            await self.repository.upsert_asset_master_if_not_exists(sym, korean_name, 'crypto')
+                            await self.repository.update_exchange_asset_status('upbit', sym, is_active=1)
+                            
+                            await self.handle_control_message(None, {
+                                "type": "update_symbols",
+                                "exchange": "upbit",
+                                "code": sym,
+                                "is_collected": 1
+                            })
+                            
+                            toast_msg = f"[업비트] 신규 상장 즉시 감지 및 실시간 수집 기동: {sym} ({korean_name})"
+                            await self.event_bus.publish("collector_signal", {
+                                "type": "toast_alert",
+                                "exchange": "upbit",
+                                "symbol": sym,
+                                "event_type": "listing",
+                                "message": toast_msg
+                            })
+                            
+                            await self.record_exchange_event("ASSET_LISTED", "upbit", toast_msg)
+            except Exception as e:
+                logger.exception(f"[CollectorService] 업비트 실시간 상장 감지 루프 내 예외: {e}")
+                
+            await asyncio.sleep(60)
+
+    async def _periodic_kis_mst_sync_loop(self):
+        """24시간마다 한국투자증권 마스터 파일 동기화를 돌려 신규 상장/상폐 여부를 감지합니다."""
+        logger.info("[CollectorService] KIS 마스터 동기화 루프 기동")
+        from src.database.sync_assets import sync_exchange_assets
+        
+        while True:
+            try:
+                # 기동 후 최초 대기 (데몬 기동 시 즉시 자산 동기화 스킵 조건 준수)
+                await asyncio.sleep(86400)
+                
+                sync_results = await sync_exchange_assets(self.db_path)
+                
+                kis_added = sync_results.get("kis", {}).get("added", [])
+                kis_delisted = sync_results.get("kis", {}).get("delisted", [])
+                
+                if kis_added:
+                    logger.info(f"[CollectorService] KIS 신규 상장 감지: {kis_added}")
+                    toast_msg = f"[한국투자증권] 신규 종목 감지 (비활성 자동 등록 완료): {', '.join(kis_added)}. 필요 시 활성화해주십시오."
+                    await self.event_bus.publish("collector_signal", {
+                        "type": "toast_alert",
+                        "exchange": "kis",
+                        "event_type": "new_asset_detected",
+                        "message": toast_msg
+                    })
+                    await self.record_exchange_event("ASSET_LISTED", "kis", toast_msg)
+                    
+                if kis_delisted:
+                    logger.info(f"[CollectorService] KIS 상장폐지 감지: {kis_delisted}")
+                    toast_msg = f"[한국투자증권] 상장폐지 자동 처리 완료 (수집 제외): {', '.join(kis_delisted)}"
+                    await self.event_bus.publish("collector_signal", {
+                        "type": "toast_alert",
+                        "exchange": "kis",
+                        "event_type": "delisted",
+                        "message": toast_msg
+                    })
+                    await self.record_exchange_event("ASSET_DELISTING_PREFLIGHT", "kis", toast_msg)
+            except Exception as e:
+                logger.exception(f"[CollectorService] KIS 마스터 동기화 중 예외: {e}")
+
+    async def _planned_events_executor_loop(self):
+        """1분마다 scheduled_at 30분 전 이내인 이벤트를 감지하여 자동으로 수집 활성화/비활성화 처리를 수행합니다."""
+        logger.info("[CollectorService] 예정 이벤트 실행 스케줄러 루프 기동")
+        from src.engine.utils.stock_mapper import stock_mapper
+        
+        while True:
+            try:
+                executable_events = await self.repository.get_executable_planned_events(before_minutes=30)
+                
+                for ev in executable_events:
+                    event_id = ev["id"]
+                    exchange_id = ev["exchange_id"]
+                    symbol = ev["symbol"]
+                    event_type = ev["event_type"]
+                    scheduled_at = ev["scheduled_at"]
+                    
+                    logger.info(f"[CollectorService] 예약 기동 조건 충족! ID={event_id}, 거래소={exchange_id}, 심볼={symbol}, 유형={event_type}")
+                    
+                    korean_name = stock_mapper.get_name(exchange_id, symbol) or symbol
+                    
+                    if event_type == 'listing':
+                        await self.repository.update_exchange_asset_status(exchange_id, symbol, is_active=1)
+                        await self.handle_control_message(None, {
+                            "type": "update_symbols",
+                            "exchange": exchange_id,
+                            "code": symbol,
+                            "is_collected": 1
+                        })
+                        
+                        toast_msg = f"[{exchange_id.upper()}] {symbol}({korean_name}) 상장 30분 전 선제 수집 및 엔진 웜업 시작"
+                        await self.event_bus.publish("collector_signal", {
+                            "type": "toast_alert",
+                            "exchange": exchange_id,
+                            "symbol": symbol,
+                            "event_type": "listing_preflight",
+                            "message": toast_msg
+                        })
+                        await self.record_exchange_event("ASSET_LISTING_PREFLIGHT", exchange_id, toast_msg)
+                        
+                    elif event_type == 'delisting':
+                        await self.repository.update_exchange_asset_status(exchange_id, symbol, is_active=0, is_delisted=1)
+                        await self.handle_control_message(None, {
+                            "type": "update_symbols",
+                            "exchange": exchange_id,
+                            "code": symbol,
+                            "is_collected": 0
+                        })
+                        
+                        toast_msg = f"[{exchange_id.upper()}] {symbol}({korean_name}) 거래지원종료 30분 전 선제 수집 중단 및 정리 처리"
+                        await self.event_bus.publish("collector_signal", {
+                            "type": "toast_alert",
+                            "exchange": exchange_id,
+                            "symbol": symbol,
+                            "event_type": "delisting_preflight",
+                            "message": toast_msg
+                        })
+                        await self.record_exchange_event("ASSET_DELISTING_PREFLIGHT", exchange_id, toast_msg)
+                        
+                    await self.repository.update_planned_event_status(event_id, 'EXECUTED')
+                    
+            except Exception as e:
+                logger.exception(f"[CollectorService] 예정 이벤트 실행 루프 내 예외: {e}")
+                
+            await asyncio.sleep(60)

@@ -3703,6 +3703,67 @@ table tbody tr.selected {
     border: 1px solid rgba(239, 68, 68, 0.35) !important;
 }
 
+/* ===== 상장/상폐 예정 안내 배너 스타일 ===== */
+.planned-events-banner {
+    position: relative;
+    width: 100%;
+    background: #1E293B;
+    border-bottom: 2px solid #F59E0B; /* Amber 포인트 */
+    padding: 12px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    z-index: 2000;
+    font-family: 'Pretendard', 'Inter', sans-serif;
+    color: #F8FAFC;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    animation: fadeInDown 0.3s ease-out;
+}
+
+.planned-events-banner .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.92rem;
+    line-height: 1.4;
+}
+
+.planned-events-banner .banner-icon {
+    font-size: 1.1rem;
+}
+
+.planned-events-banner .banner-text strong {
+    color: #F59E0B; /* Amber 강조 */
+}
+
+.planned-events-banner .banner-close-btn {
+    background: transparent;
+    border: none;
+    color: #94A3B8;
+    font-size: 1.5rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0 4px;
+    transition: color 0.2s, transform 0.2s;
+}
+
+.planned-events-banner .banner-close-btn:hover {
+    color: #F8FAFC;
+    transform: scale(1.1);
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 
 
 
