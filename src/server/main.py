@@ -82,14 +82,22 @@ async def zmq_listener_loop():
                 if data.get('type') == 'collector_symbols_sync':
                     exch = data.get('exchange')
                     if exch:
-                        system.collector_active_symbols[exch] = {
-                            "symbols": data.get("symbols", []),
-                            "synced_at": int(time.time() * 1000),
-                            "symbols_version": data.get("symbols_version", 1),
-                            "source_pid": data.get("source_pid"),
-                            "daemon_started_at": data.get("daemon_started_at")
-                        }
-                        logger.info(f"[Web ZMQ Listener] {exch} 종목 목록 동기화 캐시 갱신 완료 (버전: {data.get('symbols_version')})")
+                        cached = system.collector_active_symbols.get(exch, {})
+                        cached_ver = cached.get("symbols_version")
+                        incoming_ver = data.get("symbols_version", 1)
+                        if cached_ver == incoming_ver and cached.get("symbols"):
+                            # 버전이 동일하고 이미 종목이 있으면, 타임스탬프만 갱신 (덮어쓰기 회피)
+                            cached["synced_at"] = int(time.time() * 1000)
+                            logger.info(f"[Web ZMQ Listener] {exch} 종목 목록 버전 동일 ({incoming_ver}) - 덮어쓰기 생략 및 시간 갱신")
+                        else:
+                            system.collector_active_symbols[exch] = {
+                                "symbols": data.get("symbols", []),
+                                "synced_at": int(time.time() * 1000),
+                                "symbols_version": incoming_ver,
+                                "source_pid": data.get("source_pid"),
+                                "daemon_started_at": data.get("daemon_started_at")
+                            }
+                            logger.info(f"[Web ZMQ Listener] {exch} 종목 목록 동기화 캐시 갱신 완료 (버전: {incoming_ver})")
                 
                 elif data.get('type') == 'collector_daemon_detail':
                     data["synced_at"] = int(time.time() * 1000)
