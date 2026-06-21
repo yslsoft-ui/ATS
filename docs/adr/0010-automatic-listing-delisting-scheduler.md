@@ -22,11 +22,11 @@
 
 2. **거래소별 이원화 감지 파이프라인 구축**:
    * **빗썸 (Bithumb)**: 
-     * 공식 공지사항 API(`https://api.bithumb.com/v1/notices`)를 6시간 주기로 폴링합니다.
+     * 공식 공지사항 API(`https://api.bithumb.com/v1/notices`)를 12시간 주기로 폴링합니다.
      * 카테고리가 `'신규상장'` 또는 `'거래지원종료'`인 신규 공지를 발견하면 본문 HTML(`pc_url`) 내의 `__NEXT_DATA__` 상태값을 파싱하여 대상 종목 코드(Ticker)와 예정 일시(상장/상폐 시간)를 정규식으로 자동 추출합니다.
      * 최초 인지 시점에 ZMQ IPC를 통해 **웹 UI에 즉시 토스트 팝업 알림** 및 `ASSET_LISTING_SCHEDULED` / `ASSET_DELISTING_SCHEDULED` **시스템 이벤트**를 발행하고 DB에 `PLANNED` 상태로 등록합니다.
    * **업비트 (Upbit)**:
-     * 웹 서버 크롤링 차단 문제를 해결하기 위해, 공식 API인 `https://api.upbit.com/v1/market/all`을 주기적으로 폴링합니다.
+     * 웹 서버 크롤링 차단 문제를 해결하기 위해, 공식 API인 `https://api.upbit.com/v1/market/all`을 1시간 주기로 폴링합니다.
      * 신규 종목이 마켓 목록에 새롭게 감지되는 즉시 사전 예정 시간 없이 **실시간 상장 등록 및 즉시 수집** 프로세스로 연동합니다.
    * **KIS (한국투자증권)**:
      * 1일 1회 마스터 파일(`kospi_code.mst.zip`, `kosdaq_code.mst.zip`)을 자동 다운로드하여 비교합니다.

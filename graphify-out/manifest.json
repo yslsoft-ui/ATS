@@ -1135,8 +1135,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/collector_service.py": {
-    "mtime": 1781878140.2752628,
-    "ast_hash": "233f1841c5cf2e232732492d2dfdaf3a",
+    "mtime": 1782047677.7202504,
+    "ast_hash": "ddd616ce4a3d67d018fb9eb2bbe8831b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/shadow_eval_service.py": {
@@ -1445,13 +1445,13 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/frontend.md": {
-    "mtime": 1781870708.038083,
-    "ast_hash": "cfb192981c944ca153b603d955b80e4d",
+    "mtime": 1781878665.2475445,
+    "ast_hash": "ba89dfafffc354af97876f6ab03071bb",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/architecture.md": {
-    "mtime": 1781572325.8203824,
-    "ast_hash": "f60f5812c3b95732660a6c7a306f3bbb",
+    "mtime": 1782047706.3687515,
+    "ast_hash": "0bb42da14d0e918c08e90bdf4ba638fe",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/daemons.md": {
@@ -1460,8 +1460,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1781844647.2968059,
-    "ast_hash": "85b015356081864a79e73d44edb76f54",
+    "mtime": 1781878631.2867498,
+    "ast_hash": "cea638fb351d34a819527b70cb20b93f",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
@@ -1475,8 +1475,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1781751574.449056,
-    "ast_hash": "7c11d358c1dfa19b53bad31279ba86ca",
+    "mtime": 1781878622.910554,
+    "ast_hash": "60093caa562b357f822011a3a420f1d6",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
@@ -1495,8 +1495,8 @@
     "semantic_hash": "b66c8266b1b4b4aeae6903ae0ef0ba0c"
   },
   "/home/simon/ATS/docs/adr/0010-automatic-listing-delisting-scheduler.md": {
-    "mtime": 1781875174.0382624,
-    "ast_hash": "c5302cfa2346251f70c53659ce8b7418",
+    "mtime": 1782047694.4565449,
+    "ast_hash": "b73856daba2c7b6ba944282de1991c20",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0006-explicit-exchange-field-separation.md": {

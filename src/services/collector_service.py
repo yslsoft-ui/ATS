@@ -749,7 +749,7 @@ class CollectorService(DaemonService):
             pass
 
     async def _periodic_bithumb_notice_poll_loop(self):
-        """10분마다 빗썸 공지사항 API를 폴링하여 신규 상장/상폐 이벤트를 감지하고 DB에 등록합니다."""
+        """12시간마다 빗썸 공지사항 API를 폴링하여 신규 상장/상폐 이벤트를 감지하고 DB에 등록합니다."""
         logger.info("[CollectorService] 빗썸 공지사항 폴링 루프 기동")
         import urllib.request
         import urllib.error
@@ -900,10 +900,10 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 빗썸 공지사항 폴링 루프 내 예외: {e}")
                 
-            await asyncio.sleep(600)
+            await asyncio.sleep(43200)
 
     async def _periodic_upbit_market_poll_loop(self):
-        """1분마다 업비트 market/all API를 폴링하여 신규 상장 종목이 즉시 출현했는지 감지합니다."""
+        """1시간마다 업비트 market/all API를 폴링하여 신규 상장 종목이 즉시 출현했는지 감지합니다."""
         logger.info("[CollectorService] 업비트 실시간 상장 감지 루프 기동")
         import aiohttp
         
@@ -956,7 +956,7 @@ class CollectorService(DaemonService):
             except Exception as e:
                 logger.exception(f"[CollectorService] 업비트 실시간 상장 감지 루프 내 예외: {e}")
                 
-            await asyncio.sleep(60)
+            await asyncio.sleep(3600)
 
     async def _periodic_kis_mst_sync_loop(self):
         """24시간마다 한국투자증권 마스터 파일 동기화를 돌려 신규 상장/상폐 여부를 감지합니다."""
