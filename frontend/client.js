@@ -183,8 +183,15 @@ const APIClient = (() => {
         /**
          * 전략 데몬 프로세스 자체를 자가 재기동
          */
-        restartStrategyDaemon: () => 
-            _fetchAPI('/api/strategies/restart-daemon', { method: 'POST' }),
+        restartStrategyDaemon: (commandId = '') => {
+            const url = `/api/strategies/restart-daemon${commandId ? `?command_id=${commandId}` : ''}`;
+            return _fetchAPI(url, { method: 'POST' });
+        },
+
+        /**
+         * 전략 데몬의 상세 모니터링 캐시 조회
+         */
+        fetchStrategyDaemonDetail: () => _fetchAPI('/api/strategies/daemon-detail'),
 
 
         /**

@@ -452,8 +452,66 @@
   - **설명**: 특정 전략의 작동 여부를 사용/미사용으로 토글 제어합니다.
 
 - **`POST /api/strategies/restart-daemon`**
-  - **설명**: 전략 엔진 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다.
-  - **응답 (JSON)**: `{"message": "Strategy daemon restart signal published successfully"}`
+  - **설명**: 전략 엔진 데몬 프로세스 자체를 안전하게 자가 재기동(Self-Restart)하여 최신 코드를 메모리에 반영합니다. `command_id` 쿼리 파라미터를 지원합니다.
+  - **응답 (JSON)**: `{"message": "Strategy daemon restart signal published successfully", "command_id": "UUID-STRING"}`
+
+- **`GET /api/strategies/daemon-detail`**
+  - **설명**: 전략 데몬의 메모리 사용량(RSS), CPU 사용률, 마지막 의사결정 시각/지연 시간, 가드레일 누적 차단 통계, 개별 활성 전략 엔진들의 상태(Stale 여부 포함)를 종합 조회합니다.
+  - **응답 (JSON)**:
+    ```json
+    {
+      "type": "strategy_daemon_detail",
+      "pid": 5678,
+      "started_at": 1718020000000,
+      "last_updated_at": 1718020050000,
+      "heartbeat_age_ms": 150,
+      "is_stale": false,
+      "cpu_usage_pct": 1.2,
+      "rss_mb": 52.4,
+      "last_decision_at": 1718020048000,
+      "decision_latency_ms": 12.5,
+      "girs_model_version": "v1.2.3",
+      "proposal_count_today": 4,
+      "signal_count_today": 8,
+      "order_intent_count_today": 2,
+      "auto_promotion_enabled": true,
+      "promotion_count_today": 1,
+      "demotion_count_today": 0,
+      "rollback_count_today": 0,
+      "last_block_reason": "cooldown_limit_exceeded",
+      "guardrail_blocks": {
+        "cooldown": 2,
+        "quota": 0,
+        "daily_limit": 0,
+        "low_stability": 0,
+        "data_quality": 0,
+        "lazy_replay": 0,
+        "champion_cooldown": 0
+      },
+      "total_engines": 2,
+      "active_engines": 2,
+      "stale_engines": 0,
+      "strategy_stats": {
+        "SMA_CROSS": {"active": 1, "total": 1},
+        "RSI_TREND": {"active": 1, "total": 1}
+      },
+      "exchange_stats": {
+        "upbit": {"active": 1, "total": 1},
+        "kis": {"active": 1, "total": 1}
+      },
+      "engines": [
+        {
+          "symbol": "BTC",
+          "strategy_id": "SMA_CROSS",
+          "is_active": true,
+          "is_stale": false,
+          "last_tick_received_at": 1718020049000,
+          "decision_latency_ms": 10.2
+        }
+      ],
+      "schema_version": 1
+    }
+    ```
 
 - **`GET /api/proposals?strategy_id={id}&include_pruned={true/false}`**
   - **설명**: 시스템이 자동 생성한 전략 파라미터 개선 제안(Proposal) 목록을 조회합니다. `include_pruned` 파라미터를 통해 신뢰도 60점 미만으로 걸러진 폐기(`PRUNED`, `DEFERRED`)된 제안들을 포함할지 여부를 선택합니다. (기본값: `false`)
@@ -660,7 +718,71 @@
 }
 ```
 
-#### C. 수집기 및 큐 시스템 상태 변경 경고 패킷 (Type: `collector_status` / `queue_status`)
+#### C. 전략 데몬 실시간 상세 지표 패킷 (Type: `strategy_daemon_detail`)
+ZeroMQ `strategy_signal` 채널로부터 수신되어 웹소켓으로 브로드캐스트되는 실시간 전략 데몬의 텔레메트리 페이로드입니다.
+```json
+{
+  "type": "strategy_daemon_detail",
+  "pid": 5678,
+  "started_at": 1718020000000,
+  "last_updated_at": 1718020050000,
+  "cpu_usage_pct": 1.2,
+  "rss_mb": 52.4,
+  "last_decision_at": 1718020048000,
+  "decision_latency_ms": 12.5,
+  "girs_model_version": "v1.2.3",
+  "proposal_count_today": 4,
+  "signal_count_today": 8,
+  "order_intent_count_today": 2,
+  "auto_promotion_enabled": true,
+  "promotion_count_today": 1,
+  "demotion_count_today": 0,
+  "rollback_count_today": 0,
+  "last_block_reason": "cooldown_limit_exceeded",
+  "guardrail_blocks": {
+    "cooldown": 2,
+    "quota": 0,
+    "daily_limit": 0,
+    "low_stability": 0,
+    "data_quality": 0,
+    "lazy_replay": 0,
+    "champion_cooldown": 0
+  },
+  "total_engines": 2,
+  "active_engines": 2,
+  "stale_engines": 0,
+  "strategy_stats": {
+    "SMA_CROSS": {"active": 1, "total": 1}
+  },
+  "exchange_stats": {
+    "upbit": {"active": 1, "total": 1}
+  },
+  "engines": [
+    {
+      "symbol": "BTC",
+      "strategy_id": "SMA_CROSS",
+      "is_active": true,
+      "is_stale": false,
+      "last_tick_received_at": 1718020049000,
+      "decision_latency_ms": 10.2
+    }
+  ],
+  "schema_version": 1
+}
+```
+
+#### D. 전략 제어 명령 비동기 ACK 결과 패킷 (Type: `strategy_command_result`)
+전략 데몬에 송신한 제어(재기동 등) 명령의 비동기 처리 결과를 전달합니다.
+```json
+{
+  "type": "strategy_command_result",
+  "command_id": "cmd-str-abc123xyz",
+  "status": "SUCCESS",
+  "error": null
+}
+```
+
+#### E. 수집기 및 큐 시스템 상태 변경 경고 패킷 (Type: `collector_status` / `queue_status`)
 ```json
 {
   "type": "collector_status",

@@ -150,15 +150,18 @@ async def enable_strategy(strategy_id: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/strategies/restart-daemon")
-async def restart_strategy_daemon(request: Request):
+async def restart_strategy_daemon(request: Request, command_id: str = None):
     """전략 엔진 데몬 프로세스 자체를 자가 재기동시킵니다."""
     system = request.app.state.system
+    payload = {"target": "strategy_daemon"}
+    if command_id:
+        payload["command_id"] = command_id
     try:
         await system.dispatcher.dispatch(
             UserCommand.STRATEGY_RESTART_DAEMON,
-            {"target": "strategy_daemon"}
+            payload
         )
-        return {"message": "Strategy daemon restart signal published successfully"}
+        return {"message": "Strategy daemon restart signal published successfully", "command_id": payload.get("command_id")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -283,6 +286,33 @@ async def rollback_strategy(strategy_id: str, version_id: int, request: Request)
         logger.error(f"Failed to rollback strategy: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/strategies/daemon-detail")
+async def get_strategy_daemon_detail(request: Request):
+    """전략 데몬의 실시간 가동 엔진 개수, 전략별 가동 종목 통계, 메모리, 차단 통계 등을 조회하여 반환합니다."""
+    system = request.app.state.system
+    import time
+    now_ms = int(time.time() * 1000)
+    
+    cached_detail = system.strategy_daemon_detail.copy() if system.strategy_daemon_detail else {}
+    
+    monitoring_config = system.config_manager.get_monitoring_config()
+    detail_stale_ms = monitoring_config.get("daemon_detail_stale_ms", 15000)
+    
+    synced_at = cached_detail.get("synced_at", 0)
+    schema_version = cached_detail.get("schema_version", 1)
+    
+    heartbeat_age_ms = (now_ms - synced_at) if synced_at > 0 else None
+    is_stale = (heartbeat_age_ms is None or heartbeat_age_ms > detail_stale_ms)
+    
+    return {
+        "daemon_detail": cached_detail,
+        "last_updated_at": synced_at if synced_at > 0 else None,
+        "heartbeat_age_ms": heartbeat_age_ms,
+        "is_stale": is_stale,
+        "schema_version": schema_version,
+        "monitoring_config": monitoring_config
+    }
+
 @router.get("/api/strategies/{strategy_id}")
 async def get_strategy_detail(strategy_id: str, request: Request):
     """특정 전략의 상세 상태(활성 버전, 파라미터, 작동 여부 등)를 조회합니다."""
@@ -362,4 +392,5 @@ async def get_strategy_history(strategy_id: str, request: Request, limit: int = 
     except Exception as e:
         logger.error(f"Failed to fetch strategy history: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 

@@ -27,6 +27,7 @@ class TradeEngine:
         self.on_status_callback = on_status_callback
         self.market_data_repo = market_data_repo or SqliteMarketDataRepository()
         self.last_tick = None
+        self.last_tick_received_at = 0.0
         self.config_manager = ConfigManager("config/settings.yaml")
         
         # 전략들을 호스트로 래핑
@@ -112,6 +113,8 @@ class TradeEngine:
     async def process_tick(self, tick: Dict, portfolio_manager: Any, is_warmup: bool = False) -> tuple[List[TradeSignal], List[Candle]]:
         """실시간 틱을 처리하고, 완성된 캔들이 있을 경우 전략을 실행하여 신호와 캔들을 반환합니다."""
         self.last_tick = tick
+        if not is_warmup:
+            self.last_tick_received_at = time.time()
         tick_price = tick['trade_price']
         signals = []
         common_exit_triggered = False

@@ -78,7 +78,7 @@ sequenceDiagram
     Daemon->>PM: 2. 활성 상태인 모의투자 세션 로드
     Daemon->>Pipeline: 3. 주문 체결 파이프라인 생성 및 콜백 등록
     Daemon->>ZMQ: 4. 제어 구독(strategy_control) 리스너 시작
-    Daemon->>Daemon: 5. 3초 주기 하트비트 루프 기동 (웹서버 생존 통보)
+    Daemon->>Daemon: 5. 3초 주기 하트비트 루프 기동 및 5초 주기 상세 상태(strategy_daemon_detail) ZMQ 송출
     Note over Daemon: 활성 포트폴리오 세션 감지 시
     Daemon->>TE: 6. 세션 전략 파라미터 기반 TradeEngine 동적 기동
     TE->>PM: 7. DB 기반 과거 데이터 조회 및 지표 워밍업 (Warm-up)
@@ -208,11 +208,72 @@ sequenceDiagram
 ```
 
 ### 4.4. `strategy_signal` 토픽 (전략 데몬 상태 및 체결 송출)
+- **기본 상태 알림 (`strategy_status`)**:
 ```json
 {
   "type": "strategy_status",
   "is_running": true,
   "active_engines": 15,
+  "error": null
+}
+```
+- **[NEW] 데몬 상태 상세 취합 정보 (`strategy_daemon_detail` - 5초 주기)**:
+```json
+{
+  "type": "strategy_daemon_detail",
+  "pid": 5678,
+  "started_at": 1718020000000,
+  "last_updated_at": 1718020050000,
+  "cpu_usage_pct": 1.2,
+  "rss_mb": 52.4,
+  "last_decision_at": 1718020048000,
+  "decision_latency_ms": 12.5,
+  "girs_model_version": "v1.2.3",
+  "proposal_count_today": 4,
+  "signal_count_today": 8,
+  "order_intent_count_today": 2,
+  "auto_promotion_enabled": true,
+  "promotion_count_today": 1,
+  "demotion_count_today": 0,
+  "rollback_count_today": 0,
+  "last_block_reason": "cooldown_limit_exceeded",
+  "guardrail_blocks": {
+    "cooldown": 2,
+    "quota": 0,
+    "daily_limit": 0,
+    "low_stability": 0,
+    "data_quality": 0,
+    "lazy_replay": 0,
+    "champion_cooldown": 0
+  },
+  "total_engines": 2,
+  "active_engines": 2,
+  "stale_engines": 0,
+  "strategy_stats": {
+    "SMA_CROSS": {"active": 1, "total": 1}
+  },
+  "exchange_stats": {
+    "upbit": {"active": 1, "total": 1}
+  },
+  "engines": [
+    {
+      "symbol": "BTC",
+      "strategy_id": "SMA_CROSS",
+      "is_active": true,
+      "is_stale": false,
+      "last_tick_received_at": 1718020049000,
+      "decision_latency_ms": 10.2
+    }
+  ],
+  "schema_version": 1
+}
+```
+- **[NEW] 제어 명령 비동기 처리 응답 (`strategy_command_result`)**:
+```json
+{
+  "type": "strategy_command_result",
+  "command_id": "cmd-str-abc123xyz",
+  "status": "SUCCESS",
   "error": null
 }
 ```

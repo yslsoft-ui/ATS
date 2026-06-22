@@ -249,6 +249,9 @@ Pareto 랭킹 연산의 병목 및 진동을 차단하기 위해, 국면 확률 
 **Lazy Replay Correction (비동기 리플레이 정정)**:
 실시간 랭킹 Fast Path의 지연 시간을 최소화하기 위해 동기 검증을 수행하지 않고, 백그라운드 데몬 루프에서 **주기적 배치 윈도우(e.g., 10s)** 단위로 `full_event_rebuild()`를 수행하며, 미세 랭킹 흔들림(Oscillation) 방지를 위해 이중 임계치 Hysteresis Rule ($T_{\text{low}}=0.1, T_{\text{high}}=0.3$)에 입각해 `Materialized View` 상태를 최종 보정하는 리플레이 안전 장치. 이때 Rank Drift 계산이 후보 수 $N$에 흔들리지 않도록 정규화하고 누락 예외를 줄이기 위해, 대상을 Fast와 Replay의 합집합($candidates = union(FastRank, ReplayRank)$, $N=len(candidates)$)으로 고정하고 누락 후보는 $missing\_rank = N+1$로 가드 처리하며, 개별 순위 차이를 분모 $N$으로 나누어 정규화하고 [0, 1] 범위로 clip한 **Normalised Weighted Rank Drift** 오차 수식($\text{drift} = \sum weight_i * \text{rank\_diff\_i} / \sum weight_i$, $\text{rank\_diff\_i} = \text{clip}(|RankFast - RankReplay| / \max(1, N), 0.0, 1.0)$, 가중치는 $\min(RankFast, RankReplay)$ 기준 적용)을 사용하되, $N=0$ 또는 가중치합 0일 시 $drift=0.0$ 및 `action = NOOP`으로 예외를 방어(empty guard)합니다. 의사결정 최종 결합은 **Single Decision Authority Rule** (Replay 부재 시 Sigmoid 스무딩 가중합 $\alpha = \text{sigmoid}(10 * (\text{stability\_score} - 0.5))$ 기반의 $\text{final\_promotion\_score} = \alpha * girs\_promotion\_score + (1 - \alpha) * fallback\_promotion\_score$ 충돌 해소 적용, 모든 점수는 `1 - risk` 변환된 promotion_score로 통일)에 입각하여 처리합니다.
 
+**Strategy Daemon Monitoring (전략 데몬 모니터링)**:
+전략 데몬 프로세스의 CPU/메모리 리소스, 실시간 판단 지연(Decision Latency), GIRS/Proposal 상태, 7대 가드레일 누적 차단 통계 및 개별 전략 엔진들의 기동/Stale 여부를 실시간(5초 주기 ZMQ 통신 및 WebSocket 브로드캐스트)으로 취합 및 감시하는 진단 인터페이스.
+
 ## Relationships
 
 - 하나의 **Interval** 설정에 따라 여러 개의 **Candle**이 연속적으로 생성됨

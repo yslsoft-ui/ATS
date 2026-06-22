@@ -237,9 +237,12 @@ async def zmq_listener_loop():
                         "last_heartbeat": time.time(),
                         "error": data.get('error', None)
                     }
+                elif data.get('type') == 'strategy_daemon_detail':
+                    data["synced_at"] = int(time.time() * 1000)
+                    system.strategy_daemon_detail = data.copy()
 
                 # 실시간 전략 상태 및 주문 신호 발생 시 브로드캐스트 호출
-                if data.get('type') == 'strategy_status':
+                if data.get('type') in ['strategy_status', 'strategy_daemon_detail', 'strategy_command_result', 'system_event']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:

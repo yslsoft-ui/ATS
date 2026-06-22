@@ -60,6 +60,26 @@ class StrategyService(DaemonService):
         self.demotion_count = 0
         self.last_universe_summary_time = time.time()
         
+        # 데몬 텔레메트리 필드
+        self.status = "RUNNING"
+        self.last_error = None
+        self.last_tick_at = 0
+        self.last_decision_at = 0
+        self.decision_latency_ms = 0.0
+        self.signal_count_today = 0
+        self.order_intent_count_today = 0
+        self.stale_engines = 0
+        self.total_engines = 0
+        self.active_engines = 0
+        self.stale_threshold_seconds = 30
+        self.last_block_reason = None
+        self.rollback_count_today = 0
+        
+        import os
+        self.source_pid = os.getpid()
+        self.daemon_started_at = int(time.time() * 1000)
+        self.last_daily_reset_date = ""
+        
         self._lock = asyncio.Lock()
 
     async def fetch_exchange_symbols(self, exchange_id: str, config: Dict[str, Any]) -> List[str]:
@@ -364,6 +384,8 @@ class StrategyService(DaemonService):
             version_id = data.get('version_id')
             params = data.get('params')
             reason = data.get('reason', 'MANUAL_UPDATE')
+            if reason == 'ROLLBACK':
+                self.rollback_count_today += 1
             
             if strategy_id and params and version_id:
                 logger.info(f"[StrategyService] 전략 파라미터 동적 갱신 수신: strategy_id={strategy_id}, version={version_id}, params={params}")
@@ -392,19 +414,174 @@ class StrategyService(DaemonService):
                 })
                 return True
             return False
+        elif data.get('type') == 'restart_daemon':
+            command_id = data.get('command_id')
+            if command_id:
+                result_payload = {
+                    "type": "strategy_command_result",
+                    "command_id": command_id,
+                    "status": "SUCCESS",
+                    "error": None,
+                    "timestamp": int(time.time() * 1000)
+                }
+                await self.event_bus.publish("strategy_signal", result_payload)
+            return False
         return False
 
+    def _get_rss_memory(self) -> float:
+        """/proc/self/status 파일에서 데몬 프로세스의 현재 RSS 메모리(MB)를 안전하게 파싱합니다."""
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            kb = float(parts[1])
+                            return round(kb / 1024.0, 2)
+        except Exception:
+            pass
+        return 0.0
+
     def get_status_payloads(self) -> List[tuple[str, dict]]:
+        import time
         payloads = []
+        
+        # 1. 일일 카운터 자정 리셋 체크
+        today_date = time.strftime("%Y-%m-%d", time.localtime())
+        if self.last_daily_reset_date != today_date:
+            self.last_daily_reset_date = today_date
+            self.signal_count_today = 0
+            self.order_intent_count_today = 0
+            self.daily_proposal_count = 0
+            self.promotion_count = 0
+            self.demotion_count = 0
+            self.rollback_count_today = 0
+            
+        # 2. stale_engines 개수 계산
+        now = time.time()
+        self.total_engines = len(self.trade_engines)
+        self.stale_engines = 0
+        self.active_engines = 0
+        
+        # 전략별 및 거래소별 활성/전체 통계 취합
+        strategy_stats = {}
+        exchange_stats = {}
+        engines_list = []
+        
+        for key, engine in self.trade_engines.items():
+            ex_id = engine.exchange_id
+            
+            is_engine_active = False
+            is_stale = False
+            last_tick = getattr(engine, 'last_tick_received_at', 0)
+            if last_tick > 0:
+                if now - last_tick > self.stale_threshold_seconds:
+                    is_stale = True
+                    self.stale_engines += 1
+            else:
+                is_stale = True
+                self.stale_engines += 1
+                
+            strategy_ids = []
+            for host in getattr(engine, 'hosts', []):
+                strat = host.strategy
+                s_id = getattr(strat, 'id', strat.__class__.__name__)
+                strategy_ids.append(s_id)
+                
+                s_stat = strategy_stats.setdefault(s_id, {"total": 0, "active": 0})
+                s_stat["total"] += 1
+                if getattr(strat, 'enabled', False):
+                    s_stat["active"] += 1
+                    is_engine_active = True
+                    
+            if is_engine_active:
+                self.active_engines += 1
+                
+            ex_stat = exchange_stats.setdefault(ex_id, {"total": 0, "active": 0})
+            ex_stat["total"] += 1
+            if is_engine_active:
+                ex_stat["active"] += 1
+                
+            engines_list.append({
+                "symbol": engine.symbol,
+                "strategy_id": ", ".join(strategy_ids) if strategy_ids else "None",
+                "is_active": is_engine_active,
+                "is_stale": is_stale,
+                "last_tick_received_at": int(last_tick * 1000) if last_tick > 0 else None,
+                "decision_latency_ms": getattr(engine, 'decision_latency_ms', None)
+            })
+
         self._status_counter += 1
         if self._status_counter >= 3:
             self._status_counter = 0
             payloads.append(("strategy_signal", {
                 "type": "strategy_status",
                 "is_running": True,
-                "active_engines": len(self.trade_engines),
-                "error": None
+                "active_engines": self.active_engines,
+                "error": self.last_error
             }))
+            
+        # 5초 주기로 strategy_daemon_detail 발행
+        self._detail_status_counter = getattr(self, '_detail_status_counter', 0) + 1
+        if self._detail_status_counter >= 5:
+            self._detail_status_counter = 0
+            
+            uptime = int(time.time() - (self.daemon_started_at / 1000))
+            
+            detail_payload = {
+                "type": "strategy_daemon_detail",
+                "schema_version": 1,
+                "lifecycle": {
+                    "status": self.status,
+                    "pid": self.source_pid,
+                    "started_at": self.daemon_started_at,
+                    "uptime": uptime,
+                    "heartbeat": int(time.time() * 1000),
+                    "rss_mb": self._get_rss_memory(),
+                    "last_error": self.last_error
+                },
+                "engines": {
+                    "total_engines": self.total_engines,
+                    "active_engines": self.active_engines,
+                    "stale_engines": self.stale_engines,
+                    "strategy_stats": strategy_stats,
+                    "exchange_stats": exchange_stats,
+                    "engines": engines_list
+                },
+                "decision_status": {
+                    "last_tick_at": self.last_tick_at,
+                    "last_decision_at": self.last_decision_at,
+                    "decision_latency_ms": self.decision_latency_ms,
+                    "signal_count_today": self.signal_count_today,
+                    "order_intent_count_today": self.order_intent_count_today
+                },
+                "girs_status": {
+                    "girs_model_version": self.current_model_version,
+                    "proposal_count_today": self.daily_proposal_count,
+                    "pending": self.daily_proposal_count,
+                    "evaluated": self.promotion_count,
+                    "failed": self.demotion_count,
+                    "rolled_back": self.rollback_count_today
+                },
+                "guardrail_stats": {
+                    "cooldown": self.cooldown_blocked_count,
+                    "quota": self.quota_blocked_count,
+                    "daily_limit": self.limit_blocked_count,
+                    "low_stability": getattr(self, 'low_stability_blocked', 0),
+                    "data_quality": getattr(self, 'data_quality_blocked', 0),
+                    "lazy_replay": getattr(self, 'lazy_replay_blocked', 0),
+                    "champion_cooldown": getattr(self, 'champion_cooldown_blocked', 0),
+                    "last_block_reason": self.last_block_reason
+                },
+                "promotion_status": {
+                    "auto_promotion_enabled": self.config_manager.get("system.auto_strategy_promotion_enabled", False),
+                    "promotion_count_today": self.promotion_count,
+                    "demotion_count_today": self.demotion_count,
+                    "rollback_count_today": self.rollback_count_today
+                }
+            }
+            payloads.append(("strategy_signal", detail_payload))
+            
         return payloads
 
     async def _market_data_loop(self):
@@ -418,6 +595,7 @@ class StrategyService(DaemonService):
                     continue
 
                 if data.get('type') == 'tick':
+                    self.last_tick_at = int(time.time() * 1000)
                     logger.debug(f"[StrategyService] 틱 이벤트 수신: {data}")
                     
                     exchange = data.get('exchange_id')
@@ -444,7 +622,11 @@ class StrategyService(DaemonService):
                                 'trade_timestamp': data['trade_timestamp']
                             }
                             
+                            start_time = time.perf_counter()
                             signals, closed_candles = await engine.process_tick(tick_payload, self.portfolio_manager)
+                            latency = (time.perf_counter() - start_time) * 1000
+                            self.decision_latency_ms = round(latency, 2)
+                            self.last_decision_at = int(time.time() * 1000)
                         else:
                             if self.trade_engines and key not in self._unmatched_keys:
                                 self._unmatched_keys.add(key)
@@ -469,6 +651,8 @@ class StrategyService(DaemonService):
                                 
                     for sig in signals:
                         logger.info(f"[StrategyService] 전략 신호 감지: {sig.symbol} -> {sig.action}")
+                        self.signal_count_today += 1
+                        self.order_intent_count_today += 1
                         # DB로부터 포트폴리오 정보 동기화 (수동 개입 등)
                         await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
                         op_mode = self.config_manager.get("system.operation_mode", "shadow")
@@ -1060,6 +1244,17 @@ class StrategyService(DaemonService):
                                         if not existing or value > existing[0]:
                                             passed_symbols_dict[snapshot.symbol] = (value, snapshot)
                                     else:
+                                        # 가드레일 세부 차단 트래킹
+                                        if not snapshot.is_fresh:
+                                            self.data_quality_blocked += 1
+                                            self.last_block_reason = f"데이터 신선도 만료 (is_fresh=False) ({snapshot.symbol})"
+                                        elif tps < 0.2 or idle_time >= 30.0:
+                                            self.lazy_replay_blocked += 1
+                                            self.last_block_reason = f"Lazy Replay 감지 (TPS: {tps:.2f}, Idle: {idle_time:.1f}s) ({snapshot.symbol})"
+                                        elif stability_score < 0.4:
+                                            self.low_stability_blocked += 1
+                                            self.last_block_reason = f"안정성 점수 미달: {stability_score:.2f} ({snapshot.symbol})"
+                                            
                                         current_status = self.universe_status.get(snapshot.symbol, "WATCHED")
                                         if current_status == "CANDIDATE":
                                             self.universe_status[snapshot.symbol] = "WATCHED"
@@ -1115,6 +1310,7 @@ class StrategyService(DaemonService):
                                         logger.info(f"[StrategyService] [Universe] {sym} CANDIDATE -> WATCHED 강등 ({msg})")
                                     else:
                                         self.quota_blocked_count += 1
+                                        self.last_block_reason = f"Quota 초과 및 순위 밀림 ({sym})"
                                         prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
                                             exchange_id=snap.exchange_id,
                                             market_type=snap.market_type,
@@ -1151,6 +1347,8 @@ class StrategyService(DaemonService):
                                         # 7.2.1. 쿨다운 체크
                                         if current_time_s - last_cand_time < symbol_cooldown_seconds:
                                             self.cooldown_blocked_count += 1
+                                            self.champion_cooldown_blocked += 1
+                                            self.last_block_reason = f"재승격 쿨다운 미경과 (남은시간: {symbol_cooldown_seconds - (current_time_s - last_cand_time):.1f}초) ({sym})"
                                             prev_state = await self.portfolio_manager.repository.get_universe_guard_state(
                                                 exchange_id=snap.exchange_id,
                                                 market_type=snap.market_type,

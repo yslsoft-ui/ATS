@@ -95,6 +95,8 @@ class TradingSystem:
         self.collector_active_symbols: Dict[str, Dict[str, Any]] = {}
         # [NEW] 수집기 데몬 상세 실시간 상태 보관용 캐시
         self.collector_daemon_detail: Dict[str, Any] = {}
+        # [NEW] 전략 데몬 상세 실시간 상태 보관용 캐시
+        self.strategy_daemon_detail: Dict[str, Any] = {}
         # [NEW] 클린업 데몬 상세 실시간 상태 보관용 캐시
         self.cleanup_status: Dict[str, Any] = {}
 
