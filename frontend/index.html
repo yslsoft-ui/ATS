@@ -31,10 +31,7 @@
                 <div class="menu-item" data-view="system-events-view">🗂️ 시스템 이벤트 로그</div>
                 <div class="menu-item" data-view="ranking-view">📊 순위분석</div>
                 <div class="menu-item" data-view="settings-view">⚙️ 설정</div>
-                <div class="menu-item" data-view="collector-view">🛰️ 수집기 데몬</div>
-                <div class="menu-item" data-view="strategy-daemon-view">⚙️ 전략 데몬</div>
-                <div class="menu-item" data-view="evaluation-daemon-view">📊 평가 데몬</div>
-                <div class="menu-item" data-view="cleanup-view">🧹 클린업 데몬</div>
+                <div class="menu-item" data-view="daemon-monitoring-view">⚙️ 데몬 상태 모니터링</div>
                 <div class="menu-item" data-view="restored-view">🛠️ 복원 캔들</div>
             </nav>
             <!-- 시스템 및 수집기 통합 상태 위젯 (컴팩트 버전) -->
@@ -1633,32 +1630,66 @@
                 </div>
             </section>
 
-            <!-- 수집기 데몬 뷰 (초기엔 숨김) -->
-            <section id="collector-view" style="display: none;">
-                <!-- 1. 헤더 영역 -->
+            <section id="daemon-monitoring-view" style="display: none;">
+                <!-- 1. 공통 헤더 및 메타 바 영역 -->
                 <header class="main-header"
                     style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
                     <div>
-                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">🛰️ 수집기 데몬 상태 모니터링
-                            <span id="collector-stale-badge" class="badge danger"
-                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
+                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">⚙️ 데몬 상태 모니터링
+                            <span id="daemon-stale-badge" class="badge danger"
+                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 끊김</span>
                         </h1>
                         <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
-                            PID: <span id="collector-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
-                            기동 시각: <span id="collector-started-at" style="color: #F8FAFC;">-</span> |
-                            상태 갱신: <span id="collector-last-heartbeat" style="color: #F8FAFC;">-</span>
+                            PID: <span id="daemon-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
+                            기동 시각: <span id="daemon-started-at" style="color: #F8FAFC;">-</span> |
+                            상태 갱신: <span id="daemon-last-heartbeat" style="color: #F8FAFC;">-</span> |
+                            메모리: <span id="daemon-memory" style="color: #F8FAFC;">- MB</span>
+                            <span id="daemon-cpu" style="color: #F59E0B; font-family: monospace; display: none; margin-left: 5px;">CPU: -%</span>
                         </div>
                     </div>
-                    <!-- 전체 제어 버튼 -->
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btn-collector-start-all" class="btn success"
-                            style="font-size: 0.82rem; padding: 6px 14px;">▶️ 전체 시작</button>
-                        <button id="btn-collector-stop-all" class="btn danger"
-                            style="font-size: 0.82rem; padding: 6px 14px;">⏹️ 전체 중단</button>
-                        <button id="btn-collector-restart-daemon" class="btn warning"
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span id="daemon-state-badge" class="ctx-badge status-indicator"
+                            style="display: none; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩 중...</span>
+                        <button id="btn-daemon-restart" class="btn warning"
                             style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
                     </div>
                 </header>
+
+                <!-- 2. 데몬 탭 메뉴 -->
+                <div class="daemon-tabs" style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; align-items: center;">
+                    <style>
+                        .daemon-tab {
+                            background: transparent;
+                            border: none;
+                            color: #94A3B8;
+                            padding: 8px 16px;
+                            font-size: 0.9rem;
+                            font-weight: bold;
+                            cursor: pointer;
+                            border-radius: 6px;
+                            transition: all 0.2s ease;
+                        }
+                        .daemon-tab:hover {
+                            background: rgba(148, 163, 184, 0.1);
+                            color: #F8FAFC;
+                        }
+                        .daemon-tab.active {
+                            background: #1E293B;
+                            color: #F8FAFC;
+                            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                            border: 1px solid rgba(148, 163, 184, 0.1);
+                        }
+                    </style>
+                    <button class="daemon-tab active" data-tab="collector">🛰️ 수집기</button>
+                    <button class="daemon-tab" data-tab="strategy">⚙️ 전략</button>
+                    <button class="daemon-tab" data-tab="evaluation">📊 평가</button>
+                    <button class="daemon-tab" data-tab="cleanup">🧹 클린업</button>
+                </div>
+
+                <!-- 3. 서브 패널 영역 -->
+                <!-- 3.1 수집기 패널 -->
+                <div id="daemon-panel-collector" class="daemon-tab-panel">
+
 
                 <!-- 동기화 대기용 오버레이 경고 (버전 불일치 / STALE 감지 시) -->
                 <div id="collector-sync-warning-banner" class="alert-banner warning"
@@ -1833,31 +1864,10 @@
                             증가(<code>started_at</code>) 여부를 교차 검증하여 안전하게 로딩 상태를 완결시킵니다.</li>
                     </ul>
                 </div>
-            </section>
+                </div> <!-- End of daemon-panel-collector -->
 
-            <!-- 전략 데몬 뷰 (초기엔 숨김) -->
-            <section id="strategy-daemon-view" style="display: none;">
-                <!-- 1. 헤더 영역 -->
-                <header class="main-header"
-                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
-                    <div>
-                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">⚙️ 전략 데몬 상태 모니터링
-                            <span id="strategy-stale-badge" class="badge danger"
-                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
-                        </h1>
-                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
-                            PID: <span id="strategy-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
-                            기동 시각: <span id="strategy-started-at" style="color: #F8FAFC;">-</span> |
-                            상태 갱신: <span id="strategy-last-heartbeat" style="color: #F8FAFC;">-</span>
-                        </div>
-                    </div>
-                    <!-- 전체 제어 버튼 -->
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btn-strategy-restart-daemon" class="btn warning"
-                            style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
-                    </div>
-                </header>
-
+                <!-- 3.2 전략 패널 -->
+                <div id="daemon-panel-strategy" class="daemon-tab-panel" style="display: none;">
                 <!-- 2. 시스템 리소스 및 실시간 판단 메트릭 (5단 그리드) -->
                 <div class="diagnostic-grid"
                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
@@ -2065,43 +2075,13 @@
                         <li><strong>FSM 자동 승격 (FSM Promotion)</strong>: 섀도 평가 결과 파레토 최적을 달성한 제안 후보군을 검토하여 시스템이 자동으로 챔피언 파라미터를 교체하는 자동 제어의 가동 상태를 의미합니다.</li>
                     </ul>
                 </div>
-            </section>
+                </div> <!-- End of daemon-panel-strategy -->
 
-            <!-- 평가 데몬 뷰 (초기엔 숨김) -->
-            <section id="evaluation-daemon-view" style="display: none;">
-                <!-- 1. 헤더 영역 -->
-                <header class="main-header"
-                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
-                    <div>
-                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">📊 평가 데몬 상태 모니터링
-                            <span id="evaluation-stale-badge" class="badge danger"
-                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
-                        </h1>
-                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
-                            PID: <span id="evaluation-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
-                            기동 시각: <span id="evaluation-started-at" style="color: #F8FAFC;">-</span> |
-                            상태 갱신: <span id="evaluation-last-heartbeat" style="color: #F8FAFC;">-</span>
-                        </div>
-                    </div>
-                    <!-- 전체 제어 버튼 -->
-                    <div style="display: flex; gap: 10px;">
-                        <button id="btn-evaluation-restart-daemon" class="btn warning"
-                            style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
-                    </div>
-                </header>
-
+                <!-- 3.3 평가 패널 -->
+                <div id="daemon-panel-evaluation" class="daemon-tab-panel" style="display: none;">
                 <!-- 2. 시스템 리소스 및 실시간 판단 메트릭 (5단 그리드) -->
                 <div class="diagnostic-grid"
                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <!-- 데몬 리소스 -->
-                    <div class="diag-card">
-                        <span class="label">데몬 리소스 사용량 <span class="tooltip-icon"
-                                title="평가 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기(RSS)입니다.">❓</span></span>
-                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
-                            <span class="value" id="res-val-evaluation-memory" style="font-size: 1.15rem;">- MB</span>
-                        </div>
-                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">/proc/self/status RSS</span>
-                    </div>
                     <!-- Pending Evaluations -->
                     <div class="diag-card">
                         <span class="label">대기 중인 평가 (Pending) <span class="tooltip-icon"
@@ -2226,7 +2206,7 @@
                         </table>
                     </div>
                 </div>
-            </section>
+                </div> <!-- End of daemon-panel-evaluation -->
 
             <!-- 복원 캔들 뷰 (초기엔 숨김) -->
             <section id="restored-view" style="display: none;">
@@ -2352,42 +2332,8 @@
                 </div>
             </section>
 
-            <!-- 클린업 데몬 뷰 (초기엔 숨김) -->
-            <section id="cleanup-view" style="display: none;">
-                <!-- 1. 헤더 및 메타 바 영역 -->
-                <header class="main-header"
-                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
-                    <div>
-                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">🧹 데이터 클린업 데몬
-                            <span id="cleanup-stale-badge" class="badge danger"
-                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
-                        </h1>
-                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
-                            PID: <span id="cleanup-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
-                            기동 시각: <span id="cleanup-started-at" style="color: #F8FAFC;">-</span> |
-                            상태 갱신: <span id="cleanup-last-heartbeat" style="color: #F8FAFC;">-</span>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <span id="cleanup-state-badge" class="ctx-badge status-indicator"
-                            style="background: rgba(100, 116, 139, 0.2); color: #64748B; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩 중...</span>
-                        <button id="btn-cleanup-restart-daemon" class="btn warning"
-                            style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
-                    </div>
-                </header>
-
-                <!-- 2. 시스템 리소스 진단 그리드 (데몬 리소스 카드) -->
-                <div class="diagnostic-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <!-- 데몬 리소스 -->
-                    <div class="diag-card">
-                        <span class="label">데몬 리소스 사용량 <span class="tooltip-icon"
-                                title="클린업 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기(RSS)입니다.">❓</span></span>
-                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
-                            <span class="value" id="res-val-cleanup-memory" style="font-size: 1.15rem;">- MB</span>
-                        </div>
-                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">/proc/self/status RSS</span>
-                    </div>
-                </div>
+                <!-- 3.4 클린업 패널 -->
+                <div id="daemon-panel-cleanup" class="daemon-tab-panel" style="display: none;">
 
                 <div class="overview-metrics-grid"
                     style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px;">
@@ -2557,7 +2503,8 @@
                         </div>
                     </div>
                 </div>
-            </section>
+                </div> <!-- End of daemon-panel-cleanup -->
+            </section> <!-- End of daemon-monitoring-view -->
 
             <!-- 순위분석 뷰 (초기엔 숨김) -->
             <section id="ranking-view" style="display: none;">
@@ -3288,6 +3235,7 @@
     <script src="settings.js"></script>
     <script src="ranking.js"></script>
     <script src="strategy.js"></script>
+    <script src="daemon-monitoring.js"></script>
     <script src="strategy-daemon.js"></script>
     <script src="evaluation-daemon.js"></script>
     <script src="restored-view.js"></script>

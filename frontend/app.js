@@ -138,30 +138,27 @@ function processTick(tick) {
                 updateSystemEvents();
             }
         }
-        // [NEW] 수집기 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
-        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'collector-view') {
-            if (typeof CollectorView !== 'undefined' && typeof CollectorView.loadEvents === 'function') {
-                CollectorView.loadEvents();
-            }
-        }
-        // [NEW] 전략 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
-        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'strategy-daemon-view') {
-            if (typeof StrategyDaemonView !== 'undefined' && typeof StrategyDaemonView.loadEvents === 'function') {
-                StrategyDaemonView.loadEvents();
-            }
-        }
-        // [NEW] 평가 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
-        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'evaluation-daemon-view') {
-            if (typeof EvaluationDaemonView !== 'undefined') {
-                if (typeof EvaluationDaemonView.loadEvents === 'function') EvaluationDaemonView.loadEvents();
-                if (typeof EvaluationDaemonView.loadEvaluationsTable === 'function') EvaluationDaemonView.loadEvaluationsTable();
-                if (typeof EvaluationDaemonView.loadJobsTable === 'function') EvaluationDaemonView.loadJobsTable();
-            }
-        }
-        // [NEW] 클린업 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
-        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'cleanup-view') {
-            if (typeof CleanupView !== 'undefined' && typeof CleanupView.loadEvents === 'function') {
-                CleanupView.loadEvents();
+        // [NEW] 데몬 상태 모니터링 통합 뷰가 활성화되어 있다면 각 활성 탭별 감사 로그 즉시 갱신
+        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'daemon-monitoring-view' && typeof DaemonMonitoringView !== 'undefined') {
+            const activeTab = DaemonMonitoringView.getActiveTab();
+            if (activeTab === 'collector') {
+                if (typeof CollectorView !== 'undefined' && typeof CollectorView.loadEvents === 'function') {
+                    CollectorView.loadEvents();
+                }
+            } else if (activeTab === 'strategy') {
+                if (typeof StrategyDaemonView !== 'undefined' && typeof StrategyDaemonView.loadEvents === 'function') {
+                    StrategyDaemonView.loadEvents();
+                }
+            } else if (activeTab === 'evaluation') {
+                if (typeof EvaluationDaemonView !== 'undefined') {
+                    if (typeof EvaluationDaemonView.loadEvents === 'function') EvaluationDaemonView.loadEvents();
+                    if (typeof EvaluationDaemonView.loadEvaluationsTable === 'function') EvaluationDaemonView.loadEvaluationsTable();
+                    if (typeof EvaluationDaemonView.loadJobsTable === 'function') EvaluationDaemonView.loadJobsTable();
+                }
+            } else if (activeTab === 'cleanup') {
+                if (typeof CleanupView !== 'undefined' && typeof CleanupView.loadEvents === 'function') {
+                    CleanupView.loadEvents();
+                }
             }
         }
         return;
@@ -579,9 +576,9 @@ function initViewNavigation() {
         }
     });
 
-    ViewRouter.registerRoute('cleanup-view', () => {
-        if (typeof CleanupView !== 'undefined' && typeof CleanupView.init === 'function') {
-            CleanupView.init();
+    ViewRouter.registerRoute('daemon-monitoring-view', () => {
+        if (typeof DaemonMonitoringView !== 'undefined' && typeof DaemonMonitoringView.init === 'function') {
+            DaemonMonitoringView.init();
         }
     });
 

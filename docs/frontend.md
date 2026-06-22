@@ -51,8 +51,11 @@
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
 - **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
-- **[collector.js](file:///home/simon/ATS/frontend/collector.js)**: [NEW] 수집 데몬 프로세스의 실시간 리소스(메모리, 큐 사용률)와 거래소별 틱 수신 정보를 시각화하고, 기동/중지/데몬 자가재기동 등 라이프사이클 제어와 비동기 command_id 펜딩/ACK 처리를 주관합니다.
-- **[cleanup.js](file:///home/simon/ATS/frontend/cleanup.js)**: [NEW] 시장 데이터 정리 데몬의 라이프사이클 제어와 4개 카드 통합 실시간 텔레메트리 렌더링, 수동 정리 날짜 피커 변경 시 틱(Trades) 예상 삭제량 실시간 자동 쿼리, command_id 기반 비동기 대기 및 타임아웃(3초/5초/30초), 중복 실행 방지(Mutex), 그리고 최근 10건의 감사 이력 타임라인을 렌더링하는 클린업 관리 전용 뷰입니다.
+- **[daemon-monitoring.js](file:///home/simon/ATS/frontend/daemon-monitoring.js)**: [NEW] 통합 데몬 상태 모니터링 뷰의 최상위 조율 컨트롤러(`DaemonMonitoringView`)입니다. 공통 헤더 UI(PID, 기동 시각, 하트비트, CPU/메모리 리소스, 상태 뱃지, 데몬 재기동) 제어를 통합 관리하며 각 데몬(수집기, 전략, 평가, 클린업)의 탭 전환 및 서브 인스턴스 생애주기를 관장합니다.
+- **[collector.js](file:///home/simon/ATS/frontend/collector.js)**: [NEW] 수집 데몬 프로세스의 실시간 리소스(메모리, 큐 사용률)와 거래소별 틱 수신 정보를 시각화하는 모듈로, 통합 데몬 모니터링 내 수집 데몬 탭 전용 화면 렌더링 및 개별 비동기 제어(거래소별 온/오프, ZMQ ACK 처리 등)를 담당합니다.
+- **[strategy-daemon.js](file:///home/simon/ATS/frontend/strategy-daemon.js)**: [NEW] 전략 실행 데몬 프로세스의 텔레메트리 렌더링 및 개별 제어를 담당하는 하위 모듈입니다.
+- **[evaluation-daemon.js](file:///home/simon/ATS/frontend/evaluation-daemon.js)**: [NEW] 평가 데몬 프로세스의 텔레메트리 렌더링 및 개별 제어를 담당하는 하위 모듈입니다.
+- **[cleanup.js](file:///home/simon/ATS/frontend/cleanup.js)**: [NEW] 시장 데이터 정리 데몬의 라이프사이클 제어와 4개 카드 통합 실시간 텔레메트리 렌더링, 수동 정리 날짜 피커 변경 시 틱(Trades) 예상 삭제량 실시간 자동 쿼리, command_id 기반 비동기 대기 및 타임아웃, 중복 실행 방지(Mutex), 감사 이력 타임라인을 렌더링하는 클린업 탭 전용 모듈입니다.
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다. **[NEW]** 누락 캔들과 고스트 캔들(실제 틱이 없으나 DB에는 존재하는 오류 분봉) 탭 전환 기능을 탑재하고, 고스트 캔들 탭에서는 테이블 내 개별 '🗑️ 삭제' 버튼 연동을 통해 DB 데이터를 즉시 영구 클린업할 수 있도록 구현되어 있습니다.
 - **[system-events.js](file:///home/simon/ATS/frontend/system-events.js)**: [NEW] 시스템 감사 로그 통합 조회 페이지입니다. `system_events` 테이블의 모든 감사 로그를 조회하고, 실시간 검색(키워드 필터링) 및 동적 이벤트 타입 필터를 지원하는 전용 감사 로그 뷰 모듈입니다.
@@ -164,28 +167,25 @@
 
 ---
 
-## 7. 수집기 데몬 모니터링 및 제어 뷰 (Collector Daemon Monitor View)
+## 7. 통합 데몬 상태 모니터링 뷰 (Integrated Daemon Status Monitoring View)
 
 ### 7.1. 개요
-`collector-view` 섹션은 데이터 수집 데몬 프로세스의 내부 상세 건강 상태(Health Status)를 직관적으로 파악하고, 개별/전체 거래소 수집 제어와 데몬의 자가재기동을 수행할 수 있는 실시간 진단 대시보드입니다.
+`daemon-monitoring-view` 섹션은 시스템을 안정적으로 지탱하는 4대 백엔드 데몬 프로세스(데이터 수집기, 전략 실행기, 평가 엔진, 클린업 도구)의 건강 상태(Health Status)를 단일 뷰 및 공통 UI 레이아웃으로 통합하고, 개별 탭 전환을 통해 상세 리소스 모니터링 및 개별 비동기 제어를 제공하는 관리 콘솔입니다.
 
-### 7.2. 주요 기능 및 제어 메커니즘
-1. **실시간 큐(Queue) 텔레메트리 렌더링**:
-   - 수집 대기열(RCV), DB 쓰기 대기열(DB), 캔들 대기열(Candle)의 실시간 적재량과 동적 `max_size`를 비교하여 사용률(`usage_pct`)을 계산합니다.
-   - 사용률에 맞춰 경고 등급(`NORMAL` ≤ 50%, `WARNING` 50%~85%, `CRITICAL` ≥ 85%)을 부여하고, UI 진단 카드 테두리에 깜빡임(Pulse) 애니메이션과 경고 색상을 동적으로 바인딩합니다.
-2. **거래소 카드 동적 시각화**:
-   - 수집 데몬으로부터 수신한 거래소 상태 목록을 기반으로 개별 카드를 동적으로 렌더링합니다.
-   - 거래소별 수집 상태(RUNNING/STOPPED), 수집 종목 수, 누적 처리/드롭 카운트, 실시간 수신된 마지막 틱 정보(종목명, 시간, 가격), 최종 발생 에러 메시지를 일목요연하게 노출합니다.
-3. **비동기 제어 펜딩 & command_id 기반 ACK 처리**:
-   - 수집기 시작/중지 및 데몬 재기동 클릭 시 고유 UUID인 `command_id`를 발행하고, 로컬 펜딩 맵에 등록함과 동시에 API 호출을 전송합니다.
-   - 펜딩 기간 동안 UI 버튼에 `loading` 클래스를 활성화하고 클릭을 방지하여 더블 탭 오작동을 원천 예방합니다.
-   - 웹소켓으로 유입되는 ZMQ `collector_command_result`와 매칭 시 펜딩이 즉각 완결 및 토스트 성공/실패가 고지되며, 5초 타임아웃 지연 시 자동으로 롤백됩니다.
-4. **데몬 재기동 교차 검증**:
-   - `restart-daemon` 제어 시, 단순 제어 성공(ACK)이 아닌 데몬의 물리적 재생성을 확인하기 위해 이전 PID와 이전 기동 시각(`daemon_started_at`)을 저장합니다.
-   - 자가 재기동 후 새로 수신된 상세 정보에서 `source_pid`가 달라졌거나 `daemon_started_at`이 더 증가하였음을 교차 검증(OR 만족)하는 순간 로딩 오버레이를 해제하고 완결 처리합니다.
-5. **정합성 경고등 및 동기화 대기**:
-   - 3초 주기 감시 타이머를 통해 `daemon_detail` 하트비트 stale(6초 초과) 및 `active_symbols` stale(75초 초과), 또는 로컬-데몬 종목 버전 불일치를 상시 진단합니다.
-6. **글로벌 수집기 설정 (settings.yaml) 모니터링**:
-   - 수집기 데몬의 공통 설정에 해당하는 워밍업 활성화 여부(`warmup_enabled`), 데이터 가공을 위한 동시성 워커 수(`worker_count`), 타겟 데이터베이스 경로(`db_path`), 그리고 과거 데이터 백필 설정(백필 활성화 여부, 최대 복구 룩백 시간, 각 거래소별 API 요청 제한 지연시간)을 대시보드 화면 상단 카드에 실시간 바인딩하여 렌더링합니다.
-   - 버전 불일치나 만료가 감지되는 순간, 대시보드 상단에 경고 배너 및 거래소 내에 **"종목 동기화 대기 중..."** 로더 인디케이터가 활성화되며, ZMQ 재동기화 프로토콜에 의해 정합성이 맞춰질 때까지 쿨다운 상태로 대기합니다.
+### 7.2. 탭 구성 및 상세 모듈
+- **수집 데몬 탭 ([collector.js](file:///home/simon/ATS/frontend/collector.js))**: 수집 대기열(RCV/DB/Candle) 큐 사용률 텔레메트리, 거래소별 수집 카드 동적 시각화, 글로벌 수집 설정 모니터링, 거래소 제어 ZMQ ACK 처리를 수행합니다.
+- **전략 데몬 탭 ([strategy-daemon.js](file:///home/simon/ATS/frontend/strategy-daemon.js))**: 전략 실행 데몬의 활성 전략 현황, 기동 파라미터, 그리고 세부 진단 데이터를 모니터링합니다.
+- **평가 데몬 탭 ([evaluation-daemon.js](file:///home/simon/ATS/frontend/evaluation-daemon.js))**: 실시간 평가 파이프라인의 작업 처리율, 누적 매수/매도 평가 연산 카운트 및 에러 카드를 제공합니다.
+- **클린업 데몬 탭 ([cleanup.js](file:///home/simon/ATS/frontend/cleanup.js))**: 데이터베이스 최적화 관리 뷰로, 틱 예상 삭제량 실시간 사전 쿼리, command_id 기반 비동기 대기 및 타임아웃, 중복 실행 방지(Mutex), 그리고 최근 10건의 감사 이력 타임라인을 렌더링합니다.
+
+### 7.3. 공통 UI 조율 및 캐시 제어 메커니즘
+1. **공통 헤더 구조 단일화**:
+   - 4개 데몬 화면의 낭비되는 상단 공간을 제거하고, 공통 메트릭(PID, 기동 시각, 하트비트, CPU 사용량, 메모리 RSS, 활성 상태 뱃지, Stale 지연 경고)을 하나의 고정 헤더 UI(`DaemonMonitoringView.updateSharedHeader`)로 통일하여 시각적 직관성을 향상했습니다.
+2. **캐시 기반 격리 및 렌더링 조율 (Race Condition 방지)**:
+   - 각 데몬이 백그라운드 탭으로 전환되어 화면에 표시되지 않는 상태에서도 웹소켓(ZMQ) 실시간 틱은 지속적으로 수신됩니다.
+   - 이때 백그라운드 데몬의 상태 변화가 현재 표시 중인 활성 탭 데몬의 상단 공통 헤더 정보를 덮어쓰거나 오염시키는 것을 방지하기 위해, `DaemonMonitoringView`는 `daemonDataCache` 오브젝트에 4개 데몬의 정보를 각각 격리 캐싱합니다.
+   - `updateSharedHeader`가 호출되면 유입된 데이터는 해당 데몬의 캐시 슬롯에만 반영되며, **오직 업데이트된 데몬이 현재 활성화된 탭과 일치할 때에만** 화면 헤더 영역을 갱신 렌더링합니다.
+3. **통합 재기동 제어**:
+   - 공통 헤더 영역의 "데몬 재기동" 버튼 클릭 시, 현재 활성화된(선택된) 탭을 감지하여 각 서브 뷰의 재기동 핸들러(`restartCollectorDaemon`, `restartStrategyDaemon`, `restartEvaluationDaemon`, `restartCleanupDaemon`)를 분기 실행합니다.
+   - 비동기 재기동 과정에서 이전 PID/기동시각과의 대조 검증을 수행하여 물리적 재생성을 확인한 후 UI를 정상 복구합니다.
 

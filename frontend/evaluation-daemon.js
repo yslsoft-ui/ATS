@@ -37,6 +37,7 @@ const EvaluationDaemonView = (() => {
     let currentPid = null;
     let currentDaemonStartedAt = 0;
     let isStaleState = false;
+    let currentRssMb = 0;
 
     // 모니터링 관련 임계값 설정
     let monitoringConfig = {
@@ -277,15 +278,10 @@ const EvaluationDaemonView = (() => {
      */
     function checkStaleStatus() {
         const now = Date.now();
-        const badge = document.getElementById('evaluation-stale-badge');
 
         const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
 
         if (isDaemonStale) {
-            if (badge) {
-                badge.innerText = "연결 끊김";
-                badge.style.display = "inline-block";
-            }
             if (!isStaleState) {
                 isStaleState = true;
                 console.warn("[EvaluationDaemonView] Evaluation daemon offline.");
@@ -294,9 +290,6 @@ const EvaluationDaemonView = (() => {
                 });
             }
         } else {
-            if (badge) {
-                badge.style.display = "none";
-            }
             if (isStaleState) {
                 isStaleState = false;
                 console.log("[EvaluationDaemonView] Evaluation daemon online.");
@@ -304,6 +297,20 @@ const EvaluationDaemonView = (() => {
                     el.style.opacity = '1';
                 });
             }
+        }
+
+        // 상단 공통 UI에 동기화
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('evaluation', {
+                pid: currentPid,
+                startedAtFormatted: currentDaemonStartedAt ? new Date(currentDaemonStartedAt).toLocaleString() : '-',
+                heartbeatFormatted: lastDetailHeartbeat ? new Date(lastDetailHeartbeat).toLocaleTimeString() : '-',
+                rssMb: currentRssMb,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
     }
 
@@ -316,20 +323,24 @@ const EvaluationDaemonView = (() => {
         const lifecycle = data.lifecycle || {};
         const stats = data.telemetry || {};
 
-        // 1. 헤더 메타데이터 정보 바인딩
-        const pidEl = document.getElementById('evaluation-pid');
-        const startedEl = document.getElementById('evaluation-started-at');
-        const heartbeatEl = document.getElementById('evaluation-last-heartbeat');
+        // 1. 헤더 메타데이터 정보 바인딩 - 상단 공통 UI 위임
+        if (lifecycle.pid) currentPid = lifecycle.pid;
+        if (lifecycle.started_at) currentDaemonStartedAt = lifecycle.started_at;
+        if (lifecycle.rss_mb) currentRssMb = lifecycle.rss_mb;
 
-        if (pidEl) pidEl.innerText = lifecycle.pid || '-';
-        if (startedEl) {
-            startedEl.innerText = lifecycle.started_at 
-                ? new Date(lifecycle.started_at).toLocaleString() 
-                : '-';
-        }
-        if (heartbeatEl) {
-            const updateTime = data.last_updated_at || lifecycle.heartbeat || Date.now();
-            heartbeatEl.innerText = new Date(updateTime).toLocaleTimeString();
+        const updateTime = data.last_updated_at || lifecycle.heartbeat || Date.now();
+        const isDaemonStale = lastDetailHeartbeat === 0 || (Date.now() - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('evaluation', {
+                pid: currentPid,
+                startedAtFormatted: currentDaemonStartedAt ? new Date(currentDaemonStartedAt).toLocaleString() : '-',
+                heartbeatFormatted: new Date(updateTime).toLocaleTimeString(),
+                rssMb: currentRssMb,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
 
         // 2. 5단 진단 카드 메트릭 갱신
@@ -511,11 +522,3 @@ const EvaluationDaemonView = (() => {
 
 // 전역 window 바인딩
 window.EvaluationDaemonView = EvaluationDaemonView;
-
-// 라우터 등록
-if (typeof ViewRouter !== 'undefined') {
-    ViewRouter.registerRoute('evaluation-daemon-view', () => {
-        if (typeof exitExplorerMode === 'function') exitExplorerMode();
-        EvaluationDaemonView.init();
-    });
-}

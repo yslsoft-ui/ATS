@@ -24,6 +24,8 @@ const StrategyDaemonView = (() => {
     let currentPid = null;
     let currentDaemonStartedAt = 0;
     let isStaleState = false;
+    let currentRssMb = 0;
+    let currentCpuUsagePct = 0;
 
     // 모니터링 관련 임계값 설정
     let monitoringConfig = {
@@ -141,15 +143,10 @@ const StrategyDaemonView = (() => {
      */
     function checkStaleStatus() {
         const now = Date.now();
-        const badge = document.getElementById('strategy-stale-badge');
 
         const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
 
         if (isDaemonStale) {
-            if (badge) {
-                badge.innerText = "연결 끊김";
-                badge.style.display = "inline-block";
-            }
             if (!isStaleState) {
                 isStaleState = true;
                 console.warn("[StrategyDaemonView] Strategy daemon seems to be offline (Heartbeat stale).");
@@ -158,9 +155,6 @@ const StrategyDaemonView = (() => {
                 });
             }
         } else {
-            if (badge) {
-                badge.style.display = "none";
-            }
             if (isStaleState) {
                 isStaleState = false;
                 console.log("[StrategyDaemonView] Strategy daemon is back online.");
@@ -168,6 +162,20 @@ const StrategyDaemonView = (() => {
                     el.style.opacity = '1';
                 });
             }
+        }
+
+        // 상단 공통 UI에 동기화
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('strategy', {
+                pid: currentPid,
+                startedAtFormatted: currentDaemonStartedAt ? new Date(currentDaemonStartedAt).toLocaleString() : '-',
+                heartbeatFormatted: lastDetailHeartbeat ? new Date(lastDetailHeartbeat).toLocaleTimeString() : '-',
+                rssMb: currentRssMb,
+                cpuUsagePct: currentCpuUsagePct,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
     }
 
@@ -184,21 +192,25 @@ const StrategyDaemonView = (() => {
         const guardrailStats = data.guardrail_stats || {};
         const promotionStatus = data.promotion_status || {};
 
-        // 1. 헤더 메타데이터 정보 바인딩
-        const pidEl = document.getElementById('strategy-pid');
-        const startedEl = document.getElementById('strategy-started-at');
-        const heartbeatEl = document.getElementById('strategy-last-heartbeat');
+        // 1. 헤더 메타데이터 정보 바인딩 - 상단 공통 UI 위임
+        if (lifecycle.pid) currentPid = lifecycle.pid;
+        if (lifecycle.started_at) currentDaemonStartedAt = lifecycle.started_at;
+        if (lifecycle.rss_mb) currentRssMb = lifecycle.rss_mb;
+        if (lifecycle.cpu_usage_pct !== undefined) currentCpuUsagePct = lifecycle.cpu_usage_pct;
 
-        if (pidEl) pidEl.innerText = lifecycle.pid || '-';
-        if (startedEl) {
-            startedEl.innerText = lifecycle.started_at 
-                ? new Date(lifecycle.started_at).toLocaleString() 
-                : '-';
-        }
-        if (heartbeatEl) {
-            // REST API 호출 시점 또는 웹소켓 수신 시점
-            const updateTime = data.last_updated_at || lifecycle.heartbeat || Date.now();
-            heartbeatEl.innerText = new Date(updateTime).toLocaleTimeString();
+        const updateTime = data.last_updated_at || lifecycle.heartbeat || Date.now();
+        const isDaemonStale = lastDetailHeartbeat === 0 || (Date.now() - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('strategy', {
+                pid: currentPid,
+                startedAtFormatted: currentDaemonStartedAt ? new Date(currentDaemonStartedAt).toLocaleString() : '-',
+                heartbeatFormatted: new Date(updateTime).toLocaleTimeString(),
+                rssMb: currentRssMb,
+                cpuUsagePct: currentCpuUsagePct,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
 
         // 2. 5단 리소스 및 실시간 판단 메트릭 카드 갱신
@@ -490,11 +502,3 @@ const StrategyDaemonView = (() => {
 
 // 전역 window 바인딩
 window.StrategyDaemonView = StrategyDaemonView;
-
-// 라우터 등록
-if (typeof ViewRouter !== 'undefined') {
-    ViewRouter.registerRoute('strategy-daemon-view', () => {
-        if (typeof exitExplorerMode === 'function') exitExplorerMode();
-        StrategyDaemonView.init();
-    });
-}

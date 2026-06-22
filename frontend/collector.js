@@ -23,6 +23,7 @@ const CollectorView = (() => {
     // 수집 데몬 프로세스 메타데이터 백업 (재기동 확인용)
     let currentPid = null;
     let currentDaemonStartedAt = 0;
+    let currentRssMb = 0;
     
     // 로컬 종목 데이터 및 메타데이터 캐시
     let activeSymbols = {};
@@ -224,16 +225,11 @@ const CollectorView = (() => {
      */
     function checkStaleStatus() {
         const now = Date.now();
-        const badge = document.getElementById('collector-stale-badge');
         
         // 1. 데몬 디테일 하트비트 지연 검증 (설정된 stale_ms 이상 무반응 시 STALE 판정)
         const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
         
         if (isDaemonStale) {
-            if (badge) {
-                badge.innerText = "연결 끊김";
-                badge.style.display = "inline-block";
-            }
             if (!isStaleState) {
                 isStaleState = true;
                 console.warn("[CollectorView] Collector daemon seems to be offline (Heartbeat stale).");
@@ -243,9 +239,6 @@ const CollectorView = (() => {
                 });
             }
         } else {
-            if (badge) {
-                badge.style.display = "none";
-            }
             if (isStaleState) {
                 isStaleState = false;
                 console.log("[CollectorView] Collector daemon is back online.");
@@ -253,6 +246,20 @@ const CollectorView = (() => {
                     el.style.opacity = '1';
                 });
             }
+        }
+
+        // 상단 공통 UI에 동기화
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('collector', {
+                pid: currentPid,
+                startedAtFormatted: currentDaemonStartedAt ? new Date(currentDaemonStartedAt).toLocaleString() : '-',
+                heartbeatFormatted: lastDetailHeartbeat ? new Date(lastDetailHeartbeat).toLocaleTimeString() : '-',
+                rssMb: currentRssMb,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
 
         // 2. 거래소별 종목 동기화 만료 및 버전 불일치 배너 노출 체크
@@ -299,21 +306,23 @@ const CollectorView = (() => {
         const detail = data.daemon_detail || {};
         const queues = detail.queues || {};
         
-        // 1. 헤더 메타데이터 정보 바인딩
-        const pidEl = document.getElementById('collector-pid');
-        const startedEl = document.getElementById('collector-started-at');
-        const heartbeatEl = document.getElementById('collector-last-heartbeat');
-
-        if (pidEl) pidEl.innerText = detail.source_pid || '-';
-        if (startedEl) {
-            startedEl.innerText = detail.daemon_started_at 
-                ? new Date(detail.daemon_started_at).toLocaleString() 
-                : '-';
+        // 1. 헤더 메타데이터 정보 바인딩 - 상단 공통 UI 위임
+        if (detail.memory) {
+            currentRssMb = detail.memory.rss_mb || 0;
         }
-        if (heartbeatEl) {
-            heartbeatEl.innerText = detail.synced_at 
-                ? new Date(detail.synced_at).toLocaleTimeString() 
-                : '-';
+
+        const isDaemonStale = lastDetailHeartbeat === 0 || (Date.now() - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('collector', {
+                pid: detail.source_pid || null,
+                startedAtFormatted: detail.daemon_started_at ? new Date(detail.daemon_started_at).toLocaleString() : '-',
+                heartbeatFormatted: detail.synced_at ? new Date(detail.synced_at).toLocaleTimeString() : '-',
+                rssMb: currentRssMb,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : 'ACTIVE'
+            });
         }
 
         // 2. 큐 리소스 상태 카드 갱신 (사용률 및 경고 스타일 클래스 바인딩)
@@ -920,11 +929,3 @@ const CollectorView = (() => {
 
 // 전역 window 바인딩
 window.CollectorView = CollectorView;
-
-// 라우터 등록
-if (typeof ViewRouter !== 'undefined') {
-    ViewRouter.registerRoute('collector-view', () => {
-        if (typeof exitExplorerMode === 'function') exitExplorerMode();
-        CollectorView.init();
-    });
-}

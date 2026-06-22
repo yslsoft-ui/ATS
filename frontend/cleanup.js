@@ -11,6 +11,7 @@ const CleanupView = (() => {
     // stale 감지용 상태 변수
     let staleCheckInterval = null;
     let lastDetailHeartbeat = 0;
+    let currentStatus = null;
 
     const monitoringConfig = {
         daemon_detail_stale_ms: 15000
@@ -57,15 +58,19 @@ const CleanupView = (() => {
      */
     function checkStaleStatus() {
         const now = Date.now();
-        const badge = document.getElementById('cleanup-stale-badge');
-        if (!badge) return;
-
         const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
 
-        if (isDaemonStale) {
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
+        if (typeof DaemonMonitoringView !== 'undefined' && currentStatus) {
+            DaemonMonitoringView.updateSharedHeader('cleanup', {
+                pid: currentStatus.pid || null,
+                startedAtFormatted: formatTimestamp(currentStatus.start_time),
+                heartbeatFormatted: currentStatus.timestamp ? new Date(currentStatus.timestamp * 1000).toLocaleTimeString() : '-',
+                rssMb: currentStatus.rss_mb || 0,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : currentStatus.cleanup_state
+            });
         }
     }
 
@@ -91,8 +96,9 @@ const CleanupView = (() => {
                 dateInput.value = defaultDate.toISOString().split('T')[0];
             }
             // change 이벤트 바인딩 (최초 1회 보장 처리를 위해 제거 후 재등록)
-            dateInput.replaceWith(dateInput.cloneNode(true));
-            document.getElementById('input-cleanup-date').addEventListener('change', previewCleanup);
+            const newDateInput = dateInput.cloneNode(true);
+            dateInput.replaceWith(newDateInput);
+            newDateInput.addEventListener('change', previewCleanup);
         }
 
         // 2. 초기 1회 REST API로 현재 상태 및 감사 이력 로드
@@ -104,12 +110,14 @@ const CleanupView = (() => {
         const runBtn = document.getElementById('btn-cleanup-run');
 
         if (restartBtn) {
-            restartBtn.replaceWith(restartBtn.cloneNode(true));
-            document.getElementById('btn-cleanup-restart-daemon').addEventListener('click', restartCleanupDaemon);
+            const newRestartBtn = restartBtn.cloneNode(true);
+            restartBtn.replaceWith(newRestartBtn);
+            newRestartBtn.addEventListener('click', restartCleanupDaemon);
         }
         if (runBtn) {
-            runBtn.replaceWith(runBtn.cloneNode(true));
-            document.getElementById('btn-cleanup-run').addEventListener('click', runCleanup);
+            const newRunBtn = runBtn.cloneNode(true);
+            runBtn.replaceWith(newRunBtn);
+            newRunBtn.addEventListener('click', runCleanup);
         }
 
         // 4. 초기 구동 시 해당 기본 날짜 기준 틱 예상량 자동 1회 조회
@@ -238,49 +246,22 @@ const CleanupView = (() => {
     function renderStatus(status) {
         if (!status) return;
 
-        // 1. 상태 뱃지 업데이트
-        const badge = document.getElementById('cleanup-state-badge');
-        if (badge) {
-            badge.innerText = status.cleanup_state;
-            
-            // 상태값에 따른 Harmonious Color 매핑
-            badge.style.borderRadius = '6px';
-            badge.style.padding = '4px 10px';
-            badge.style.fontWeight = 'bold';
-            
-            if (status.cleanup_state === 'ACTIVE') {
-                badge.style.background = 'rgba(16, 185, 129, 0.2)'; // Emerald Green
-                badge.style.color = '#10B981';
-            } else if (status.cleanup_state === 'PAUSED') {
-                badge.style.background = 'rgba(100, 116, 139, 0.2)'; // Slate Gray
-                badge.style.color = '#94A3B8';
-            } else if (status.cleanup_state === 'RUNNING_ONCE') {
-                badge.style.background = 'rgba(0, 114, 255, 0.2)'; // Vibrant Blue
-                badge.style.color = '#38BDF8';
-            } else if (status.cleanup_state === 'ERROR') {
-                badge.style.background = 'rgba(255, 75, 75, 0.2)'; // Vibrant Red
-                badge.style.color = '#FF4B4B';
-            }
-        }
-
-        // 2. 데몬 PID 및 기동시각, 상태갱신, 리소스 갱신
+        currentStatus = status;
         lastDetailHeartbeat = Date.now();
 
-        const cleanupPid = document.getElementById('cleanup-pid');
-        if (cleanupPid) {
-            cleanupPid.innerText = status.pid || '-';
-        }
+        const isDaemonStale = lastDetailHeartbeat === 0 || (Date.now() - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
 
-        const cleanupStartedAt = document.getElementById('cleanup-started-at');
-        if (cleanupStartedAt) {
-            cleanupStartedAt.innerText = formatTimestamp(status.start_time);
-        }
-
-        const cleanupLastHeartbeat = document.getElementById('cleanup-last-heartbeat');
-        if (cleanupLastHeartbeat) {
-            cleanupLastHeartbeat.innerText = (status.timestamp && status.timestamp > 0)
-                ? new Date(status.timestamp * 1000).toLocaleTimeString()
-                : '-';
+        if (typeof DaemonMonitoringView !== 'undefined') {
+            DaemonMonitoringView.updateSharedHeader('cleanup', {
+                pid: status.pid || null,
+                startedAtFormatted: formatTimestamp(status.start_time),
+                heartbeatFormatted: status.timestamp ? new Date(status.timestamp * 1000).toLocaleTimeString() : '-',
+                rssMb: status.rss_mb || 0,
+                cpuUsagePct: null,
+                isStale: isDaemonStale,
+                staleReason: isDaemonStale ? "연결 끊김" : null,
+                state: isDaemonStale ? 'ERROR' : status.cleanup_state
+            });
         }
 
         const cleanupMemory = document.getElementById('res-val-cleanup-memory');
