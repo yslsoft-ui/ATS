@@ -180,6 +180,44 @@ async def get_planned_events(
         raise HTTPException(status_code=500, detail=f"Internal database error: {e}")
 
 
+@router.delete("/market/planned-events/{event_id}")
+async def delete_planned_event(
+    request: Request,
+    event_id: int
+):
+    """지정한 상장 및 상장폐지 예정 이벤트를 안전하게 삭제합니다."""
+    system = request.app.state.system
+    try:
+        # 먼저 해당 이벤트가 존재하는지 상태와 함께 조회
+        events = await system.repository.get_planned_asset_events(event_id=event_id)
+        if not events:
+            raise HTTPException(status_code=404, detail="Planned event not found.")
+        
+        event = events[0]
+        if event["status"] != "PLANNED":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot delete event in '{event['status']}' status. Only 'PLANNED' events can be deleted."
+            )
+            
+        success = await system.repository.delete_planned_event(event_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Planned event not found or already deleted.")
+            
+        # 삭제 시 로깅
+        logger.info(
+            f"[delete_planned_event] Planned event deleted: ID={event_id}, "
+            f"exchange={event.get('exchange_id')}, symbol={event.get('symbol')}, "
+            f"type={event.get('event_type')}, scheduled_at={event.get('scheduled_at')}"
+        )
+        return {"status": "success", "message": f"Planned event {event_id} deleted successfully."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[delete_planned_event] Failed to delete planned event {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Internal database error: {e}")
+
+
 @router.get("/market/ranking/types")
 async def get_ranking_types():
     """12종 순위 분석 항목의 제목, 설명, 연동할 TR_ID 목록을 반환합니다."""

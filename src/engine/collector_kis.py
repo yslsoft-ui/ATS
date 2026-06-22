@@ -302,10 +302,31 @@ class KisCollector(BaseCollector):
         start_time_str = hours_config.get('start_time', '08:30')
         end_time_str = hours_config.get('end_time', '18:10')
 
+        # 1. 주말 및 영업시간 기본 체크
         if not MarketHours.is_krx_open(start_time_str=start_time_str, end_time_str=end_time_str):
             wait_sec = MarketHours.time_until_open('kis', start_time_str=start_time_str)
             logger.info(f"Market is closed. KisCollector waiting for {wait_sec/3600:.1f} hours...")
             return min(wait_sec, 3600.0)
+
+        # 2. 공휴일/휴장일 실시간 API 체크 (CredentialProvider 활용)
+        from datetime import datetime, timedelta, timezone
+        kst = timezone(timedelta(hours=9))
+        now_kst = datetime.now(kst)
+        today_str = now_kst.strftime("%Y%m%d")
+
+        try:
+            is_open = await self.cred_provider.check_kis_open_day(today_str)
+            if not is_open:
+                # 오늘 남은 시간(익일 00:00 KST)까지 연결을 유예합니다.
+                tomorrow = (now_kst + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+                wait_sec = (tomorrow - now_kst).total_seconds()
+                logger.info(f"[KisCollector] 오늘({now_kst.strftime('%Y-%m-%d')})은 KIS 휴장일입니다. 익일 00:00시까지 연결을 유예합니다 ({wait_sec/3600:.1f}시간 대기).")
+                return wait_sec
+        except Exception as e:
+            # 수집기 데몬 루프는 API 호출 실패로 중단(폭사)되지 않고 60초 대기 후 안전하게 재시도합니다.
+            logger.error(f"[KisCollector] KIS 휴장일 확인 실패로 60초 동안 수집 연결을 일시 유예합니다: {e}")
+            return 60.0
+
         return 0.0
 
     async def _prepare_connection(self, config: Dict[str, Any]) -> bool:

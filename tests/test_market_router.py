@@ -164,3 +164,69 @@ async def test_kis_reservation_order_routing_and_validation(temp_db):
     finally:
         app.state.system.db_path = old_db_path
         app.state.system.cred_provider = old_cred_provider
+
+
+@pytest.mark.asyncio
+async def test_delete_planned_event_routing(temp_db):
+    # 1. 임시 데이터베이스 초기화
+    await init_db(temp_db)
+    
+    # 2. FastAPI app state Mocking 설정
+    old_db_path = app.state.system.db_path
+    app.state.system.db_path = temp_db
+    
+    repo = app.state.system.repository
+    old_repo_db_path = repo.db_path
+    repo.db_path = temp_db
+    
+    client = TestClient(app)
+    
+    try:
+        # 3. 테스트용 예정 이벤트 삽입
+        event_id = await repo.insert_planned_asset_event(
+            exchange_id='upbit',
+            symbol='MOCK',
+            event_type='listing',
+            scheduled_at='2026-06-30 12:00:00',
+            notice_url='https://upbit.com/notice/mock'
+        )
+        assert event_id > 0
+        
+        # 4. GET API로 조회 검증
+        response = client.get("/market/planned-events?status=PLANNED")
+        assert response.status_code == 200
+        events = response.json()
+        assert any(ev['id'] == event_id for ev in events)
+        
+        # 5. DELETE API로 삭제 실행
+        del_response = client.delete(f"/market/planned-events/{event_id}")
+        assert del_response.status_code == 200
+        assert del_response.json()["status"] == "success"
+        
+        # 6. GET API 재조회 시 삭제 확인
+        response_after = client.get("/market/planned-events?status=PLANNED")
+        assert response_after.status_code == 200
+        events_after = response_after.json()
+        assert not any(ev['id'] == event_id for ev in events_after)
+        
+        # 7. 존재하지 않는 ID 삭제 시도 시 404 반환 검증
+        del_response_fail = client.delete("/market/planned-events/99999")
+        assert del_response_fail.status_code == 404
+
+        # 8. 이미 EXECUTED인 이벤트를 삭제 시도할 때 400 반환 검증
+        event_id_executed = await repo.insert_planned_asset_event(
+            exchange_id='upbit',
+            symbol='MOCK_EXEC',
+            event_type='listing',
+            scheduled_at='2026-06-30 12:00:00',
+            notice_url='https://upbit.com/notice/mock_exec'
+        )
+        assert event_id_executed > 0
+        await repo.update_planned_event_status(event_id_executed, 'EXECUTED')
+        
+        del_response_exec_fail = client.delete(f"/market/planned-events/{event_id_executed}")
+        assert del_response_exec_fail.status_code == 400
+        
+    finally:
+        app.state.system.db_path = old_db_path
+        repo.db_path = old_repo_db_path

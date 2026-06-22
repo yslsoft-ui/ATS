@@ -63,7 +63,7 @@ function formatRate(rate) {
  * @param {string} message - 메시지 내용
  * @param {string} type - 알림 타입 ('success', 'error', 'info')
  */
-function showToast(message, type = 'success', autoClose = true) {
+function showToast(message, type = 'success', autoClose = true, onClose = null) {
     let container = document.getElementById('toast-container');
     if (!container) {
         container = document.createElement('div');
@@ -106,6 +106,13 @@ function showToast(message, type = 'success', autoClose = true) {
     const closeToast = () => {
         toast.style.opacity = '0';
         toast.style.transform = 'translateY(-20px)';
+        if (typeof onClose === 'function') {
+            try {
+                onClose();
+            } catch (e) {
+                console.error("[showToast] onClose callback error:", e);
+            }
+        }
         setTimeout(() => toast.remove(), 300);
     };
 

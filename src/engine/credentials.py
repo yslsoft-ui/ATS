@@ -31,6 +31,7 @@ class CredentialProvider:
         self.kis_token_expires: float = 0
         self.kis_token_last_attempt: float = 0 # 추가: 마지막 시도 시간
         self.kis_approval_key: Optional[str] = None
+        self.kis_open_day_cache: Dict[str, bool] = {}  # 추가: KIS 개장일 조회 캐시 (1일 1회 호출 준수)
         self._initialized = True
         self.session: Optional[aiohttp.ClientSession] = None
         self.last_error: Optional[str] = None
@@ -181,7 +182,75 @@ class CredentialProvider:
             self.last_error = f"KIS Approval Exception: {str(e)}"
             logger.error(self.last_error)
         
-        return None
+    async def check_kis_open_day(self, date_str: str) -> bool:
+        """
+        한국투자증권 휴장일 조회 API(CTCA0903R)를 호출하여 해당 일자가 개장일(opnd_yn == 'Y')인지 확인합니다.
+        메모리 캐시를 적용하여 동일 일자에 대해서는 API를 단 1회만 호출하도록 제어합니다.
+        """
+        if date_str in self.kis_open_day_cache:
+            logger.info(f"Using cached KIS open day status for {date_str}: {self.kis_open_day_cache[date_str]}")
+            return self.kis_open_day_cache[date_str]
+
+        token = await self.get_kis_access_token()
+        if not token:
+            raise ValueError("KIS 토큰 발급에 실패했습니다. (Fail-Fast)")
+
+        kis_config = self.config.get('exchanges', {}).get('kis', {})
+        app_key = str(kis_config.get('app_key', '')).strip()
+        app_secret = str(kis_config.get('app_secret', '')).strip()
+        api_url = str(kis_config.get('api_url', 'https://openapi.koreainvestment.com:9443')).strip()
+
+        if not app_key or not app_secret:
+            raise ValueError("KIS 인증 정보(app_key/app_secret)가 누락되었습니다. (Fail-Fast)")
+
+        url = f"{api_url}/uapi/domestic-stock/v1/quotations/chk-holiday"
+        headers = {
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {token}",
+            "appkey": app_key,
+            "appsecret": app_secret,
+            "tr_id": "CTCA0903R",
+            "custtype": "P"
+        }
+        params = {
+            "BASS_DT": date_str,
+            "CTX_AREA_NK": "",
+            "CTX_AREA_FK": ""
+        }
+
+        try:
+            if not self.session:
+                self.session = aiohttp.ClientSession()
+
+            logger.info(f"Requesting KIS holiday status (CTCA0903R) for date: {date_str}")
+            async with self.session.get(url, headers=headers, params=params) as resp:
+                self.last_status = resp.status
+                if resp.status != 200:
+                    text = await resp.text()
+                    raise ValueError(f"KIS 휴장일조회 API HTTP 에러 ({resp.status}): {text}")
+
+                data = await resp.json()
+                rt_cd = data.get("rt_cd")
+                if rt_cd != "0":
+                    msg = data.get("msg1", "알 수 없는 에러")
+                    raise ValueError(f"KIS 휴장일조회 API 실패 (rt_cd={rt_cd}): {msg}")
+
+                output = data.get("output", [])
+                if not output:
+                    raise ValueError("KIS 휴장일조회 API 응답에 output 데이터가 없습니다. (Fail-Fast)")
+
+                day_info = output[0]
+                opnd_yn = day_info.get("opnd_yn")
+                if opnd_yn is None:
+                    raise ValueError("KIS 휴장일조회 API 응답에 opnd_yn 필드가 없습니다. (Fail-Fast)")
+
+                is_open = (opnd_yn == "Y")
+                self.kis_open_day_cache[date_str] = is_open
+                logger.info(f"Successfully fetched KIS holiday status for {date_str}: opnd_yn={opnd_yn} (is_open={is_open})")
+                return is_open
+        except Exception as e:
+            logger.error(f"KIS 휴장일조회 중 예외 발생: {e}")
+            raise
 
     async def close(self):
         if self.session:

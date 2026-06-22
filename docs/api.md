@@ -183,6 +183,18 @@
     ]
     ```
 
+- **`DELETE /market/planned-events/{event_id}`**
+  - **설명**: 등록된 예정 이벤트(`PLANNED` 상태)를 취소(삭제)합니다. 이미 실행된(`EXECUTED`) 이벤트는 삭제할 수 없습니다 (400 Bad Request).
+  - **Path Parameters**:
+    - `event_id` (필수): 삭제할 예정 이벤트의 고유 ID.
+  - **응답 (JSON)**:
+    ```json
+    {
+      "status": "success",
+      "message": "Planned event deleted successfully."
+    }
+    ```
+
 - **`GET /candles?exchange={exchange_id}&symbol={symbol}&interval={seconds}&limit={count}&start_ts={seconds}&end_ts={seconds}`**
   - **설명**: 특정 종목의 OHLCV 캔들스틱 목록을 반환합니다.
     - **60초 미만 저분봉(1초, 3초, 5초 등) 지원:** 저분봉 요청 시 DB에 캔들을 항시 쓰지 않고, 요청이 들어온 시점에 체결(`trades`) 테이블의 Raw 틱데이터를 디스크로부터 읽어 메모리 상에서 초 단위로 실시간 즉석 조립(Aggregation)하여 반환합니다.

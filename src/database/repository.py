@@ -1113,9 +1113,10 @@ class BaseTradingRepository(abc.ABC):
     async def get_planned_asset_events(
         self,
         status: Optional[str] = None,
-        exchange_id: Optional[str] = None
+        exchange_id: Optional[str] = None,
+        event_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """특정 상태 및 거래소의 예정 이벤트 목록을 조회합니다."""
+        """특정 상태, 거래소, 또는 ID의 예정 이벤트 목록을 조회합니다."""
         pass
 
     @abc.abstractmethod
@@ -1133,6 +1134,14 @@ class BaseTradingRepository(abc.ABC):
         status: str
     ) -> bool:
         """예정 이벤트의 진행 상태를 업데이트합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def delete_planned_event(
+        self,
+        event_id: int
+    ) -> bool:
+        """지정된 ID의 예정 이벤트를 삭제합니다."""
         pass
 
     @abc.abstractmethod
@@ -2523,7 +2532,8 @@ class SqliteTradingRepository(BaseTradingRepository):
     async def get_planned_asset_events(
         self,
         status: Optional[str] = None,
-        exchange_id: Optional[str] = None
+        exchange_id: Optional[str] = None,
+        event_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
             query = "SELECT * FROM planned_asset_events WHERE 1=1"
@@ -2534,6 +2544,9 @@ class SqliteTradingRepository(BaseTradingRepository):
             if exchange_id:
                 query += " AND exchange_id = ?"
                 params.append(exchange_id)
+            if event_id is not None:
+                query += " AND id = ?"
+                params.append(event_id)
             query += " ORDER BY scheduled_at ASC"
             async with db.execute(query, params) as cursor:
                 rows = await cursor.fetchall()
@@ -2565,6 +2578,18 @@ class SqliteTradingRepository(BaseTradingRepository):
                 SET status = ?, updated_at = datetime('now', 'localtime')
                 WHERE id = ?
             ''', (status, event_id))
+            await db.commit()
+            return cursor.rowcount > 0
+
+    async def delete_planned_event(
+        self,
+        event_id: int
+    ) -> bool:
+        async with get_db_conn(self.db_path) as db:
+            cursor = await db.execute('''
+                DELETE FROM planned_asset_events 
+                WHERE id = ? AND status = 'PLANNED'
+            ''', (event_id,))
             await db.commit()
             return cursor.rowcount > 0
 
@@ -3326,13 +3351,16 @@ class InMemoryTradingRepository(BaseTradingRepository):
     async def get_planned_asset_events(
         self,
         status: Optional[str] = None,
-        exchange_id: Optional[str] = None
+        exchange_id: Optional[str] = None,
+        event_id: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         res = []
         for ev in self.planned_asset_events:
             if status and ev["status"] != status:
                 continue
             if exchange_id and ev["exchange_id"] != exchange_id:
+                continue
+            if event_id is not None and ev["id"] != event_id:
                 continue
             res.append(dict(ev))
         res.sort(key=lambda x: x["scheduled_at"])
@@ -3361,6 +3389,16 @@ class InMemoryTradingRepository(BaseTradingRepository):
                 ev["status"] = status
                 import datetime
                 ev["updated_at"] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                return True
+        return False
+
+    async def delete_planned_event(
+        self,
+        event_id: int
+    ) -> bool:
+        for i, ev in enumerate(self.planned_asset_events):
+            if ev["id"] == event_id and ev["status"] == "PLANNED":
+                self.planned_asset_events.pop(i)
                 return True
         return False
 

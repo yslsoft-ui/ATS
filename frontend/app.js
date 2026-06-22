@@ -811,6 +811,9 @@ async function init() {
     if (typeof checkUpcomingAssetEvents === 'function') {
         checkUpcomingAssetEvents();
     }
+    if (typeof checkMissedAssetEvents === 'function') {
+        checkMissedAssetEvents();
+    }
 }
 
 

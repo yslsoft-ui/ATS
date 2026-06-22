@@ -423,6 +423,15 @@ const APIClient = (() => {
             if (exchangeId) params.push(`exchange_id=${exchangeId}`);
             if (params.length > 0) url += `?${params.join('&')}`;
             return _fetchAPI(url);
+        },
+
+        /**
+         * 지정된 ID의 예정 이벤트를 삭제
+         */
+        deletePlannedEvent: (eventId) => {
+            return _fetchAPI(`/market/planned-events/${eventId}`, {
+                method: 'DELETE'
+            });
         }
     };
 })();
