@@ -59,7 +59,9 @@ async def get_cleanup_status(request: Request):
             "next_cleanup_target_trades_cutoff": 0,
             "next_cleanup_target_candles_cutoff": 0,
             "pid": 0,
-            "start_time": 0
+            "start_time": 0,
+            "timestamp": 0,
+            "rss_mb": 0.0
         }
     return status
 

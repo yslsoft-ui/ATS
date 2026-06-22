@@ -278,12 +278,14 @@ const CleanupView = (() => {
 
         const cleanupLastHeartbeat = document.getElementById('cleanup-last-heartbeat');
         if (cleanupLastHeartbeat) {
-            cleanupLastHeartbeat.innerText = new Date().toLocaleTimeString();
+            cleanupLastHeartbeat.innerText = (status.timestamp && status.timestamp > 0)
+                ? new Date(status.timestamp * 1000).toLocaleTimeString()
+                : '-';
         }
 
         const cleanupMemory = document.getElementById('res-val-cleanup-memory');
         if (cleanupMemory) {
-            cleanupMemory.innerText = (status.rss_mb !== undefined && status.rss_mb !== null)
+            cleanupMemory.innerText = (status.rss_mb !== undefined && status.rss_mb !== null && status.rss_mb > 0)
                 ? `${status.rss_mb.toFixed(2)} MB`
                 : '- MB';
         }
