@@ -102,28 +102,6 @@ async def zmq_listener_loop():
                 elif data.get('type') == 'collector_daemon_detail':
                     data["synced_at"] = int(time.time() * 1000)
                     system.collector_daemon_detail = data.copy()
-                    
-                    # symbols_version 불일치 감지 및 10초 쿨다운 적용 자동 재동기화 트리거
-                    daemon_versions = data.get("symbols_version", {})
-                    for exch, daemon_ver in daemon_versions.items():
-                        cached_ver = system.collector_active_symbols.get(exch, {}).get("symbols_version")
-                        if cached_ver is not None and cached_ver != daemon_ver:
-                            now_ms = int(time.time() * 1000)
-                            # 동적으로 거래소 쿨다운 관리
-                            last_req_time = getattr(app.state, 'last_request_symbols_sync_time', {}).get(exch, 0)
-                            cooldown_ms = system.config_manager.get_monitoring_config()["request_symbols_sync_cooldown_ms"]
-                            if now_ms - last_req_time > cooldown_ms:
-                                if not hasattr(app.state, 'last_request_symbols_sync_time'):
-                                    app.state.last_request_symbols_sync_time = {}
-                                app.state.last_request_symbols_sync_time[exch] = now_ms
-                                
-                                # collector_control 토픽으로 직접 request_symbols_sync 퍼블리싱
-                                if hasattr(app, 'state') and hasattr(app.state, 'control_publisher'):
-                                    logger.warning(f"[Web ZMQ Listener] {exch} 종목 버전 불일치 감지 (로컬: {cached_ver} vs 데몬: {daemon_ver}). 재동기화 요청 송출.")
-                                    await app.state.control_publisher.publish("collector_control", {
-                                        "type": "request_symbols_sync",
-                                        "exchange_id": exch
-                                    })
                 
                 # 실시간 수집기 상태 패킷 수신 시 캐시 업데이트
                 elif data.get('type') == 'collector_status':

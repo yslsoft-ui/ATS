@@ -262,40 +262,10 @@ const CollectorView = (() => {
             });
         }
 
-        // 2. 거래소별 종목 동기화 만료 및 버전 불일치 배너 노출 체크
-        let anySyncIssue = false;
-        let issueMsg = "";
-        
-        for (const [exch, meta] of Object.entries(activeSymbolsMetadata)) {
-            const ageMs = meta.synced_at ? (now - meta.synced_at) : 999999;
-            const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
-            
-            // 데몬 측 캐시 버전 대조
-            const daemonVer = daemonSymbolsVersions[exch] || 1;
-            const cachedVer = meta.symbols_version || 0;
-            const isMismatch = daemonVer !== cachedVer;
-
-            const warningLoader = document.getElementById(`sync-pending-${exch}`);
-            if (warningLoader) {
-                if (isSymStale || isMismatch) {
-                    warningLoader.style.display = 'flex';
-                    anySyncIssue = true;
-                    issueMsg = `[${exch.toUpperCase()}] 종목 동기화 대기 중... (데몬버전: ${daemonVer} / 로컬버전: ${cachedVer})`;
-                } else {
-                    warningLoader.style.display = 'none';
-                }
-            }
-        }
-
+        // 2. 거래소별 종목 동기화 만료 및 버전 불일치 배너 노출 체크 제거 (DB 직접 조회 방식 전환)
         const banner = document.getElementById('collector-sync-warning-banner');
-        const bannerMsg = document.getElementById('collector-sync-warning-msg');
-        if (banner && bannerMsg) {
-            if (anySyncIssue) {
-                bannerMsg.innerText = issueMsg || "거래소 종목 목록을 동기화하는 중입니다. 잠시만 기다려 주십시오...";
-                banner.style.display = 'flex';
-            } else {
-                banner.style.display = 'none';
-            }
+        if (banner) {
+            banner.style.display = 'none';
         }
     }
 
@@ -483,16 +453,7 @@ const CollectorView = (() => {
             }
         }
 
-        // 2. 동기화 대기 플래그 확인
-        const meta = activeSymbolsMetadata[exch] || {};
-        const now = Date.now();
-        const ageMs = meta.synced_at ? (now - meta.synced_at) : 999999;
-        const isSymStale = ageMs > monitoringConfig.active_symbols_stale_ms;
-        
-        const daemonVer = daemonSymbolsVersions[exch] || 1;
-        const cachedVer = meta.symbols_version || 0;
-        const isMismatch = daemonVer !== cachedVer;
-        const isSyncPending = isSymStale || isMismatch;
+        // 2. 동기화 대기 플래그 확인 제거 (DB 직접 조회 방식)
 
         // 3. 제어 펜딩 여부 확인 (스피너 로딩 스켈레톤 적용용)
         const isPending = isCommandPending(exch);
@@ -573,11 +534,6 @@ const CollectorView = (() => {
                         <strong>⚠️ 에러 발생:</strong> ${lastError}
                     </div>
                 ` : ''}
-
-                <!-- 동기화 대기용 로더 -->
-                <div id="sync-pending-${exch}" style="display: ${isSyncPending ? 'flex' : 'none'}; align-items: center; justify-content: center; gap: 8px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); color: #F59E0B; padding: 8px; border-radius: 6px; margin-bottom: 15px; font-size: 0.78rem; font-weight: bold;">
-                    <span class="spinner-small"></span> 동기화 대기 중...
-                </div>
 
                 <!-- 제어 버튼 영역 -->
                 <div style="display: flex; gap: 8px; margin-top: auto;">

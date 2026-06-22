@@ -540,8 +540,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/collector.js": {
-    "mtime": 1782140160.7061448,
-    "ast_hash": "f929cbb18a06b83815efd616e1a5f8f8",
+    "mtime": 1782143857.5880136,
+    "ast_hash": "7ca07f21dfdd3e2cc16dbb9d003754d3",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/cleanup.js": {
@@ -1040,8 +1040,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/main.py": {
-    "mtime": 1782107029.9758387,
-    "ast_hash": "36a33c66691ca57224200c1013a7a98a",
+    "mtime": 1782143828.0914805,
+    "ast_hash": "51330fedf37d916eb9865d009e263da3",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/strategy.py": {
@@ -1060,8 +1060,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/collector.py": {
-    "mtime": 1781324939.410526,
-    "ast_hash": "2332f5441f0fe9a4750cb0b22f371cf3",
+    "mtime": 1782143821.0593536,
+    "ast_hash": "b2d4aec3f377baa7b72ce511f191169a",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/telemetry.py": {
@@ -1105,8 +1105,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/repository.py": {
-    "mtime": 1782107359.7582786,
-    "ast_hash": "1283f60c4c1987d4646f94213c0bb1ab",
+    "mtime": 1782143732.0057445,
+    "ast_hash": "4e2898e86abec6bbe09e9df2e8108beb",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/database/__init__.py": {
@@ -1360,8 +1360,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_collector_detail.py": {
-    "mtime": 1782089751.3397079,
-    "ast_hash": "e97950d52e67b1cc3991bface4cfca51",
+    "mtime": 1782147272.513821,
+    "ast_hash": "65b014a71b96d265ac3f10d4e6e9b560",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_girs_shadow.py": {
@@ -1510,8 +1510,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1782101821.9437742,
-    "ast_hash": "45fd42a935a65a5e52b949cdad3e8d46",
+    "mtime": 1782147299.6863155,
+    "ast_hash": "beb7641745a4b00ad041cb20b8c5f056",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {

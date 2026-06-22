@@ -41,7 +41,7 @@
   - **응답 (JSON)**: `{"message": "Collector daemon restart signal published successfully"}`
 
 - **`GET /collector/daemon-detail`**
-  - **설명**: 수집기 데몬의 실시간 가공 처리 큐 상태, 거래소별 메타데이터, 메모리, 매퍼 캐시 수 및 정합성 유효성을 진단하여 반환합니다.
+  - **설명**: 수집기 데몬의 실시간 가공 처리 큐 상태, 거래소별 메타데이터, 메모리, 매퍼 캐시 수 및 정합성 유효성을 진단하여 반환합니다. (참고: 버전 체크 기반 ZMQ 동기화 로직 제거 및 DB 직접 조회 개편으로 active_symbols_stale, symbols_version_mismatch, symbols_stale 검사는 더 이상 수행하지 않고 항상 False를 반환합니다.)
   - **응답 (JSON)**:
     ```json
     {
@@ -91,9 +91,9 @@
       },
       "stale_status": {
         "daemon_detail_stale": {"upbit": false},
-        "active_symbols_stale": {"upbit": false},
-        "symbols_version_mismatch": {"upbit": false},
-        "symbols_stale": {"upbit": false}
+        "active_symbols_stale": {"upbit": false},  // DB 직접 조회 개편으로 항상 false 고정
+        "symbols_version_mismatch": {"upbit": false}, // DB 직접 조회 개편으로 항상 false 고정
+        "symbols_stale": {"upbit": false}           // DB 직접 조회 개편으로 항상 false 고정
       },
       "monitoring_config": {
         "daemon_detail_stale_ms": 15000,

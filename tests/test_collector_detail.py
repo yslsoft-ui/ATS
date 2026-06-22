@@ -107,6 +107,9 @@ async def test_daemon_detail_api_endpoint(temp_db):
     old_db_path = system.db_path
     system.db_path = temp_db
     
+    old_repo_db_path = system.repository.db_path
+    system.repository.db_path = temp_db
+    
     # 테스트 전용 상태 캐시 직접 주입
     now_ms = int(time.time() * 1000)
     system.collector_statuses = {
@@ -117,6 +120,16 @@ async def test_daemon_detail_api_endpoint(temp_db):
             "error": None
         }
     }
+    
+    # 0. asset_master 및 exchange_assets 테이블에 활성 자산 추가
+    async with get_db_conn(temp_db) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO asset_master (symbol, korean_name, asset_type) VALUES ('KRW-BTC', '비트코인', 'crypto')"
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO exchange_assets (exchange_id, symbol, is_active) VALUES ('upbit', 'KRW-BTC', 1)"
+        )
+        await db.commit()
     
     # ConfigManager를 통해 설정된 실제 임계 시각을 획득
     monitoring_config = system.config_manager.get_monitoring_config()
@@ -168,9 +181,9 @@ async def test_daemon_detail_api_endpoint(temp_db):
         # 3. stale 및 mismatch 계산 무결성 검증
         stale_status = res_data["stale_status"]
         assert stale_status["daemon_detail_stale"]["upbit"] is True
-        assert stale_status["active_symbols_stale"]["upbit"] is True
-        assert stale_status["symbols_version_mismatch"]["upbit"] is True
-        assert stale_status["symbols_stale"]["upbit"] is True
+        assert stale_status["active_symbols_stale"]["upbit"] is False
+        assert stale_status["symbols_version_mismatch"]["upbit"] is False
+        assert stale_status["symbols_stale"]["upbit"] is False
         
         # 4. defaultdict 제거 및 dict 형변환 안전성 검증
         assert isinstance(res_data["daemon_detail"]["symbols_version"], dict)
@@ -205,3 +218,4 @@ async def test_daemon_detail_api_endpoint(temp_db):
         
     finally:
         system.db_path = old_db_path
+        system.repository.db_path = old_repo_db_path

@@ -150,18 +150,10 @@ async def get_daemon_detail(request: Request):
         detail_synced_at = system.collector_daemon_detail.get("synced_at", 0)
         daemon_detail_stale[exch] = (now_ms - detail_synced_at > detail_stale_ms) if detail_synced_at > 0 else True
         
-        # 2) active_symbols_stale 검증 (30초 정기/동적 동기화 주기, 설정된 stale_ms 이상 수신 지연 시)
-        sym_info = system.collector_active_symbols.get(exch, {})
-        symbols_synced_at = sym_info.get("synced_at", 0)
-        active_symbols_stale[exch] = (now_ms - symbols_synced_at > active_stale_ms) if symbols_synced_at > 0 else True
-        
-        # 3) symbols_version_mismatch 검증 (데몬 측과 웹서버 캐시 버전이 어긋날 시)
-        daemon_ver = system.collector_daemon_detail.get("symbols_version", {}).get(exch)
-        cached_ver = sym_info.get("symbols_version")
-        symbols_version_mismatch[exch] = (daemon_ver is not None and cached_ver != daemon_ver)
-        
-        # 4) symbols_stale 종합 검증 (동기화 지연 또는 버전 불일치 발생 시)
-        symbols_stale[exch] = active_symbols_stale[exch] or symbols_version_mismatch[exch]
+        # 2) active_symbols_stale/mismatch/stale 비활성화 (선택지 2 적용: DB 직접 조회)
+        active_symbols_stale[exch] = False
+        symbols_version_mismatch[exch] = False
+        symbols_stale[exch] = False
         
     # defaultdict 방지용 딕셔너리 안전 정제 처리
     clean_daemon_detail = system.collector_daemon_detail.copy()
@@ -169,17 +161,18 @@ async def get_daemon_detail(request: Request):
         clean_daemon_detail["symbols_version"] = dict(clean_daemon_detail["symbols_version"])
         
     collector_config = system.config_manager.get("collector", {})
+    db_active_symbols = await system.repository.get_active_symbols()
     
     return {
         "daemon_detail": clean_daemon_detail,
-        "active_symbols": {ex: info.get("symbols", []) for ex, info in system.collector_active_symbols.items()},
-        "active_symbols_metadata": {ex: {
-            "synced_at": info.get("synced_at"),
-            "symbols_version": info.get("symbols_version"),
-            "source_pid": info.get("source_pid"),
-            "daemon_started_at": info.get("daemon_started_at"),
-            "age_ms": (now_ms - info.get("synced_at", 0)) if info.get("synced_at") else None
-        } for ex, info in system.collector_active_symbols.items()},
+        "active_symbols": db_active_symbols,
+        "active_symbols_metadata": {exch: {
+            "synced_at": now_ms,
+            "symbols_version": clean_daemon_detail.get("symbols_version", {}).get(exch, 1),
+            "source_pid": clean_daemon_detail.get("source_pid"),
+            "daemon_started_at": clean_daemon_detail.get("daemon_started_at"),
+            "age_ms": 0
+        } for exch in exchanges},
         "stale_status": {
             "daemon_detail_stale": daemon_detail_stale,
             "active_symbols_stale": active_symbols_stale,

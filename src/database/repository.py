@@ -1169,6 +1169,11 @@ class BaseTradingRepository(abc.ABC):
         """asset_master 테이블에 자산이 없을 경우 추가합니다."""
         pass
 
+    @abc.abstractmethod
+    async def get_active_symbols(self) -> Dict[str, List[str]]:
+        """각 거래소별로 DB exchange_assets에서 활성화된(is_active = 1) 종목 목록을 조회하여 반환합니다."""
+        pass
+
 
 
 
@@ -2716,6 +2721,22 @@ class SqliteTradingRepository(BaseTradingRepository):
                 return cursor.rowcount > 0
             return False
 
+    async def get_active_symbols(self) -> Dict[str, List[str]]:
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(
+                "SELECT exchange_id, symbol FROM exchange_assets WHERE is_active = 1"
+            ) as cursor:
+                rows = await cursor.fetchall()
+                result = {}
+                for row in rows:
+                    exch = row['exchange_id']
+                    sym = row['symbol']
+                    result.setdefault(exch, []).append(sym)
+                for exch in ['upbit', 'bithumb', 'kis']:
+                    if exch not in result:
+                        result[exch] = []
+                return result
+
 
 class InMemoryTradingRepository(BaseTradingRepository):
     """
@@ -3531,6 +3552,18 @@ class InMemoryTradingRepository(BaseTradingRepository):
             }
             return True
         return False
+
+    async def get_active_symbols(self) -> Dict[str, List[str]]:
+        result = {}
+        for key, asset in self.exchange_assets.items():
+            if asset.get("is_active") == 1:
+                exch = asset["exchange_id"]
+                sym = asset["symbol"]
+                result.setdefault(exch, []).append(sym)
+        for exch in ['upbit', 'bithumb', 'kis']:
+            if exch not in result:
+                result[exch] = []
+        return result
 
 
 
