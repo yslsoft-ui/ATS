@@ -1057,7 +1057,7 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int, evaluated_at: Optional[int] = None):
         pass
 
     @abc.abstractmethod
@@ -1065,7 +1065,11 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str, evaluated_at: Optional[int] = None):
+        pass
+
+    @abc.abstractmethod
+    async def get_evaluation_telemetry_stats(self, now_ms: int) -> Dict[str, Any]:
         pass
 
     @abc.abstractmethod
@@ -2076,7 +2080,7 @@ class SqliteTradingRepository(BaseTradingRepository):
         async with get_db_conn(self.db_path) as db:
             async with db.execute(
                 "SELECT * FROM proposal_evaluations "
-                "WHERE evaluation_status = 'PENDING' AND baseline_value IS NULL AND (due_at - horizon_value) <= ?",
+                "WHERE evaluation_status = 'PENDING' AND baseline_value IS NULL AND (due_at - horizon_value * 1000) <= ?",
                 (now,)
             ) as cursor:
                 rows = await cursor.fetchall()
@@ -2121,7 +2125,9 @@ class SqliteTradingRepository(BaseTradingRepository):
             )
             await db.commit()
 
-    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int, evaluated_at: Optional[int] = None):
+        if evaluated_at is None:
+            evaluated_at = int(time.time() * 1000)
         async with get_db_conn(self.db_path) as db:
             if retry_count < max_retries:
                 await db.execute(
@@ -2137,10 +2143,12 @@ class SqliteTradingRepository(BaseTradingRepository):
                 await db.execute(
                     "UPDATE proposal_evaluations SET "
                     "evaluation_status = 'ERROR', "
+                    "evaluated_at = ?, "
                     "locked_at = NULL, "
-                    "last_error = ? "
+                    "last_error = ?, "
+                    "retry_count = retry_count + 1 "
                     "WHERE id = ?",
-                    (error_msg, pe_id)
+                    (evaluated_at, error_msg, pe_id)
                 )
             await db.commit()
 
@@ -2153,8 +2161,75 @@ class SqliteTradingRepository(BaseTradingRepository):
                 rows = await cursor.fetchall()
                 return [dict(r) for r in rows]
 
-    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
-        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries)
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str, evaluated_at: Optional[int] = None):
+        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries, evaluated_at)
+
+    async def get_evaluation_telemetry_stats(self, now_ms: int) -> Dict[str, Any]:
+        from datetime import datetime, time as dt_time
+        today_start_dt = datetime.combine(datetime.now().date(), dt_time.min)
+        today_start_ms = int(today_start_dt.timestamp() * 1000)
+
+        async with get_db_conn(self.db_path) as db:
+            # 1. Future Pending / Due Pending
+            async with db.execute(
+                "SELECT "
+                "  SUM(CASE WHEN due_at > ? THEN 1 ELSE 0 END) as future_pending, "
+                "  SUM(CASE WHEN due_at <= ? THEN 1 ELSE 0 END) as due_pending, "
+                "  MAX(? - due_at) as oldest_due_age "
+                "FROM proposal_evaluations WHERE evaluation_status = 'PENDING'",
+                (now_ms, now_ms, now_ms)
+            ) as cursor:
+                row = await cursor.fetchone()
+                future_pending = row["future_pending"] or 0 if row else 0
+                due_pending = row["due_pending"] or 0 if row else 0
+                oldest_due_age = row["oldest_due_age"] or 0 if row else 0
+
+            # 2. Completed / Failed Today
+            async with db.execute(
+                "SELECT "
+                "  SUM(CASE WHEN evaluation_status = 'COMPLETED' AND evaluated_at >= ? THEN 1 ELSE 0 END) as completed_today, "
+                "  SUM(CASE WHEN evaluation_status = 'ERROR' AND evaluated_at >= ? THEN 1 ELSE 0 END) as failed_today "
+                "FROM proposal_evaluations WHERE evaluation_status IN ('COMPLETED', 'ERROR')",
+                (today_start_ms, today_start_ms)
+            ) as cursor:
+                row = await cursor.fetchone()
+                completed_today = row["completed_today"] or 0 if row else 0
+                failed_today = row["failed_today"] or 0 if row else 0
+
+            # 3. Max Lock Age
+            async with db.execute(
+                "SELECT MAX(? - locked_at) as max_lock_age FROM proposal_evaluations "
+                "WHERE evaluation_status = 'EVALUATING' AND locked_at IS NOT NULL",
+                (now_ms,)
+            ) as cursor:
+                row = await cursor.fetchone()
+                max_lock_age = row["max_lock_age"] or 0 if row else 0
+
+            # 4. Manual Jobs (Queued/Running & Today Completed/Failed)
+            async with db.execute(
+                "SELECT "
+                "  SUM(CASE WHEN status IN ('QUEUED', 'RUNNING') THEN 1 ELSE 0 END) as queued_running_jobs, "
+                "  SUM(CASE WHEN status = 'COMPLETED' AND finished_at >= ? THEN 1 ELSE 0 END) as completed_today_jobs, "
+                "  SUM(CASE WHEN status = 'FAILED' AND finished_at >= ? THEN 1 ELSE 0 END) as failed_today_jobs "
+                "FROM proposal_reevaluation_jobs",
+                (today_start_ms, today_start_ms)
+            ) as cursor:
+                row = await cursor.fetchone()
+                queued_running_jobs = row["queued_running_jobs"] or 0 if row else 0
+                completed_today_jobs = row["completed_today_jobs"] or 0 if row else 0
+                failed_today_jobs = row["failed_today_jobs"] or 0 if row else 0
+
+        return {
+            "future_pending": future_pending,
+            "due_pending": due_pending,
+            "oldest_due_age_ms": oldest_due_age,
+            "completed_today": completed_today,
+            "failed_today": failed_today,
+            "max_lock_age_ms": max_lock_age,
+            "manual_jobs_queued_running": queued_running_jobs,
+            "manual_jobs_completed_today": completed_today_jobs,
+            "manual_jobs_failed_today": failed_today_jobs
+        }
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         async with get_db_conn(self.db_path) as db:
@@ -2982,7 +3057,7 @@ class InMemoryTradingRepository(BaseTradingRepository):
         for v in self.proposal_evaluations_v2.values():
             due_at = v.get("due_at", 0)
             hz_val = v.get("horizon_value", 0)
-            if v.get("evaluation_status") == "PENDING" and v.get("baseline_value") is None and (due_at - hz_val) <= now:
+            if v.get("evaluation_status") == "PENDING" and v.get("baseline_value") is None and (due_at - hz_val * 1000) <= now:
                 res.append(dict(v))
         return res
 
@@ -3012,7 +3087,9 @@ class InMemoryTradingRepository(BaseTradingRepository):
             v["trade_count_divergence"] = trade_div
             v["locked_at"] = None
 
-    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int):
+    async def fail_evaluation(self, pe_id: int, error_msg: str, retry_count: int, max_retries: int, evaluated_at: Optional[int] = None):
+        if evaluated_at is None:
+            evaluated_at = int(time.time() * 1000)
         v = self.proposal_evaluations_v2.get(pe_id)
         if v:
             if retry_count < max_retries:
@@ -3022,8 +3099,10 @@ class InMemoryTradingRepository(BaseTradingRepository):
                 v["last_error"] = error_msg
             else:
                 v["evaluation_status"] = "ERROR"
+                v["evaluated_at"] = evaluated_at
                 v["locked_at"] = None
                 v["last_error"] = error_msg
+                v["retry_count"] = v.get("retry_count", 0) + 1
 
     async def get_stale_evaluating_evaluations(self, cutoff: int) -> List[Dict[str, Any]]:
         res = []
@@ -3033,8 +3112,21 @@ class InMemoryTradingRepository(BaseTradingRepository):
                 res.append(dict(v))
         return res
 
-    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str):
-        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries)
+    async def recover_stale_evaluation(self, pe_id: int, retry_count: int, max_retries: int, error_msg: str, evaluated_at: Optional[int] = None):
+        await self.fail_evaluation(pe_id, error_msg, retry_count, max_retries, evaluated_at)
+
+    async def get_evaluation_telemetry_stats(self, now_ms: int) -> Dict[str, Any]:
+        return {
+            "future_pending": 0,
+            "due_pending": 0,
+            "oldest_due_age_ms": 0,
+            "completed_today": 0,
+            "failed_today": 0,
+            "max_lock_age_ms": 0,
+            "manual_jobs_queued_running": 0,
+            "manual_jobs_completed_today": 0,
+            "manual_jobs_failed_today": 0
+        }
 
     async def get_unevaluated_applied_proposals(self) -> List[Dict[str, Any]]:
         props = list(self.strategy_proposals.values())

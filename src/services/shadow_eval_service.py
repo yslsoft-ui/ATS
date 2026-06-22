@@ -4,6 +4,7 @@ import asyncio
 import time
 import json
 import aiosqlite
+import os
 from typing import Dict, Any, List, Tuple
 from src.engine.utils.telemetry import get_logger
 from src.engine.daemon_supervisor import DaemonService
@@ -51,6 +52,12 @@ class ShadowEvaluationService(DaemonService):
         )
         self.current_model_version = model_ver
         self._reeval_event = asyncio.Event()
+        self.telemetry_stats = {}
+        self._last_telemetry_time = 0.0
+        self.daemon_started_at = int(time.time() * 1000)
+        self.source_pid = os.getpid()
+        self.last_error = None
+        self._detail_status_counter = 0
 
     async def start(self):
         logger.info("[ShadowEvaluationService] 서비스 기동 중...")
@@ -117,7 +124,7 @@ class ShadowEvaluationService(DaemonService):
                 pe_id = ev["id"]
                 prop_id = ev["proposal_id"]
                 hz_val = ev.get("horizon_value") or 600
-                start_ts = ev["due_at"] - hz_val
+                start_ts = ev["due_at"] - hz_val * 1000
                 
                 proposal = await self.repo.get_strategy_proposal(prop_id)
                 if not proposal:
@@ -129,7 +136,7 @@ class ShadowEvaluationService(DaemonService):
                 async with get_db_conn(self.db_path) as db:
                     async with db.execute(
                         "SELECT close FROM candles WHERE symbol = ? AND timestamp >= ? ORDER BY timestamp ASC LIMIT 1",
-                        (symbol, start_ts * 1000)
+                        (symbol, start_ts)
                     ) as cur:
                         row = await cur.fetchone()
                 
@@ -141,10 +148,10 @@ class ShadowEvaluationService(DaemonService):
             logger.error(f"[ShadowEvaluationService] baseline 캡처 루틴 중 에러: {e}")
 
     async def _evaluate_record(self, pe_id: int, due_at: int, horizon_name: str, horizon_value: int, proposal_id: int, exchange: str, symbol: str, market_type: str):
-        now = int(time.time())
+        now = int(time.time() * 1000)
         try:
-            # 계산 기간: [due_at - horizon_value, due_at]
-            start_ts = due_at - horizon_value
+            # 계산 기간: [due_at - horizon_value * 1000, due_at]
+            start_ts = due_at - horizon_value * 1000
             end_ts = due_at
             
             # baseline_value, predicted 값들 조회
@@ -168,7 +175,7 @@ class ShadowEvaluationService(DaemonService):
                 async with get_db_conn(self.db_path) as db:
                     async with db.execute(
                         "SELECT close FROM candles WHERE symbol = ? AND timestamp >= ? ORDER BY timestamp ASC LIMIT 1",
-                        (symbol, start_ts * 1000)
+                        (symbol, start_ts)
                     ) as cur:
                         start_row = await cur.fetchone()
                 if start_row and start_row[0] > 0:
@@ -178,7 +185,7 @@ class ShadowEvaluationService(DaemonService):
             async with get_db_conn(self.db_path) as db:
                 async with db.execute(
                     "SELECT close FROM candles WHERE symbol = ? AND timestamp <= ? ORDER BY timestamp DESC LIMIT 1",
-                    (symbol, end_ts * 1000)
+                    (symbol, end_ts)
                 ) as cur:
                     end_row = await cur.fetchone()
             
@@ -195,7 +202,7 @@ class ShadowEvaluationService(DaemonService):
             async with get_db_conn(self.db_path) as db:
                 async with db.execute(
                     "SELECT COUNT(*) FROM trades WHERE symbol = ? AND trade_timestamp BETWEEN ? AND ?",
-                    (symbol, start_ts * 1000, end_ts * 1000)
+                    (symbol, start_ts, end_ts)
                 ) as cur:
                     actual_trades = (await cur.fetchone())[0]
             
@@ -224,15 +231,24 @@ class ShadowEvaluationService(DaemonService):
                 pe_id=pe_id,
                 error_msg=str(calc_ex),
                 retry_count=r_count,
-                max_retries=self.max_retries
+                max_retries=self.max_retries,
+                evaluated_at=now
             )
 
     async def _evaluation_loop(self):
         logger.info("[ShadowEvaluationService] 다중 Horizon 평가 폴러 루프 시작")
         while self._is_running:
             try:
-                now = int(time.time())
+                now = int(time.time() * 1000)
                 
+                # 5초마다 텔레메트리 캐시 갱신
+                if time.time() - self._last_telemetry_time >= 5.0:
+                    try:
+                        self.telemetry_stats = await self.repo.get_evaluation_telemetry_stats(now)
+                        self._last_telemetry_time = time.time()
+                    except Exception as tel_ex:
+                        logger.warning(f"[ShadowEvaluationService] 텔레메트리 갱신 오류: {tel_ex}")
+
                 # 0. 아직 baseline이 없는 pending 대상에 대해 시작 시점이 도달한 경우 baseline 캡처
                 await self._capture_baselines(now)
                 
@@ -287,7 +303,8 @@ class ShadowEvaluationService(DaemonService):
                             pe_id=pe_id,
                             error_msg=str(e),
                             retry_count=retry_count,
-                            max_retries=self.max_retries
+                            max_retries=self.max_retries,
+                            evaluated_at=now
                         )
             except Exception as e:
                 logger.error(f"[ShadowEvaluationService] 평가 루프 중 오류: {e}")
@@ -298,8 +315,8 @@ class ShadowEvaluationService(DaemonService):
         logger.info("[ShadowEvaluationService] stale lock 복구 스캐너 루프 시작")
         while self._is_running:
             try:
-                now = int(time.time())
-                cutoff = now - self.lock_timeout
+                now = int(time.time() * 1000)
+                cutoff = now - self.lock_timeout * 1000
                 
                 # EVALUATING 상태로 락 타임아웃 경과된 stale 레코드 조회
                 stale_evals = await self.repo.get_stale_evaluating_evaluations(cutoff)
@@ -315,7 +332,8 @@ class ShadowEvaluationService(DaemonService):
                         pe_id=pe_id,
                         retry_count=r_count,
                         max_retries=self.max_retries,
-                        error_msg="LOCK_TIMEOUT"
+                        error_msg="LOCK_TIMEOUT",
+                        evaluated_at=now
                     )
             except Exception as e:
                 logger.error(f"[ShadowEvaluationService] Stale Lock 복구 중 오류: {e}")
@@ -338,14 +356,53 @@ class ShadowEvaluationService(DaemonService):
             return True
         return False
 
+    def _get_rss_memory(self) -> float:
+        """/proc/self/status 파일에서 데몬 프로세스의 현재 RSS 메모리(MB)를 안전하게 파싱합니다."""
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            kb = float(parts[1])
+                            return round(kb / 1024.0, 2)
+        except Exception:
+            pass
+        return 0.0
+
     def get_status_payloads(self) -> List[tuple[str, dict]]:
-        return [
+        payloads = [
             ("evaluation_signal", {
                 "type": "shadow_eval_status",
                 "is_running": self._is_running,
-                "poll_interval": self.poll_interval
+                "poll_interval": self.poll_interval,
+                "telemetry": self.telemetry_stats
             })
         ]
+        
+        # 5초 주기로 evaluation_daemon_detail 발행
+        self._detail_status_counter = getattr(self, '_detail_status_counter', 0) + 1
+        if self._detail_status_counter >= 5:
+            self._detail_status_counter = 0
+            
+            uptime = int(time.time() - (self.daemon_started_at / 1000))
+            
+            payloads.append(("evaluation_signal", {
+                "type": "evaluation_daemon_detail",
+                "schema_version": 1,
+                "lifecycle": {
+                    "status": "RUNNING" if self._is_running else "STOPPED",
+                    "pid": self.source_pid,
+                    "started_at": self.daemon_started_at,
+                    "uptime": uptime,
+                    "heartbeat": int(time.time() * 1000),
+                    "rss_mb": self._get_rss_memory(),
+                    "last_error": self.last_error
+                },
+                "telemetry": self.telemetry_stats
+            }))
+            
+        return payloads
 
     async def _reevaluation_jobs_loop(self):
         logger.info("[ShadowEvaluationService] 수동 재평가 Job 폴러 루프 시작")

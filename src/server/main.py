@@ -194,7 +194,12 @@ async def zmq_listener_loop():
                 topic, data = await evaluation_sub.receive()
                 if not topic:
                     continue
-                if data.get('type') in ['shadow_eval_status', 'system_event']:
+                if data.get('type') == 'evaluation_daemon_detail':
+                    import time
+                    data["synced_at"] = int(time.time() * 1000)
+                    system.evaluation_daemon_detail = data.copy()
+
+                if data.get('type') in ['shadow_eval_status', 'evaluation_daemon_detail', 'system_event']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:

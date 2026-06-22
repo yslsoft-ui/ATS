@@ -328,7 +328,7 @@ const StrategyDaemonView = (() => {
                     ? '<span class="badge warning" style="font-size: 0.72rem; padding: 2px 6px;">지연</span>'
                     : '<span class="badge success" style="font-size: 0.72rem; padding: 2px 6px;">정상</span>';
 
-                const latencyStr = eng.decision_latency_ms !== undefined 
+                const latencyStr = (eng.decision_latency_ms !== undefined && eng.decision_latency_ms !== null) 
                     ? `${eng.decision_latency_ms.toFixed(1)} ms`
                     : '-';
 

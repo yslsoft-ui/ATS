@@ -304,6 +304,25 @@ async def _init_db_core(target_path: str):
             WHERE type = 'simulation_ended'
         """)
         await db.commit()
+
+        # proposal_evaluations 시간 컬럼 초 단위 -> ms 단위 마이그레이션
+        await db.execute("""
+            UPDATE proposal_evaluations
+            SET due_at = due_at * 1000
+            WHERE due_at IS NOT NULL AND due_at < 1000000000000
+        """)
+        await db.execute("""
+            UPDATE proposal_evaluations
+            SET evaluated_at = evaluated_at * 1000
+            WHERE evaluated_at IS NOT NULL AND evaluated_at < 1000000000000
+        """)
+        await db.execute("""
+            UPDATE proposal_evaluations
+            SET locked_at = locked_at * 1000
+            WHERE locked_at IS NOT NULL AND locked_at < 1000000000000
+        """)
+        await db.commit()
+    
     
     await seed_initial_assets(target_path)
     logger.info("Database initialization and schema reset complete.")

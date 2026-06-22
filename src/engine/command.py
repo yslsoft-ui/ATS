@@ -23,6 +23,7 @@ class UserCommand(Enum):
     CLEANUP_PREVIEW = "cleanup_preview"
     CLEANUP_RUN_ONCE = "cleanup_run_once"
     CLEANUP_RESTART_DAEMON = "cleanup_restart_daemon"
+    EVALUATION_RESTART_DAEMON = "evaluation_restart_daemon"
 
 class UserCommandDispatcher:
     """
@@ -45,6 +46,7 @@ class UserCommandDispatcher:
         UserCommand.CLEANUP_PREVIEW: "CLEANUP_PREVIEW",
         UserCommand.CLEANUP_RUN_ONCE: "CLEANUP_RUN_ONCE",
         UserCommand.CLEANUP_RESTART_DAEMON: "DAEMON_RESTART_SIGNAL",
+        UserCommand.EVALUATION_RESTART_DAEMON: "DAEMON_RESTART_SIGNAL",
     }
 
     def __init__(
@@ -79,6 +81,7 @@ class UserCommandDispatcher:
             UserCommand.CLEANUP_PREVIEW: self._handle_cleanup_preview,
             UserCommand.CLEANUP_RUN_ONCE: self._handle_cleanup_run_once,
             UserCommand.CLEANUP_RESTART_DAEMON: self._handle_cleanup_restart_daemon,
+            UserCommand.EVALUATION_RESTART_DAEMON: self._handle_evaluation_restart_daemon,
         }
 
     def set_publishers(self, control_publisher, strategy_control_publisher, cleanup_control_publisher=None):
@@ -130,7 +133,7 @@ class UserCommandDispatcher:
         target_id = "system"
         if command in [UserCommand.COLLECTOR_START, UserCommand.COLLECTOR_STOP]:
             target_id = payload.get("exchange", "all")
-        elif command in [UserCommand.COLLECTOR_RESTART_DAEMON, UserCommand.STRATEGY_RESTART_DAEMON, UserCommand.CLEANUP_RESTART_DAEMON]:
+        elif command in [UserCommand.COLLECTOR_RESTART_DAEMON, UserCommand.STRATEGY_RESTART_DAEMON, UserCommand.CLEANUP_RESTART_DAEMON, UserCommand.EVALUATION_RESTART_DAEMON]:
             target_id = payload.get("target", "daemon")
         elif command in [UserCommand.STRATEGY_ENABLE, UserCommand.STRATEGY_DISABLE, UserCommand.STRATEGY_UPDATE_PARAMS]:
             target_id = payload.get("strategy_id", "all")
@@ -155,7 +158,8 @@ class UserCommandDispatcher:
             UserCommand.CLEANUP_STOP: "클린업 자동정리 일시중지",
             UserCommand.CLEANUP_PREVIEW: "클린업 대상 미리보기 조회",
             UserCommand.CLEANUP_RUN_ONCE: "클린업 즉시 실행",
-            UserCommand.CLEANUP_RESTART_DAEMON: "클린업 데몬 재기동 신호 송신"
+            UserCommand.CLEANUP_RESTART_DAEMON: "클린업 데몬 재기동 신호 송신",
+            UserCommand.EVALUATION_RESTART_DAEMON: "평가 데몬 재기동 신호 송신"
         }.get(command, command.value)
 
         msg = f"사용자 요청으로 {cmd_kr} {status_kr} (대상: {target_id.upper()})"
@@ -318,6 +322,14 @@ class UserCommandDispatcher:
         if not self.strategy_control_publisher:
             raise RuntimeError("ZMQ Strategy Control Publisher is not initialized")
         await self.strategy_control_publisher.publish("strategy_control", {"type": "restart_daemon"})
+
+    async def _handle_evaluation_restart_daemon(self, command_id: str, payload: Dict[str, Any]):
+        if not self.strategy_control_publisher:
+            raise RuntimeError("ZMQ Strategy Control Publisher is not initialized")
+        await self.strategy_control_publisher.publish("shadow_eval_control", {
+            "type": "restart_daemon",
+            "command_id": command_id
+        })
 
     async def _handle_portfolio_start(self, command_id: str, payload: Dict[str, Any]):
         initial_cash = payload.get("initial_cash")

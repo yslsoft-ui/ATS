@@ -408,7 +408,7 @@ class ShadowBacktestEngine:
                 
                 async with get_db_conn(self.db_path) as db:
                     for hz in horizons_list:
-                        due_at = calculate_due_at(market_type, hz, int(time.time()))
+                        due_at = calculate_due_at(market_type, hz, int(time.time())) * 1000
                         await db.execute(
                             """
                             INSERT INTO proposal_evaluations (

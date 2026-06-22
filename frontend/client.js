@@ -195,6 +195,30 @@ const APIClient = (() => {
 
 
         /**
+         * 평가 데몬의 상세 모니터링 캐시 조회
+         */
+        fetchEvaluationDaemonDetail: () => _fetchAPI('/api/evaluations/daemon-detail'),
+
+        /**
+         * 최근 사후 평가 목록 조회
+         */
+        fetchEvaluations: (limit = 50) => _fetchAPI(`/api/evaluations?limit=${limit}`),
+
+        /**
+         * 최근 수동 재평가 Job 목록 조회
+         */
+        fetchReevaluationJobsList: (limit = 50) => _fetchAPI(`/api/evaluations/jobs?limit=${limit}`),
+
+        /**
+         * 평가 데몬 프로세스 자체를 자가 재기동
+         */
+        restartEvaluationDaemon: (commandId = '') => {
+            const url = `/api/evaluations/restart-daemon${commandId ? `?command_id=${commandId}` : ''}`;
+            return _fetchAPI(url, { method: 'POST' });
+        },
+
+
+        /**
          * 클린업 데몬 상태 및 설정 조회
          */
         fetchCleanupStatus: () => _fetchAPI('/api/cleanup/status'),

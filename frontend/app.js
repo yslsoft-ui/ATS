@@ -150,6 +150,14 @@ function processTick(tick) {
                 StrategyDaemonView.loadEvents();
             }
         }
+        // [NEW] 평가 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
+        if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'evaluation-daemon-view') {
+            if (typeof EvaluationDaemonView !== 'undefined') {
+                if (typeof EvaluationDaemonView.loadEvents === 'function') EvaluationDaemonView.loadEvents();
+                if (typeof EvaluationDaemonView.loadEvaluationsTable === 'function') EvaluationDaemonView.loadEvaluationsTable();
+                if (typeof EvaluationDaemonView.loadJobsTable === 'function') EvaluationDaemonView.loadJobsTable();
+            }
+        }
         // [NEW] 클린업 데몬 탭이 활성화되어 있다면 감사 로그 즉시 갱신
         if (typeof ViewRouter !== 'undefined' && ViewRouter.getActiveView() === 'cleanup-view') {
             if (typeof CleanupView !== 'undefined' && typeof CleanupView.loadEvents === 'function') {
@@ -163,6 +171,14 @@ function processTick(tick) {
     if (tick.type === 'strategy_daemon_detail') {
         if (typeof StrategyDaemonView !== 'undefined' && typeof StrategyDaemonView.handleDaemonDetail === 'function') {
             StrategyDaemonView.handleDaemonDetail(tick);
+        }
+        return;
+    }
+
+    // [NEW] 실시간 평가 데몬 상세 정보 수신 시 라우팅
+    if (tick.type === 'evaluation_daemon_detail') {
+        if (typeof EvaluationDaemonView !== 'undefined' && typeof EvaluationDaemonView.handleDaemonDetail === 'function') {
+            EvaluationDaemonView.handleDaemonDetail(tick);
         }
         return;
     }

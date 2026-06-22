@@ -818,6 +818,92 @@ async def get_raw_data(object_type: str, object_id: str, request: Request):
         logger.error(f"[Raw Data API] Error fetching raw {object_type} #{object_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/api/evaluations/daemon-detail")
+async def get_evaluation_daemon_detail(request: Request):
+    """평가 데몬의 실시간 텔레메트리, 보정 설정, 메모리, 지연 통계 등을 조회하여 반환합니다."""
+    system = request.app.state.system
+    import time
+    now_ms = int(time.time() * 1000)
+    
+    cached_detail = system.evaluation_daemon_detail.copy() if system.evaluation_daemon_detail else {}
+    
+    monitoring_config = system.config_manager.get_monitoring_config() if hasattr(system, 'config_manager') else {}
+    detail_stale_ms = monitoring_config.get("daemon_detail_stale_ms", 15000)
+    
+    synced_at = cached_detail.get("synced_at", 0)
+    schema_version = cached_detail.get("schema_version", 1)
+    
+    heartbeat_age_ms = (now_ms - synced_at) if synced_at > 0 else None
+    is_stale = (heartbeat_age_ms is None or heartbeat_age_ms > detail_stale_ms)
+    
+    return {
+        "daemon_detail": cached_detail,
+        "last_updated_at": synced_at if synced_at > 0 else None,
+        "heartbeat_age_ms": heartbeat_age_ms,
+        "is_stale": is_stale,
+        "schema_version": schema_version,
+        "monitoring_config": monitoring_config
+    }
+
+@router.get("/api/evaluations")
+async def list_evaluations(request: Request, limit: int = 50):
+    """최근의 사후 평가 목록을 조회하여 반환합니다."""
+    system = request.app.state.system
+    query = """
+        SELECT pe.*, sp.strategy_id, sp.metrics
+        FROM proposal_evaluations pe
+        JOIN strategy_proposals sp ON pe.proposal_id = sp.id
+        ORDER BY pe.due_at DESC LIMIT ?
+    """
+    try:
+        async with get_db_conn(system.db_path) as db:
+            async with db.execute(query, (limit,)) as cur:
+                rows = await cur.fetchall()
+                results = []
+                for r in rows:
+                    p = dict(r)
+                    if p.get("metrics") and isinstance(p["metrics"], str):
+                        try:
+                            p["metrics"] = json.loads(p["metrics"])
+                        except:
+                            pass
+                    results.append(p)
+                return results
+    except Exception as e:
+        logger.error(f"[Evaluations API] Error fetching evaluations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/evaluations/jobs")
+async def list_reevaluation_jobs(request: Request, limit: int = 50):
+    """최근의 수동 재평가 Job 목록을 조회하여 반환합니다."""
+    system = request.app.state.system
+    query = "SELECT * FROM proposal_reevaluation_jobs ORDER BY requested_at DESC LIMIT ?"
+    try:
+        async with get_db_conn(system.db_path) as db:
+            async with db.execute(query, (limit,)) as cur:
+                rows = await cur.fetchall()
+                return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"[Jobs API] Error fetching jobs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/evaluations/restart-daemon")
+async def restart_evaluation_daemon(request: Request, command_id: str = None):
+    """평가 데몬 프로세스 자체를 자가 재기동시킵니다."""
+    system = request.app.state.system
+    from src.engine.command import UserCommand
+    payload = {"target": "shadow_eval_daemon"}
+    if command_id:
+        payload["command_id"] = command_id
+    try:
+        await system.dispatcher.dispatch(
+            UserCommand.EVALUATION_RESTART_DAEMON,
+            payload
+        )
+        return {"message": "Evaluation daemon restart signal published successfully", "command_id": payload.get("command_id")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ─────────────────────────────────────────────
 # 헬퍼 함수 정의
 # ─────────────────────────────────────────────

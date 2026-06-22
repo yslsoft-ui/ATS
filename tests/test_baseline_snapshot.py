@@ -126,8 +126,8 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
     proposal_id = await repo.insert_strategy_proposal(proposal_data)
     
     # 2. 10m PENDING 평가 등록 (시작 캔들 가격: 50000.0)
-    now = int(time.time())
-    due_at = now + 600
+    now = int(time.time() * 1000)
+    due_at = now + 600 * 1000
     pe_id = await repo.insert_proposal_evaluation({
         "proposal_id": proposal_id,
         "horizon_name": "10m",
@@ -149,21 +149,21 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
         await db.execute("""
             INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 50000.0, 50000.0, 50000.0, 50000.0, 1.0)
-        """, (now * 1000,))
+        """, (now,))
         # 2) 만기 시점 캔들 (가격: 52500.0, ROI 5.0% 상승)
         await db.execute("""
             INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 52500.0, 52500.0, 52500.0, 52500.0, 1.0)
-        """, (due_at * 1000,))
-        # 3) 미래 캔들 (timestamp = due_at + 120, 가격: 60000.0) -> 만기 이후 데이터라 평가에 참조되면 안 됨!
+        """, (due_at,))
+        # 3) 미래 캔들 (timestamp = due_at + 120 * 1000, 가격: 60000.0) -> 만기 이후 데이터라 평가에 참조되면 안 됨!
         await db.execute("""
             INSERT INTO candles (exchange_id, symbol, interval, timestamp, open, high, low, close, volume)
             VALUES ('upbit', 'BTC', 60, ?, 60000.0, 60000.0, 60000.0, 60000.0, 1.0)
-        """, ((due_at + 120) * 1000,))
+        """, (due_at + 120 * 1000,))
         await db.commit()
 
     # 4. Baseline 스냅샷 캡처 시뮬레이션
-    # due_at - 600 시각의 캔들을 읽어 baseline_value 로 캡처 및 update
+    # due_at - 600 * 1000 시각의 캔들을 읽어 baseline_value 로 캡처 및 update
     snap = FeatureSnapshot(
         price_features={"close": 50000.0},
         liquidity_features={"spread": 0.001, "volume": 1000.0, "depth": 5000.0},
@@ -181,12 +181,12 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
 
     # 5. TTL Cleanup으로 시작 시점의 캔들을 완전히 삭제 (50000.0 가격의 캔들)
     async with get_db_conn(TEST_DB_PATH) as db:
-        await db.execute("DELETE FROM candles WHERE timestamp = ?", (now * 1000,))
+        await db.execute("DELETE FROM candles WHERE timestamp = ?", (now,))
         await db.commit()
         
     # 시작 시각 캔들이 삭제되었는지 확인
     async with get_db_conn(TEST_DB_PATH) as db:
-        async with db.execute("SELECT * FROM candles WHERE timestamp = ?", (now * 1000,)) as cur:
+        async with db.execute("SELECT * FROM candles WHERE timestamp = ?", (now,)) as cur:
             assert await cur.fetchone() is None, "시작 캔들이 DB 상에서 지워져야 합니다."
 
     # 6. Shadow Evaluation Service 기동 및 평가 수행
@@ -195,7 +195,7 @@ async def test_baseline_snapshot_정합성_및_TTL_삭제_대응():
     service.repository = repo
     
     # claim 선점
-    claim_ok = await repo.claim_evaluation(pe_id, int(time.time()))
+    claim_ok = await repo.claim_evaluation(pe_id, int(time.time() * 1000))
     assert claim_ok is True
     
     # 평가 실행

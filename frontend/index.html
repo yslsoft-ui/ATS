@@ -33,6 +33,7 @@
                 <div class="menu-item" data-view="settings-view">⚙️ 설정</div>
                 <div class="menu-item" data-view="collector-view">🛰️ 수집기 데몬</div>
                 <div class="menu-item" data-view="strategy-daemon-view">⚙️ 전략 데몬</div>
+                <div class="menu-item" data-view="evaluation-daemon-view">📊 평가 데몬</div>
                 <div class="menu-item" data-view="cleanup-view">🧹 클린업 데몬</div>
                 <div class="menu-item" data-view="restored-view">🛠️ 복원 캔들</div>
             </nav>
@@ -2066,6 +2067,167 @@
                 </div>
             </section>
 
+            <!-- 평가 데몬 뷰 (초기엔 숨김) -->
+            <section id="evaluation-daemon-view" style="display: none;">
+                <!-- 1. 헤더 영역 -->
+                <header class="main-header"
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">📊 평가 데몬 상태 모니터링
+                            <span id="evaluation-stale-badge" class="badge danger"
+                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
+                        </h1>
+                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
+                            PID: <span id="evaluation-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
+                            기동 시각: <span id="evaluation-started-at" style="color: #F8FAFC;">-</span> |
+                            상태 갱신: <span id="evaluation-last-heartbeat" style="color: #F8FAFC;">-</span>
+                        </div>
+                    </div>
+                    <!-- 전체 제어 버튼 -->
+                    <div style="display: flex; gap: 10px;">
+                        <button id="btn-evaluation-restart-daemon" class="btn warning"
+                            style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
+                    </div>
+                </header>
+
+                <!-- 2. 시스템 리소스 및 실시간 판단 메트릭 (5단 그리드) -->
+                <div class="diagnostic-grid"
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- 데몬 리소스 -->
+                    <div class="diag-card">
+                        <span class="label">데몬 리소스 사용량 <span class="tooltip-icon"
+                                title="평가 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기(RSS)입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-evaluation-memory" style="font-size: 1.15rem;">- MB</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">/proc/self/status RSS</span>
+                    </div>
+                    <!-- Pending Evaluations -->
+                    <div class="diag-card">
+                        <span class="label">대기 중인 평가 (Pending) <span class="tooltip-icon"
+                                title="미래 만기 대기(Future) 및 현재 만기 도달(Due) 상태의 평가 건수입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-evaluation-future-pending" style="font-size: 1.15rem;">- 건</span>
+                            <span class="sub-label" id="res-val-evaluation-due-pending" style="font-size: 0.8rem; color: #FF4B4B; font-family: monospace;">Due: -건</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">Future / Due Pending</span>
+                    </div>
+                    <!-- Completed / Failed Today -->
+                    <div class="diag-card">
+                        <span class="label">오늘 처리 결과 <span class="tooltip-icon"
+                                title="오늘 00시 이후 성공적으로 완료된 평가 건수 및 실패(에러) 처리된 건수입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-evaluation-completed-today" style="font-size: 1.15rem; color: #10B981;">- 건</span>
+                            <span class="sub-label" id="res-val-evaluation-failed-today" style="font-size: 0.8rem; color: #FF4B4B; font-family: monospace;">실패: -건</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">성공(COMPLETED) / 실패(ERROR)</span>
+                    </div>
+                    <!-- Manual Jobs -->
+                    <div class="diag-card">
+                        <span class="label">수동 재평가 Job <span class="tooltip-icon"
+                                title="수동 재평가 Job 대기/진행 중 건수와 오늘 완료/실패 건수입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-evaluation-jobs-running" style="font-size: 1.15rem;">- 건</span>
+                            <span class="sub-label" id="res-val-evaluation-jobs-today" style="font-size: 0.8rem; color: #94A3B8; font-family: monospace;">오늘: 완료 - / 실패 -</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">대기·진행 / 오늘 마감</span>
+                    </div>
+                    <!-- Oldest Due / Max Lock Age -->
+                    <div class="diag-card">
+                        <span class="label">처리 지연 및 최대 락 점유 <span class="tooltip-icon"
+                                title="현재 밀려있는 가장 오래된 평가 대기 시간(Oldest Due) 및 최장 락 점유 시간(Max Lock)입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-evaluation-oldest-due" style="font-size: 1.15rem; color: #F59E0B;">-</span>
+                            <span class="sub-label" id="res-val-evaluation-max-lock" style="font-size: 0.8rem; color: #D946EF; font-family: monospace;">락: -</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">Oldest Due / Max Lock Age</span>
+                    </div>
+                </div>
+
+                <!-- 3. 평가 결과 테이블 -->
+                <div class="card" style="padding: 15px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 12px 0; color: #F8FAFC; font-size: 0.95rem;">🎯 최근 Horizon 사후 평가 현황</h3>
+                    <div class="table-wrapper" style="max-height: 350px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;" id="evaluation-results-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; width: 60px;">제안 ID</th>
+                                    <th style="text-align: left; width: 140px;">전략 ID</th>
+                                    <th style="text-align: left; width: 80px;">종목</th>
+                                    <th style="text-align: center; width: 80px;">Horizon</th>
+                                    <th style="text-align: right; width: 80px;">예측 ROI</th>
+                                    <th style="text-align: right; width: 80px;">실측 ROI</th>
+                                    <th style="text-align: right; width: 80px;">ROI Gap</th>
+                                    <th style="text-align: center; width: 80px;">상태</th>
+                                    <th style="text-align: left; width: 130px;">만기 시각 (Due)</th>
+                                    <th style="text-align: left; width: 130px;">평가 완료 시각</th>
+                                    <th style="text-align: left;">에러 메시지</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluation-results-tbody">
+                                <tr>
+                                    <td colspan="11" style="text-align: center; color: #64748B; padding: 20px;">평가 데이터를 불러오는 중...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 4. 수동 재평가 Job 테이블 -->
+                <div class="card" style="padding: 15px; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 12px 0; color: #F8FAFC; font-size: 0.95rem;">🛠️ 수동 재평가 비동기 Job 내역</h3>
+                    <div class="table-wrapper" style="max-height: 250px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;" id="evaluation-jobs-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; width: 80px;">Job ID</th>
+                                    <th style="text-align: left; width: 80px;">제안 ID</th>
+                                    <th style="text-align: center; width: 100px;">상태</th>
+                                    <th style="text-align: left; width: 140px;">요청 시각</th>
+                                    <th style="text-align: left; width: 140px;">시작 시각</th>
+                                    <th style="text-align: left; width: 140px;">종료 시각</th>
+                                    <th style="text-align: center; width: 80px;">재시도 수</th>
+                                    <th style="text-align: left;">에러 메시지</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluation-jobs-tbody">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; color: #64748B; padding: 20px;">수동 Job 내역을 불러오는 중...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 5. 하단 감사 이벤트 로그 -->
+                <div class="card"
+                    style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                    <h3
+                        style="margin: 0 0 12px 0; color: #F8FAFC; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
+                        <span>📋 최근 평가 시스템 이벤트 감사 로그</span>
+                        <span style="font-size: 0.72rem; color: #64748B;">최근 20건 (EVAL_* 또는 PROPOSAL_REEVALUATION_*)</span>
+                    </h3>
+                    <div class="table-wrapper" style="max-height: 250px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;"
+                            id="evaluation-events-table">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left; width: 150px;">발생 시각</th>
+                                    <th style="text-align: left; width: 100px;">이벤트 구분</th>
+                                    <th style="text-align: left; width: 120px;">대상</th>
+                                    <th style="text-align: left;">메시지</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluation-events-tbody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #64748B; padding: 20px;">이벤트를 불러오는 중...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
             <!-- 복원 캔들 뷰 (초기엔 숨김) -->
             <section id="restored-view" style="display: none;">
                 <header class="main-header" style="flex-direction: column; align-items: flex-start; gap: 15px;">
@@ -3114,6 +3276,7 @@
     <script src="ranking.js"></script>
     <script src="strategy.js"></script>
     <script src="strategy-daemon.js"></script>
+    <script src="evaluation-daemon.js"></script>
     <script src="restored-view.js"></script>
     <script src="cleanup.js"></script>
     <script src="collector.js"></script>
