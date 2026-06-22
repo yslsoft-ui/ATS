@@ -173,7 +173,6 @@ async def zmq_listener_loop():
                 if not topic:
                     continue
                 if data.get('type') == 'evaluation_daemon_detail':
-                    import time
                     data["synced_at"] = int(time.time() * 1000)
                     system.evaluation_daemon_detail = data.copy()
 
@@ -203,7 +202,6 @@ async def zmq_listener_loop():
 
                 # 실시간 전략 엔진 상태 패킷 수신 시 캐시 업데이트
                 if data.get('type') == 'strategy_status' and 'strategy_id' not in data:
-                    import time
                     prev_running = system.strategy_status.get('is_running')
                     prev_engines = system.strategy_status.get('active_engines')
                     current_running = data.get('is_running', False)

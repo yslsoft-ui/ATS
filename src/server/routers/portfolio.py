@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 from src.engine.command import UserCommand
-from datetime import datetime
+from datetime import datetime, timedelta
 import aiohttp
 import asyncio
 import time
@@ -749,7 +749,7 @@ async def _sync_real_kis_orders(system, force_sync: bool = False):
     }
 
     today_str = datetime.now().strftime("%Y%m%d")
-    start_dt = (datetime.now() - datetime.timedelta(days=7)).strftime("%Y%m%d")
+    start_dt = (datetime.now() - timedelta(days=7)).strftime("%Y%m%d")
     
     params = {
         "CANO": cano,
