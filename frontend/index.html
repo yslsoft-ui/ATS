@@ -2354,36 +2354,49 @@
 
             <!-- 클린업 데몬 뷰 (초기엔 숨김) -->
             <section id="cleanup-view" style="display: none;">
+                <!-- 1. 헤더 및 메타 바 영역 -->
                 <header class="main-header"
-                    style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <h1 style="display: flex; align-items: center; gap: 15px; margin: 0;">
-                        <span>🧹 데이터 클린업 데몬</span>
-                        <button id="btn-cleanup-restart-daemon" class="btn primary sm"
-                            style="font-size:0.75rem; background: #3B82F6; padding: 4px 10px; border-radius: 6px; margin: 0; cursor: pointer;">🔄
-                            데몬 자가 재기동</button>
-                    </h1>
-                    <span id="cleanup-state-badge" class="ctx-badge status-indicator"
-                        style="background: rgba(100, 116, 139, 0.2); color: #64748B; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩
-                        중...</span>
+                    style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
+                    <div>
+                        <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">🧹 데이터 클린업 데몬
+                            <span id="cleanup-stale-badge" class="badge danger"
+                                style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 지연</span>
+                        </h1>
+                        <div style="font-size: 0.85rem; color: #94A3B8; margin-top: 5px;">
+                            PID: <span id="cleanup-pid" style="font-family: monospace; color: #F8FAFC;">-</span> |
+                            기동 시각: <span id="cleanup-started-at" style="color: #F8FAFC;">-</span> |
+                            상태 갱신: <span id="cleanup-last-heartbeat" style="color: #F8FAFC;">-</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <span id="cleanup-state-badge" class="ctx-badge status-indicator"
+                            style="background: rgba(100, 116, 139, 0.2); color: #64748B; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩 중...</span>
+                        <button id="btn-cleanup-restart-daemon" class="btn warning"
+                            style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
+                    </div>
                 </header>
+
+                <!-- 2. 시스템 리소스 진단 그리드 (데몬 리소스 카드) -->
+                <div class="diagnostic-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <!-- 데몬 리소스 -->
+                    <div class="diag-card">
+                        <span class="label">데몬 리소스 사용량 <span class="tooltip-icon"
+                                title="클린업 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기(RSS)입니다.">❓</span></span>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
+                            <span class="value" id="res-val-cleanup-memory" style="font-size: 1.15rem;">- MB</span>
+                        </div>
+                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">/proc/self/status RSS</span>
+                    </div>
+                </div>
 
                 <div class="overview-metrics-grid"
                     style="margin-top: 15px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px;">
-                    <!-- 1. 데몬 정보 카드 -->
+                    <!-- 1. 데몬 설정 카드 -->
                     <div class="overview-card" style="padding: 20px;">
-                        <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">⚙️ 클린업 데몬 정보
+                        <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">⚙️ 클린업 데몬 설정
                         </h3>
                         <div
                             style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: #F8FAFC;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color: #94A3B8;">데몬 PID:</span>
-                                <span id="cleanup-daemon-pid"
-                                    style="font-weight:bold; font-family: 'Roboto Mono', monospace;">-</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color: #94A3B8;">데몬 기동시각:</span>
-                                <span id="cleanup-daemon-start-time" style="font-weight:bold;">-</span>
-                            </div>
                             <div style="display:flex; justify-content:space-between;">
                                 <span style="color: #94A3B8;">자동 정리 주기:</span>
                                 <span id="cleanup-setting-interval" style="font-weight:bold;">-</span>

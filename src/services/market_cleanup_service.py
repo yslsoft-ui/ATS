@@ -467,6 +467,20 @@ class MarketDataCleanupService(DaemonService):
                 if self.cleanup_state == "RUNNING_ONCE":
                     self.cleanup_state = prev_state
 
+    def _get_rss_memory(self) -> float:
+        """/proc/self/status 파일에서 데몬 프로세스의 현재 RSS 메모리(MB)를 안전하게 파싱합니다."""
+        try:
+            with open("/proc/proc/self/status" if os.path.exists("/proc/proc/self/status") else "/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            kb = float(parts[1])
+                            return round(kb / 1024.0, 2)
+        except Exception:
+            pass
+        return 0.0
+
     def get_status_payloads(self) -> List[tuple[str, dict]]:
         return [
             ("cleanup_signal", {
@@ -490,7 +504,8 @@ class MarketDataCleanupService(DaemonService):
                 "next_cleanup_target_trades_cutoff": self.next_cleanup_target_trades_cutoff,
                 "next_cleanup_target_candles_cutoff": self.next_cleanup_target_candles_cutoff,
                 "pid": self.pid,
-                "start_time": self.start_time
+                "start_time": self.start_time,
+                "rss_mb": self._get_rss_memory()
             })
         ]
 

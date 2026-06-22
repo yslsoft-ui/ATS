@@ -470,7 +470,7 @@
     "semantic_hash": "24924e04346a36ed4d802cb644f1680b"
   },
   "/home/simon/ATS/logs/label_quality_report.json": {
-    "mtime": 1782107378.5626464,
+    "mtime": 1782109014.3945348,
     "ast_hash": "f72078ade04cc8feadfd4ef8bce15343",
     "semantic_hash": ""
   },
@@ -535,8 +535,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/cleanup.js": {
-    "mtime": 1781338296.529244,
-    "ast_hash": "af1530aec11896652fd95c69b071f1a6",
+    "mtime": 1782108994.6141493,
+    "ast_hash": "12909fc57b31e97b62fb2f3d99c2e64b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/restored-view.js": {
@@ -1175,8 +1175,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/services/market_cleanup_service.py": {
-    "mtime": 1781406023.509571,
-    "ast_hash": "e9e31aa6951040f7017949b8e63e24bc",
+    "mtime": 1782108958.4134426,
+    "ast_hash": "5d3182bbbb739e3a6b67ed45c6f59e3b",
     "semantic_hash": ""
   },
   "/home/simon/ATS/tests/test_girs_shadow_rehearsal.py": {
@@ -1450,7 +1450,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1782107393.238933,
+    "mtime": 1782109030.1548421,
     "ast_hash": "bd46550e16ee48820cea531279808087",
     "semantic_hash": ""
   },
@@ -1470,8 +1470,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1782107096.5171359,
-    "ast_hash": "464654ff953a966e819a73336cf70f84",
+    "mtime": 1782108975.793782,
+    "ast_hash": "6e9769955ed4875c0ef2da2afd367e91",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {

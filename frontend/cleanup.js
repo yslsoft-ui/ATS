@@ -8,6 +8,14 @@ const CleanupView = (() => {
     // 로딩 상태 플래그
     let isActionPending = false;
 
+    // stale 감지용 상태 변수
+    let staleCheckInterval = null;
+    let lastDetailHeartbeat = 0;
+
+    const monitoringConfig = {
+        daemon_detail_stale_ms: 15000
+    };
+
     // 타임아웃 설정 (승인 기준)
     const TIMEOUTS = {
         LIFECYCLE: 3000,    // 시작, 중지, 재기동: 3초
@@ -45,10 +53,34 @@ const CleanupView = (() => {
     }
 
     /**
+     * 연결 지연 체크 루프
+     */
+    function checkStaleStatus() {
+        const now = Date.now();
+        const badge = document.getElementById('cleanup-stale-badge');
+        if (!badge) return;
+
+        const isDaemonStale = lastDetailHeartbeat === 0 || (now - lastDetailHeartbeat > monitoringConfig.daemon_detail_stale_ms);
+
+        if (isDaemonStale) {
+            badge.style.display = 'inline-block';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    /**
      * 화면 진입 시 초기화 함수
      */
     async function init() {
         console.log("[CleanupView] Initializing view...");
+
+        lastDetailHeartbeat = Date.now();
+        if (staleCheckInterval) {
+            clearInterval(staleCheckInterval);
+        }
+        staleCheckInterval = setInterval(checkStaleStatus, 3000);
+        checkStaleStatus();
         
         // 1. 기본 오늘 날짜를 Date Picker에 세팅 (Ad-hoc 기본값: 30일 전 추천)
         const dateInput = document.getElementById('input-cleanup-date');
@@ -231,15 +263,29 @@ const CleanupView = (() => {
             }
         }
 
-        // 2. 데몬 PID 및 기동시각 갱신
-        const daemonPid = document.getElementById('cleanup-daemon-pid');
-        if (daemonPid) {
-            daemonPid.innerText = status.pid || '-';
+        // 2. 데몬 PID 및 기동시각, 상태갱신, 리소스 갱신
+        lastDetailHeartbeat = Date.now();
+
+        const cleanupPid = document.getElementById('cleanup-pid');
+        if (cleanupPid) {
+            cleanupPid.innerText = status.pid || '-';
         }
 
-        const daemonStartTime = document.getElementById('cleanup-daemon-start-time');
-        if (daemonStartTime) {
-            daemonStartTime.innerText = formatTimestamp(status.start_time);
+        const cleanupStartedAt = document.getElementById('cleanup-started-at');
+        if (cleanupStartedAt) {
+            cleanupStartedAt.innerText = formatTimestamp(status.start_time);
+        }
+
+        const cleanupLastHeartbeat = document.getElementById('cleanup-last-heartbeat');
+        if (cleanupLastHeartbeat) {
+            cleanupLastHeartbeat.innerText = new Date().toLocaleTimeString();
+        }
+
+        const cleanupMemory = document.getElementById('res-val-cleanup-memory');
+        if (cleanupMemory) {
+            cleanupMemory.innerText = (status.rss_mb !== undefined && status.rss_mb !== null)
+                ? `${status.rss_mb.toFixed(2)} MB`
+                : '- MB';
         }
 
         // 3. 글로벌 설정 정보
@@ -545,8 +591,19 @@ const CleanupView = (() => {
         });
     }
 
+    /**
+     * 뷰 퇴장 시 타이머 정리
+     */
+    function destroy() {
+        if (staleCheckInterval) {
+            clearInterval(staleCheckInterval);
+            staleCheckInterval = null;
+        }
+    }
+
     return {
         init,
+        destroy,
         loadEvents,
         handleStatusUpdate,
         handleCommandResult
