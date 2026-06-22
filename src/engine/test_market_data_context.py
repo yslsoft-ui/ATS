@@ -5,7 +5,7 @@ from src.engine.market_data_context import MarketDataContext
 
 def create_dummy_candle(close_price: float, timestamp: int) -> Candle:
     return Candle(
-        exchange="upbit",
+        exchange_id="upbit",
         symbol="BTC",
         interval=60,
         timestamp=timestamp,

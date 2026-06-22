@@ -9,19 +9,7 @@ from .trade_engine import TradeEngine
 from .portfolio import Portfolio, PortfolioManager, VirtualOrderExecutorAdapter
 
 from src.engine.pipeline import ExecutionPipeline
-
-class BacktestPortfolioManagerProxy:
-    """
-    StrategyHost가 포트폴리오 요약을 조회할 때 
-    특정 백테스트 임시 포트폴리오 ID를 바라보도록 우회해 주는 프록시 객체입니다.
-    """
-    def __init__(self, manager: PortfolioManager, portfolio_id: str):
-        self.manager = manager
-        self.portfolio_id = portfolio_id
-        
-    def get_portfolio_summary(self, symbol: str, portfolio_id: Optional[str] = None, exchange_id: Optional[str] = None) -> Dict[str, Any]:
-        target_id = portfolio_id if portfolio_id is not None else self.portfolio_id
-        return self.manager.get_portfolio_summary(symbol, target_id, exchange_id)
+from .replay_runner import BacktestPortfolioManagerProxy, TickReplayRunner
 
 class BacktestEngine:
     def __init__(self, db_path: str = None):
@@ -108,40 +96,30 @@ class BacktestEngine:
         proxy_manager = BacktestPortfolioManagerProxy(self.portfolio_manager, portfolio_id)
 
         # 6. 리플레이 루프 구동
-        candle_history: List[Dict[str, Any]] = []
-        
-        for row in rows:
-            tick = {
+        ticks = [
+            {
+                "exchange_id": exchange_id,
+                "symbol": symbol,
                 "trade_price": row["trade_price"],
                 "trade_volume": row["trade_volume"],
                 "ask_bid": row["ask_bid"],
                 "trade_timestamp": row["trade_timestamp"]
             }
-            
-            # 엔진 주입
-            signals, closed_candles = await engine.process_tick(tick, proxy_manager)
-            
-            # 차트 시각화용 캔들 히스토리 수집
-            for c in closed_candles:
-                candle_history.append({
-                    "time": c.timestamp,
-                    "open": c.open,
-                    "high": c.high,
-                    "low": c.low,
-                    "close": c.close,
-                    "volume": c.volume
-                })
-            
-            # 발생한 전략 신호 가상 매칭 체결
-            for sig in signals:
-                await self.execution_pipeline.process_signal(
-                    signal=sig,
-                    price=tick["trade_price"],
-                    portfolio_id=portfolio_id,
-                    risk_limits_enabled=risk_limits_enabled,
-                    slippage_rate=slippage_rate,
-                    size_ratio=0.95  # 단일 백테스트는 수수료 여백 포함 95% 비율로 매수 적용
-                )
+            for row in rows
+        ]
+        
+        engines = {f"{exchange_id}_{symbol}": engine}
+        
+        runner = TickReplayRunner(
+            portfolio_id=portfolio_id,
+            execution_pipeline=self.execution_pipeline,
+            size_ratio=0.95,
+            risk_limits_enabled=risk_limits_enabled,
+            slippage_rate=slippage_rate
+        )
+        
+        replay_result = await runner.run(ticks, engines, proxy_manager)
+        candle_history = replay_result["candle_histories"].get(f"{exchange_id}_{symbol}", [])
 
         # 7. 백테스트 종료 시 최종 평가액 및 성과 계산
         final_price = rows[-1]["trade_price"]
@@ -306,48 +284,32 @@ class BacktestEngine:
         candle_histories = {f"{p['exchange_id']}_{p['symbol']}": [] for p in pairs}
         
         # 6. 리플레이 루프 구동 (시간 정렬된 단일 스트림)
-        last_prices = {}
-        
-        for row in rows:
-            ex = row["exchange_id"]
-            sym = row["symbol"]
-            last_prices[sym] = row["trade_price"]
-            
-            tick = {
+        ticks = [
+            {
+                "exchange_id": row["exchange_id"],
+                "symbol": row["symbol"],
                 "trade_price": row["trade_price"],
                 "trade_volume": row["trade_volume"],
                 "ask_bid": row["ask_bid"],
                 "trade_timestamp": row["trade_timestamp"]
             }
+            for row in rows
+        ]
+        
+        for t in ticks:
+            get_or_create_engine(t["exchange_id"], t["symbol"])
             
-            # 종목 전용 TradeEngine 획득
-            engine = get_or_create_engine(ex, sym)
-            
-            # 엔진 주입
-            signals, closed_candles = await engine.process_tick(tick, proxy_manager)
-            
-            # 캔들 정보 수집
-            key = f"{ex}_{sym}"
-            for c in closed_candles:
-                candle_histories[key].append({
-                    "time": c.timestamp,
-                    "open": c.open,
-                    "high": c.high,
-                    "low": c.low,
-                    "close": c.close,
-                    "volume": c.volume
-                })
-                
-            # 발생한 전략 신호 가상 매칭 체결 (거래소별 자금 격리)
-            for sig in signals:
-                await self.execution_pipeline.process_signal(
-                    signal=sig,
-                    price=tick["trade_price"],
-                    portfolio_id=portfolio_id,
-                    risk_limits_enabled=risk_limits_enabled,
-                    slippage_rate=slippage_rate,
-                    size_ratio=0.19  # 다중 종목 백테스트 격리 자산의 20% * 수수료 margin 95% = 19% 반영
-                )
+        runner = TickReplayRunner(
+            portfolio_id=portfolio_id,
+            execution_pipeline=self.execution_pipeline,
+            size_ratio=0.19,
+            risk_limits_enabled=risk_limits_enabled,
+            slippage_rate=slippage_rate
+        )
+        
+        replay_result = await runner.run(ticks, engines, proxy_manager)
+        candle_histories = replay_result["candle_histories"]
+        last_prices = replay_result["last_prices"]
 
         # 7. 백테스트 종료 시 최종 평가액 및 성과 계산
         final_value = portfolio.get_total_value(last_prices)

@@ -44,8 +44,14 @@ async def test_collector_service_stop_cleanup(temp_db):
     service = CollectorService(config, event_bus, repository)
     service.collectors = {}
     
-    # 임의로 _periodic_symbols_sync_loop 태스크 등록 및 stop() 호출 시 정리되는지 검증
-    task = asyncio.create_task(service._periodic_symbols_sync_loop())
+    # 임의로 더미 태스크 등록 및 stop() 호출 시 정리되는지 검증
+    async def dummy_coro():
+        try:
+            await asyncio.sleep(10)
+        except asyncio.CancelledError:
+            pass
+            
+    task = asyncio.create_task(dummy_coro())
     service._tasks.append(task)
     
     await service.stop()

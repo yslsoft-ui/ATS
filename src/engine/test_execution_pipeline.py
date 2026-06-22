@@ -29,14 +29,16 @@ class MockSignal:
         self.symbol = symbol
         self.action = action
         self.exchange = exchange
+        self.exchange_id = exchange
         self.strategy_id = strategy_id
         self.reason = reason
         self.context = {}
 
 @pytest.mark.asyncio
 async def test_calculate_position_size():
-    # 포트폴리오 준비 (현금 100만 원, exchange_id="upbit" 명시)
-    portfolio = Portfolio(portfolio_id="default", name="Default Portfolio", initial_cash=1000000, exchange_id="upbit")
+    portfolio = Portfolio(portfolio_id="default", name="Default Portfolio", portfolio_type="simulation")
+    portfolio.exchange_cash["upbit"] = 1000000.0
+    portfolio.exchange_initial_cash["upbit"] = 1000000.0
     # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
     pm = PortfolioManager(db_path=TEST_DB_PATH)
     pipeline = ExecutionPipeline(pm)
@@ -80,7 +82,9 @@ async def test_apply_slippage():
 async def test_check_risk_limits():
     # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
     pm = PortfolioManager(db_path=TEST_DB_PATH)
-    portfolio = Portfolio(portfolio_id="default", name="Default Portfolio", initial_cash=1000000, exchange_id="upbit")
+    portfolio = Portfolio(portfolio_id="default", name="Default Portfolio", portfolio_type="simulation")
+    portfolio.exchange_cash["upbit"] = 1000000.0
+    portfolio.exchange_initial_cash["upbit"] = 1000000.0
     pipeline = ExecutionPipeline(pm)
 
     # 1. 잔고 부족 시나리오

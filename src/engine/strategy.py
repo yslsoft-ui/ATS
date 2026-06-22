@@ -67,7 +67,7 @@ class StrategyRegistry:
 
     @classmethod
     def register(cls, strategy_cls):
-        cls._strategies[strategy_cls.__name__] = strategy_cls
+        cls._strategies[strategy_cls.__name__.lower()] = strategy_cls
         return strategy_cls
 
     @classmethod
@@ -76,11 +76,7 @@ class StrategyRegistry:
 
     @classmethod
     def get_strategy_class(cls, strategy_id: str) -> Optional[type]:
-        target_id_lower = strategy_id.lower()
-        for name, s_cls in cls._strategies.items():
-            if name.lower() == target_id_lower:
-                return s_cls
-        return None
+        return cls._strategies.get(strategy_id.lower())
 
     @classmethod
     def create_strategy(cls, strategy_id: str, params: Dict = None) -> Optional[BaseStrategy]:

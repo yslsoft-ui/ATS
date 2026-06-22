@@ -9,10 +9,13 @@ class TestStrategyLoaderTDD(unittest.TestCase):
         self.test_dir = os.path.join(os.getcwd(), 'data', 'test_strategies')
         if not os.path.exists(self.test_dir):
             os.makedirs(self.test_dir)
-        # 레지스트리 초기화 (테스트 간 간섭 방지)
+        # 레지스트리 백업 및 초기화
+        self._orig_strategies = dict(StrategyRegistry._strategies)
         StrategyRegistry._strategies = {}
 
     def tearDown(self):
+        # 레지스트리 복원
+        StrategyRegistry._strategies = self._orig_strategies
         # 테스트 후 임시 디렉토리 삭제
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)

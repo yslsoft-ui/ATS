@@ -21,7 +21,7 @@ async def test_rsi_parameter_reflection():
     for i in range(25):
         price = 50000 + i
         context.add_candle(Candle(
-            exchange="upbit", symbol="KRW-BTC", interval=60, timestamp=i*60, 
+            exchange_id="upbit", symbol="KRW-BTC", interval=60, timestamp=i*60, 
             open=price, high=price, low=price, close=price, volume=1.0, is_closed=True
         ))
         await host.execute(context)
@@ -35,7 +35,7 @@ async def test_rsi_parameter_reflection():
     for i in range(25):
         price = 100 - i
         context.add_candle(Candle(
-            exchange="upbit", symbol="KRW-BTC", interval=60, timestamp=i*60, 
+            exchange_id="upbit", symbol="KRW-BTC", interval=60, timestamp=i*60, 
             open=price, high=price, low=price, close=price, volume=1.0, is_closed=True
         ))
         res = await host.execute(context)
@@ -51,7 +51,7 @@ async def test_rsi_parameter_reflection():
     # 다음 캔들에서 BUY 신호가 발생하는지 검증
     price = 50
     context.add_candle(Candle(
-        exchange="upbit", symbol="KRW-BTC", interval=60, timestamp=1000, 
+        exchange_id="upbit", symbol="KRW-BTC", interval=60, timestamp=1000, 
         open=price, high=price, low=price, close=price, volume=1.0, is_closed=True
     ))
     res = await host.execute(context)

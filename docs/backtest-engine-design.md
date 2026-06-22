@@ -94,25 +94,46 @@
 3. **승률 (Win Rate)** ⚠️ 미구현: `익절 거래 횟수 / 총 거래 횟수`
 4. **손익비 (Profit Factor)** ⚠️ 미구현: `총 이익 합계 / 총 손실 합계`
 
-## 6. 데이터 리플레이 루프 (Replay Loop) — `src/engine/backtest.py`
+## 6. 데이터 리플레이 루프 (Replay Loop) — `src/engine/replay_runner.py`
+
+과거 데이터 리플레이와 주문 가상 집행 루프를 백테스트 엔진으로부터 격리하여, 순수 인메모리 비즈니스 로직 연산기인 `TickReplayRunner` 클래스로 구현하였습니다.
+
+### 6.1. 무상태형 리플레이어 (TickReplayRunner)
+- DB, 파일 시스템, 환경변수 등 외부 I/O 의존성을 전혀 가지지 않고 주입받은 틱 데이터 목록(`ticks`), 종목별 매칭 엔진 매핑(`engines`), 가상 체결 파이프라인(`execution_pipeline`), 포트폴리오 요약 조회를 우회해주는 `BacktestPortfolioManagerProxy` 만을 활용해 루프를 실행합니다.
+- 단일 종목 백테스트와 다중 종목 백테스트 루프를 하나로 단일화하여 작동합니다.
 
 ```python
-for tick in tick_data_source:
-    # 1. 틱 데이터를 캔들 생성기에 주입
-    closed_candles = candle_gen.process_tick(symbol, price, volume, timestamp)
-    
-    # 2. 완성된 캔들이 있으면 전략 실행
-    for candle in closed_candles:
-        market_data_context.add_candle(candle)
-        result = await host.execute(market_data_context, portfolio_manager)
-        
-        if result and result.action == "BUY" and cash > 0:
-            position = cash / price  # TODO: matching_engine 연동
-            cash = 0
-        elif result and result.action == "SELL" and position > 0:
-            cash = position * price  # TODO: matching_engine 연동
-            position = 0
+class TickReplayRunner:
+    async def run(
+        self,
+        ticks: List[Dict[str, Any]],
+        engines: Dict[str, Any],
+        proxy_manager: BacktestPortfolioManagerProxy
+    ) -> Dict[str, Any]:
+        # 1. 틱 데이터 시간 순 리플레이
+        for tick in ticks:
+            # 2. 해당 종목의 TradeEngine에 틱 주입 및 전략 신호, 캔들 수집
+            signals, closed_candles = await engine.process_tick(tick, proxy_manager)
+            
+            # 3. 완성된 캔들 히스토리 누적
+            for c in closed_candles:
+                candle_histories[key].append({...})
+                
+            # 4. 발생한 전략 신호를 가상 체결 파이프라인으로 전송
+            for sig in signals:
+                await self.execution_pipeline.process_signal(
+                    signal=sig,
+                    price=tick["trade_price"],
+                    portfolio_id=self.portfolio_id,
+                    size_ratio=self.size_ratio,
+                    ...
+                )
+        return {"candle_histories": candle_histories, "last_prices": last_prices}
 ```
+
+### 6.2. 기본 비중 (size_ratio) 결정 정책의 분리
+- `TickReplayRunner`는 `size_ratio`를 외부에서 주입받아 사용합니다.
+- 단일 종목 백테스트는 수수료 여백 포함 **0.95 (95%)**, 다중 종목 백테스트는 자산 격리 및 분할을 고려하여 **0.19 (19%)**의 비중을 적용하며, 이 기본값 결정 정책은 호출자인 `BacktestEngine`이 제어합니다.
 
 ## 7. 시각화 (Visualization) — `src/utils/visualizer.py`
 

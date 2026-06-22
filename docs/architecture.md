@@ -236,6 +236,7 @@ classDiagram
 - **주문 체결 분리**: `OrderExecutor` 인터페이스를 통해 실제 API 주문(`KISExecutor`)과 모의 시뮬레이션 주문(`VirtualOrderExecutorAdapter`)을 완벽하게 교체할 수 있습니다. 어댑터는 생성 시 `fee_rate` 를 주입받아 수수료를 자동 적용합니다.
 - **성과 분석기 분리 (PerformanceAnalyzer Seam)**: 포트폴리오의 실시간/정적 성과 통계 보고서 데이터 계산 로직을 `PortfolioManager`로부터 완전히 격리해내고, 외부 I/O가 배제된 무상태(Stateless) 성과 분석 모듈 `PerformanceAnalyzer`로 위임하여 아키텍처 깊이(Depth)와 결합도를 개선하고 단위 테스트의 용이성을 확보했습니다.
 - **주문 실행 스코어러 분리 (ExecutionScorer Seam)**: 주문 처리 파이프라인(`ExecutionPipeline`)에서 포지션 수량 산정, 리스크 한도 검증, 슬리피지 가격 보정 등의 순수 비즈니스 연산 로직을 무상태(Stateless) 계산 모듈인 `ExecutionScorer`로 격리했습니다. 이를 통해 DB이나 외부 상태 의존성을 완벽히 제거하여 순수 연산의 단위 테스트 용이성을 개선하였고, 파이프라인은 오케스트레이션 역할에만 집중하게 되었습니다.
+- **틱 리플레이 루프 격리 (ReplayRunner Seam)**: 백테스트 데이터의 시간 순 리플레이 및 매칭 실행 루프를 `BacktestEngine`으로부터 분리하여, DB 및 설정 관리에 전혀 의존하지 않는 무상태(Stateless)형 `TickReplayRunner` 클래스([replay_runner.py](file:///home/simon/ATS/src/engine/replay_runner.py))로 이관하였습니다.
 - **저장소 레이어를 통한 거래 조회 격리 (Repository Seam)**: 포트폴리오 매니저 내부에서 DB 직접 연결 및 SQLite 원시 쿼리 처리를 완전히 배제하고, `BaseTradingRepository` 인터페이스 및 `SqliteTradingRepository.get_orders_history()` 래퍼를 통해 DB 조작을 캡슐화했습니다.
 - **BTC 마켓 전용 자산 원화 시세 환산**:
   - 업비트 거래소에서 원화(KRW) 마켓 없이 BTC 마켓만 상장된 종목(`OBSR`, `ENJ` 등)의 경우, 실시간 현재가를 `BTC-{코인} 현재가 × KRW-BTC 원화 현재가`로 곱셈하여 원화 가치로 정확하게 변환해 포지션 평가에 반영합니다.
@@ -404,7 +405,7 @@ ATS/
 │   ├── server/                # FastAPI 웹 API 서버 및 웹소켓 핸들러
 │   ├── collector/             # 거래소별 데이터 수집 엔진
 │   ├── database/              # SQLite 스키마 및 DB Writer 모듈
-│   ├── engine/                # 캔들 변환, 지표 연산, 주문 매칭, 백테스트 엔진
+│   ├── engine/                # 캔들 변환, 지표 연산, 주문 매칭, 백테스트 엔진, 리플레이 러너
 │   ├── ipc/                   # ZeroMQ 기반 이벤트 버스 퍼블리셔/서브스크라이버
 │   └── utils/                 # 로깅 및 공통 유틸리티
 ├── frontend/                  # Vanilla HTML/JS/CSS 기반 프론트엔드 리소스
