@@ -132,7 +132,7 @@ async def zmq_listener_loop():
 
                 # 실시간 상태 패킷 브로드캐스트 호출
                 # [NEW] collector_command_result, collector_symbols_sync, collector_daemon_detail 타입 추가 브로드캐스트
-                if data.get('type') in ['collector_status', 'queue_status', 'system_event', 'collector_command_result', 'collector_symbols_sync', 'collector_daemon_detail']:
+                if data.get('type') in ['collector_status', 'queue_status', 'system_event', 'collector_command_result', 'collector_symbols_sync', 'collector_daemon_detail', 'notification']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -155,7 +155,7 @@ async def zmq_listener_loop():
                     system.cleanup_status = data.copy()
 
                 # 브로드캐스트 대상 이벤트 확장
-                if data.get('type') in ['market_cleanup_status', 'system_event', 'cleanup_command_result']:
+                if data.get('type') in ['market_cleanup_status', 'system_event', 'cleanup_command_result', 'notification']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -176,7 +176,7 @@ async def zmq_listener_loop():
                     data["synced_at"] = int(time.time() * 1000)
                     system.evaluation_daemon_detail = data.copy()
 
-                if data.get('type') in ['shadow_eval_status', 'evaluation_daemon_detail', 'system_event']:
+                if data.get('type') in ['shadow_eval_status', 'evaluation_daemon_detail', 'system_event', 'notification']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:
@@ -223,7 +223,7 @@ async def zmq_listener_loop():
                     system.strategy_daemon_detail = data.copy()
 
                 # 실시간 전략 상태 및 주문 신호 발생 시 브로드캐스트 호출
-                if data.get('type') in ['strategy_status', 'strategy_daemon_detail', 'strategy_command_result', 'system_event']:
+                if data.get('type') in ['strategy_status', 'strategy_daemon_detail', 'strategy_command_result', 'system_event', 'notification']:
                     from src.server.websocket import manager
                     await manager.broadcast_alert(data)
                 elif system.broadcast_callback:

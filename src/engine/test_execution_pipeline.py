@@ -41,7 +41,8 @@ async def test_calculate_position_size():
     portfolio.exchange_initial_cash["upbit"] = 1000000.0
     # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
     pm = PortfolioManager(db_path=TEST_DB_PATH)
-    pipeline = ExecutionPipeline(pm)
+    from unittest.mock import AsyncMock
+    pipeline = ExecutionPipeline(pm, notification_service=AsyncMock())
 
     # 1. context에 비율이 없는 경우 (디폴트 10% = 10만 원)
     signal = MockSignal("KRW-BTC", "BUY")
@@ -66,7 +67,8 @@ async def test_calculate_position_size():
 async def test_apply_slippage():
     # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
     pm = PortfolioManager(db_path=TEST_DB_PATH)
-    pipeline = ExecutionPipeline(pm)
+    from unittest.mock import AsyncMock
+    pipeline = ExecutionPipeline(pm, notification_service=AsyncMock())
 
     # BUY: 0.1% 불리하게 상승
     signal_buy = MockSignal("KRW-BTC", "BUY")
@@ -85,7 +87,8 @@ async def test_check_risk_limits():
     portfolio = Portfolio(portfolio_id="default", name="Default Portfolio", portfolio_type="simulation")
     portfolio.exchange_cash["upbit"] = 1000000.0
     portfolio.exchange_initial_cash["upbit"] = 1000000.0
-    pipeline = ExecutionPipeline(pm)
+    from unittest.mock import AsyncMock
+    pipeline = ExecutionPipeline(pm, notification_service=AsyncMock())
 
     # 1. 잔고 부족 시나리오
     # 100만 원 자산인데 110만 원 매수 요청
@@ -109,13 +112,38 @@ async def test_check_risk_limits():
 async def test_skip_alert_rate_limiting():
     # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
     pm = PortfolioManager(db_path=TEST_DB_PATH)
-    pipeline = ExecutionPipeline(pm)
-
+    
+    # 쿨다운 설정을 위해 MockConfigManager 사용
+    config_dict = {
+        "system": {
+            "notification": {
+                "cooldowns_sec": {
+                    "types": {
+                        "skip": 30
+                    },
+                    "codes": {}
+                }
+            }
+        }
+    }
+    from src.services.test_notification_service import MockConfigManager
+    from src.services.notification_service import NotificationService
+    from unittest.mock import AsyncMock
+    
+    config_manager = MockConfigManager(config_dict)
+    repository = AsyncMock()
+    
     broadcasted_notifications = []
     async def mock_broadcast(msg):
         broadcasted_notifications.append(msg)
-
-    pipeline.set_broadcast_callback(mock_broadcast)
+        
+    notification_service = NotificationService(
+        repository=repository,
+        config_manager=config_manager,
+        broadcast_callback=mock_broadcast
+    )
+    
+    pipeline = ExecutionPipeline(pm, notification_service=notification_service)
 
     signal = MockSignal("KRW-BTC", "BUY", exchange="upbit")
 
@@ -123,17 +151,17 @@ async def test_skip_alert_rate_limiting():
     await pipeline._broadcast_skip(signal, "테스트 보류 사유")
     assert len(broadcasted_notifications) == 1
     assert broadcasted_notifications[0]["notification_type"] == "skip"
-    assert broadcasted_notifications[0]["code"] == "KRW-BTC"
-    assert broadcasted_notifications[0]["exchange_id"] == "upbit"
+    assert broadcasted_notifications[0]["code"] == "risk.unknown_blocked"
+    assert broadcasted_notifications[0]["target"] == "portfolio:default/exchange:upbit/symbol:KRW-BTC"
 
     # 2. Second skip notification within 30s cooldown (should be suppressed)
     await pipeline._broadcast_skip(signal, "테스트 보류 사유")
     assert len(broadcasted_notifications) == 1
 
-    # 3. Different key (different reason) should not be suppressed
-    await pipeline._broadcast_skip(signal, "다른 보류 사유")
+    # 3. Different key (different reason mapping to different code) should not be suppressed
+    await pipeline._broadcast_skip(signal, "잔고 부족")
     assert len(broadcasted_notifications) == 2
-    assert broadcasted_notifications[1]["msg"] == "⚠️ [매매보류] KRW-BTC 주문 보류 (다른 보류 사유)"
+    assert "잔고 부족" in broadcasted_notifications[1]["message"]
 
     # 4. Different symbol should not be suppressed
     signal_eth = MockSignal("KRW-ETH", "BUY", exchange="upbit")
@@ -141,7 +169,7 @@ async def test_skip_alert_rate_limiting():
     assert len(broadcasted_notifications) == 3
 
     # 5. Let's fake time to test cooldown expiry (e.g. +31s)
-    cooldown_key = ("upbit", "KRW-BTC", "테스트 보류 사유")
-    pipeline.last_skip_times[cooldown_key] -= 31.0
+    cooldown_key = ("skip", "risk.unknown_blocked", "portfolio:default/exchange:upbit/symbol:KRW-BTC")
+    notification_service.cooldown_cache[cooldown_key] -= 31.0
     await pipeline._broadcast_skip(signal, "테스트 보류 사유")
     assert len(broadcasted_notifications) == 4

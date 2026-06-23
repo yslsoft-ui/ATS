@@ -82,7 +82,10 @@ async def test_replay_runner_equivalence():
     pm.executors['simulation'] = virtual_executor
     pm.executors['simulation_upbit'] = virtual_executor
     
-    execution_pipeline = ExecutionPipeline(pm)
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    execution_pipeline = ExecutionPipeline(pm, notification_service=mock_ns)
 
     # 1초(1000ms) 간격의 모의 틱 데이터 (rows)
     # interval=1 이므로 1초 이상 차이가 나면 캔들이 닫힙니다.

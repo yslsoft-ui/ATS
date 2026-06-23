@@ -49,26 +49,39 @@ class UIBroadcastHandler(logging.Handler):
         if not self.broadcast_callback:
             return
             
-        try:
-            msg = self.format(record)
-            notification_type = "info"
-            if record.levelno >= logging.ERROR:
-                notification_type = "error"
-            elif record.levelno >= logging.WARNING:
-                notification_type = "warning"
+        # UIBroadcastHandler에서 알림 발행을 시도할 때 무한 재귀 루프 방지
+        if record.name == "notification_service" or "notification_service" in record.name:
+            return
 
-            # UI 규격에 맞춘 알림 데이터 생성
+        try:
+            # ANSI 색상 코드 제거
+            clean_name = record.name.replace("\033[1m", "").replace("\033[0m", "").replace("\x1b[1m", "").replace("\x1b[0m", "")
+            
+            # UI 규격에 맞춘 알림 데이터 생성 (type="notification" 단일 규격)
             alert_data = {
-                "type": "alert",
+                "type": "notification",
                 "notification_type": "system",
                 "level": record.levelname,
-                "msg": f"[{record.name}] {record.getMessage()}",
-                "timestamp": record.created * 1000
+                "code": f"log.{record.levelname.lower()}",
+                "target": f"logger:{clean_name}",
+                "message": record.getMessage(),
+                "context": {
+                    "pathname": record.pathname,
+                    "lineno": record.lineno,
+                    "funcName": record.funcName
+                },
+                "created_at_ms": int(record.created * 1000)
             }
             
             # 비동기 콜백 호출
             if asyncio.iscoroutinefunction(self.broadcast_callback):
-                asyncio.create_task(self.broadcast_callback(alert_data))
+                try:
+                    asyncio.create_task(self.broadcast_callback(alert_data))
+                except RuntimeError:
+                    # 이벤트 루프가 비활성화된 환경에서의 호출 방어
+                    pass
+            else:
+                self.broadcast_callback(alert_data)
         except Exception:
             self.handleError(record)
 

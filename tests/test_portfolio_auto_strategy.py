@@ -163,6 +163,11 @@ async def test_strategy_service_reload_engines_applies_overrides(setup_auto_stra
     service = StrategyService(config_manager=config, event_bus=None, market_data_repository=md_repo)
     service.portfolio_manager = pm
     
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
+    
     # exchange_symbols 동적 페치 우회
     async def mock_fetch_symbols(ex_id, conf):
         return ["BTC"] if ex_id == "upbit" else ["005930"]

@@ -17,7 +17,14 @@ class BacktestEngine:
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
         self.virtual_executor = VirtualOrderExecutorAdapter()
         self.portfolio_manager.executors['simulation'] = self.virtual_executor
-        self.execution_pipeline = ExecutionPipeline(self.portfolio_manager)
+        
+        # 백테스트 환경에 맞춰 명시적인 Dummy 알림 서비스 주입 (의존성 노출)
+        from src.services.notification_service import NotificationService
+        class DummyConfig:
+            def get(self, key, default=None):
+                return default
+        dummy_ns = NotificationService(repository=None, config_manager=DummyConfig())
+        self.execution_pipeline = ExecutionPipeline(self.portfolio_manager, notification_service=dummy_ns)
         
     async def run(
         self, 

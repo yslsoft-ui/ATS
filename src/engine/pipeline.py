@@ -12,12 +12,20 @@ class ExecutionPipeline:
     전략 신호를 수신하여 리스크 검증, 슬리피지 보정, 포지션 사이징, 알림까지의 전 과정을 총괄하는 파이프라인입니다.
     (Deep Module: 인터페이스는 단순하지만 내부에서 복잡한 실행 로직을 처리)
     """
-    def __init__(self, portfolio_manager: PortfolioManager, repository: Optional[BaseTradingRepository] = None):
+    def __init__(
+        self,
+        portfolio_manager: PortfolioManager,
+        notification_service: Any,
+        repository: Optional[BaseTradingRepository] = None
+    ):
+        if notification_service is None:
+            raise ValueError("ExecutionPipeline: notification_service 의존성이 누락되었습니다. (Fail-Fast)")
+            
         self.portfolio_manager = portfolio_manager
         self.repository = repository or portfolio_manager.repository
         self.broadcast_callback: Optional[Callable] = None
         self.scorer = ExecutionScorer()
-        self.last_skip_times: Dict[Tuple[str, str, str], float] = {}
+        self.notification_service = notification_service
 
     def set_broadcast_callback(self, callback: Callable):
         self.broadcast_callback = callback
@@ -124,65 +132,55 @@ class ExecutionPipeline:
             return None
 
     async def _broadcast_skip(self, signal: Any, reason: str):
-        """리스크 및 규칙 위반으로 거래가 취소(Skip)되었음을 UI에 공유합니다."""
+        """리스크 및 규칙 위반으로 거래가 취소(Skip)되었음을 알림 서비스를 통해 발행합니다."""
         symbol = signal.symbol
         exchange_id = getattr(signal, 'exchange_id', None)
         if not exchange_id:
             raise ValueError("_broadcast_skip: exchange_id가 누락되었습니다.")
-        
-        # 30초 중복 억제 쿨다운 적용
-        current_time = time.time()
-        
+
         # 동적 수치가 포함될 수 있는 reason 문자열을 고정된 대표 키값으로 정규화
-        normalized_reason = reason
+        skip_reason_code = "risk.unknown_blocked"
         if reason.startswith("잔고 부족"):
-            normalized_reason = "잔고 부족"
+            skip_reason_code = "risk.insufficient_balance"
         elif reason.startswith("단일 종목 투자 한도"):
-            normalized_reason = "단일 종목 투자 한도 초과"
-            
-        cooldown_key = (exchange_id, symbol, normalized_reason)
-        last_time = self.last_skip_times.get(cooldown_key, 0.0)
-        if current_time - last_time < 30.0:
-            logger.info(f"Skip notification for {cooldown_key} suppressed due to 30s cooldown")
-            return
-        self.last_skip_times[cooldown_key] = current_time
+            skip_reason_code = "risk.max_position_blocked"
+        elif "daily" in reason.lower() or "일일" in reason:
+            skip_reason_code = "risk.daily_loss_blocked"
 
-        msg = f"⚠️ [매매보류] {symbol} 주문 보류 ({reason})"
-        notification = {
-            "type": "alert",
-            "notification_type": "skip",
-            "exchange_id": exchange_id,
-            "code": symbol,
-            "price": 0.0,
-            "msg": msg,
-            "timestamp": int(current_time * 1000)
-        }
+        portfolio = self.portfolio_manager.get_active_simulation_portfolio()
+        portfolio_id = portfolio.id if portfolio else "default"
 
-        # 웹소켓 브로드캐스트
-        if self.broadcast_callback:
-            await self.broadcast_callback(notification)
+        await self.notification_service.publish(
+            notification_type="skip",
+            level="WARNING",
+            code=skip_reason_code,
+            message=f"⚠️ [매매보류] {symbol} 주문 보류 ({reason})",
+            target=f"portfolio:{portfolio_id}/exchange:{exchange_id}/symbol:{symbol}",
+            context={"raw_reason": reason}
+        )
 
     async def _handle_notifications(self, result: Dict, signal: Any):
-        """거래 발생 알림을 생성하고 전송합니다."""
+        """거래 발생 알림을 알림 서비스를 통해 발행합니다."""
         symbol = result['symbol']
         exchange_id = result['exchange_id']
         action = result['side']
         price = result['price']
         reason = getattr(signal, 'reason', '')
         
-        msg = f"🤖 [전략매매] {action} 체결: {symbol} @ {price:,.2f} ({reason})"
-        
-        notification = {
-            "type": "alert",
-            "notification_type": "trade",
-            "exchange_id": exchange_id,
-            "code": symbol,
-            "price": price,
-            "msg": msg,
-            "timestamp": int(time.time() * 1000)
-        }
+        portfolio_id = result.get('portfolio_id', 'unknown')
 
-        # 외부 브로드캐스트 (WebSocket 등)
-        if self.broadcast_callback:
-            await self.broadcast_callback(notification)
+        await self.notification_service.publish(
+            notification_type="trade",
+            level="SUCCESS",
+            code=f"trade.{action.lower()}",
+            message=f"🤖 [전략매매] {action} 체결: {symbol} @ {price:,.2f} ({reason})",
+            target=f"portfolio:{portfolio_id}/exchange:{exchange_id}/symbol:{symbol}",
+            context={
+                "price": price,
+                "quantity": result.get("quantity", 0.0),
+                "side": action,
+                "strategy_id": getattr(signal, 'strategy_id', 'unknown'),
+                "reason": reason
+            }
+        )
 

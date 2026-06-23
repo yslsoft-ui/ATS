@@ -916,6 +916,12 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
   - 자산 동기화 감사 로그 (`ASSET_LISTED`, `ASSET_DELISTED`)
     - `ASSET_LISTED`: 신규 상장 또는 기존 폐지 종목의 재상장 시 적재. `context`에 거래소, 카테고리(ETF, ETN, ELW 등) 및 재상장 여부(`relisted: true/false`) 메타데이터가 보존됨.
     - `ASSET_DELISTED`: 상장폐지 또는 마스터 파일 유실 시 적재.
+  - **영속화(DB 저장) 필터 정책**:
+    - 알림 스패밍으로 인한 DB 과부하 및 디스크 용량 낭비를 차단하기 위해, 오직 아래의 중요 알림 이벤트들만 `system_events`에 기록됩니다:
+      - `system` 타입 알림 (예: 시스템 기동, 종료 등)
+      - `error` 타입 알림 (예: API 호출 실패 등)
+      - `asset` 타입 알림 중 **레벨이 `WARNING` 이상**인 중요 자산 상태 변경 건
+    - 단순 거래 보류(`skip` 타입), 일반 체결 알림(`trade` 타입) 등은 실시간 웹소켓 화면으로만 브로드캐스트되고 DB에는 기입되지 않습니다.
 
 ---
 

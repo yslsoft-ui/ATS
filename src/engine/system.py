@@ -48,7 +48,16 @@ class TradingSystem:
         
         # 컴포넌트 초기화 - 주입된 DB 경로 관통 주입
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
-        self.execution_pipeline = ExecutionPipeline(self.portfolio_manager) # [NEW]
+        from src.services.notification_service import NotificationService
+        self.notification_service = NotificationService(
+            repository=self.repository,
+            config_manager=self.config_manager,
+            broadcast_callback=self._broadcast_notification
+        )
+        self.execution_pipeline = ExecutionPipeline(
+            portfolio_manager=self.portfolio_manager,
+            notification_service=self.notification_service
+        )
         
         # 사용자 명령 디스패처 초기화 (의존성 분리 주입)
         from src.engine.command import UserCommandDispatcher
@@ -237,6 +246,16 @@ class TradingSystem:
         """전략의 실시간 상태 정보(Audit Log)를 처리합니다."""
         if self.broadcast_callback:
             await self.broadcast_callback(status)
+
+    async def _broadcast_notification(self, payload: dict):
+        """통합 알림 서비스를 거친 메시지를 웹소켓 등으로 브로드캐스트합니다."""
+        if self.broadcast_callback:
+            # ConnectionManager.broadcast_alert 호출이 가능한 경우 전역 브로드캐스트로 라우팅
+            callback_self = getattr(self.broadcast_callback, "__self__", None)
+            if callback_self and hasattr(callback_self, "broadcast_alert"):
+                await callback_self.broadcast_alert(payload)
+            else:
+                await self.broadcast_callback(payload)
 
     def set_broadcast_callback(self, callback: Callable):
         """외부 브로드캐스트 콜백을 설정합니다."""

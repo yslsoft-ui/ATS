@@ -156,6 +156,10 @@ async def test_proposal_evaluations_fsm_and_lock_timeout():
 
     # StrategyService를 구동하여 FSM 복구 및 평가 검증
     service = StrategyService(config, MockEventBus(), InMemoryMarketDataRepository())
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     service.db_path = TEST_DB_PATH
     
     # 2. _periodic_proposal_evaluation_loop의 락 복구 파트만 강제 수동 호출 또는 프라이빗 메소드 형태이므로 간접 테스트
@@ -213,6 +217,10 @@ async def test_universe_watched_candidate_control():
         async def subscribe(self, topic): return None
         
     service = StrategyService(config, MockEventBus(), InMemoryMarketDataRepository())
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     service.db_path = TEST_DB_PATH
     
     import src.database.connection

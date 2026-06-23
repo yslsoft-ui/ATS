@@ -34,6 +34,7 @@ class StrategyService(DaemonService):
         self.db_path = self.config_manager.get('system.db_path', 'data/backtest.db')
         self.portfolio_manager: Optional[PortfolioManager] = None
         self.execution_pipeline: Optional[ExecutionPipeline] = None
+        self.notification_service: Optional[Any] = None
         
         self.trade_engines: Dict[str, TradeEngine] = {}
         self._unmatched_keys = set()
@@ -273,12 +274,21 @@ class StrategyService(DaemonService):
         self.portfolio_manager = PortfolioManager(db_path=self.db_path)
         await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
 
-        # 3. ExecutionPipeline 연동
-        self.execution_pipeline = ExecutionPipeline(self.portfolio_manager)
+        # 3. ExecutionPipeline & NotificationService 연동
+        from src.services.notification_service import NotificationService
         
         async def event_broadcast_callback(alert_data: dict):
             await self.event_bus.publish("strategy_signal", alert_data)
             
+        self.notification_service = NotificationService(
+            repository=self.portfolio_manager.repository,
+            config_manager=self.config_manager,
+            broadcast_callback=event_broadcast_callback
+        )
+        self.execution_pipeline = ExecutionPipeline(
+            portfolio_manager=self.portfolio_manager,
+            notification_service=self.notification_service
+        )
         self.execution_pipeline.set_broadcast_callback(event_broadcast_callback)
         self.portfolio_manager.broadcast_callback = event_broadcast_callback
 
@@ -726,22 +736,22 @@ class StrategyService(DaemonService):
             logger.error(f"[StrategyService] signal_data 수신 루프 예외: {e}")
 
     async def record_strategy_event(self, event_type: str, message: str):
-        ts = int(time.time() * 1000)
-        try:
-            if self.portfolio_manager and self.portfolio_manager.repository:
-                await self.portfolio_manager.repository.insert_system_event(event_type, "strategy_daemon", message, ts)
-        except Exception as e:
-            logger.error(f"[StrategyService] 시스템 이벤트 DB 적재 실패: {e}")
-        try:
-            await self.event_bus.publish("strategy_signal", {
-                "type": "system_event",
-                "event_type": event_type,
-                "target": "strategy_daemon",
-                "message": message,
-                "timestamp": ts
-            })
-        except Exception as e:
-            logger.error(f"[StrategyService] 이벤트 버스 발행 실패: {e}")
+        if self.notification_service is None:
+            raise ValueError("StrategyService: notification_service 의존성이 누락되었습니다. (Fail-Fast)")
+            
+        level = "INFO"
+        if "error" in message.lower() or "실패" in message or "fail" in message.lower():
+            level = "ERROR"
+        elif "warning" in message.lower() or "경고" in message or "blocked" in message.lower():
+            level = "WARNING"
+            
+        await self.notification_service.publish(
+            notification_type="system",
+            level=level,
+            code=event_type,
+            message=message,
+            target="strategy_daemon"
+        )
 
     async def record_performance_snapshot(self, strategy_id: str, version_id: int, snapshot_type: str, params: dict):
         if not self.current_portfolio_id:

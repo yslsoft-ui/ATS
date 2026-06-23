@@ -15,7 +15,7 @@ function showNotification(notification, typeFallback) {
     let payload = {};
     if (typeof notification === 'string') {
         payload = {
-            msg: notification,
+            message: notification,
             notification_type: typeFallback || 'info'
         };
     } else {
@@ -23,6 +23,7 @@ function showNotification(notification, typeFallback) {
     }
 
     const type = payload.notification_type;
+    const level = (payload.level || '').toUpperCase();
     
     // 감지 알림(detect)인 경우 실시간 팝업 거부
     if (type === 'detect') {
@@ -32,15 +33,28 @@ function showNotification(notification, typeFallback) {
     let cardClass = 'notification-card';
     let title = '🚀 알림';
     
+    // 1. notification_type 및 level에 따른 타이틀 설정
     if (type === 'trade') {
-        cardClass += ' success';
         title = '🤖 전략매매 체결';
     } else if (type === 'skip') {
-        cardClass += ' warning';
         title = '⚠️ 매매 보류';
-    } else if (type === 'warning' || type === 'error' || type === 'success' || type === 'system') {
-        cardClass += ` ${type}`;
-        title = type === 'error' ? '❌ 시스템 에러' : (type === 'warning' ? '⚠️ 시스템 경고' : 'ℹ️ 시스템 알림');
+    } else if (type === 'asset') {
+        title = '🔔 자산 정보';
+    } else if (type === 'error' || level === 'ERROR' || level === 'CRITICAL') {
+        title = '❌ 시스템 에러';
+    } else if (level === 'WARNING') {
+        title = '⚠️ 시스템 경고';
+    } else {
+        title = 'ℹ️ 시스템 알림';
+    }
+
+    // 2. 레벨/타입에 따른 스타일 클래스 분기
+    if (level === 'ERROR' || level === 'CRITICAL' || type === 'error') {
+        cardClass += ' error';
+    } else if (level === 'WARNING' || type === 'skip') {
+        cardClass += ' warning';
+    } else if (level === 'SUCCESS' || type === 'trade') {
+        cardClass += ' success';
     } else {
         cardClass += ' info';
     }
@@ -48,13 +62,28 @@ function showNotification(notification, typeFallback) {
     const card = document.createElement('div');
     card.className = cardClass;
     
-    const symbol = payload.code || payload.symbol || '';
-    const msg = payload.msg || '';
+    // target 필드 파싱 (예: portfolio:1/exchange:upbit/symbol:KRW-BTC)
+    let symbol = payload.code || payload.symbol || '';
+    let exchangeId = payload.exchange_id || 'upbit';
+    
+    if (payload.target) {
+        const targetParts = payload.target.split('/');
+        for (const part of targetParts) {
+            if (part.startsWith('symbol:')) {
+                symbol = part.split(':')[1];
+            } else if (part.startsWith('exchange:')) {
+                exchangeId = part.split(':')[1];
+            }
+        }
+    }
+
+    const msg = payload.message || payload.msg || '';
+    const timeStr = payload.created_at_ms ? new Date(payload.created_at_ms).toLocaleTimeString() : new Date().toLocaleTimeString();
 
     card.innerHTML = `
         <div class="notification-header">
             <span class="notification-title">${title}</span>
-            <span class="notification-time">${new Date().toLocaleTimeString()}</span>
+            <span class="notification-time">${timeStr}</span>
         </div>
         <div class="notification-body">
             ${msg}
@@ -68,7 +97,7 @@ function showNotification(notification, typeFallback) {
         if (symbol) {
             // 스토어 상태 변경 -> 반응형 구독에 의해 자동 리로드 실행됨
             Store.update({
-                currentExchange: payload.exchange_id || 'upbit',
+                currentExchange: exchangeId,
                 currentSymbol: symbol
             });
 

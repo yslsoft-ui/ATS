@@ -34,6 +34,10 @@ async def test_strategy_service_no_warning_when_engines_empty(caplog):
     })
     repo = InMemoryTradingRepository()
     service = StrategyService(config_manager=config, event_bus=None, market_data_repository=repo)
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     
     # Ensure trade_engines is empty
     assert len(service.trade_engines) == 0
@@ -69,6 +73,10 @@ async def test_strategy_service_warning_when_engines_exist_and_throttled(caplog)
     })
     repo = InMemoryTradingRepository()
     service = StrategyService(config_manager=config, event_bus=None, market_data_repository=repo)
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     
     # Populate trade_engines with a dummy engine to make it non-empty
     service.trade_engines = {"bithumb:BTC": object()}
@@ -115,6 +123,10 @@ async def test_strategy_service_reload_engines_clears_unmatched_keys(caplog):
     })
     repo = InMemoryTradingRepository()
     service = StrategyService(config_manager=config, event_bus=None, market_data_repository=repo)
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     
     # Populate trade_engines
     service.trade_engines = {"bithumb:BTC": object()}

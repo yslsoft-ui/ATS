@@ -255,7 +255,7 @@ function processTick(tick) {
         return;
     }
 
-    if (tick.type === 'alert') {
+    if (tick.type === 'alert' || tick.type === 'notification') {
         showNotification(tick);
         
         const notificationType = tick.notification_type;

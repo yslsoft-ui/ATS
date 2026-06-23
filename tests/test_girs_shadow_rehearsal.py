@@ -214,6 +214,10 @@ async def test_universe_resource_guards_and_logging_rules():
     config_mock.config = {}
 
     service = StrategyService(config_mock, event_bus, InMemoryMarketDataRepository())
+    from unittest.mock import AsyncMock, Mock
+    mock_ns = Mock()
+    mock_ns.publish = AsyncMock(return_value=True)
+    service.notification_service = mock_ns
     
     # PortfolioManager Mocking 및 Repository 연동
     portfolio_mock = MagicMock(spec=PortfolioManager)
