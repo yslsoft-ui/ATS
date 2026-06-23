@@ -1660,6 +1660,8 @@
                     style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 15px; margin-bottom: 20px;">
                     <div>
                         <h1 style="margin: 0; display: flex; align-items: center; gap: 10px;">⚙️ 데몬 상태 모니터링
+                            <span id="daemon-state-badge" class="ctx-badge status-indicator"
+                                style="display: none; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩 중...</span>
                             <span id="daemon-stale-badge" class="badge danger"
                                 style="font-size: 0.72rem; display: none; padding: 2px 8px;">연결 끊김</span>
                         </h1>
@@ -1672,8 +1674,6 @@
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <span id="daemon-state-badge" class="ctx-badge status-indicator"
-                            style="display: none; padding: 4px 10px; font-weight: bold; border-radius: 6px;">로딩 중...</span>
                         <button id="btn-daemon-restart" class="btn warning"
                             style="font-size: 0.82rem; padding: 6px 14px;">🔄 데몬 재기동</button>
                     </div>
@@ -1767,15 +1767,7 @@
                             style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">사용률: 0.0%
                             (NORMAL)</span>
                     </div>
-                    <!-- 데몬 메모리 -->
-                    <div class="diag-card">
-                        <span class="label">데몬 메모리 사용량 (RSS) <span class="tooltip-icon"
-                                title="수집기 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기입니다. 2초 화면 갱신 주기마다 /proc/self/status를 읽어와 실시간으로 재측정합니다.">❓</span></span>
-                        <span class="value" id="res-val-memory">- MB</span>
-                        <span class="sub-label"
-                            style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">데몬 단독
-                            할당량</span>
-                    </div>
+
                     <!-- 매퍼 캐시 -->
                     <div class="diag-card">
                         <span class="label">마스터 매핑 캐시 수 <span class="tooltip-icon"
@@ -1895,16 +1887,7 @@
                 <!-- 2. 시스템 리소스 및 실시간 판단 메트릭 (5단 그리드) -->
                 <div class="diagnostic-grid"
                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                    <!-- 데몬 리소스 -->
-                    <div class="diag-card">
-                        <span class="label">데몬 리소스 사용량 <span class="tooltip-icon"
-                                title="전략 데몬 프로세스가 실제 RAM에 점유 중인 물리 메모리 크기(RSS)와 CPU 사용률입니다. 5초 송출 주기마다 실시간 측정됩니다.">❓</span></span>
-                        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 8px;">
-                            <span class="value" id="res-val-strategy-memory" style="font-size: 1.15rem;">- MB</span>
-                            <span class="sub-label" id="res-val-strategy-cpu" style="font-size: 0.8rem; color: #F59E0B; font-family: monospace;">CPU: -%</span>
-                        </div>
-                        <span class="sub-label" style="font-size: 0.72rem; color: #94A3B8; margin-top: 4px; display: block;">/proc/self/status RSS</span>
-                    </div>
+
                     <!-- 결정 처리 상태 -->
                     <div class="diag-card">
                         <span class="label">마지막 실시간 판단 <span class="tooltip-icon"
@@ -2258,35 +2241,18 @@
                         </div>
                     </div>
 
-                    <!-- 2. 마지막 실행 통계 카드 -->
-                    <div class="overview-card" style="padding: 20px;">
-                        <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">📊 마지막 실행 통계
-                        </h3>
-                        <div
-                            style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: #F8FAFC;">
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color: #94A3B8;">최종 실행 시각:</span>
-                                <span id="cleanup-stat-last-time" style="font-weight:bold;">-</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color: #94A3B8;">다음 예정 시각:</span>
-                                <span id="cleanup-stat-next-time" style="font-weight:bold;">-</span>
-                            </div>
-                            <div style="display:flex; justify-content:space-between;">
-                                <span style="color: #94A3B8;">정리 소요 시간:</span>
-                                <span id="cleanup-stat-duration" style="font-weight:bold;">-</span>
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- 3. 마지막 실행 결과 상세 카드 -->
                     <div class="overview-card"
                         style="padding: 20px; display: flex; flex-direction: column; justify-content: space-between;">
                         <div>
-                            <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">📦 마지막 실행
-                                결과 상세</h3>
+                            <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">📦 마지막 실행 결과 상세</h3>
                             <div
                                 style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: #F8FAFC;">
+                                <div
+                                    style="display:flex; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,0.05); padding-bottom: 6px;">
+                                    <span style="color: #94A3B8;">최종 실행 시각:</span>
+                                    <span id="cleanup-stat-last-time" style="font-weight:bold;">-</span>
+                                </div>
                                 <div
                                     style="display:flex; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,0.05); padding-bottom: 6px;">
                                     <span style="color: #94A3B8;">삭제된 Trades (틱) 수:</span>
@@ -2299,10 +2265,15 @@
                                     <span id="cleanup-stat-deleted-candles-detail"
                                         style="font-weight:bold; color:#F59E0B; font-family: 'Roboto Mono', monospace;">-</span>
                                 </div>
-                                <div style="display:flex; justify-content:space-between; padding-bottom: 4px;">
+                                <div
+                                    style="display:flex; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,0.05); padding-bottom: 6px;">
                                     <span style="color: #94A3B8;">다운샘플링된 Candles 수:</span>
                                     <span id="cleanup-stat-downsampled-detail"
                                         style="font-weight:bold; color:#10B981; font-family: 'Roboto Mono', monospace;">-</span>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; padding-bottom: 4px;">
+                                    <span style="color: #94A3B8;">정리 소요 시간:</span>
+                                    <span id="cleanup-stat-duration" style="font-weight:bold;">-</span>
                                 </div>
                             </div>
                         </div>
@@ -2319,10 +2290,14 @@
 
                     <!-- 4. 다음 삭제 실행 대상 상세 카드 -->
                     <div class="overview-card" style="padding: 20px;">
-                        <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">🧹 다음 삭제 실행 대상
-                            상세</h3>
+                        <h3 style="margin-top:0; margin-bottom:15px; font-size: 0.95rem; color: #94A3B8;">🧹 다음 삭제 실행 대상 상세</h3>
                         <div
                             style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85rem; color: #F8FAFC;">
+                            <div
+                                style="display:flex; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,0.05); padding-bottom: 6px;">
+                                <span style="color: #94A3B8;">다음 예정 시각:</span>
+                                <span id="cleanup-stat-next-time" style="font-weight:bold;">-</span>
+                            </div>
                             <div
                                 style="display:flex; justify-content:space-between; border-bottom: 1px solid rgba(148,163,184,0.05); padding-bottom: 6px;">
                                 <span style="color: #94A3B8;">삭제예정 Trades (틱) 수:</span>
@@ -3262,8 +3237,8 @@
     <script src="strategy-daemon.js"></script>
     <script src="evaluation-daemon.js"></script>
     <script src="restored-view.js"></script>
-    <script src="cleanup.js"></script>
-    <script src="collector.js"></script>
+    <script src="cleanup.js?v=1.0.4"></script>
+    <script src="collector.js?v=1.0.4"></script>
     <script src="system-events.js"></script>
     <script src="app.js?v=1.0.3"></script>
 </body>

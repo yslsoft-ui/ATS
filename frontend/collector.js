@@ -30,6 +30,7 @@ const CollectorView = (() => {
     let activeSymbolsMetadata = {};
     let daemonSymbolsVersions = {}; // 데몬의 실제 종목 버전 캐시
     let isStaleState = false;
+    let lastRawDetailData = null; // 마지막 수신된 상세 데이터 스냅샷 캐시
 
     // 모니터링 관련 임계값 설정 (백엔드와 동기화되며, 연결 전에는 안전한 기본값으로 fallback)
     let monitoringConfig = {
@@ -237,6 +238,10 @@ const CollectorView = (() => {
                 document.querySelectorAll('.diag-card, .collector-exch-card').forEach(el => {
                     el.style.opacity = '0.5';
                 });
+                // 즉시 UI 리렌더링 유도 (거래소 뱃지 OFFLINE 전환)
+                if (lastRawDetailData) {
+                    updateUI(lastRawDetailData);
+                }
             }
         } else {
             if (isStaleState) {
@@ -245,6 +250,10 @@ const CollectorView = (() => {
                 document.querySelectorAll('.diag-card, .collector-exch-card').forEach(el => {
                     el.style.opacity = '1';
                 });
+                // 즉시 UI 리렌더링 유도 (거래소 뱃지 정상 복구)
+                if (lastRawDetailData) {
+                    updateUI(lastRawDetailData);
+                }
             }
         }
 
@@ -273,6 +282,7 @@ const CollectorView = (() => {
      * 실시간 수신 데이터 UI 바인딩 핵심 로직
      */
     function updateUI(data) {
+        lastRawDetailData = data; // 실시간 상세 데이터 캐시 최신화
         const detail = data.daemon_detail || {};
         const queues = detail.queues || {};
         
@@ -354,14 +364,24 @@ const CollectorView = (() => {
             orderedExchanges.forEach(exch => {
                 const exchInfo = detail.exchanges[exch];
                 if (exchInfo) {
-                    htmlContent += buildExchangeCardHtml(exch, exchInfo);
+                    const adjustedInfo = { ...exchInfo };
+                    if (isDaemonStale) {
+                        adjustedInfo.is_running = false;
+                        adjustedInfo.status = 'OFFLINE';
+                    }
+                    htmlContent += buildExchangeCardHtml(exch, adjustedInfo);
                 }
             });
             
             // 2) 혹시 나중에 추가될 수 있는 미정의 거래소들을 뒤에 안전하게 순차 병합
             for (const [exch, exchInfo] of Object.entries(detail.exchanges)) {
                 if (!orderedExchanges.includes(exch)) {
-                    htmlContent += buildExchangeCardHtml(exch, exchInfo);
+                    const adjustedInfo = { ...exchInfo };
+                    if (isDaemonStale) {
+                        adjustedInfo.is_running = false;
+                        adjustedInfo.status = 'OFFLINE';
+                    }
+                    htmlContent += buildExchangeCardHtml(exch, adjustedInfo);
                 }
             }
             
@@ -677,6 +697,10 @@ const CollectorView = (() => {
             }, 12000) // 프로세스가 완전히 소멸했다가 다시 뜨는 것을 고려해 넉넉히 12초 설정
         });
 
+        // 즉시 하트비트를 만료시켜 UI에 연결 끊김 및 거래소 OFFLINE 강제 반영
+        lastDetailHeartbeat = 0;
+        checkStaleStatus();
+
         try {
             await APIClient.restartCollectorDaemon(cmdId);
             showToast("수집기 데몬 자가 재기동 신호가 전송되었습니다.", "success");
@@ -684,6 +708,10 @@ const CollectorView = (() => {
             pendingCommands.delete(cmdId);
             if (btn) btn.classList.remove('loading');
             showToast("수집기 데몬 재기동 신호 전송 실패", "error");
+            
+            // 에러 발생 시 하트비트 복구 복원
+            lastDetailHeartbeat = Date.now();
+            checkStaleStatus();
         }
     }
 

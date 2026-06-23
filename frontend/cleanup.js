@@ -63,7 +63,7 @@ const CleanupView = (() => {
         if (typeof DaemonMonitoringView !== 'undefined' && currentStatus) {
             DaemonMonitoringView.updateSharedHeader('cleanup', {
                 pid: currentStatus.pid || null,
-                startedAtFormatted: formatTimestamp(currentStatus.start_time),
+                startedAtFormatted: currentStatus.start_time ? new Date(currentStatus.start_time * 1000).toLocaleString() : '-',
                 heartbeatFormatted: currentStatus.timestamp ? new Date(currentStatus.timestamp * 1000).toLocaleTimeString() : '-',
                 rssMb: currentStatus.rss_mb || 0,
                 cpuUsagePct: null,
@@ -254,7 +254,7 @@ const CleanupView = (() => {
         if (typeof DaemonMonitoringView !== 'undefined') {
             DaemonMonitoringView.updateSharedHeader('cleanup', {
                 pid: status.pid || null,
-                startedAtFormatted: formatTimestamp(status.start_time),
+                startedAtFormatted: status.start_time ? new Date(status.start_time * 1000).toLocaleString() : '-',
                 heartbeatFormatted: status.timestamp ? new Date(status.timestamp * 1000).toLocaleTimeString() : '-',
                 rssMb: status.rss_mb || 0,
                 cpuUsagePct: null,
