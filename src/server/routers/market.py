@@ -110,7 +110,7 @@ async def get_candles(
 async def get_restored_candles(
     exchange_id: Optional[str] = None,
     symbol: Optional[str] = None,
-    limit_minutes: int = 1440
+    limit_minutes: int = 60
 ):
     """DB에 누락되었으나 틱으로 복구된 캔들 목록 반환"""
     if exchange_id and exchange_id not in ("upbit", "bithumb", "kis"):
@@ -127,7 +127,7 @@ async def get_restored_candles(
 async def get_ghost_candles(
     exchange_id: Optional[str] = None,
     symbol: Optional[str] = None,
-    limit_minutes: int = 1440
+    limit_minutes: int = 60
 ):
     """DB의 candles에는 존재하지만 trades에는 체결 틱이 0건인 고스트 캔들 목록 반환"""
     if exchange_id and exchange_id not in ("upbit", "bithumb", "kis"):

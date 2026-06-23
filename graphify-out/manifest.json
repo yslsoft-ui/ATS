@@ -394,6 +394,11 @@
     "ast_hash": "68557719c4cd94d52c693f060dd2cd79",
     "semantic_hash": "68557719c4cd94d52c693f060dd2cd79"
   },
+  "/home/simon/ATS/scratch/migrate_evaluations.py": {
+    "mtime": 1782171215.7871027,
+    "ast_hash": "917bca478fb5b90c5c2f43bc1866afa8",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/test_low_candles.py": {
     "mtime": 1780618900.60194,
     "ast_hash": "fe92f3ea18034ebf9ac3bb5f7555e1cb",
@@ -480,7 +485,7 @@
     "semantic_hash": "24924e04346a36ed4d802cb644f1680b"
   },
   "/home/simon/ATS/logs/label_quality_report.json": {
-    "mtime": 1782141748.1852624,
+    "mtime": 1782173132.544687,
     "ast_hash": "f72078ade04cc8feadfd4ef8bce15343",
     "semantic_hash": ""
   },
@@ -1040,8 +1045,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/main.py": {
-    "mtime": 1782143828.0914805,
-    "ast_hash": "51330fedf37d916eb9865d009e263da3",
+    "mtime": 1782169917.1035404,
+    "ast_hash": "4548ccfa31a1c07c739fd15cf95869ac",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/strategy.py": {
@@ -1070,8 +1075,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/portfolio.py": {
-    "mtime": 1781830650.6196806,
-    "ast_hash": "30422550a6ab229e8d5283ab1a8d5bef",
+    "mtime": 1782169923.6196988,
+    "ast_hash": "ebbe468fd437bf014ee04549ab5f2c68",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/intelligence.py": {
@@ -1090,8 +1095,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/server/routers/market.py": {
-    "mtime": 1782093929.1224918,
-    "ast_hash": "aa8005d3041fe621ca6e9469ba5da4ca",
+    "mtime": 1782173118.0603743,
+    "ast_hash": "ccdfa625e92f9392086ff13deaf1f50e",
     "semantic_hash": ""
   },
   "/home/simon/ATS/src/config/manager.py": {
@@ -1434,6 +1439,16 @@
     "ast_hash": "066465e848fb0ba5c20df62a9766bcc2",
     "semantic_hash": ""
   },
+  "/home/simon/ATS/scratch/evaluation-daemon-fix/PRD.md": {
+    "mtime": 1782171607.7917473,
+    "ast_hash": "dc6050eb2431ffb588e1614a38336ac7",
+    "semantic_hash": ""
+  },
+  "/home/simon/ATS/scratch/evaluation-daemon-fix/issues/01-evaluation-daemon-telemetry-and-db-fix.md": {
+    "mtime": 1782171612.5798497,
+    "ast_hash": "761f3fe6d9301c43ce059b51dc2f98da",
+    "semantic_hash": ""
+  },
   "/home/simon/ATS/scratch/graphify-wiki-enrichment/PRD.md": {
     "mtime": 1779162181.0,
     "ast_hash": "72ecec4a8b0b878d59c45996a88f1c61",
@@ -1465,7 +1480,7 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/config/settings.yaml": {
-    "mtime": 1782141763.6615658,
+    "mtime": 1782173149.7490587,
     "ast_hash": "bd46550e16ee48820cea531279808087",
     "semantic_hash": ""
   },
@@ -1475,8 +1490,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_report.md": {
-    "mtime": 1781360014.131642,
-    "ast_hash": "b74d90c14d1de0c2131c1154fcfe6f8b",
+    "mtime": 1782172220.5489843,
+    "ast_hash": "a6a8c74de9a7e51d13fd7c9c958e8dba",
     "semantic_hash": ""
   },
   "/home/simon/ATS/logs/girs_shadow_soak_report.md": {
@@ -1485,8 +1500,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/frontend/index.html": {
-    "mtime": 1782141707.124457,
-    "ast_hash": "59eef23d80626b2c6f55d05aa8c049e3",
+    "mtime": 1782173101.3760138,
+    "ast_hash": "d4782c1e990049fd88e9ac1ba63305dc",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/collector-design.md": {
@@ -1510,8 +1525,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/api.md": {
-    "mtime": 1782147299.6863155,
-    "ast_hash": "beb7641745a4b00ad041cb20b8c5f056",
+    "mtime": 1782173344.237259,
+    "ast_hash": "8281eee1d9d8afee933fdfd0125dc491",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/ui-design.md": {
@@ -1525,8 +1540,8 @@
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/database.md": {
-    "mtime": 1781878622.910554,
-    "ast_hash": "60093caa562b357f822011a3a420f1d6",
+    "mtime": 1782171711.2619808,
+    "ast_hash": "ec2339bb60631e71bd1f03b85904cd09",
     "semantic_hash": ""
   },
   "/home/simon/ATS/docs/adr/0002-sqlite-concurrency-optimization.md": {
