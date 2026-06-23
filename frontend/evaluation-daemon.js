@@ -515,6 +515,7 @@ const EvaluationDaemonView = (() => {
         loadEvents,
         loadEvaluationsTable,
         loadJobsTable,
+        restartEvaluationDaemon,
         handleDaemonDetail,
         handleCommandResult
     };

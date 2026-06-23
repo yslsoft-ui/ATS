@@ -110,6 +110,58 @@ class TradeEngine:
         except Exception as e:
             logger.warning(f"{self.symbol} warmup failed: {e}")
 
+    def sync_position_state(self, portfolio_manager: Any):
+        """실제 포트폴리오 잔고를 조회하여 전략의 인메모리 포지션 상태를 강제 동기화합니다."""
+        if not portfolio_manager:
+            return
+
+        # portfolio_manager 타입 유연성 대응 (실거래용 PortfolioManager vs 백테스트용 프록시 객체)
+        target_portfolios = {}
+        actual_pm = portfolio_manager
+        p_id = None
+        if hasattr(portfolio_manager, 'manager') and hasattr(portfolio_manager, 'portfolio_id'):
+            actual_pm = portfolio_manager.manager
+            p_id = portfolio_manager.portfolio_id
+            if p_id in actual_pm.portfolios:
+                target_portfolios = {p_id: actual_pm.portfolios[p_id]}
+        elif hasattr(portfolio_manager, 'portfolios'):
+            target_portfolios = portfolio_manager.portfolios
+            if len(target_portfolios) == 1:
+                p_id = list(target_portfolios.keys())[0]
+            elif hasattr(portfolio_manager, 'get_active_simulation_portfolio'):
+                active_sim = portfolio_manager.get_active_simulation_portfolio()
+                if active_sim:
+                    p_id = active_sim.id
+
+        has_position = False
+        matching_pos = None
+        for portfolio in target_portfolios.values():
+            pos_key = (self.exchange_id.lower(), self.symbol)
+            if pos_key in portfolio.positions and portfolio.positions[pos_key].quantity > 0:
+                has_position = True
+                matching_pos = portfolio.positions[pos_key]
+                break
+
+        for host in self.hosts:
+            if hasattr(host.strategy, 'in_position'):
+                if host.strategy.in_position != has_position:
+                    logger.info(
+                        f"[TradeEngine] [sync_position_state] 전략 {host.strategy.id}의 인메모리 포지션 상태 동기화: "
+                        f"{host.strategy.in_position} -> {has_position} ({self.symbol})"
+                    )
+                    host.strategy.in_position = has_position
+                    if has_position and matching_pos:
+                        host.strategy.buy_price = matching_pos.avg_price
+                        host.strategy.peak_price = matching_pos.peak_price or matching_pos.avg_price
+                        host.strategy.entry_time = matching_pos.entry_time
+                    else:
+                        if hasattr(host.strategy, '_reset_position_state'):
+                            host.strategy._reset_position_state()
+                        else:
+                            host.strategy.buy_price = None
+                            host.strategy.peak_price = None
+                            host.strategy.entry_time = None
+
     async def process_tick(self, tick: Dict, portfolio_manager: Any, is_warmup: bool = False) -> tuple[List[TradeSignal], List[Candle]]:
         """실시간 틱을 처리하고, 완성된 캔들이 있을 경우 전략을 실행하여 신호와 캔들을 반환합니다."""
         self.last_tick = tick
@@ -198,6 +250,31 @@ class TradeEngine:
                         has_position = True
                         break
                 
+                # 전략의 인메모리 포지션 상태를 실제 포트폴리오 상태와 동기화 (재기동/핫리로드 대응)
+                if hasattr(host.strategy, 'in_position'):
+                    if host.strategy.in_position != has_position:
+                        logger.info(
+                            f"[TradeEngine] 전략 {host.strategy.id}의 인메모리 포지션 상태 동기화: "
+                            f"{host.strategy.in_position} -> {has_position} ({self.symbol})"
+                        )
+                        host.strategy.in_position = has_position
+                        if has_position:
+                            for portfolio in target_portfolios.values():
+                                pos_key = (self.exchange_id.lower(), self.symbol)
+                                if pos_key in portfolio.positions and portfolio.positions[pos_key].quantity > 0:
+                                    pos = portfolio.positions[pos_key]
+                                    host.strategy.buy_price = pos.avg_price
+                                    host.strategy.peak_price = pos.peak_price or pos.avg_price
+                                    host.strategy.entry_time = pos.entry_time
+                                    break
+                        else:
+                            if hasattr(host.strategy, '_reset_position_state'):
+                                host.strategy._reset_position_state()
+                            else:
+                                host.strategy.buy_price = None
+                                host.strategy.peak_price = None
+                                host.strategy.entry_time = None
+                
                 # 1) 전략이 비활성화(enabled=False)되었고, 보유 포지션도 없다면 신규 진입 방지를 위해 실행 건너뜀
                 # 2) 만약 포지션을 보유하고 있다면 전략이 꺼져 있어도 청산 신호를 내보내야 하므로 실행함
                 strategy_enabled = getattr(host.strategy, 'enabled', True)
@@ -208,8 +285,12 @@ class TradeEngine:
                 action_result = await host.execute(context, portfolio_manager, portfolio_id=p_id)
                 if action_result:
                     action = action_result.action if hasattr(action_result, 'action') else str(action_result)
-                    # 비활성화된 전략의 오작동 BUY 신호 강제 차단
-                    if action == 'BUY' and not strategy_enabled:
+                    # 비활성화된 전략의 오작동 BUY 신호 강제 차단 또는 포지션 보유 중인 전략의 중복 BUY 신호 차단
+                    if action == 'BUY' and (not strategy_enabled or has_position):
+                        logger.warning(
+                            f"[TradeEngine] {self.symbol} BUY 신호 차단: "
+                            f"전략활성화={strategy_enabled}, 포지션보유={has_position}"
+                        )
                         continue
                         
                     await self._handle_strategy_result(host, candle, action_result, signals)

@@ -605,14 +605,76 @@
                         </div>
                     </div>
 
-                    <!-- 2.2. 가상자산 안내 메시지 영역 -->
-                    <div id="crypto-detail-info-wrapper" style="display: none; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 40px; text-align: center; color: #94A3B8; margin-top: 10px;">
-                        <span style="font-size: 2.5rem; display: block; margin-bottom: 15px;">🪙</span>
-                        <h3 style="color: #F8FAFC; margin-bottom: 10px;">가상자산 상세 정보 미제공</h3>
-                        <p style="font-size: 0.9rem; line-height: 1.5; margin: 0;">
-                            선택하신 종목은 가상자산입니다.<br>
-                            가상자산은 기업 제원 및 대체거래소(Nextrade) 거래 정보가 존재하지 않으므로 상세 정보를 제공하지 않습니다.
-                        </p>
+                    <!-- 2.2. 가상자산 상세 정보 영역 -->
+                    <div id="crypto-detail-info-wrapper" style="display: none;">
+                        <div class="crypto-detail-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
+                            <!-- 1. 수집 및 거래 상태 정보 -->
+                            <div class="kis-detail-card" style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                                <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">💡 수집 및 거래 상태 정보</h3>
+                                <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">거래소</div>
+                                        <div id="crypto-detail-exchange" style="font-weight: bold; font-size: 1.1rem; color: #F8FAFC;">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">마켓 (거래 페어)</div>
+                                        <div id="crypto-detail-market" style="font-weight: bold; font-size: 1.1rem; color: #F8FAFC;">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">수집 상태</div>
+                                        <div id="crypto-detail-collect-status" style="font-weight: bold; font-size: 1.1rem;">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">실시간 수집 채널</div>
+                                        <div id="crypto-detail-sub-channel" style="font-family: monospace; font-weight: bold; color: #F59E0B;">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. 시세 요약 정보 -->
+                            <div class="kis-detail-card" style="background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                                <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">⚙️ 시세 요약 정보</h3>
+                                <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">현재가</div>
+                                        <div id="crypto-detail-price" style="font-family: monospace; font-weight: bold; font-size: 1.2rem;">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">전일 대비 변동</div>
+                                        <div id="crypto-detail-change" style="font-family: monospace; font-weight: bold;">-</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">24h 고가 / 저가</div>
+                                        <div style="font-family: monospace; font-size: 0.9rem; font-weight: bold; color: #E2E8F0;">
+                                            <span id="crypto-detail-high" style="color: #FF4B4B;">-</span> / <span id="crypto-detail-low" style="color: #0072FF;">-</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">24h 거래대금</div>
+                                        <div id="crypto-detail-trade-value" style="font-family: monospace; font-weight: bold; color: #E2E8F0;">-</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. 실시간 체결 통계 -->
+                            <div class="kis-detail-card" style="grid-column: span 2; background: #1E293B; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 8px; padding: 20px;">
+                                <h3 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid rgba(148, 163, 184, 0.1); padding-bottom: 10px; color: #F8FAFC; font-size: 1.1rem;">📊 실시간 체결 통계 (틱 분석)</h3>
+                                <div class="info-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">실시간 체결 강도</div>
+                                        <div id="crypto-detail-volume-power" style="font-family: monospace; font-weight: bold; font-size: 1.2rem; color: #F8FAFC;">100.00%</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">매수 누적 거래량</div>
+                                        <div id="crypto-detail-buy-volume" style="font-family: monospace; font-weight: bold; color: #FF4B4B;">0</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 5px;">매도 누적 거래량</div>
+                                        <div id="crypto-detail-sell-volume" style="font-family: monospace; font-weight: bold; color: #0072FF;">0</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

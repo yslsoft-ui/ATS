@@ -495,6 +495,7 @@ const StrategyDaemonView = (() => {
         init,
         destroy,
         loadEvents,
+        restartStrategyDaemon,
         handleDaemonDetail,
         handleCommandResult
     };

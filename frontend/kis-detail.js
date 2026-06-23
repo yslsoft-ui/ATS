@@ -3,6 +3,10 @@
  */
 
 const KisDetailView = (() => {
+    // 실시간 체결 강도 연산용 누적 상태 변수
+    let cryptoBuyVolume = 0;
+    let cryptoSellVolume = 0;
+    let lastRenderedCryptoKey = ""; // "exchange:symbol" 키
 
     /**
      * KIS 종목 상세 정보를 서버로부터 로드하여 화면에 렌더링합니다.
@@ -24,14 +28,7 @@ const KisDetailView = (() => {
             if (kisWrapper) kisWrapper.style.display = 'none';
             if (cryptoWrapper) {
                 cryptoWrapper.style.display = 'block';
-                // 텍스트 동적 변경 (선택된 심볼 및 거래소 표시)
-                const descP = cryptoWrapper.querySelector('p');
-                if (descP) {
-                    descP.innerHTML = `
-                        선택하신 종목은 가상자산입니다.<br>
-                        <strong>${symbol} (${exchange.toUpperCase()})</strong>은 가상자산이므로 기업 제원 및 대체거래소(Nextrade) 거래 정보가 제공되지 않습니다.
-                    `;
-                }
+                renderCryptoDetail(symbol, exchange);
             }
             return;
         }
@@ -234,7 +231,172 @@ const KisDetailView = (() => {
         }
     }
 
+    /**
+     * 가상자산 종목 상세 정보를 초기 렌더링합니다.
+     */
+    function renderCryptoDetail(symbol, exchange) {
+        const key = `${exchange}:${symbol}`;
+        
+        // 종목이 변경되었을 때만 누적 거래량 초기화
+        if (lastRenderedCryptoKey !== key) {
+            cryptoBuyVolume = 0;
+            cryptoSellVolume = 0;
+            lastRenderedCryptoKey = key;
+        }
+        
+        // UI 엘리먼트 바인딩
+        const exEl = document.getElementById('crypto-detail-exchange');
+        const mkEl = document.getElementById('crypto-detail-market');
+        if (exEl) exEl.innerText = exchange.toUpperCase();
+        if (mkEl) mkEl.innerText = symbol;
+        
+        // 전역 마켓 목록에서 데이터 매칭
+        const coin = (window.marketData || []).find(item => item.exchange === exchange && item.market === symbol);
+        
+        // 수집 상태 뱃지 및 채널 정보 설정
+        const activeItem = (window.marketData || []).find(item => item.exchange === exchange && item.market === symbol);
+        const isCollected = activeItem ? (activeItem.is_collected !== false) : false;
+        
+        const collectStatusEl = document.getElementById('crypto-detail-collect-status');
+        if (collectStatusEl) {
+            collectStatusEl.innerHTML = isCollected 
+                ? `<span style="background: #10B981; color: #FFFFFF; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;">🟢 수집 중</span>`
+                : `<span style="background: #475569; color: #E2E8F0; padding: 4px 10px; border-radius: 4px; font-size: 0.85rem; font-weight: bold;">⚪ 미수집 (설정 고정)</span>`;
+        }
+        
+        const subChannelEl = document.getElementById('crypto-detail-sub-channel');
+        if (subChannelEl) {
+            subChannelEl.innerHTML = exchange === 'upbit' 
+                ? `<div>체결: <span style="color: #F59E0B; font-weight: bold;">ticker, trade</span></div>`
+                : `<div>체결: <span style="color: #F59E0B; font-weight: bold;">ticker, transaction</span></div>`;
+        }
+        
+        // 초기 시세 정보 바인딩
+        if (coin) {
+            updateCryptoUI(coin.trade_price, coin.signed_change_rate, coin.high_price, coin.low_price, coin.acc_trade_price_24h);
+        } else {
+            // 정보 부재 시 초기화
+            updateCryptoUI(0, 0, 0, 0, 0);
+        }
+        
+        // 체결 통계 초기화 표시
+        updateCryptoVolumePowerUI();
+    }
+    
+    /**
+     * 가상자산 시세 UI 요소를 갱신합니다.
+     */
+    function updateCryptoUI(price, changeRate, high, low, tradeValue) {
+        const priceEl = document.getElementById('crypto-detail-price');
+        const changeEl = document.getElementById('crypto-detail-change');
+        const highEl = document.getElementById('crypto-detail-high');
+        const lowEl = document.getElementById('crypto-detail-low');
+        const valEl = document.getElementById('crypto-detail-trade-value');
+        
+        const formatPriceKRW = (val) => {
+            if (val === undefined || val === null || isNaN(val) || val === 0) return '-';
+            return parseFloat(val).toLocaleString('ko-KR') + ' 원';
+        };
+        
+        if (priceEl && price !== undefined) priceEl.innerText = formatPriceKRW(price);
+        
+        if (changeEl && changeRate !== undefined) {
+            const pct = (changeRate || 0) * 100;
+            const formatted = formatRate(pct); // app.js의 formatRate 활용
+            changeEl.innerText = formatted.text;
+            changeEl.className = formatted.className;
+            changeEl.style.color = getTrendColor(pct); // app.js의 getTrendColor 활용
+        }
+        
+        if (highEl && high !== undefined) highEl.innerText = formatPriceKRW(high);
+        if (lowEl && low !== undefined) lowEl.innerText = formatPriceKRW(low);
+        
+        if (valEl && tradeValue !== undefined) {
+            if (tradeValue === null || isNaN(tradeValue) || tradeValue === 0) {
+                valEl.innerText = '-';
+            } else {
+                valEl.innerText = Math.round(tradeValue).toLocaleString('ko-KR') + ' 원';
+            }
+        }
+    }
+    
+    /**
+     * 가상자산 체결 통계 UI 요소를 갱신합니다.
+     */
+    function updateCryptoVolumePowerUI() {
+        const powerEl = document.getElementById('crypto-detail-volume-power');
+        const buyEl = document.getElementById('crypto-detail-buy-volume');
+        const sellEl = document.getElementById('crypto-detail-sell-volume');
+        
+        const formatQty = (val) => {
+            if (val === undefined || val === null || isNaN(val)) return '0';
+            return parseFloat(val).toLocaleString('ko-KR');
+        };
+        
+        if (buyEl) buyEl.innerText = formatQty(cryptoBuyVolume);
+        if (sellEl) sellEl.innerText = formatQty(cryptoSellVolume);
+        
+        if (powerEl) {
+            const sum = cryptoBuyVolume + cryptoSellVolume;
+            if (sum === 0) {
+                powerEl.innerText = '100.00%';
+                powerEl.style.color = '#F8FAFC';
+            } else {
+                const den = cryptoSellVolume === 0 ? 1e-9 : cryptoSellVolume;
+                const ratio = (cryptoBuyVolume / den) * 100;
+                powerEl.innerText = ratio.toFixed(2) + '%';
+                
+                if (ratio > 100) {
+                    powerEl.style.color = '#FF4B4B'; // bull
+                } else if (ratio < 100) {
+                    powerEl.style.color = '#0072FF'; // bear
+                } else {
+                    powerEl.style.color = '#94A3B8'; // neutral
+                }
+            }
+        }
+    }
+    
+    /**
+     * 실시간 웹소켓 틱 수신 시 가상자산 상세 정보 뷰를 업데이트합니다.
+     */
+    function updateCryptoDetailRealtime(tick) {
+        if (!tick) return;
+        const symbol = state.currentSymbol;
+        const exchange = state.currentExchange;
+        
+        // 현재 선택된 종목과 일치하는 틱인지 검증
+        if (tick.exchange_id !== exchange || tick.code !== symbol) return;
+        
+        // 1. 시세 요약 정보 실시간 업데이트
+        const price = tick.trade_price;
+        let changeRate = 0.0;
+        if (tick.signed_change_rate !== undefined && tick.signed_change_rate !== null) {
+            changeRate = tick.signed_change_rate;
+        } else if (tick.change_price && tick.prev_closing_price) {
+            changeRate = tick.change_price / tick.prev_closing_price;
+            if (tick.change === 'FALL') changeRate = -changeRate;
+        }
+        
+        const high = tick.high_price;
+        const low = tick.low_price;
+        const tradeValue = tick.acc_trade_price_24h;
+        
+        updateCryptoUI(price, changeRate, high, low, tradeValue);
+        
+        // 2. 실시간 체결량 누적 계산
+        const volume = tick.trade_volume || 0;
+        if (tick.ask_bid === 'BID') {
+            cryptoBuyVolume += volume;
+        } else if (tick.ask_bid === 'ASK') {
+            cryptoSellVolume += volume;
+        }
+        
+        updateCryptoVolumePowerUI();
+    }
+
     return {
-        loadKisDetail
+        loadKisDetail,
+        updateCryptoDetailRealtime
     };
 })();

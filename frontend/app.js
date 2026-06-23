@@ -306,6 +306,16 @@ function processTick(tick) {
     updateMetrics(tick);
     updateTable(tick);
     updatePortfolioRealtime(tick);
+
+    // [NEW] 가상자산 상세 탭 실시간 업데이트 연동
+    if (state.currentExchange !== 'kis') {
+        const detailTab = document.querySelector('.monitoring-tab[data-tab="detail"]');
+        const detailActive = detailTab ? detailTab.classList.contains('active') : false;
+        if (ViewRouter.getActiveView() === 'monitoring-view' && detailActive && typeof KisDetailView !== 'undefined' && typeof KisDetailView.updateCryptoDetailRealtime === 'function') {
+            KisDetailView.updateCryptoDetailRealtime(tick);
+        }
+    }
+
     ChartEngine.render(state.candles, state.currentCandle);
 }
 

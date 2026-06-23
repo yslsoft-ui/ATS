@@ -64,7 +64,7 @@
   * **지능형 타겟 라우팅**: 알림 페이로드의 `target` 필드 정보를 파싱(예: `symbol:KRW-BTC`, `exchange:upbit` 등)하여 사용자가 알림 팝업을 클릭할 때 해당 거래소/종목의 대시보드 화면으로 즉시 포커스 및 이동(라우팅)하는 기능이 지원됩니다.
   * `checkUpcomingAssetEvents()`를 수행하여 미처리된 예정 일정이 존재하는 경우 대시보드 상단에 닫기 버튼이 포함된 영속적 배너를 생성합니다.
 - **[market.js](file:///home/simon/ATS/frontend/market.js)**: 마켓(Market) 관리 모듈로, 거래소별 탭(Upbit, Bithumb, KIS)에 맞춰 실시간 시세 및 24h 변동 지표를 테이블 형태로 렌더링합니다. 전역 정렬 기준 필드(`state.marketSortKey`, `state.marketSortOrder`)를 활용해 클라이언트 사이드 실시간 정렬(3단계 순환 토글)을 수행하며, KIS 탭의 미수집 종목은 항상 하단에 고정하는 지능형 정렬이 적용되어 있습니다.
-- **[kis-detail.js](file:///home/simon/ATS/frontend/kis-detail.js)**: KIS 종목 상세 정보를 조회하고 렌더링하는 모듈입니다. 독립 라우트 뷰가 아닌 `monitoring-view` 내부의 '종목 상세정보' 탭 콘텐츠 영역으로 이식되었으며, 주식 종목일 경우 Nextrade 연동 여부 및 기업 상세 제원을 렌더링하고 가상자산일 경우 가이드 메시지를 분기하여 출력합니다.
+- **[kis-detail.js](file:///home/simon/ATS/frontend/kis-detail.js)**: KIS 및 가상자산 종목 상세 정보를 조회하고 실시간으로 렌더링하는 모듈입니다. 독립 라우트 뷰가 아닌 `monitoring-view` 내부의 '종목 상세정보' 탭 콘텐츠 영역으로 이식되었으며, 주식 종목일 경우 Nextrade 연동 여부 및 기업 상세 제원을 렌더링하고 가상자산 종목일 경우 전역 시세 캐시와 실시간 웹소켓 체결 틱을 재사용하여 3개 카드 구조(수집 상태 정보, 시세 요약 정보, 틱 기반 누적 체결 강도)의 상세 정보를 실시간 렌더링합니다.
 
 ---
 
@@ -78,6 +78,7 @@
 6. **세션 드롭다운 및 포트폴리오 양방향 동기화**: 대시보드 상단의 세션 선택 드롭다운은 모의투자(`#overview-simulation-session-select`) 및 실거래(`#overview-live-session-select`)로 이중화되어 각각 `state.currentSimPortfolioId`와 `state.currentLivePortfolioId` 변경에 관여합니다. 현재 활성화된 화면과 일치하는 뷰의 세션 ID가 변경되면 `state.currentPortfolioId`에 동기화되어 `loadPortfolio()`가 트리거됩니다. 반대로 포트폴리오 뷰 이력을 클릭해도 대시보드의 드롭다운 선택값이 즉각적으로 일치됩니다.
 7. **컴팩트 자산 비중 시각화**: 자산 비중 바의 낭비 공간을 최소화하기 위해 범주(Legend) 텍스트 영역을 생략하였으며, '기타' 병합 처리 없이 보유한 전 종목 자산 세그먼트를 100% 스택 바에 표현하고 마우스 호버 시에만 커스텀 CSS 툴팁으로 상세 정보를 제공합니다.
 8. **상장 및 상장폐지 예정 이벤트 배너 갱신**: 대시보드 페이지 로드 시 또는 백소켓을 통한 실시간 알림(`toast_alert` 중 예정 등록 관련) 수신 시 `checkUpcomingAssetEvents()`가 실행되어 DB 예정 목록을 비동기 조회한 후 대시보드 상단에 고정 안내 배너를 동적으로 노출합니다. 사용자가 배너의 닫기 단추를 클릭하면 해당 상태가 백엔드 DB(`system_settings` 테이블)에 비동기 저장되어, 기기나 브라우저를 변경하더라도 다시 노출되지 않고 닫기 상태가 영구 유지됩니다.
+9. **가상자산 상세 탭 실시간 갱신**: 사용자가 '상세정보' 탭을 열고 있을 때 실시간 체결 틱(`tick`)이 들어오면 `KisDetailView.updateCryptoDetailRealtime(tick)`이 작동하여 현재가, 전일 대비 변동, 누적 매수/매도 거래량 및 틱 기반 실시간 체결 강도(Volume Power)를 1초 미만 주기로 즉시 동적 갱신합니다.
 
 
 ---

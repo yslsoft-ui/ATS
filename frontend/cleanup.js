@@ -588,6 +588,7 @@ const CleanupView = (() => {
         init,
         destroy,
         loadEvents,
+        restartCleanupDaemon,
         handleStatusUpdate,
         handleCommandResult
     };

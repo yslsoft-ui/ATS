@@ -256,6 +256,7 @@ class StrategyService(DaemonService):
         for key, engine in new_engines.items():
             try:
                 await engine.warm_up(self.db_path)
+                engine.sync_position_state(self.portfolio_manager)
             except Exception as e:
                 logger.error(f"[StrategyService] {key} 워밍업 실패: {e}")
             await asyncio.sleep(0.002)
