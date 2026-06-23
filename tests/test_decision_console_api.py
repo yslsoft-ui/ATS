@@ -155,3 +155,65 @@ async def test_decision_console_endpoints(temp_db):
         # 4. db_path 및 설정 복구
         app.state.system.db_path = old_db_path
         app.state.system.strategy_configs = old_configs
+
+
+@pytest.mark.asyncio
+async def test_system_settings_endpoints(temp_db):
+    """
+    시스템 설정 API (GET, POST)가 정상 작동하는지 검증합니다.
+    """
+    # 1. 임시 데이터베이스 초기화
+    await init_db(temp_db)
+    
+    # 2. 전역 FastAPI app state의 db_path를 임시 DB 경로로 Mocking
+    old_db_path = app.state.system.db_path
+    app.state.system.db_path = temp_db
+    
+    try:
+        client = TestClient(app)
+        
+        # [A] 미등록 설정 조회 검증
+        response = client.get("/api/system/settings/non_existent_key")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["key"] == "non_existent_key"
+        assert data["value"] is None
+        
+        # [B] 설정 저장 검증 (POST)
+        response = client.post(
+            "/api/system/settings/test_dismissed_events",
+            json={"value": "[1, 2, 3]"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["key"] == "test_dismissed_events"
+        assert data["value"] == "[1, 2, 3]"
+        
+        # [C] 저장된 설정 조회 검증 (GET)
+        response = client.get("/api/system/settings/test_dismissed_events")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["key"] == "test_dismissed_events"
+        assert data["value"] == "[1, 2, 3]"
+        
+        # [D] 설정 업데이트 검증 (POST)
+        response = client.post(
+            "/api/system/settings/test_dismissed_events",
+            json={"value": "[1, 2, 3, 4]"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["key"] == "test_dismissed_events"
+        assert data["value"] == "[1, 2, 3, 4]"
+        
+        # [E] 업데이트된 설정 조회 검증 (GET)
+        response = client.get("/api/system/settings/test_dismissed_events")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["key"] == "test_dismissed_events"
+        assert data["value"] == "[1, 2, 3, 4]"
+        
+    finally:
+        # 3. db_path 복구
+        app.state.system.db_path = old_db_path
+

@@ -81,4 +81,31 @@ async def test_strategy_status(strategy_id: str = "rsistrategy"):
     await manager.broadcast_alert(mock_status)
     return {"message": f"Test status for {strategy_id} broadcasted"}
 
+from pydantic import BaseModel
+
+class SettingUpdate(BaseModel):
+    value: str
+
+@router.get("/api/system/settings/{key}")
+async def get_system_setting(key: str):
+    """지정된 키의 시스템 설정을 조회합니다."""
+    async with get_db_conn() as db:
+        async with db.execute("SELECT value FROM system_settings WHERE key = ?", (key,)) as cursor:
+            row = await cursor.fetchone()
+            if row:
+                return {"key": key, "value": row[0]}
+            return {"key": key, "value": None}
+
+@router.post("/api/system/settings/{key}")
+async def set_system_setting(key: str, data: SettingUpdate):
+    """지정된 키의 시스템 설정을 저장/업데이트합니다."""
+    async with get_db_conn() as db:
+        await db.execute(
+            "INSERT OR REPLACE INTO system_settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+            (key, data.value)
+        )
+        await db.commit()
+    return {"key": key, "value": data.value}
+
+
 

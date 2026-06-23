@@ -463,7 +463,22 @@ const APIClient = (() => {
             return _fetchAPI(`/market/planned-events/${eventId}`, {
                 method: 'DELETE'
             });
-        }
+        },
+
+        /**
+         * 시스템 설정값 조회
+         */
+        fetchSystemSetting: (key) => _fetchAPI(`/api/system/settings/${key}`),
+
+        /**
+         * 시스템 설정값 저장/업데이트
+         */
+        saveSystemSetting: (key, value) => 
+            _fetchAPI(`/api/system/settings/${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            })
     };
 })();
 

@@ -484,4 +484,11 @@ CREATE INDEX IF NOT EXISTS idx_planned_events_lookup ON planned_asset_events (ex
 CREATE INDEX IF NOT EXISTS idx_planned_events_schedule ON planned_asset_events (status, scheduled_at);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_planned_events_unique ON planned_asset_events (exchange_id, symbol, event_type, scheduled_at);
 
+-- 26. system_settings
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 

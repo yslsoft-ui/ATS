@@ -269,10 +269,13 @@ async function checkUpcomingAssetEvents() {
             return;
         }
 
-        // 로컬 스토리지에서 사용자가 명시적으로 닫은 이벤트 ID 목록 조회
+        // 백엔드 DB에서 사용자가 명시적으로 닫은 이벤트 ID 목록 조회
         let dismissedIds = [];
         try {
-            dismissedIds = JSON.parse(localStorage.getItem('dismissed_planned_events') || '[]');
+            const res = await APIClient.fetchSystemSetting('dismissed_planned_events');
+            if (res && res.value) {
+                dismissedIds = JSON.parse(res.value);
+            }
         } catch (e) {
             dismissedIds = [];
         }
@@ -307,17 +310,25 @@ async function checkUpcomingAssetEvents() {
 
         document.body.prepend(banner);
 
-        document.getElementById('btn-close-planned-events').addEventListener('click', () => {
+        document.getElementById('btn-close-planned-events').addEventListener('click', async () => {
             try {
-                const currentDismissed = JSON.parse(localStorage.getItem('dismissed_planned_events') || '[]');
+                let currentDismissed = [];
+                try {
+                    const res = await APIClient.fetchSystemSetting('dismissed_planned_events');
+                    if (res && res.value) {
+                        currentDismissed = JSON.parse(res.value);
+                    }
+                } catch (e) {
+                    currentDismissed = [];
+                }
                 activeEvents.forEach(ev => {
                     if (!currentDismissed.includes(ev.id)) {
                         currentDismissed.push(ev.id);
                     }
                 });
-                localStorage.setItem('dismissed_planned_events', JSON.stringify(currentDismissed));
+                await APIClient.saveSystemSetting('dismissed_planned_events', JSON.stringify(currentDismissed));
             } catch (e) {
-                console.error("[checkUpcomingAssetEvents] Failed to save dismissed events to localStorage:", e);
+                console.error("[checkUpcomingAssetEvents] Failed to save dismissed events to backend:", e);
             }
             banner.remove();
         });
@@ -333,13 +344,26 @@ window.checkUpcomingAssetEvents = checkUpcomingAssetEvents;
  */
 async function checkMissedAssetEvents() {
     try {
-        let lastSeenTs = parseInt(localStorage.getItem('last_seen_asset_event_ts') || '0', 10);
+        let lastSeenTs = 0;
+        try {
+            const res = await APIClient.fetchSystemSetting('last_seen_asset_event_ts');
+            if (res && res.value) {
+                lastSeenTs = parseInt(res.value, 10);
+            }
+        } catch (e) {
+            lastSeenTs = 0;
+        }
+        
         const now = Date.now();
         
-        // 로컬 스토리지 키가 전혀 존재하지 않는 최초 접속일 경우, 과거의 로그가 대량으로 뜨는 것을 방지하기 위해 
+        // 백엔드 설정 키가 전혀 존재하지 않는 최초 접속일 경우, 과거의 로그가 대량으로 뜨는 것을 방지하기 위해 
         // 현재 시각으로 초기화하고 바로 리턴합니다.
         if (lastSeenTs === 0) {
-            localStorage.setItem('last_seen_asset_event_ts', now.toString());
+            try {
+                await APIClient.saveSystemSetting('last_seen_asset_event_ts', now.toString());
+            } catch (e) {
+                console.error("[checkMissedAssetEvents] Failed to initialize last_seen_asset_event_ts on backend:", e);
+            }
             return;
         }
 
@@ -362,10 +386,18 @@ async function checkMissedAssetEvents() {
             const toastType = event.event_type === 'ASSET_LISTED' ? 'success' : 'warning';
             // 사용자가 명시적으로 확인하고 닫을 때 비로소 last_seen_asset_event_ts를 업데이트합니다.
             if (typeof showToast === 'function') {
-                showToast(event.message, toastType, false, () => {
-                    const currentLastSeen = parseInt(localStorage.getItem('last_seen_asset_event_ts') || '0', 10);
-                    if (event.timestamp > currentLastSeen) {
-                        localStorage.setItem('last_seen_asset_event_ts', event.timestamp.toString());
+                showToast(event.message, toastType, false, async () => {
+                    try {
+                        let currentLastSeen = 0;
+                        const res = await APIClient.fetchSystemSetting('last_seen_asset_event_ts');
+                        if (res && res.value) {
+                            currentLastSeen = parseInt(res.value, 10);
+                        }
+                        if (event.timestamp > currentLastSeen) {
+                            await APIClient.saveSystemSetting('last_seen_asset_event_ts', event.timestamp.toString());
+                        }
+                    } catch (e) {
+                        console.error("[checkMissedAssetEvents] Failed to update last_seen_asset_event_ts on backend:", e);
                     }
                 });
             }

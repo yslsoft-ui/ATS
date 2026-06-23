@@ -74,7 +74,8 @@
 5. **인터벌 전환**: 상단 시간 주기(Interval) 선택 시, 백엔드로부터 새로운 주기의 역사적 캔들 셋을 `client.js`로 호출하여 스토어를 전면 교체한 후 차트를 다시 로딩합니다.
 6. **세션 드롭다운 및 포트폴리오 양방향 동기화**: 대시보드 상단의 세션 선택 드롭다운은 모의투자(`#overview-simulation-session-select`) 및 실거래(`#overview-live-session-select`)로 이중화되어 각각 `state.currentSimPortfolioId`와 `state.currentLivePortfolioId` 변경에 관여합니다. 현재 활성화된 화면과 일치하는 뷰의 세션 ID가 변경되면 `state.currentPortfolioId`에 동기화되어 `loadPortfolio()`가 트리거됩니다. 반대로 포트폴리오 뷰 이력을 클릭해도 대시보드의 드롭다운 선택값이 즉각적으로 일치됩니다.
 7. **컴팩트 자산 비중 시각화**: 자산 비중 바의 낭비 공간을 최소화하기 위해 범주(Legend) 텍스트 영역을 생략하였으며, '기타' 병합 처리 없이 보유한 전 종목 자산 세그먼트를 100% 스택 바에 표현하고 마우스 호버 시에만 커스텀 CSS 툴팁으로 상세 정보를 제공합니다.
-8. **상장 및 상장폐지 예정 이벤트 배너 갱신**: 대시보드 페이지 로드 시 또는 백소켓을 통한 실시간 알림(`toast_alert` 중 예정 등록 관련) 수신 시 `checkUpcomingAssetEvents()`가 실행되어 DB 예정 목록을 비동기 조회한 후 대시보드 상단에 고정 안내 배너를 동적으로 노출하며, 닫기 단추가 클릭되기 전까지 영구 유지됩니다.
+8. **상장 및 상장폐지 예정 이벤트 배너 갱신**: 대시보드 페이지 로드 시 또는 백소켓을 통한 실시간 알림(`toast_alert` 중 예정 등록 관련) 수신 시 `checkUpcomingAssetEvents()`가 실행되어 DB 예정 목록을 비동기 조회한 후 대시보드 상단에 고정 안내 배너를 동적으로 노출합니다. 사용자가 배너의 닫기 단추를 클릭하면 해당 상태가 백엔드 DB(`system_settings` 테이블)에 비동기 저장되어, 기기나 브라우저를 변경하더라도 다시 노출되지 않고 닫기 상태가 영구 유지됩니다.
+
 
 ---
 
@@ -158,6 +159,8 @@
 | `fetchReevaluationJobs(id)` | `GET /api/decision-console/proposals/{id}/reevaluation-jobs` |
 | `fetchDecisionConsoleEvents(params)` | `GET /api/decision-console/events` |
 | `fetchDecisionConsoleRaw(type, id)` | `GET /api/decision-console/raw/{type}/{id}` |
+| `fetchSystemSetting(key)` | `GET /api/system/settings/{key}` |
+| `saveSystemSetting(key, value)` | `POST /api/system/settings/{key}` |
 
 ### 6.4. 라우팅 등록
 

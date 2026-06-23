@@ -466,6 +466,15 @@ erDiagram
 | **created_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 레코드 최초 생성 일시 |
 | **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 레코드 최종 수정 일시 |
 
+#### 2.2.8. system_settings (시스템 범용 설정)
+사용자가 브라우저나 디바이스를 변경하더라도 동일한 환경(UI/UX 설정 및 알림 읽음 여부 등)을 보장하기 위해 시스템 설정값을 키-값(Key-Value) 형태로 백엔드 DB에 영구 보존합니다.
+
+| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
+| :--- | :--- | :--- | :--- |
+| **key** (PK) | TEXT | PRIMARY KEY | 설정의 고유 키 (예: `dismissed_planned_events`, `last_seen_asset_event_ts`) |
+| **value** | TEXT | NOT NULL | 설정 값 (JSON 형식 또는 단순 문자열) |
+| **updated_at** | DATETIME | DEFAULT CURRENT_TIMESTAMP | 최종 변경/저장 일시 |
+
 ---
 
 ### 2.3. AI 가설 및 제안 사후 평가 영역

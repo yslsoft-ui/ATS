@@ -550,6 +550,32 @@
 - **`GET /test-status?strategy_id={id}`**
   - **설명**: UI 연동 테스트를 위해 특정 매매 전략의 가상 동작 지표 상태 데이터를 강제 발생 및 전송합니다.
 
+- **`GET /api/system/settings/{key}`**
+  - **설명**: 지정된 키의 시스템 설정을 조회합니다. (예: `dismissed_planned_events`, `last_seen_asset_event_ts`)
+  - **응답 예시**:
+    ```json
+    {
+      "key": "last_seen_asset_event_ts",
+      "value": "1782172156957"
+    }
+    ```
+
+- **`POST /api/system/settings/{key}`**
+  - **설명**: 지정된 키의 시스템 설정을 저장 또는 업데이트합니다.
+  - **Request Body**:
+    ```json
+    {
+      "value": "1782172156957"
+    }
+    ```
+  - **응답 예시**:
+    ```json
+    {
+      "key": "last_seen_asset_event_ts",
+      "value": "1782172156957"
+    }
+    ```
+
 ### 1.8. 데이터 클린업 제어 API (Cleanup Router)
 
 - **`GET /api/cleanup/status`**
