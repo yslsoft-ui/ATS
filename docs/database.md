@@ -31,7 +31,6 @@
 | `EXCHANGE_ASSETS` | 거래소 자산 관리 | 각 거래소에서 실시간 수집 및 매매 감시를 진행할 활성 종목 및 상폐 상태 제어 |
 | `TRADES` | 실시간 체결 (Tick) | 거래소 소켓 등으로부터 실시간 수집된 틱 데이터 적재 |
 | `CANDLES` | 분봉 캔들 (OHLCV) | 틱 데이터를 특정 주기(초 단위)로 가공한 역사적 캔들스틱 데이터 |
-| `ALERTS` | 실시간 알림 | 가격 급등락이나 기술 지표 특정 조건 돌파 시 발생하는 시스템 Alert 메시지 |
 | `STRATEGY_INSIGHTS` | 전략 통계 인사이트 | AI 손실 원인 분석을 통해 도출한 통계적 진단 결과 |
 | `STRATEGY_PROPOSALS` | 전략 개선 제안 | AI 분석을 바탕으로 파라미터 개선을 제안하고 그 승인/적용 상태 관리 |
 | `PROPOSAL_EVALUATIONS` | 제안 사후 평가 | 적용된 제안에 대해 다중 시간축(Horizon) 기준으로 롤백 여부 사후 검증 |
@@ -233,7 +232,6 @@ erDiagram
     EXCHANGES_거래소 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "취급 자산 목록"
     EXCHANGES_거래소 ||--o{ TRADES_실시간_체결 : "실시간 틱 수집"
     EXCHANGES_거래소 ||--o{ CANDLES_분봉_캔들 : "OHLCV 캔들 취합"
-    EXCHANGES_거래소 ||--o{ ALERTS_실시간_알림 : "급등락 경보 발생"
     EXCHANGES_거래소 ||--o{ PLANNED_ASSET_EVENTS_예정_이벤트 : "상장/상폐 일정 예고"
     ASSET_MASTER_자산_마스터 ||--o{ EXCHANGE_ASSETS_거래소_자산 : "거래 자산 메타 매핑"
     ASSET_MASTER_자산_마스터 ||--o| KIS_STOCK_INFO_KIS_주식_상세_캐시 : "KIS 주식 상세 제원 캐시"
@@ -284,15 +282,6 @@ erDiagram
         real volume "누적 체결 거래량"
         integer is_closed "캔들 마감 여부 (0: 진행중, 1: 마감)"
         integer is_backfill "백필 수집 여부 (0: 실시간 조립, 1: REST API 백필)"
-    }
-
-    ALERTS_실시간_알림 {
-        integer id PK "알림 고유 일련번호"
-        text exchange_id "감지 거래소 ID"
-        text symbol "자산 심볼 코드"
-        real price "감지 시점 체결가"
-        text msg "사용자 경고 메시지 내용"
-        integer timestamp "이벤트 발생 시각 타임스탬프 (ms)"
     }
 
     KIS_STOCK_INFO_KIS_주식_상세_캐시 {
@@ -403,19 +392,6 @@ erDiagram
 > * **메모리(Memory) 레벨**: 실시간 틱 수집 엔진([CandleGenerator](file:///home/simon/ATS/src/engine/candles.py)) 내부에서는 1분 단위가 완성되기 직전까지 해당 캔들의 `is_closed`가 `False` 상태를 유지하며 틱이 업데이트됩니다. 분 경계를 넘겨 캔들이 완성되는 시점에 `True`로 플래그가 반전됩니다.
 > * **데이터베이스(DB) 레벨**: 현재 수집 파이프라인 구조상 미마감 캔들은 메모리 버퍼에서만 존재하며, DB(`candles` 테이블)로 적재되는 모든 캔들은 적재 시점에 `is_closed = 1(True)` 상태로 강제 전환되어 저장됩니다. 따라서 실제 DB 내 레코드의 `is_closed` 컬럼 값은 현재 아키텍처 기준 항상 `1`로 고정됩니다.
 > * **쿼리 필터링 목적**: 향후 미마감 캔들을 실시간으로 DB에 적재(Upsert)하는 형태로 아키텍처를 확장할 때, 전략 엔진이 미완성된 캔들의 종가를 가져와 지표를 오연산하는 오작동(Look-ahead bias)을 방지하기 위해 조회 쿼리(`WHERE is_closed = 1`)에서 안전장치 필터로 사용되고 있습니다.
-
-
-#### 2.2.5. alerts (급등락 실시간 알림)
-실시간 가격 급등락(Spike) 감지 또는 특정 지표 조건 돌파 시 발생한 이벤트를 영속화합니다.
-
-| 컬럼명 | 데이터 타입 | 제약조건 / 기본값 | 설명 |
-| :--- | :--- | :--- | :--- |
-| **id** (PK) | INTEGER | PRIMARY KEY AUTOINCREMENT | 알림 고유 번호 |
-| **exchange_id** | TEXT | - | 감지 대상 거래소 ID |
-| **symbol** | TEXT | - | 자산 심볼 |
-| **price** | REAL | - | 감지 시점의 체결가 |
-| **msg** | TEXT | - | 사용자 경고 메시지 내용 (예: `[Spike] BTC 가격 3.5% 급등!`) |
-| **timestamp** | INTEGER | - | 감지 시점 타임스탬프 (ms) |
 
 #### 2.2.6. kis_stock_info (KIS 주식 상세 제원 캐시)
 한국투자증권 주식기본조회 API(`CTPF1002R`)로 획득한 각 종목별 상세 규격 및 대체거래소(Nextrade) 연동 상태를 캐싱합니다.

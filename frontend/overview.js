@@ -343,7 +343,7 @@ const OverviewEngine = (() => {
      */
     function update(tick) {
         // 1. 거래 발생 알림 시 양쪽 대시보드 포트폴리오 데이터 새로고침
-        if (tick.type === 'alert' && tick.alert_type === 'trade') {
+        if (tick.type === 'alert' && tick.notification_type === 'trade') {
             refreshData('simulation');
             refreshData('live');
         }

@@ -929,10 +929,6 @@ class BaseTradingRepository(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def insert_alert(self, alert: Dict[str, Any]):
-        pass
-
-    @abc.abstractmethod
     async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
         pass
 
@@ -1595,18 +1591,6 @@ class SqliteTradingRepository(BaseTradingRepository):
                     return res
                 return None
 
-    async def insert_alert(self, alert: Dict[str, Any]):
-        required_keys = ['exchange_id', 'code', 'price', 'msg', 'timestamp']
-        missing_keys = [k for k in required_keys if k not in alert]
-        if missing_keys:
-            raise ValueError(f"Required fields missing from alert dictionary: {missing_keys}")
-
-        async with get_db_conn(self.db_path) as db:
-            await db.execute(
-                "INSERT INTO alerts (exchange_id, symbol, price, msg, timestamp) VALUES (?, ?, ?, ?, ?)",
-                (alert['exchange_id'], alert['code'], alert['price'], alert['msg'], alert['timestamp'])
-            )
-            await db.commit()
 
     async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
         configs = {}
@@ -2759,7 +2743,6 @@ class InMemoryTradingRepository(BaseTradingRepository):
         self.portfolios: Dict[str, Any] = {}
         self.exchange_configs: Dict[str, Dict[str, Any]] = {}
         self.order_histories: List[Dict[str, Any]] = []
-        self.alerts: List[Dict[str, Any]] = []
         self.system_events: List[Dict[str, Any]] = []
         self.strategy_versions: Dict[str, Dict[str, Any]] = {}
         self.strategy_parameter_histories: Dict[str, List[Dict[str, Any]]] = {}
@@ -2799,13 +2782,6 @@ class InMemoryTradingRepository(BaseTradingRepository):
         else:
             sliced = sorted_desc
         return sorted(sliced, key=lambda x: x.get('timestamp', 0))
-
-    async def insert_alert(self, alert: Dict[str, Any]):
-        required_keys = ['exchange_id', 'code', 'price', 'msg', 'timestamp']
-        missing_keys = [k for k in required_keys if k not in alert]
-        if missing_keys:
-            raise ValueError(f"Required fields missing from alert dictionary: {missing_keys}")
-        self.alerts.append(alert)
 
     async def load_exchange_configs(self) -> Dict[str, Dict[str, Any]]:
         return self.exchange_configs

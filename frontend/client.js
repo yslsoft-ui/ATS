@@ -59,16 +59,6 @@ const APIClient = (() => {
             _fetchAPI(`/trades?exchange_id=${exchange}&symbol=${symbol}&limit=${limit}`),
 
         /**
-         * 실시간 급등/체결 알림 이력 조회
-         */
-        fetchAlertHistory: () => _fetchAPI('/alerts'),
-
-        /**
-         * 모든 알림 이력 영구 삭제
-         */
-        clearAlertHistory: () => _fetchAPI('/api/alerts', { method: 'DELETE' }),
-
-        /**
          * 전략 매개변수 설정 및 활성화 목록 조회
          */
         fetchStrategies: () => _fetchAPI('/api/strategies'),

@@ -905,9 +905,9 @@ td.secondary {
     pointer-events: none;
 }
 
-.alert-card {
-    background: #2c2d33;
-    border-left: 4px solid var(--bull-color);
+.notification-card {
+    background: #1E293B;
+    border-left: 4px solid #3B82F6;
     padding: 15px 20px;
     border-radius: 6px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -919,35 +919,59 @@ td.secondary {
     transition: transform 0.2s;
 }
 
-.alert-card:hover {
+.notification-card:hover {
     transform: translateX(-5px);
     filter: brightness(1.1);
 }
 
-.alert-header {
+.notification-card.success {
+    border-left-color: #10B981;
+}
+
+.notification-card.success .notification-title {
+    color: #10B981;
+}
+
+.notification-card.warning {
+    border-left-color: #F59E0B;
+}
+
+.notification-card.warning .notification-title {
+    color: #F59E0B;
+}
+
+.notification-card.error {
+    border-left-color: #EF4444;
+}
+
+.notification-card.error .notification-title {
+    color: #EF4444;
+}
+
+.notification-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 5px;
 }
 
-.alert-title {
+.notification-title {
     font-weight: bold;
-    color: var(--bull-color);
+    color: #3B82F6;
     font-size: 1rem;
 }
 
-.alert-time {
+.notification-time {
     font-size: 0.75rem;
     color: var(--text-secondary);
 }
 
-.alert-body {
+.notification-body {
     font-size: 0.9rem;
     line-height: 1.4;
 }
 
-.alert-footer {
+.notification-footer {
     margin-top: 8px;
     font-size: 0.8rem;
     color: var(--text-secondary);

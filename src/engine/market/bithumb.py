@@ -32,7 +32,7 @@ class BithumbMarketAdapter(MarketAdapter):
 
         # 1.5. 빗썸 주의 종목 / 경보제 상태 조회
         alert_markets = set()
-        bithumb_alerts = {}
+        bithumb_warnings = {}
         warning_type_map = {
             "PRICE_SUDDEN_FLUCTUATION": "가격 급등락",
             "PRICE_DIFFERENCE_HIGH": "글로벌 시세 차이",
@@ -51,7 +51,7 @@ class BithumbMarketAdapter(MarketAdapter):
                             alert_markets.add(m_code)
                             w_type = item.get('warning_type')
                             if w_type:
-                                bithumb_alerts.setdefault(m_code, []).append(warning_type_map.get(w_type, "주의"))
+                                bithumb_warnings.setdefault(m_code, []).append(warning_type_map.get(w_type, "주의"))
         except Exception as e:
             logger.error(f"Failed to fetch Bithumb virtual asset warnings: {e}")
 
@@ -99,8 +99,8 @@ class BithumbMarketAdapter(MarketAdapter):
                 is_caution = caution_map.get(code, False)
                 if is_caution:
                     reasons.append("투자유의")
-                if code in bithumb_alerts:
-                    reasons.extend(bithumb_alerts[code])
+                if code in bithumb_warnings:
+                    reasons.extend(bithumb_warnings[code])
 
                 dto_list.append(MarketTickerDTO(
                     exchange="bithumb",

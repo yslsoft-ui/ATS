@@ -95,16 +95,6 @@ CREATE TABLE IF NOT EXISTS orders_history (
     FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
--- 6. alerts
-CREATE TABLE IF NOT EXISTS alerts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    exchange_id TEXT,
-    symbol TEXT,
-    price REAL,
-    msg TEXT,
-    timestamp INTEGER
-);
-
 -- 7. candles
 CREATE TABLE IF NOT EXISTS candles (
     exchange_id TEXT,

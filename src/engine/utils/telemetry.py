@@ -51,16 +51,16 @@ class UIBroadcastHandler(logging.Handler):
             
         try:
             msg = self.format(record)
-            alert_type = "info"
+            notification_type = "info"
             if record.levelno >= logging.ERROR:
-                alert_type = "error"
+                notification_type = "error"
             elif record.levelno >= logging.WARNING:
-                alert_type = "warning"
+                notification_type = "warning"
 
             # UI 규격에 맞춘 알림 데이터 생성
             alert_data = {
                 "type": "alert",
-                "alert_type": "system",
+                "notification_type": "system",
                 "level": record.levelname,
                 "msg": f"[{record.name}] {record.getMessage()}",
                 "timestamp": record.created * 1000

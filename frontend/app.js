@@ -256,18 +256,10 @@ function processTick(tick) {
     }
 
     if (tick.type === 'alert') {
-        state.alertHistory.unshift(tick);
-        if (state.alertHistory.length > 500) {
-            state.alertHistory.pop();
-        }
+        showNotification(tick);
         
-        const countEl = document.getElementById('alert-count');
-        if (countEl) countEl.innerText = `${state.alertHistory.length}개 기록`;
-
-        showAlert(tick);
-        addAlertToTable(tick, true);
-        
-        if (tick.alert_type === 'trade') {
+        const notificationType = tick.notification_type;
+        if (notificationType === 'trade') {
             loadPortfolio();
         }
         return;

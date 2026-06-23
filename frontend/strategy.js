@@ -557,25 +557,25 @@ function loadTracerPanelForStrategy(trace) {
     document.getElementById('quad-rollback').previousElementSibling.innerText = 'Trade Count';
 
     // 안전 제한 상태 표시
-    const alertsSec = document.getElementById('tracer-alerts-section');
-    const alertsList = document.getElementById('tracer-alerts-list');
-    alertsList.innerHTML = '';
+    const warningsSec = document.getElementById('tracer-warnings-section');
+    const warningsList = document.getElementById('tracer-warnings-list');
+    warningsList.innerHTML = '';
     
     if (!trace.is_synced) {
-        alertsSec.style.display = 'block';
-        const alertItem = document.createElement('div');
-        alertItem.className = 'alert-item blocked';
-        alertItem.style.borderLeft = '3px solid #EF4444';
-        alertItem.innerHTML = `
+        warningsSec.style.display = 'block';
+        const warningItem = document.createElement('div');
+        warningItem.className = 'alert-item blocked';
+        warningItem.style.borderLeft = '3px solid #EF4444';
+        warningItem.innerHTML = `
             <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:0.8rem;">
                 <span class="alert-name" style="color:#F8FAFC;">상태 동기화 경고</span>
                 <span class="alert-status blocked" style="color:#EF4444;">BLOCKED</span>
             </div>
             <div class="alert-reason" style="font-size:0.75rem; color:#94A3B8; margin-top:2px;">${trace.sync_alert_message}</div>
         `;
-        alertsList.appendChild(alertItem);
+        warningsList.appendChild(warningItem);
     } else {
-        alertsSec.style.display = 'none';
+        warningsSec.style.display = 'none';
     }
 }
 
@@ -1753,12 +1753,12 @@ async function selectProposalRow(proposalId, trElement) {
         document.getElementById('quad-rollback').previousElementSibling.innerText = 'Rollback Prob.';
 
         // 안정성 차단 및 제한 사항 바인딩 (Guards)
-        const alertsSec = document.getElementById('tracer-alerts-section');
-        const alertsList = document.getElementById('tracer-alerts-list');
-        alertsList.innerHTML = '';
+        const warningsSec = document.getElementById('tracer-warnings-section');
+        const warningsList = document.getElementById('tracer-warnings-list');
+        warningsList.innerHTML = '';
 
         if (trace.guards && trace.guards.length > 0) {
-            alertsSec.style.display = 'block';
+            warningsSec.style.display = 'block';
             trace.guards.forEach(g => {
                 const item = document.createElement('div');
                 const statusClass = g.status.toLowerCase();
@@ -1780,10 +1780,10 @@ async function selectProposalRow(proposalId, trElement) {
                     </div>
                     ${g.reason ? `<div style="font-size:0.75rem; color:#94A3B8; margin-top:2px;">${g.reason}</div>` : ''}
                 `;
-                alertsList.appendChild(item);
+                warningsList.appendChild(item);
             });
         } else {
-            alertsSec.style.display = 'none';
+            warningsSec.style.display = 'none';
         }
 
     } catch (e) {

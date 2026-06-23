@@ -101,7 +101,7 @@ function renderCollectorStatuses(statuses) {
                     if (typeof showToast === 'function') {
                         showToast(`⚠️ [${exch.toUpperCase()}] 변동성 완화장치(VI) 등으로 인해 수집이 일시 정지(SUSPENDED)되었습니다${reason}`, 'warning');
                     } else {
-                        showAlert({ msg: `⚠️ [${exch.toUpperCase()}] 수집 일시 정지${reason}`, alert_type: 'warning' });
+                        showNotification({ msg: `⚠️ [${exch.toUpperCase()}] 수집 일시 정지${reason}`, notification_type: 'warning' });
                     }
                     lastSeenSuspended[exch] = true;
                 }
@@ -110,7 +110,7 @@ function renderCollectorStatuses(statuses) {
                 errorEl.style.color = '#FF4B4B';
                 errorEl.style.display = 'block';
                 if (lastSeenErrors[exch] !== error) {
-                    showAlert({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${error}`, alert_type: 'error' });
+                    showNotification({ msg: `⚠️ ${exch.toUpperCase()} 에러: ${error}`, notification_type: 'error' });
                     lastSeenErrors[exch] = error;
                 }
                 lastSeenSuspended[exch] = false;
@@ -173,7 +173,7 @@ function initCollectorControls() {
                 const action = exchangeState[exch].isRunning ? 'stop' : 'start';
                 try {
                     await APIClient.controlCollector(exch, action);
-                    showAlert({ msg: `Collector ${exch} ${action}ed` });
+                    showNotification({ msg: `Collector ${exch} ${action}ed` });
                     if (action === 'start') {
                         const statusEl = document.querySelector(`#${exch}-status`);
                         const errorEl = document.querySelector(`#${exch}-error-msg`);
@@ -187,7 +187,7 @@ function initCollectorControls() {
                     }
                     updateCollectorStatus();
                 } catch (e) {
-                    showAlert({ msg: `${exch} 제어 실패`, alert_type: 'error' });
+                    showNotification({ msg: `${exch} 제어 실패`, notification_type: 'error' });
                     btn.disabled = false;
                 }
             });
@@ -204,9 +204,9 @@ function initCollectorControls() {
             btnRestartCollector.disabled = true;
             try {
                 await APIClient.restartCollectorDaemon();
-                showAlert({ msg: "🚀 수집 데몬 프로세스 재시작 신호가 전송되었습니다.", alert_type: 'success' });
+                showNotification({ msg: "🚀 수집 데몬 프로세스 재시작 신호가 전송되었습니다.", notification_type: 'success' });
             } catch (e) {
-                showAlert({ msg: `❌ 수집 데몬 재시작 실패: ${e.message}`, alert_type: 'error' });
+                showNotification({ msg: `❌ 수집 데몬 재시작 실패: ${e.message}`, notification_type: 'error' });
             } finally {
                 setTimeout(() => { btnRestartCollector.disabled = false; }, 3000);
             }
@@ -222,9 +222,9 @@ function initCollectorControls() {
             btnRestartStrategy.disabled = true;
             try {
                 await APIClient.restartStrategyDaemon();
-                showAlert({ msg: "🚀 전략 데몬 프로세스 재시작 신호가 전송되었습니다.", alert_type: 'success' });
+                showNotification({ msg: "🚀 전략 데몬 프로세스 재시작 신호가 전송되었습니다.", notification_type: 'success' });
             } catch (e) {
-                showAlert({ msg: `❌ 전략 데몬 재시작 실패: ${e.message}`, alert_type: 'error' });
+                showNotification({ msg: `❌ 전략 데몬 재시작 실패: ${e.message}`, notification_type: 'error' });
             } finally {
                 setTimeout(() => { btnRestartStrategy.disabled = false; }, 3000);
             }
@@ -487,7 +487,7 @@ function initAssetSyncControls() {
                         resultText.innerHTML = htmlContent;
                     }
                     if (resultPanel) resultPanel.style.display = 'block';
-                    showAlert({ msg: "🌐 종목 동기화가 완료되었습니다." });
+                    showNotification({ msg: "🌐 종목 동기화가 완료되었습니다." });
                 } else {
                     throw new Error(data.detail || "서버 응답 오류");
                 }
@@ -500,7 +500,7 @@ function initAssetSyncControls() {
                     `;
                 }
                 if (resultPanel) resultPanel.style.display = 'block';
-                showAlert({ msg: "❌ 종목 동기화에 실패했습니다.", alert_type: 'error' });
+                showNotification({ msg: "❌ 종목 동기화에 실패했습니다.", notification_type: 'error' });
             } finally {
                 btnSync.disabled = false;
                 btnSync.innerText = "🔄 관리종목 변경 확인 및 동기화";

@@ -9,22 +9,6 @@ from src.engine.utils.telemetry import get_logger
 logger = get_logger(__name__)
 router = APIRouter()
 
-@router.get("/alerts")
-async def get_alerts(limit: int = 50):
-    """최근 알림 기록을 반환합니다."""
-    async with get_db_conn() as db:
-        async with db.execute("SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,)) as cursor:
-            rows = await cursor.fetchall()
-            return [dict(r) for r in rows]
-
-@router.delete("/api/alerts")
-async def clear_alerts():
-    """모든 알림 기록을 삭제합니다."""
-    async with get_db_conn() as db:
-        await db.execute("DELETE FROM alerts")
-        await db.commit()
-    return {"message": "모든 알림 기록이 삭제되었습니다."}
-
 @router.get("/api/system/queues")
 async def get_queue_status(request: Request):
     """각 작업 큐의 현재 적체량 및 누적 처리량을 반환합니다."""
@@ -44,14 +28,15 @@ async def get_queue_status(request: Request):
     }
 
 
-@router.get("/test-alert")
-async def test_alert(request: Request, symbol: str = "KRW-BTC"):
+@router.get("/test-notification")
+async def test_notification(request: Request, symbol: str = "KRW-BTC"):
     """UI 확인용 테스트 알림을 강제로 발생시킵니다."""
     system = request.app.state.system
     exchange_id = "kis" if symbol.isdigit() or len(symbol) == 6 else "upbit"
     import time
-    mock_alert = {
+    mock_notification = {
         "type": "alert",
+        "notification_type": "trade",
         "exchange_id": exchange_id,
         "code": symbol,
         "price": 100000000,
@@ -60,9 +45,8 @@ async def test_alert(request: Request, symbol: str = "KRW-BTC"):
         "msg": f"🚀 [TEST] 급등 포착: {symbol} (+5.23%)",
         "timestamp": int(time.time() * 1000)
     }
-    await manager.broadcast_alert(mock_alert)
-    await system.save_alert(mock_alert)
-    return {"message": f"Test alert for {symbol} sent to all clients and saved"}
+    await manager.broadcast_alert(mock_notification)
+    return {"message": f"Test notification for {symbol} sent to all clients"}
 
 @router.get("/test-status")
 async def test_strategy_status(strategy_id: str = "rsistrategy"):

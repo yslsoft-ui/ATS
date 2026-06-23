@@ -150,7 +150,7 @@ async function loadPortfolioHistoryList(force = false) {
         if (!state.currentPortfolioId || state.currentPortfolioId === 'default' || !addedIds.has(String(state.currentPortfolioId))) {
             if (state.currentPortfolioId && state.currentPortfolioId !== 'default') {
                 console.error(`선택된 포트폴리오 ID가 유효하지 않습니다: ${state.currentPortfolioId}`);
-                showAlert(`포트폴리오 세션 오류: 선택한 세션(${state.currentPortfolioId})이 유효하지 않거나 존재하지 않습니다.`, 'error');
+                showNotification(`포트폴리오 세션 오류: 선택한 세션(${state.currentPortfolioId})이 유효하지 않거나 존재하지 않습니다.`, 'error');
                 state.currentPortfolioId = null;
                 updateSessionControlUI();
                 return;
@@ -296,7 +296,7 @@ async function deletePortfolioHistory(portfolioId) {
     try {
         const res = await APIClient.deletePortfolioHistory(portfolioId);
         if (res.status === 'success') {
-            showAlert("이력이 정상적으로 삭제되었습니다.", "success");
+            showNotification("이력이 정상적으로 삭제되었습니다.", "success");
             
             // 캐시에서 삭제된 포트폴리오를 선제적으로 필터링하여 동기화 꼬임 차단
             if (state.portfoliosCache) {
@@ -309,10 +309,10 @@ async function deletePortfolioHistory(portfolioId) {
             await loadPortfolioHistoryList(true);
             await loadPortfolio(true);
         } else {
-            showAlert(res.message || "삭제 실패", "error");
+            showNotification(res.message || "삭제 실패", "error");
         }
     } catch (e) {
-        showAlert("이력 삭제 도중 오류가 발생했습니다.", "error");
+        showNotification("이력 삭제 도중 오류가 발생했습니다.", "error");
         console.error(e);
     }
 }
@@ -694,7 +694,7 @@ async function loadRealAssets(sync = false) {
             ViewRouter.navigateTo('monitoring-view');
             exitExplorerMode();
             loadHistory();
-            showAlert(`${asset.korean_name} 차트로 이동합니다.`, 'info');
+            showNotification(`${asset.korean_name} 차트로 이동합니다.`, 'info');
         };
 
         // 데이터 정렬 처리 후 렌더링 호출
@@ -862,12 +862,12 @@ function changeRealAssetExchange(exchange) {
 async function syncRealOrderHistory() {
     const exchange = state.realAssetExchange || 'upbit';
     const exchangeName = (exchange === 'upbit' ? '업비트' : (exchange === 'bithumb' ? '빗썸' : '한국투자증권(KIS)'));
-    showAlert(`${exchangeName}로부터 과거 주문/체결 내역을 동기화하고 있습니다. 잠시만 기다려주세요...`, "info");
+    showNotification(`${exchangeName}로부터 과거 주문/체결 내역을 동기화하고 있습니다. 잠시만 기다려주세요...`, "info");
     try {
         await loadRealAssets(true);
-        showAlert(`${exchangeName} 이력 동기화가 완료되었습니다.`, "success");
+        showNotification(`${exchangeName} 이력 동기화가 완료되었습니다.`, "success");
     } catch (e) {
-        showAlert(`${exchangeName} 이력 동기화 중 오류가 발생했습니다.`, "error");
+        showNotification(`${exchangeName} 이력 동기화 중 오류가 발생했습니다.`, "error");
         console.error(e);
     }
 }
@@ -887,7 +887,7 @@ state.realOrderState = {
  */
 function openRealAssetOrderModal(asset) {
     if (asset.currency === 'KRW') {
-        showAlert("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
+        showNotification("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
         return;
     }
     
@@ -1254,7 +1254,7 @@ async function openRealAssetOrderModalFromMonitoring() {
     const symbol = state.currentSymbol;
     
     if (symbol === 'KRW') {
-        showAlert("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
+        showNotification("원화 자산은 매수/매도 주문을 할 수 없습니다.", "warning");
         return;
     }
     
@@ -1611,7 +1611,7 @@ function setOrderRatio(ratio) {
                     if (volumeInput) volumeInput.value = (targetKrw / currentPrice).toFixed(8);
                 }
             } else {
-                showAlert("가격을 먼저 선택하거나 입력해주세요.", "warning");
+                showNotification("가격을 먼저 선택하거나 입력해주세요.", "warning");
             }
         } else {
             // 시장가 매수
@@ -1620,7 +1620,7 @@ function setOrderRatio(ratio) {
                     const qty = Math.floor(targetKrw / currentPrice);
                     if (volumeInput) volumeInput.value = qty;
                 } else {
-                    showAlert("현재가 정보를 수신할 때까지 잠시만 기다려주세요.", "warning");
+                    showNotification("현재가 정보를 수신할 때까지 잠시만 기다려주세요.", "warning");
                 }
             } else {
                 if (totalInput) totalInput.value = targetKrw;
@@ -2152,16 +2152,16 @@ async function submitStrategyRun() {
     try {
         const res = await APIClient.startPortfolioSession(cash_config, strategies);
         if (res.status === 'success') {
-            showAlert(`실시간 모의투자가 가동되었습니다.`, "success");
+            showNotification(`실시간 모의투자가 가동되었습니다.`, "success");
             state.currentPortfolioId = res.portfolio_id;
             closeStrategyRunModal();
             await loadPortfolioHistoryList(true);
             await loadPortfolio(true);
         } else {
-            showAlert(res.message || "모의투자 기동 실패", "error");
+            showNotification(res.message || "모의투자 기동 실패", "error");
         }
     } catch (e) {
-        showAlert("전략 기동 과정에 장애가 발생했습니다.", "error");
+        showNotification("전략 기동 과정에 장애가 발생했습니다.", "error");
         console.error(e);
     } finally {
         if (submitBtn) {
@@ -2212,14 +2212,14 @@ async function endSimulationSession(portfolioId) {
     try {
         const res = await APIClient.endPortfolioSession(portfolioId);
         if (res.status === 'success') {
-            showAlert("모의투자 세션이 성공적으로 마감되었습니다.", "success");
+            showNotification("모의투자 세션이 성공적으로 마감되었습니다.", "success");
             await loadPortfolioHistoryList(true);
             await loadPortfolio(true);
         } else {
-            showAlert(res.message || "종료 실패", "error");
+            showNotification(res.message || "종료 실패", "error");
         }
     } catch (e) {
-        showAlert("세션 마감 중 오류가 발생했습니다.", "error");
+        showNotification("세션 마감 중 오류가 발생했습니다.", "error");
         console.error(e);
     }
 }
@@ -2373,7 +2373,7 @@ async function cancelOutstandingOrder(uuid, isReservation, excgIdDvsnCd, rsvnOrd
         
         await APIClient.cancelRealOrder(exchange, payload);
         
-        showAlert(`주문 취소가 완료되었습니다. (ID: ${uuid})`, "success");
+        showNotification(`주문 취소가 완료되었습니다. (ID: ${uuid})`, "success");
         
         // 내역 새로고침
         await loadOutstandingOrders();
@@ -2384,7 +2384,7 @@ async function cancelOutstandingOrder(uuid, isReservation, excgIdDvsnCd, rsvnOrd
         }
     } catch (e) {
         console.error("[cancelOutstandingOrder] 취소 실패:", e);
-        showAlert(`주문 취소 실패: ${e.message || e}`, "danger");
+        showNotification(`주문 취소 실패: ${e.message || e}`, "danger");
     }
 }
 

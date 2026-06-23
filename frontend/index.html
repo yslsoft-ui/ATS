@@ -24,7 +24,6 @@
                 <div class="menu-item" data-view="overview-live-view">🏠 대시보드(실거래)</div>
                 <div class="menu-item" data-view="market-view">🌐 마켓</div>
                 <div class="menu-item" data-view="monitoring-view">📊 모니터링</div>
-                <div class="menu-item" data-view="alert-view">🔔 알림</div>
                 <div class="menu-item" data-view="strategy-view">🎯 전략</div>
                 <div class="menu-item" data-view="portfolio-view">💼 포트폴리오</div>
                 <div class="menu-item" data-view="real-asset-view">💳 실자산 현황</div>
@@ -794,43 +793,6 @@
 
 
 
-            <!-- 알림 뷰 (초기엔 숨김) -->
-            <section id="alert-view" style="display: none;">
-                <header class="main-header"
-                    style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                        <h1>🔔 매매 및 수신 알림 기록 <span id="alert-count" class="market-count-badge"></span></h1>
-                        <div style="display: flex; gap: 10px;">
-                            <button id="btn-toggle-alerts" class="btn sm" onclick="toggleAlerts()">🔕 알림 팝업:
-                                OFF</button>
-                            <button class="btn sm danger" onclick="clearAlertHistory()">🗑️ 전체 내역 삭제</button>
-                        </div>
-                    </div>
-                    <!-- 고신호 필터 선택 탭 [NEW] -->
-                    <div class="alert-filter-container">
-                        <button class="filter-tab active" id="alert-filter-high" onclick="setAlertFilter('high')">⚡
-                            체결/보류 전용 (고신호 추천)</button>
-                        <button class="filter-tab" id="alert-filter-all" onclick="setAlertFilter('all')">🌐 전체 수신 알림 (감지
-                            포함)</button>
-                    </div>
-                </header>
-                <div class="market-table-wrapper">
-                    <table id="alert-table">
-                        <thead>
-                            <tr>
-                                <th>시간</th>
-                                <th>코인</th>
-                                <th style="text-align:right">포착가</th>
-                                <th style="text-align:right">변동률</th>
-                                <th style="text-align:right">매수비중</th>
-                                <th>메시지</th>
-                            </tr>
-                        </thead>
-                        <tbody id="alert-tbody"></tbody>
-                    </table>
-                </div>
-            </section>
-
             <!-- 전략 뷰 (초기엔 숨김) -->
             <section id="strategy-view" style="display: none;">
                 <div class="console-summary-bar">
@@ -1057,9 +1019,9 @@
                             </div>
 
                             <!-- 안전 제한 상태 (Guards) -->
-                            <div class="panel-section" id="tracer-alerts-section" style="display: none;">
+                            <div class="panel-section" id="tracer-warnings-section" style="display: none;">
                                 <span class="label" style="color: #EF4444;">안전 제한 작동 내역 (Guards)</span>
-                                <div id="tracer-alerts-list" style="display: flex; flex-direction: column; gap: 8px;">
+                                <div id="tracer-warnings-list" style="display: flex; flex-direction: column; gap: 8px;">
                                 </div>
                             </div>
                         </div>
@@ -3224,7 +3186,7 @@
     <script src="stream.js?v=1.0.2"></script>
     <script src="indicators.js"></script>
     <script src="chart.js"></script>
-    <script src="alerts.js"></script>
+    <script src="notifications.js"></script>
     <script src="market.js"></script>
     <script src="kis-detail.js"></script>
     <script src="portfolio-adapter.js"></script>

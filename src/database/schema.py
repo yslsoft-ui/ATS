@@ -305,6 +305,11 @@ async def _init_db_core(target_path: str):
         """)
         await db.commit()
 
+        # alerts 테이블 제거 마이그레이션 실행
+        await db.execute("DROP TABLE IF EXISTS alerts")
+        await db.commit()
+        logger.info("[Migration] alerts 테이블이 삭제되었습니다.")
+
         # proposal_evaluations 시간 컬럼 초 단위 -> ms 단위 마이그레이션
         await db.execute("""
             UPDATE proposal_evaluations

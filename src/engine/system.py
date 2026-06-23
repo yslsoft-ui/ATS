@@ -245,10 +245,6 @@ class TradingSystem:
         self.execution_pipeline.set_broadcast_callback(callback)
         update_broadcast_callback(callback)
 
-    async def save_alert(self, alert: Dict):
-        """알림을 저장합니다. 외부 및 mock용 퍼블릭 인터페이스."""
-        await self.execution_pipeline.save_alert(alert)
-
 
     async def _on_config_changed(self, new_config: Dict[str, Any]):
         """설정 파일 변경 시 전략 파라미터 및 인증 정보를 실시간으로 업데이트합니다."""

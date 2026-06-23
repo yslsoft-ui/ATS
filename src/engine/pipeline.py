@@ -17,6 +17,7 @@ class ExecutionPipeline:
         self.repository = repository or portfolio_manager.repository
         self.broadcast_callback: Optional[Callable] = None
         self.scorer = ExecutionScorer()
+        self.last_skip_times: Dict[Tuple[str, str, str], float] = {}
 
     def set_broadcast_callback(self, callback: Callable):
         self.broadcast_callback = callback
@@ -129,26 +130,40 @@ class ExecutionPipeline:
         if not exchange_id:
             raise ValueError("_broadcast_skip: exchange_id가 누락되었습니다.")
         
+        # 30초 중복 억제 쿨다운 적용
+        current_time = time.time()
+        
+        # 동적 수치가 포함될 수 있는 reason 문자열을 고정된 대표 키값으로 정규화
+        normalized_reason = reason
+        if reason.startswith("잔고 부족"):
+            normalized_reason = "잔고 부족"
+        elif reason.startswith("단일 종목 투자 한도"):
+            normalized_reason = "단일 종목 투자 한도 초과"
+            
+        cooldown_key = (exchange_id, symbol, normalized_reason)
+        last_time = self.last_skip_times.get(cooldown_key, 0.0)
+        if current_time - last_time < 30.0:
+            logger.info(f"Skip notification for {cooldown_key} suppressed due to 30s cooldown")
+            return
+        self.last_skip_times[cooldown_key] = current_time
+
         msg = f"⚠️ [매매보류] {symbol} 주문 보류 ({reason})"
-        alert = {
+        notification = {
             "type": "alert",
-            "alert_type": "skip",
+            "notification_type": "skip",
             "exchange_id": exchange_id,
             "code": symbol,
             "price": 0.0,
             "msg": msg,
-            "timestamp": int(time.time() * 1000)
+            "timestamp": int(current_time * 1000)
         }
 
-        # 1. DB 알림 저장
-        await self._save_alert_to_db(alert)
-
-        # 2. 웹소켓 브로드캐스트
+        # 웹소켓 브로드캐스트
         if self.broadcast_callback:
-            await self.broadcast_callback(alert)
+            await self.broadcast_callback(notification)
 
     async def _handle_notifications(self, result: Dict, signal: Any):
-        """거래 발생 알림을 생성하고 저장/전송합니다."""
+        """거래 발생 알림을 생성하고 전송합니다."""
         symbol = result['symbol']
         exchange_id = result['exchange_id']
         action = result['side']
@@ -157,9 +172,9 @@ class ExecutionPipeline:
         
         msg = f"🤖 [전략매매] {action} 체결: {symbol} @ {price:,.2f} ({reason})"
         
-        alert = {
+        notification = {
             "type": "alert",
-            "alert_type": "trade",
+            "notification_type": "trade",
             "exchange_id": exchange_id,
             "code": symbol,
             "price": price,
@@ -167,21 +182,7 @@ class ExecutionPipeline:
             "timestamp": int(time.time() * 1000)
         }
 
-        # 1. DB 알림 저장
-        await self._save_alert_to_db(alert)
-
-        # 2. 외부 브로드캐스트 (WebSocket 등)
+        # 외부 브로드캐스트 (WebSocket 등)
         if self.broadcast_callback:
-            await self.broadcast_callback(alert)
-
-    async def save_alert(self, alert: Dict):
-        """알림을 저장합니다. 외부 및 mock용 퍼블릭 인터페이스."""
-        await self._save_alert_to_db(alert)
-
-    async def _save_alert_to_db(self, alert: Dict):
-        """알림을 데이터베이스에 영구 저장합니다."""
-        try:
-            await self.repository.insert_alert(alert)
-        except Exception as e:
-            logger.error(f"Alert Save Error: {e}")
+            await self.broadcast_callback(notification)
 

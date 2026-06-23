@@ -33,7 +33,7 @@ _Avoid_: Trade, 체결 건
 가격이나 거래량이 단기간에 임계치 이상으로 상승하는 현상.
 _Avoid_: 급등락, 펌핑
 
-**Alert**:
+**Notification**:
 **Spike** 포착 또는 특정 지표 조건 충족 시 생성되어 사용자에게 전달되는 정보 단위.
 _Avoid_: 알림 메시지, 노티
 
@@ -261,14 +261,14 @@ Pareto 랭킹 연산의 병목 및 진동을 차단하기 위해, 국면 확률 
 - 실시간 수집 전, **TradeEngine**은 반드시 **Warm-up** 과정을 거쳐 지표를 최신화해야 함
 - **Doji**가 발생하면 시스템은 현재 가격을 이전 **Candle**의 종가와 비교하여 **Trade Simulation**의 색상 로직에 반영함
 - **Spike Detector**는 **Tick** 스트림을 분석하여 **Spike**를 포착함
-- **Spike**가 발생하면 시스템은 **Alert**를 생성하고 저장함
+- **Spike**가 발생하면 시스템은 **Notification**을 생성하고 실시간 브로드캐스트함
 - **Trade Simulation**은 하나 이상의 **Strategy**를 실행하여 매매 신호를 발생시킴
 - **Backtest**는 과거의 **Candle** 데이터를 입력값으로 사용하는 **Trade Simulation**의 형태임
 
 ### 3. Logging & Telemetry
 - **Standard**: Always use `src.engine.utils.telemetry.get_logger`.
 - **Avoid**: Never use standard `logging.getLogger` or `print()` for system logs.
-- **Leverage**: `logger.warning` and `logger.error` automatically broadcast alerts to the UI.
+- **Leverage**: `logger.warning` and `logger.error` automatically broadcast notifications to the UI.
 
 ### 4. KIS (한국투자증권) API 연동 규격 원칙
 - **KIS (한국투자증권) 연동 및 다중 자산군 개발 시**: 에이전트는 사용자의 추가적인 요청 유무에 관계없이 아래의 **5대 분할 정제 마스터 매뉴얼**을 상시 우선 참조하여 설계의 무결성을 완벽하게 보증해야 합니다.

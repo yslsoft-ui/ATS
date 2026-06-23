@@ -104,3 +104,44 @@ async def test_check_risk_limits():
     passed, reason = pipeline.check_risk_limits(portfolio, signal, 50000000, 0.004, 200000)
     assert passed
     assert reason == ""
+
+@pytest.mark.asyncio
+async def test_skip_alert_rate_limiting():
+    # 🌟 DI 적용: PortfolioManager에 격리된 테스트용 DB 주입
+    pm = PortfolioManager(db_path=TEST_DB_PATH)
+    pipeline = ExecutionPipeline(pm)
+
+    broadcasted_notifications = []
+    async def mock_broadcast(msg):
+        broadcasted_notifications.append(msg)
+
+    pipeline.set_broadcast_callback(mock_broadcast)
+
+    signal = MockSignal("KRW-BTC", "BUY", exchange="upbit")
+
+    # 1. First skip notification broadcast
+    await pipeline._broadcast_skip(signal, "테스트 보류 사유")
+    assert len(broadcasted_notifications) == 1
+    assert broadcasted_notifications[0]["notification_type"] == "skip"
+    assert broadcasted_notifications[0]["code"] == "KRW-BTC"
+    assert broadcasted_notifications[0]["exchange_id"] == "upbit"
+
+    # 2. Second skip notification within 30s cooldown (should be suppressed)
+    await pipeline._broadcast_skip(signal, "테스트 보류 사유")
+    assert len(broadcasted_notifications) == 1
+
+    # 3. Different key (different reason) should not be suppressed
+    await pipeline._broadcast_skip(signal, "다른 보류 사유")
+    assert len(broadcasted_notifications) == 2
+    assert broadcasted_notifications[1]["msg"] == "⚠️ [매매보류] KRW-BTC 주문 보류 (다른 보류 사유)"
+
+    # 4. Different symbol should not be suppressed
+    signal_eth = MockSignal("KRW-ETH", "BUY", exchange="upbit")
+    await pipeline._broadcast_skip(signal_eth, "테스트 보류 사유")
+    assert len(broadcasted_notifications) == 3
+
+    # 5. Let's fake time to test cooldown expiry (e.g. +31s)
+    cooldown_key = ("upbit", "KRW-BTC", "테스트 보류 사유")
+    pipeline.last_skip_times[cooldown_key] -= 31.0
+    await pipeline._broadcast_skip(signal, "테스트 보류 사유")
+    assert len(broadcasted_notifications) == 4

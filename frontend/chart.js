@@ -197,7 +197,7 @@
                 if (!state.autoScroll || state.isExplorerMode) {
                     console.log("[INFO] Right-click detected: Returning to Real-time Mode");
                     exitExplorerMode();
-                    showAlert({ msg: "실시간 모드로 복귀합니다." });
+                    showNotification({ msg: "실시간 모드로 복귀합니다." });
                 }
             });
 
