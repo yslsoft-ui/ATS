@@ -56,7 +56,8 @@ async def test_strategy_service_no_warning_when_engines_empty(caplog):
     service.market_sub = MockSubscriber([tick_data])
     
     with caplog.at_level(logging.WARNING):
-        await service._market_data_loop()
+        with pytest.raises(asyncio.CancelledError):
+            await service._market_data_loop()
         
     # No warning should be captured because trade_engines is empty
     warnings = [r.message for r in caplog.records if "활성화된 전략 엔진에 매칭되지 않는 키 감지" in r.message]
@@ -94,7 +95,8 @@ async def test_strategy_service_warning_when_engines_exist_and_throttled(caplog)
     # Send the tick once
     service.market_sub = MockSubscriber([tick_data])
     with caplog.at_level(logging.WARNING):
-        await service._market_data_loop()
+        with pytest.raises(asyncio.CancelledError):
+            await service._market_data_loop()
         
     # Warning should be captured
     warnings = [r.message for r in caplog.records if "활성화된 전략 엔진에 매칭되지 않는 키 감지" in r.message]
@@ -106,7 +108,8 @@ async def test_strategy_service_warning_when_engines_exist_and_throttled(caplog)
     # Send the tick again
     service.market_sub = MockSubscriber([tick_data])
     with caplog.at_level(logging.WARNING):
-        await service._market_data_loop()
+        with pytest.raises(asyncio.CancelledError):
+            await service._market_data_loop()
         
     # Warning should NOT be captured again due to throttling
     warnings = [r.message for r in caplog.records if "활성화된 전략 엔진에 매칭되지 않는 키 감지" in r.message]
@@ -143,7 +146,8 @@ async def test_strategy_service_reload_engines_clears_unmatched_keys(caplog):
     
     # Send tick to populate unmatched_keys
     service.market_sub = MockSubscriber([tick_data])
-    await service._market_data_loop()
+    with pytest.raises(asyncio.CancelledError):
+        await service._market_data_loop()
     assert "bithumb:META" in service._unmatched_keys
     
     # Reload engines (with None portfolio to keep it simple and trigger clear)
@@ -156,7 +160,8 @@ async def test_strategy_service_reload_engines_clears_unmatched_keys(caplog):
     caplog.clear()
     service.market_sub = MockSubscriber([tick_data])
     with caplog.at_level(logging.WARNING):
-        await service._market_data_loop()
+        with pytest.raises(asyncio.CancelledError):
+            await service._market_data_loop()
         
     # Warning should be captured again because unmatched_keys was cleared
     warnings = [r.message for r in caplog.records if "활성화된 전략 엔진에 매칭되지 않는 키 감지" in r.message]

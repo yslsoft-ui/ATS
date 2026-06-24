@@ -174,6 +174,8 @@ class CollectorService(DaemonService):
         self.last_known_statuses: Dict[str, dict] = {}
         self._status_counter = 0
         self._tasks: List[asyncio.Task] = []
+        self.critical_tasks: List[asyncio.Task] = []
+        self.scheduler = SchedulerTrigger(self.config_manager, logger)
 
         # [NEW] 수집기 종목 버전 및 메타데이터 동적 관리를 위한 변수 초기화
         self.symbols_version: Dict[str, int] = {}
@@ -273,13 +275,17 @@ class CollectorService(DaemonService):
 
 
         # [V2] 시장 상태 요약 수집 루프 백그라운드 태스크 기동
-        self._tasks.append(asyncio.create_task(self._periodic_market_regime_summarizer_loop()))
+        t_regime = asyncio.create_task(self._periodic_market_regime_summarizer_loop())
 
         # [NEW] 상장/상폐 자동 동기화 및 스케줄러 백그라운드 태스크 기동
-        self._tasks.append(asyncio.create_task(self._periodic_bithumb_notice_poll_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_upbit_market_poll_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_kis_mst_sync_loop()))
-        self._tasks.append(asyncio.create_task(self._planned_events_executor_loop()))
+        t_bithumb = asyncio.create_task(self._periodic_bithumb_notice_poll_loop())
+        t_upbit = asyncio.create_task(self._periodic_upbit_market_poll_loop())
+        t_kis = asyncio.create_task(self._periodic_kis_mst_sync_loop())
+        t_planned = asyncio.create_task(self._planned_events_executor_loop())
+        
+        loop_tasks = [t_regime, t_bithumb, t_upbit, t_kis, t_planned]
+        self._tasks.extend(loop_tasks)
+        self.critical_tasks.extend(loop_tasks)
 
     async def stop(self):
         # 0. 백그라운드 태스크 정리 (안전하게 cancel & gather)
@@ -289,6 +295,7 @@ class CollectorService(DaemonService):
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
             self._tasks.clear()
+            self.critical_tasks.clear()
 
         # 1. 수집기 중단
         for exchange_id, collector in self.collectors.items():

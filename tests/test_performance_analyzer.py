@@ -78,7 +78,7 @@ def test_performance_analyzer_single_exchange_with_trades():
         }
     ]
 
-    current_prices = {"BTC": 55000000.0}  # 평가 가격 상승
+    current_prices = {("upbit", "BTC"): 55000000.0}  # 평가 가격 상승
 
     report = PerformanceAnalyzer.calculate_report(
         portfolio=portfolio,
@@ -144,8 +144,8 @@ def test_performance_analyzer_multi_exchange_isolation():
     ]
 
     current_prices = {
-        "BTC": 60000000.0,   # upbit 평가액 상승
-        "005930": 90000.0    # kis 평가액 하락
+        ("upbit", "BTC"): 60000000.0,   # upbit 평가액 상승
+        ("kis", "005930"): 90000.0    # kis 평가액 하락
     }
 
     report = PerformanceAnalyzer.calculate_report(

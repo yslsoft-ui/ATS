@@ -93,18 +93,18 @@ async def test_check_risk_limits():
     # 1. 잔고 부족 시나리오
     # 100만 원 자산인데 110만 원 매수 요청
     signal = MockSignal("KRW-BTC", "BUY")
-    passed, reason = pipeline.check_risk_limits(portfolio, signal, 50000000, 0.022, 1100000)
+    passed, reason = await pipeline.check_risk_limits(portfolio, signal, 50000000, 0.022, 1100000)
     assert not passed
     assert "잔고 부족" in reason
 
     # 2. 단일 종목 투자 한도(30%) 초과 시나리오
     # 100만 원 자산인데 한 종목에 40만 원 매수 요청
-    passed, reason = pipeline.check_risk_limits(portfolio, signal, 50000000, 0.008, 400000)
+    passed, reason = await pipeline.check_risk_limits(portfolio, signal, 50000000, 0.008, 400000)
     assert not passed
     assert "단일 종목 투자 한도" in reason
 
     # 3. 리스크 필터 통과 시나리오 (20만 원 매수 요청, 20% 비중)
-    passed, reason = pipeline.check_risk_limits(portfolio, signal, 50000000, 0.004, 200000)
+    passed, reason = await pipeline.check_risk_limits(portfolio, signal, 50000000, 0.004, 200000)
     assert passed
     assert reason == ""
 

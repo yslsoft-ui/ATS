@@ -179,7 +179,7 @@ async def test_replay_runner_equivalence():
     assert candle_history_before == candle_history_after
 
     # 포트폴리오 평가액 비교
-    current_prices = {"KRW-BTC": raw_rows[-1]["trade_price"]}
+    current_prices = {("upbit", "KRW-BTC"): raw_rows[-1]["trade_price"]}
     val_before = port_before.get_total_value(current_prices)
     val_after = port_after.get_total_value(current_prices)
     assert val_before == val_after
@@ -257,4 +257,4 @@ async def test_replay_runner_statelessness():
     assert processed["signal"].action == "BUY"
     
     # last_prices 검증
-    assert result["last_prices"] == {"ETH": 3050000.0}
+    assert result["last_prices"] == {("bithumb", "ETH"): 3050000.0}

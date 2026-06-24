@@ -100,7 +100,26 @@ class PerformanceAnalyzer:
             pos_info = portfolio.positions.get((ex_lower, sym))
             current_qty = pos_info.quantity if pos_info else 0.0
             avg_price = pos_info.avg_price if pos_info else 0.0
-            final_price = current_prices.get(sym, avg_price)
+            
+            lookup_key = (ex_lower, sym)
+            if current_qty > 0:
+                if lookup_key not in current_prices:
+                    raise KeyError(f"Price for {lookup_key} is missing in current_prices (strict evaluation)")
+                final_price = current_prices[lookup_key]
+                display_price = final_price
+                price_source = "current_price"
+            else:
+                final_price = 0.0
+                if lookup_key in current_prices:
+                    display_price = current_prices[lookup_key]
+                    price_source = "current_price"
+                elif len(sym_trades) > 0:
+                    last_trade = sorted(sym_trades, key=lambda x: x.get('timestamp', 0))[-1]
+                    display_price = last_trade.get('price', avg_price)
+                    price_source = "last_trade_price"
+                else:
+                    display_price = avg_price
+                    price_source = "avg_price"
 
             buy_sum = sum(t["price"] * t["quantity"] for t in sym_trades if t["side"] == "BUY")
             sell_sum = sum(t["price"] * t["quantity"] for t in sym_trades if t["side"] == "SELL")
@@ -147,7 +166,9 @@ class PerformanceAnalyzer:
                 "candle_history": [],
                 "quantity": current_qty,
                 "avg_price": avg_price,
-                "final_price": final_price
+                "final_price": final_price,
+                "display_price": display_price,
+                "price_source": price_source
             })
 
         # 3. 거래소별 요약 지표 생성 (results 기반)

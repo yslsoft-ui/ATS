@@ -1167,11 +1167,8 @@ class PortfolioManager:
     async def get_portfolio_current_prices(self, portfolio_id: str, system) -> dict:
         """
         포트폴리오의 보유 종목들에 대한 현재가(종가) 맵을 공통으로 산출합니다.
-        1순위: 진행 중인 경우 system.latest_prices 메모리 캐시 참조.
-               완료/백테스트인 경우 portfolios.strategy_info 의 final_prices 참조.
-        2순위: 로컬 DB candles 테이블 최신 종가 조회.
-        3순위: 업비트 API 직접 조회 (업비트 종목만).
-        4순위: 포지션 평균 매수가(avg_price).
+        오직 system.latest_prices 및 final_prices 메모리 캐시로부터 복합 튜플 키로만 매핑하며,
+        임의의 폴백(DB 쿼리, API 조회, avg_price)은 전면 배제합니다.
         """
         portfolio = self.portfolios.get(portfolio_id)
         if not portfolio:
@@ -1185,121 +1182,45 @@ class PortfolioManager:
         if not is_active and getattr(portfolio, 'strategy_info', ''):
             try:
                 import json
+                import ast
                 meta = json.loads(portfolio.strategy_info)
                 if isinstance(meta, dict) and "final_prices" in meta:
-                    # 마감된 가격 복원
                     for k, v in meta["final_prices"].items():
-                        clean_k = k.replace("KIS-", "").replace("KRW-", "").replace("UPB-", "")
-                        current_prices[clean_k] = float(v)
+                        try:
+                            parsed_k = ast.literal_eval(k)
+                            if isinstance(parsed_k, tuple) and len(parsed_k) == 2:
+                                current_prices[(parsed_k[0].lower(), parsed_k[1])] = float(v)
+                                continue
+                        except Exception:
+                            pass
+                        
+                        if ":" in k:
+                            parts = k.split(":")
+                            current_prices[(parts[0].lower(), parts[1])] = float(v)
+                        else:
+                            for pos_key in portfolio.positions.keys():
+                                if pos_key[1] == k:
+                                    current_prices[(pos_key[0].lower(), pos_key[1])] = float(v)
+                                    break
             except Exception as e:
                 logger.error(f"Failed to parse strategy_info final_prices: {e}")
 
         # 2순위: 진행중이거나 meta에 종가 정보가 없는 경우 ➔ system.latest_prices 메모리 캐시 확인
-        upbit_symbols = []
         for pos_key, pos in portfolio.positions.items():
             if pos.quantity <= 0:
                 continue
             ex_key, sym = pos_key
-            if sym in current_prices:
+            lookup_key = (ex_key.lower(), sym)
+            if lookup_key in current_prices:
                 continue
 
-            # 메모리 캐시 조회
-            cached = system.latest_prices.get(f"{ex_key.lower()}:{sym}")
-            if cached and cached.get('trade_price') is not None:
-                current_prices[sym] = float(cached['trade_price'])
-                continue
-
-            if ex_key.lower() == 'upbit':
-                upbit_symbols.append(sym)
-
-        # 3순위: 로컬 DB candles 조회 (업비트가 아니거나 메모리 캐시에 없는 종목 대상)
-        from src.database.connection import get_db_conn
-        async with get_db_conn(self.db_path) as db:
-            for pos_key, pos in portfolio.positions.items():
-                if pos.quantity <= 0:
+            if system and hasattr(system, 'latest_prices'):
+                price = system.latest_prices.get(lookup_key)
+                if price is not None:
+                    current_prices[lookup_key] = float(price)
                     continue
-                ex_key, sym = pos_key
-                if sym in current_prices:
-                    continue
-                if ex_key.lower() == 'upbit':
-                    continue  # 업비트는 API로 조회할 것임
-                
-                try:
-                    async with db.execute(
-                        "SELECT close FROM candles WHERE exchange_id = ? AND symbol = ? ORDER BY timestamp DESC LIMIT 1",
-                        (ex_key.lower(), sym)
-                    ) as cursor:
-                        row = await cursor.fetchone()
-                        if row:
-                            current_prices[sym] = float(row['close'])
-                except Exception as e:
-                    logger.error(f"Failed to query end candle price for {ex_key}:{sym}: {e}")
 
-        # 4순위: 업비트 API 직접 조회 (메모리에 없었던 업비트 종목들)
-        if upbit_symbols:
-            needed_upbit = [s for s in upbit_symbols if s not in current_prices]
-            if needed_upbit:
-                import aiohttp
-                try:
-                    # 업비트 전체 마켓 정보를 조회하여 지원 마켓 판별
-                    all_markets = []
-                    market_url = "https://api.upbit.com/v1/market/all"
-                    timeout = aiohttp.ClientTimeout(total=3.0)
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        async with session.get(market_url) as m_resp:
-                            if m_resp.status == 200:
-                                all_markets = await m_resp.json()
-                    
-                    krw_supported = {m['market'].replace("KRW-", "") for m in all_markets if m['market'].startswith("KRW-")}
-                    btc_supported = {m['market'].replace("BTC-", "") for m in all_markets if m['market'].startswith("BTC-")}
-
-                    # 조회할 마켓 리스트 조립 (KRW-BTC 강제 포함)
-                    query_markets = ["KRW-BTC"]
-                    for s in needed_upbit:
-                        if s in krw_supported:
-                            query_markets.append(f"KRW-{s}")
-                        elif s in btc_supported:
-                            query_markets.append(f"BTC-{s}")
-                    
-                    query_markets = list(set(query_markets))
-                    
-                    prices = {}
-                    # URI Too Long 방지를 위한 배치(Batch) 분할 조회 (최대 50개 단위)
-                    limit = 50
-                    chunks = [query_markets[i:i + limit] for i in range(0, len(query_markets), limit)]
-                    
-                    async with aiohttp.ClientSession(timeout=timeout) as session:
-                        for chunk in chunks:
-                            url = f"https://api.upbit.com/v1/ticker?markets={','.join(chunk)}"
-                            async with session.get(url) as resp:
-                                if resp.status == 200:
-                                    tickers = await resp.json()
-                                    for t in tickers:
-                                        prices[t['market']] = float(t['trade_price'])
-                            # 짧은 비동기 휴식으로 루프 블로킹 완화
-                            await asyncio.sleep(0.02)
-                                    
-                    btc_krw_price = prices.get("KRW-BTC", 0.0)
-                    
-                    for s in needed_upbit:
-                        if s in krw_supported:
-                            current_prices[s] = prices.get(f"KRW-{s}", 0.0)
-                        elif s in btc_supported:
-                            btc_price = prices.get(f"BTC-{s}", 0.0)
-                            current_prices[s] = btc_price * btc_krw_price
-                except Exception as e:
-                    logger.error(f"Failed to fetch upbit prices for {needed_upbit}: {e}")
-
-        # 최종 폴백: 여전히 없는 종목들은 포지션의 평균 매수가로 채움 (단, live 실거래 포트폴리오의 경우 상장폐지/거래불가 종목은 0.0원으로 평가)
-        for pos_key, pos in portfolio.positions.items():
-            if pos.quantity <= 0:
-                continue
-            _, sym = pos_key
-            if sym not in current_prices:
-                if portfolio.portfolio_type == 'live':
-                    current_prices[sym] = 0.0
-                else:
-                    current_prices[sym] = pos.avg_price
+            raise KeyError(f"Price for {lookup_key} is missing in system.latest_prices (hydrate error)")
 
         return current_prices
 

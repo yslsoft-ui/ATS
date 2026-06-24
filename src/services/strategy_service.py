@@ -81,6 +81,7 @@ class StrategyService(DaemonService):
         self.source_pid = os.getpid()
         self.daemon_started_at = int(time.time() * 1000)
         self.last_daily_reset_date = ""
+        self.latest_prices: Dict[tuple[str, str], float] = {}
         
         self._lock = asyncio.Lock()
 
@@ -309,6 +310,55 @@ class StrategyService(DaemonService):
                     new_engs = await self.reload_trade_engines(active_p)
                     self.trade_engines.clear()
                     self.trade_engines.update(new_engs)
+                    
+                    lookup_keys = set()
+                    for pos_key, pos in active_p.positions.items():
+                        qty = getattr(pos, 'quantity', 0.0) if not isinstance(pos, dict) else pos.get('quantity', 0.0)
+                        if qty > 0:
+                            if isinstance(pos, dict):
+                                ex = pos.get('exchange_id')
+                                sym = pos.get('symbol')
+                            else:
+                                ex = getattr(pos, 'exchange_id', None)
+                                sym = getattr(pos, 'symbol', None)
+                            if (not ex or not sym) and isinstance(pos_key, tuple) and len(pos_key) == 2:
+                                ex, sym = pos_key
+                            if ex and sym:
+                                lookup_keys.add((ex.lower(), sym))
+                                
+                    for eng_key in self.trade_engines.keys():
+                        parts = eng_key.split(':')
+                        if len(parts) == 2:
+                            lookup_keys.add((parts[0].lower(), parts[1]))
+                            
+                    if lookup_keys:
+                        candles_data = await self.market_data_repository.get_latest_closed_candles_batch(list(lookup_keys))
+                        current_time = time.time()
+                        for key in lookup_keys:
+                            if key not in candles_data:
+                                raise KeyError(f"Price for {key} is missing in DB candles")
+                            
+                            c_info = candles_data[key]
+                            c_close = c_info['close']
+                            c_ts = c_info['timestamp']
+                            
+                            ex_lower = key[0]
+                            stale_threshold = self.config_manager.get(
+                                f"system.price_hydrate_stale_threshold_seconds.{ex_lower}",
+                                self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
+                            )
+                            
+                            if c_ts > 10000000000:
+                                cmp_time = int(current_time * 1000)
+                                cmp_threshold = stale_threshold * 1000
+                            else:
+                                cmp_time = int(current_time)
+                                cmp_threshold = stale_threshold
+                                
+                            if cmp_time - c_ts > cmp_threshold:
+                                raise KeyError(f"Price for {key} is stale in DB candles (Diff: {cmp_time - c_ts} > {cmp_threshold})")
+                                
+                            self.latest_prices[key] = float(c_close)
         except (ValueError, KeyError, asyncio.CancelledError):
             raise
         except Exception as e:
@@ -629,6 +679,7 @@ class StrategyService(DaemonService):
                         continue
                         
                     key = f"{exchange}:{symbol}"
+                    self.latest_prices[(exchange.lower(), symbol)] = float(data['trade_price'])
                     
                     signals = []
                     closed_candles = []
@@ -677,7 +728,7 @@ class StrategyService(DaemonService):
                         await self.portfolio_manager.load_from_db(exclude_types=['backtest'], exclude_ended=True)
                         op_mode = self.config_manager.get("system.operation_mode", "shadow")
                         target_portfolio_id = '1' if op_mode == 'live' else None
-                        await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id)
+                        await self.execution_pipeline.process_signal(sig, data['trade_price'], portfolio_id=target_portfolio_id, system=self)
 
                 elif data.get('type') == 'candle' and data.get('is_backfill') == True:
                     exchange = data.get('exchange_id')
@@ -708,9 +759,13 @@ class StrategyService(DaemonService):
                                 context.merge_backfilled_candles([candle])
                                 logger.debug(f"[StrategyService] 백필 캔들 병합 완료: {key} (ts: {candle.timestamp})")
         except asyncio.CancelledError:
-            pass
+            raise
+        except (KeyError, ValueError) as e:
+            logger.error(f"[StrategyService] market_data 수신 루프 정합성 예외: {e}")
+            raise
         except Exception as e:
-            logger.error(f"[StrategyService] market_data 수신 루프 예외: {e}")
+            logger.error(f"[StrategyService] market_data 수신 루프 일반 예외: {e}")
+            raise
 
     async def _signal_data_loop(self):
         """실시간 signal_data(수집기 상태 등) 수신 루프"""
@@ -741,9 +796,10 @@ class StrategyService(DaemonService):
                             logger.warning(f"[StrategyService] {exchange} 정지 상태 감지! 미체결 주문 일괄 취소 실행.")
                             await self.portfolio_manager.cancel_all_orders(ex_lower)
         except asyncio.CancelledError:
-            pass
+            raise
         except Exception as e:
             logger.error(f"[StrategyService] signal_data 수신 루프 예외: {e}")
+            raise
 
     async def record_strategy_event(self, event_type: str, message: str):
         if self.notification_service is None:

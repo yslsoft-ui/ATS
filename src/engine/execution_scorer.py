@@ -65,7 +65,7 @@ class ExecutionScorer:
             
         return 0.0, 0.0
 
-    def check_risk_limits(self, portfolio, signal: Any, price: float, qty: float, target_value: float, fee_rate: float, risk_limits_enabled: bool = True) -> Tuple[bool, str]:
+    def check_risk_limits(self, portfolio, signal: Any, price: float, qty: float, target_value: float, fee_rate: float, risk_limits_enabled: bool = True, current_prices: Optional[dict] = None) -> Tuple[bool, str]:
         """
         포지션 진입 전에 리스크 한도 필터를 실행합니다.
         
@@ -77,6 +77,7 @@ class ExecutionScorer:
             target_value: 계산된 예정 진입 가치
             fee_rate: 거래소 수수료율 (ExecutionPipeline에서 전달받음)
             risk_limits_enabled: 리스크 한도 필터 적용 여부
+            current_prices: 외부에서 주입된 튜플 키 현재가 캐시
             
         Returns:
             Tuple[bool, str]: (통과 여부, 보류 사유)
@@ -106,11 +107,11 @@ class ExecutionScorer:
             return False, f"잔고 부족 (소요 현금: {total_cost:,.0f} > 보유 현금: {available_cash:,.0f})"
 
         # 2. 단일 종목 투자 한도 검사 (최대 30%)
-        # 자산 평가를 위한 종목별 현재가 사전 구성 (기존 포지션 평균 단가 기반)
-        current_prices = {pos.symbol: pos.avg_price for pos in portfolio.positions.values()}
-        current_prices[signal.symbol] = price  # 진입할 종목 현재가 주입
+        # 자산 평가를 위한 종목별 현재가 사전 구성
+        curr_prices = dict(current_prices or {})
+        curr_prices[(ex_key, signal.symbol)] = price  # 진입할 종목 현재가 주입
         
-        total_portfolio_value = portfolio.get_total_value(current_prices)
+        total_portfolio_value = portfolio.get_total_value(curr_prices)
         if total_portfolio_value <= 0:
             total_portfolio_value = portfolio.initial_cash
 

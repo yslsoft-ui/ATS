@@ -152,6 +152,13 @@ class BaseMarketDataRepository(abc.ABC):
         """여러 종목에 대해 각각 최신 확정된 캔들의 종가를 배치 조회합니다."""
         pass
 
+    async def get_latest_closed_candles_batch(
+        self, 
+        pairs: List[tuple[str, str]]
+    ) -> Dict[tuple[str, str], Dict[str, Any]]:
+        """여러 종목에 대해 각각 최신 확정된 캔들의 종가와 타임스탬프를 배치 조회합니다."""
+        raise NotImplementedError()
+
     @abc.abstractmethod
     async def get_candle_close_at_or_before_batch(
         self, 
@@ -763,6 +770,48 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
                         result[(ex_id, symbol)] = r[2]
         except Exception as e:
             logger.error(f"[SqliteMarketDataRepository] Failed to query latest closed candle closes batch: {e}")
+        return result
+
+    async def get_latest_closed_candles_batch(
+        self, 
+        pairs: List[tuple[str, str]]
+    ) -> Dict[tuple[str, str], Dict[str, Any]]:
+        if not pairs:
+            return {}
+        
+        placeholders = ", ".join(["(?, ?)"] * len(pairs))
+        query = f"""
+            SELECT exchange_id, symbol, close, timestamp 
+            FROM candles c1
+            WHERE (exchange_id, symbol) IN ({placeholders})
+              AND is_closed = 1
+              AND timestamp = (
+                  SELECT MAX(timestamp) 
+                  FROM candles c2 
+                  WHERE c2.exchange_id = c1.exchange_id 
+                    AND c2.symbol = c1.symbol 
+                    AND c2.is_closed = 1
+              )
+        """
+        params = []
+        for ex, sym in pairs:
+            params.append(ex.lower())
+            params.append(sym)
+            
+        result = {}
+        try:
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(query, tuple(params)) as cursor:
+                    rows = await cursor.fetchall()
+                    for r in rows:
+                        ex_id = r[0].lower() if r[0] else ''
+                        symbol = r[1]
+                        result[(ex_id, symbol)] = {
+                            'close': r[2],
+                            'timestamp': r[3]
+                        }
+        except Exception as e:
+            logger.error(f"[SqliteMarketDataRepository] Failed to query latest closed candles batch: {e}")
         return result
 
     async def get_candle_close_at_or_before_batch(

@@ -34,13 +34,18 @@ class ExecutionPipeline:
         """포지션의 수량과 예정 진입 가치를 정밀 계산합니다. (ExecutionScorer로 위임)"""
         return self.scorer.calculate_position_size(portfolio, signal, price, size_ratio=size_ratio)
 
-    def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float, risk_limits_enabled: bool = True) -> Tuple[bool, str]:
+    async def check_risk_limits(self, portfolio, signal, price: float, qty: float, target_value: float, risk_limits_enabled: bool = True, system: Optional[Any] = None) -> Tuple[bool, str]:
         """포지션 진입 전에 리스크 한도 필터를 실행합니다. (ExecutionScorer로 위임)"""
         ex_id = getattr(signal, 'exchange_id', None)
         if not ex_id:
             raise ValueError("리스크 검증 중 신호의 exchange_id가 누락되었습니다.")
         exchange_config = self.portfolio_manager.exchange_configs.get(ex_id, {})
         fee_rate = exchange_config.get('fee_rate', 0.0005)
+        
+        current_prices = {}
+        if system:
+            current_prices = await self.portfolio_manager.get_portfolio_current_prices(portfolio.id, system)
+            
         return self.scorer.check_risk_limits(
             portfolio=portfolio,
             signal=signal,
@@ -48,14 +53,15 @@ class ExecutionPipeline:
             qty=qty,
             target_value=target_value,
             fee_rate=fee_rate,
-            risk_limits_enabled=risk_limits_enabled
+            risk_limits_enabled=risk_limits_enabled,
+            current_prices=current_prices
         )
 
     def apply_slippage(self, signal, price: float, slippage_rate: float = 0.001) -> float:
         """가상 체결 시 시뮬레이션 현실성을 위한 슬리피지를 적용합니다. (ExecutionScorer로 위임)"""
         return self.scorer.apply_slippage(signal, price, slippage_rate=slippage_rate)
 
-    async def process_signal(self, signal: Any, price: float, orderbook: Optional[Dict] = None, portfolio_id: Optional[str] = None, risk_limits_enabled: bool = True, slippage_rate: float = 0.001, size_ratio: Optional[float] = None) -> Optional[Dict]:
+    async def process_signal(self, signal: Any, price: float, orderbook: Optional[Dict] = None, portfolio_id: Optional[str] = None, risk_limits_enabled: bool = True, slippage_rate: float = 0.001, size_ratio: Optional[float] = None, system: Optional[Any] = None) -> Optional[Dict]:
         """
         신호를 수신하여 실행 파이프라인의 오케스트레이션 과정을 가동합니다.
         """
@@ -100,7 +106,7 @@ class ExecutionPipeline:
             return None
 
         # 4. 리스크 한도(Risk Limits) 필터 실행
-        passed, skip_reason = self.check_risk_limits(portfolio, signal, price, qty, target_value, risk_limits_enabled=risk_limits_enabled)
+        passed, skip_reason = await self.check_risk_limits(portfolio, signal, price, qty, target_value, risk_limits_enabled=risk_limits_enabled, system=system)
         if not passed:
             logger.warning(f"Trade signal SKIPPED for {symbol}: {skip_reason}")
             await self._broadcast_skip(signal, skip_reason)
