@@ -435,5 +435,31 @@ sequenceDiagram
 - 실시간 틱 수신 루프(`_market_data_loop`) 내부로 들어오는 틱 중 `exchange_id` 및 `symbol`이 결여된 불량 이벤트 감지 시 즉각 `warning` 로그를 남기고 폐기하여 데이터 무결성을 보장합니다.
 - 활성화된 TradeEngine 세션에 등록되지 않은 종목의 틱(`exchange_id:symbol` 미매칭 키)이 들어올 경우, 실시간 고속 스트리밍 환경에서 콘솔 로그가 폭발하는 것을 막기 위해 `self._unmatched_keys` 집합을 사용하여 **최초 1회만 경고 로그**를 발생시키고 이후에는 경고를 음소거(Throttling)합니다.
 
+---
+
+## 12. 데몬 감시 및 치명적 예외 Fail-Stop 아키텍처 (Daemon Supervision & Fail-Stop)
+
+시스템의 데이터 정합성을 철저히 보장하고 장애 상황이 조용히 뭉개진 채 오동작(Silent Fallback/Failure)하는 것을 원천 차단하기 위해 `DaemonSupervisor` 기반의 실시간 헬스체크 및 Fail-Stop 아키텍처를 운용합니다.
+
+### 12.1. 0.1초 주기 태스크 모니터링 폴링 루프
+- `DaemonSupervisor`는 기동된 후 종료 대기 상태에서 단순히 대기(`stop_event.wait()`)하지 않고, **0.1초 주기로 백그라운드 태스크들의 생존 상태를 감시하는 폴링 루프**를 가동합니다.
+- 감시 대상 태스크들은 `DaemonSupervisor` 자체의 태스크 목록(`self._tasks`)과 도메인 서비스(`self.service._tasks`)에 등록된 태스크들의 합집합으로 동적 집계됩니다.
+
+### 12.2. 핵심 장기 실행 루프 (`critical_tasks`) 격리 및 판정
+- 데몬 수명주기 전반에 걸쳐 항상 영구히 생존하여 무한 루프를 돌며 동작해야 하는 핵심 태스크(예: ZMQ 수신 제어 리스너, 시세 데이터 파싱 루프, 제안 사후 평가 루프 등)들은 **`critical_tasks` 목록에 명시적으로 추가되어 격리 관리**됩니다.
+- 단발성 청소 태스크(예: `run_clean`)와 같이 목적을 달성한 후 정상 리턴되어 종료되는 태스크는 `critical_tasks`에서 제외되어, 정상적인 조기 완료 시에도 오작동으로 오경보를 뿜지 않도록 제어합니다.
+- 만약 `critical_tasks`에 등록된 핵심 태스크가 예외 없이 조기 리턴(종료)된 것이 발견될 경우, 정합성 위반(`RuntimeError`)으로 간주하여 프로세스를 즉시 크래시시킵니다.
+
+### 12.3. CancelledError 및 일반 예외 전파 정책
+- **CancelledError의 정상/비정상 정밀 분기**:
+  - 오직 `stop_event`가 set된 상태(사용자의 수동 종료, 재시작 등 명시적인 Graceful Shutdown 절차 진행 중)에서 감지된 `CancelledError`만 정상 종료로 pass합니다.
+  - `stop_event`가 설정되지 않았는데 태스크가 취소되어 `CancelledError`가 발생한 경우는 비정상 취소 상태로 간주하여, 예외를 삼키지 않고 그대로 상위로 `raise` 전파하여 프로세스를 즉시 중단(Fail-Stop)합니다.
+- **일반 예외의 즉각적 Fail-Stop**:
+  - `task.result()` 호출 시 감지된 일반 예외(`ValueError`, `KeyError` 등 정합성 오류)에 대해서는 `stop_event` 설정 여부와 관계없이 무조건 크래시 이벤트(`DAEMON_CRASHED`) 적재 및 `raise`를 통해 즉각 프로세스를 중지시킵니다.
+- **종료 정리(Cleanup) 단계의 예외 수거**:
+  - `stop_event` 설정 이후 안전 종료(`.stop()`)가 시작될 때, 정리되는 백그라운드 태스크들을 `asyncio.gather(..., return_exceptions=True)`로 취소 및 종료 수거한 후 그 결과를 반드시 대조 점검합니다.
+  - 이 중 일반 예외(비-CancelledError)가 하나라도 발견되면 즉시 예외를 다시 던져(`raise`), 데몬의 종료 과정에 잠재되어 있던 정합성 에러나 예외 런타임 장애를 누락 없이 겉으로 드러냅니다.
+
+
 
 

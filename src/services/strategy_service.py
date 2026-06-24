@@ -44,6 +44,7 @@ class StrategyService(DaemonService):
         self.market_sub: Optional[EventBusSubscriberInterface] = None
         self.signal_sub: Optional[EventBusSubscriberInterface] = None
         self._tasks: List[asyncio.Task] = []
+        self.critical_tasks: List[asyncio.Task] = []
         
         self.girs_scorer: Optional[GIRSScorer] = None
         self.current_model_version: Optional[str] = None
@@ -308,6 +309,8 @@ class StrategyService(DaemonService):
                     new_engs = await self.reload_trade_engines(active_p)
                     self.trade_engines.clear()
                     self.trade_engines.update(new_engs)
+        except (ValueError, KeyError, asyncio.CancelledError):
+            raise
         except Exception as e:
             logger.error(f"[StrategyService] 초기 세션 로드 예외: {e}")
 
@@ -335,13 +338,17 @@ class StrategyService(DaemonService):
         self.market_sub = await self.event_bus.subscribe("market_data")
         self.signal_sub = await self.event_bus.subscribe("signal_data")
         
-        self._tasks.append(asyncio.create_task(self._market_data_loop()))
-        self._tasks.append(asyncio.create_task(self._signal_data_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_performance_snapshot_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_proposal_generation_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_proposal_evaluation_loop()))
-        self._tasks.append(asyncio.create_task(self._girs_shadow_metrics_collector_loop()))
-        self._tasks.append(asyncio.create_task(self._periodic_shadow_report_loop()))
+        t_market = asyncio.create_task(self._market_data_loop())
+        t_signal = asyncio.create_task(self._signal_data_loop())
+        t_snapshot = asyncio.create_task(self._periodic_performance_snapshot_loop())
+        t_gen = asyncio.create_task(self._periodic_proposal_generation_loop())
+        t_eval = asyncio.create_task(self._periodic_proposal_evaluation_loop())
+        t_girs = asyncio.create_task(self._girs_shadow_metrics_collector_loop())
+        t_shadow = asyncio.create_task(self._periodic_shadow_report_loop())
+        
+        loop_tasks = [t_market, t_signal, t_snapshot, t_gen, t_eval, t_girs, t_shadow]
+        self._tasks.extend(loop_tasks)
+        self.critical_tasks.extend(loop_tasks)
         
         # 초기 감사 로그 청소 비동기 기동 (7일 보존 설정)
         if self.portfolio_manager and self.portfolio_manager.repository:
@@ -360,6 +367,7 @@ class StrategyService(DaemonService):
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
             self._tasks.clear()
+            self.critical_tasks.clear()
 
         if self.market_sub:
             self.market_sub.close()
@@ -779,14 +787,31 @@ class StrategyService(DaemonService):
                 self.current_portfolio_id, strategy_id
             )
                     
-            # 4. 최신 가격 데이터 획득
-            current_prices = {}
+            # 4. 대상 exchange_id, symbol 수집 및 최신 가격 데이터 획득
+            lookup_pairs = set()
             for t in trades:
-                sym = t['symbol']
-                if sym not in current_prices:
-                    close_val = await self.market_data_repository.get_latest_closed_candle_close(symbol=sym)
-                    if close_val is not None:
-                        current_prices[sym] = close_val
+                ex = t.get('exchange_id') or t.get('exchange')
+                sym = t.get('symbol')
+                if not ex or not sym:
+                    raise ValueError(f"exchange_id or symbol is missing in trade: {t}")
+                lookup_pairs.add((ex.lower(), sym))
+                
+            if portfolio and hasattr(portfolio, 'positions'):
+                for pos_key, pos in portfolio.positions.items():
+                    if isinstance(pos, dict):
+                        ex = pos.get('exchange_id')
+                        sym = pos.get('symbol')
+                    else:
+                        ex = getattr(pos, 'exchange_id', None)
+                        sym = getattr(pos, 'symbol', None)
+                    if (not ex or not sym) and isinstance(pos_key, tuple) and len(pos_key) == 2:
+                        ex, sym = pos_key
+                    if ex and sym:
+                        lookup_pairs.add((ex.lower(), sym))
+                    elif not ex or not sym:
+                        raise ValueError(f"exchange_id or symbol is missing in position: {pos}")
+
+            current_prices = await self.market_data_repository.get_latest_closed_candle_closes_batch(list(lookup_pairs))
                                 
             # 5. 가상 잔고 및 포지션 복구
             temp_positions = {}
@@ -841,6 +866,8 @@ class StrategyService(DaemonService):
             }
             await self.portfolio_manager.repository.insert_strategy_performance_snapshot(snapshot_data)
             logger.info(f"[StrategyService] 성과 스냅샷 기록 성공: strategy_id={strategy_id}, version={version_id}, type={snapshot_type}, ROI={metrics['roi']}%")
+        except (ValueError, KeyError, asyncio.CancelledError):
+            raise
         except Exception as e:
             logger.error(f"[StrategyService] 성능 스냅샷 기록 중 예외 발생: {e}")
 
@@ -950,16 +977,18 @@ class StrategyService(DaemonService):
                             portfolio_id, strategy_id, applied_ts, end_ts
                         )
                                 
-                        # 3. 실측 성과 계산을 위한 간이 가상 자산 평가
-                        current_prices = {}
+                        # 3. 대상 exchange_id, symbol 수집 및 실측 성과 계산을 위한 가상 자산 평가
+                        lookup_pairs = set()
                         for t in trades:
-                            sym = t['symbol']
-                            if sym not in current_prices:
-                                close_val = await self.market_data_repository.get_candle_close_at_or_before(
-                                    symbol=sym, timestamp_ms=end_ts * 1000
-                                )
-                                if close_val is not None:
-                                    current_prices[sym] = close_val
+                            ex = t.get('exchange_id') or t.get('exchange')
+                            sym = t.get('symbol')
+                            if not ex or not sym:
+                                raise ValueError(f"exchange_id or symbol is missing in trade: {t}")
+                            lookup_pairs.add((ex.lower(), sym))
+                            
+                        current_prices = await self.market_data_repository.get_candle_close_at_or_before_batch(
+                            list(lookup_pairs), timestamp_ms=end_ts * 1000
+                        )
                                             
                         temp_positions = {}
                         temp_cash = 10000000.0
@@ -1030,12 +1059,14 @@ class StrategyService(DaemonService):
                             f"[StrategyService] 제안 #{prop_id} 사후 평가 완료 및 결과 적재 완료. "
                             f"(예상 ROI: {predicted_roi}%, 실제 ROI: {actual_roi}%, 괴리율: {roi_div}%)"
                         )
+                except (ValueError, KeyError, asyncio.CancelledError):
+                    raise
                 except Exception as e:
                     logger.error(f"[StrategyService] 제안 사후 평가 연산 중 예외 발생: {e}")
                 # 24시간 주기
                 await asyncio.sleep(86400)
         except asyncio.CancelledError:
-            pass
+            raise
 
     def reload_girs_scorer_if_needed(self):
         """설정에서 모델 버전이 변경되었는지 감지하고 GIRSScorer를 리로드합니다."""

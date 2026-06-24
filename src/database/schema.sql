@@ -400,6 +400,7 @@ CREATE TABLE IF NOT EXISTS proposal_evaluation_runs (
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_trades_exch_sym_time ON trades (exchange_id, symbol, trade_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_candles_exch_sym_time ON candles (exchange_id, symbol, interval, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_candles_lookup_latest ON candles (exchange_id, symbol, is_closed, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_history_portfolio_id ON orders_history (portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_positions_portfolio_id ON positions (portfolio_id);
 CREATE INDEX IF NOT EXISTS idx_exchange_assets_active ON exchange_assets (exchange_id, is_active);

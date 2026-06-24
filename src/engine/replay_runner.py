@@ -60,11 +60,11 @@ class TickReplayRunner:
             Dict[str, Any]:
                 {
                     "candle_histories": { f"{exchange_id}_{symbol}": List[Dict[str, Any]] },
-                    "last_prices": { symbol: float }
+                    "last_prices": { (exchange_id.lower(), symbol): float }
                 }
         """
         candle_histories: Dict[str, List[Dict[str, Any]]] = {}
-        last_prices: Dict[str, float] = {}
+        last_prices: Dict[tuple[str, str], float] = {}
 
         for tick in ticks:
             ex = tick["exchange_id"]
@@ -72,7 +72,7 @@ class TickReplayRunner:
             price = tick["trade_price"]
             
             # 최종 체결가 갱신
-            last_prices[sym] = price
+            last_prices[(ex.lower(), sym)] = price
             
             key = f"{ex}_{sym}"
             if key not in candle_histories:

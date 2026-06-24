@@ -144,6 +144,23 @@ class BaseMarketDataRepository(abc.ABC):
         """특정 시점(timestamp_ms)과 같거나 그 이전에 확정된(closed = 1) 캔들 중 가장 최근의 종가(close)를 조회합니다."""
         pass
 
+    @abc.abstractmethod
+    async def get_latest_closed_candle_closes_batch(
+        self, 
+        pairs: List[tuple[str, str]]
+    ) -> Dict[tuple[str, str], float]:
+        """여러 종목에 대해 각각 최신 확정된 캔들의 종가를 배치 조회합니다."""
+        pass
+
+    @abc.abstractmethod
+    async def get_candle_close_at_or_before_batch(
+        self, 
+        pairs: List[tuple[str, str]], 
+        timestamp_ms: int
+    ) -> Dict[tuple[str, str], float]:
+        """여러 종목에 대해 각각 특정 시점(timestamp_ms)과 같거나 그 이전의 가장 최근 종가를 배치 조회합니다."""
+        pass
+
 
 
 
@@ -709,6 +726,90 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             logger.error(f"[SqliteMarketDataRepository] Failed to query candle close at or before {timestamp_ms} for {symbol}: {e}")
             return None
 
+    async def get_latest_closed_candle_closes_batch(
+        self, 
+        pairs: List[tuple[str, str]]
+    ) -> Dict[tuple[str, str], float]:
+        if not pairs:
+            return {}
+        
+        placeholders = ", ".join(["(?, ?)"] * len(pairs))
+        query = f"""
+            SELECT exchange_id, symbol, close 
+            FROM candles c1
+            WHERE (exchange_id, symbol) IN ({placeholders})
+              AND is_closed = 1
+              AND timestamp = (
+                  SELECT MAX(timestamp) 
+                  FROM candles c2 
+                  WHERE c2.exchange_id = c1.exchange_id 
+                    AND c2.symbol = c1.symbol 
+                    AND c2.is_closed = 1
+              )
+        """
+        params = []
+        for ex, sym in pairs:
+            params.append(ex.lower())
+            params.append(sym)
+            
+        result = {}
+        try:
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(query, tuple(params)) as cursor:
+                    rows = await cursor.fetchall()
+                    for r in rows:
+                        ex_id = r[0].lower() if r[0] else ''
+                        symbol = r[1]
+                        result[(ex_id, symbol)] = r[2]
+        except Exception as e:
+            logger.error(f"[SqliteMarketDataRepository] Failed to query latest closed candle closes batch: {e}")
+        return result
+
+    async def get_candle_close_at_or_before_batch(
+        self, 
+        pairs: List[tuple[str, str]], 
+        timestamp_ms: int
+    ) -> Dict[tuple[str, str], float]:
+        if not pairs:
+            return {}
+            
+        ts_s = int(timestamp_ms / 1000)
+        placeholders = ", ".join(["(?, ?)"] * len(pairs))
+        query = f"""
+            SELECT exchange_id, symbol, close 
+            FROM candles c1
+            WHERE (exchange_id, symbol) IN ({placeholders})
+              AND is_closed = 1
+              AND timestamp <= ?
+              AND timestamp = (
+                  SELECT MAX(timestamp) 
+                  FROM candles c2 
+                  WHERE c2.exchange_id = c1.exchange_id 
+                    AND c2.symbol = c1.symbol 
+                    AND c2.is_closed = 1
+                    AND c2.timestamp <= ?
+              )
+        """
+        params = []
+        for ex, sym in pairs:
+            params.append(ex.lower())
+            params.append(sym)
+        params.append(ts_s)
+        params.append(ts_s)
+            
+        result = {}
+        try:
+            async with get_db_conn(self.db_path) as db:
+                async with db.execute(query, tuple(params)) as cursor:
+                    rows = await cursor.fetchall()
+                    for r in rows:
+                        ex_id = r[0].lower() if r[0] else ''
+                        symbol = r[1]
+                        result[(ex_id, symbol)] = r[2]
+        except Exception as e:
+            logger.error(f"[SqliteMarketDataRepository] Failed to query candle closes at or before batch for {timestamp_ms}: {e}")
+        return result
+
 
 
 
@@ -857,6 +958,29 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
 
         candidates.sort(key=lambda x: x.get('timestamp', 0))
         return candidates[-1].get('close')
+
+    async def get_latest_closed_candle_closes_batch(
+        self, 
+        pairs: List[tuple[str, str]]
+    ) -> Dict[tuple[str, str], float]:
+        result = {}
+        for ex, sym in pairs:
+            close_val = await self.get_latest_closed_candle_close(symbol=sym, exchange_id=ex)
+            if close_val is not None:
+                result[(ex.lower(), sym)] = close_val
+        return result
+
+    async def get_candle_close_at_or_before_batch(
+        self, 
+        pairs: List[tuple[str, str]], 
+        timestamp_ms: int
+    ) -> Dict[tuple[str, str], float]:
+        result = {}
+        for ex, sym in pairs:
+            close_val = await self.get_candle_close_at_or_before(symbol=sym, timestamp_ms=timestamp_ms, exchange_id=ex)
+            if close_val is not None:
+                result[(ex.lower(), sym)] = close_val
+        return result
 
     async def get_candle_close_at_or_before(
         self, 
@@ -2472,14 +2596,52 @@ class SqliteTradingRepository(BaseTradingRepository):
                 return
 
             current_prices = {}
+            lookup_pairs = set()
             for pos_key, pos in portfolio.positions.items():
-                symbol = pos.symbol
-                if self.system and hasattr(self.system, 'get_latest_price'):
-                    price_info = self.system.get_latest_price(pos.exchange_id, symbol)
-                    if price_info and price_info.get("trade_price"):
-                        current_prices[symbol] = price_info["trade_price"]
-                if symbol not in current_prices:
-                    current_prices[symbol] = pos.avg_price
+                qty = getattr(pos, 'quantity', 0.0)
+                ex = getattr(pos, 'exchange_id', None)
+                sym = getattr(pos, 'symbol', None)
+                if (not ex or not sym) and isinstance(pos_key, tuple) and len(pos_key) == 2:
+                    ex, sym = pos_key
+                if qty > 0:
+                    if not ex or not sym:
+                        raise ValueError(f"exchange_id or symbol is missing in position: {pos}")
+                    lookup_pairs.add((ex.lower(), sym))
+
+            for tx in portfolio.history:
+                ex = tx.get('exchange_id') or tx.get('exchange')
+                sym = tx.get('symbol')
+                if not ex or not sym:
+                    raise ValueError(f"exchange_id or symbol is missing in trade history: {tx}")
+                lookup_pairs.add((ex.lower(), sym))
+
+            if lookup_pairs:
+                placeholders = ", ".join(["(?, ?)"] * len(lookup_pairs))
+                query = f"""
+                    SELECT exchange_id, symbol, close 
+                    FROM candles c1
+                    WHERE (exchange_id, symbol) IN ({placeholders})
+                      AND is_closed = 1
+                      AND timestamp = (
+                          SELECT MAX(timestamp) 
+                          FROM candles c2 
+                          WHERE c2.exchange_id = c1.exchange_id 
+                            AND c2.symbol = c1.symbol 
+                            AND c2.is_closed = 1
+                      )
+                """
+                params = []
+                for ex, sym in lookup_pairs:
+                    params.append(ex.lower())
+                    params.append(sym)
+                    
+                async with get_db_conn(self.db_path) as db:
+                    async with db.execute(query, tuple(params)) as cursor:
+                        rows = await cursor.fetchall()
+                        for r in rows:
+                            ex_id = r[0].lower() if r[0] else ''
+                            symbol = r[1]
+                            current_prices[(ex_id, symbol)] = r[2]
 
             from src.engine.utils.performance import calculate_performance_metrics
             metrics = calculate_performance_metrics(

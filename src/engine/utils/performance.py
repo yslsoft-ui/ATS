@@ -10,11 +10,26 @@ def calculate_performance_metrics(history: List[Dict[str, Any]], initial_cash: f
     position_value = 0.0
     for pos_key, pos in positions.items():
         qty = getattr(pos, 'quantity', 0.0) if not isinstance(pos, dict) else pos.get('quantity', 0.0)
-        avg_price = getattr(pos, 'avg_price', 0.0) if not isinstance(pos, dict) else pos.get('avg_price', 0.0)
-        symbol = getattr(pos, 'symbol', '') if not isinstance(pos, dict) else pos.get('symbol', '')
         
+        if isinstance(pos, dict):
+            exchange_id = pos.get('exchange_id')
+            symbol = pos.get('symbol')
+        else:
+            exchange_id = getattr(pos, 'exchange_id', None)
+            symbol = getattr(pos, 'symbol', None)
+            
+        if (not exchange_id or not symbol) and isinstance(pos_key, tuple) and len(pos_key) == 2:
+            exchange_id, symbol = pos_key
+            
         if qty > 0:
-            price = current_prices.get(symbol, avg_price)
+            if not exchange_id or not symbol:
+                raise ValueError("exchange_id or symbol is missing in positions")
+            
+            lookup_key = (exchange_id.lower(), symbol)
+            if lookup_key not in current_prices:
+                raise KeyError(f"Price for {lookup_key} is missing in current_prices")
+            
+            price = current_prices[lookup_key]
             position_value += qty * price
             
     total_value = current_cash + position_value

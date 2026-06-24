@@ -112,6 +112,7 @@ class DaemonSupervisor:
         self.restart_requested = False
 
         self._tasks: List[asyncio.Task] = []
+        self.critical_tasks: List[asyncio.Task] = []
 
     async def record_system_event(self, event_type: str, message: str):
         ts = int(time.time() * 1000)
@@ -228,11 +229,53 @@ class DaemonSupervisor:
             await self.config_manager.start_watching()
 
         # 6. 백그라운드 태스크 기동
-        self._tasks.append(asyncio.create_task(self._control_listener_loop()))
-        self._tasks.append(asyncio.create_task(self._status_broadcast_loop()))
+        t_control = asyncio.create_task(self._control_listener_loop())
+        t_status = asyncio.create_task(self._status_broadcast_loop())
+        
+        self._tasks.extend([t_control, t_status])
+        self.critical_tasks.extend([t_control, t_status])
 
-        # 7. 종료 대기
-        await self.stop_event.wait()
+        # 7. 종료 대기 및 태스크 상태 감시 루프
+        while not self.stop_event.is_set():
+            service_critical = getattr(self.service, 'critical_tasks', [])
+            supervisor_critical = self.critical_tasks
+            all_critical = list(service_critical) + list(supervisor_critical)
+            
+            service_tasks = getattr(self.service, '_tasks', [])
+            supervisor_tasks = self._tasks
+            all_tasks = list(service_tasks) + list(supervisor_tasks)
+            
+            for task in all_tasks:
+                if task.done():
+                    try:
+                        if task.cancelled():
+                            raise asyncio.CancelledError()
+                        
+                        task.result()
+                        
+                        if task in all_critical and not self.stop_event.is_set():
+                            task_name = task.get_name() if hasattr(task, 'get_name') else str(task)
+                            raise RuntimeError(f"정합성 오류: 핵심 백그라운드 태스크({task_name})가 예외 없이 조기 종료되었습니다.")
+                    except asyncio.CancelledError as exc:
+                        if not self.stop_event.is_set():
+                            logger.critical(
+                                f"[{self.daemon_name}] 비정상적인 백그라운드 태스크 취소 감지 (stop_event 비활성 상태)", 
+                                exc_info=True
+                            )
+                            await self.record_system_event('DAEMON_CRASHED', f"태스크 비정상 취소 예외: {exc}")
+                            raise exc
+                    except Exception as exc:
+                        logger.critical(
+                            f"[{self.daemon_name}] 백그라운드 태스크 치명적 예외 감지: {exc}", 
+                            exc_info=True
+                        )
+                        await self.record_system_event('DAEMON_CRASHED', f"태스크 치명적 중단 예외: {exc}")
+                        raise exc
+            
+            try:
+                await asyncio.wait_for(self.stop_event.wait(), timeout=0.1)
+            except asyncio.TimeoutError:
+                pass
 
         # 8. 안전 종료 수행
         await self.stop()
@@ -245,13 +288,23 @@ class DaemonSupervisor:
         if self.config_manager:
             await self.config_manager.stop_watching()
 
-        # 2. 백그라운드 태스크 정리
+        # 2. 백그라운드 태스크 정리 및 종료 시점의 일반 예외 수거
         for task in self._tasks:
             if not task.done():
                 task.cancel()
+                
         if self._tasks:
-            await asyncio.gather(*self._tasks, return_exceptions=True)
+            results = await asyncio.gather(*self._tasks, return_exceptions=True)
+            for task, res in zip(self._tasks, results):
+                if isinstance(res, Exception) and not isinstance(res, asyncio.CancelledError):
+                    logger.critical(
+                        f"[{self.daemon_name}] 종료 정리 단계 백그라운드 태스크 예외 감지: {res}",
+                        exc_info=res
+                    )
+                    await self.record_system_event('DAEMON_CRASHED', f"종료 정리 중 태스크 예외: {res}")
+                    raise res
             self._tasks.clear()
+            self.critical_tasks.clear()
 
         # 3. 도메인 서비스 중단
         try:

@@ -130,11 +130,21 @@ class BacktestEngine:
 
         # 7. 백테스트 종료 시 최종 평가액 및 성과 계산
         final_price = rows[-1]["trade_price"]
-        current_prices = {symbol: final_price}
+        current_prices = {(exchange_id.lower(), symbol): final_price}
         final_value = portfolio.get_total_value(current_prices)
         roi = ((final_value - initial_cash) / initial_cash) * 100
         
         total_fee = sum(h.get('fee', 0.0) for h in portfolio.history)
+
+        from src.engine.utils.performance import calculate_performance_metrics
+        metrics = calculate_performance_metrics(
+            history=portfolio.history,
+            initial_cash=initial_cash,
+            current_cash=portfolio.exchange_cash.get(exchange_id.lower(), 0.0),
+            positions=portfolio.positions,
+            current_prices=current_prices
+        )
+        mdd = metrics.get("mdd", 0.0)
 
         # 8. 백테스트 결과를 portfolios, positions, orders_history에 영구 적재
         await self.portfolio_manager.save_to_db(portfolio_id)
@@ -156,6 +166,7 @@ class BacktestEngine:
                 "initial_cash": initial_cash,
                 "final_value": round(final_value, 2),
                 "roi": round(roi, 2),
+                "mdd": round(mdd, 2),
                 "trade_count": len(portfolio.history),
                 "total_fee": round(total_fee, 2),
                 "trades": [
@@ -382,7 +393,7 @@ class BacktestEngine:
                         if current_qty <= 0:
                             current_qty = 0; avg_price = 0; total_cost = 0
                             
-                final_price = last_prices.get(sym, 0.0)
+                final_price = last_prices.get((ex.lower(), sym), 0.0)
                 # 미실현 보유 자산 평가액
                 valuation = current_qty * final_price
                 # 개별 종목 손익 = 매도금액 + 평가액 - 매수금액 - 수수료
@@ -459,6 +470,17 @@ class BacktestEngine:
         total_final = total_initial + total_profit
         total_roi = (total_profit / total_initial * 100) if total_initial > 0 else 0.0
 
+        from src.engine.utils.performance import calculate_performance_metrics
+        current_total_cash = sum(portfolio.exchange_cash.values())
+        metrics = calculate_performance_metrics(
+            history=portfolio.history,
+            initial_cash=total_initial,
+            current_cash=current_total_cash,
+            positions=portfolio.positions,
+            current_prices=last_prices
+        )
+        mdd = metrics.get("mdd", 0.0)
+
         return {
             "status": "success",
             "portfolio_id": portfolio_id,
@@ -470,6 +492,7 @@ class BacktestEngine:
                 "final_value": round(total_final, 2),
                 "profit": round(total_profit, 2),
                 "roi": round(total_roi, 2),
+                "mdd": round(mdd, 2),
                 "trade_count": total_trade_count,
                 "total_fee": round(total_fee, 2),
                 "fee": round(total_fee, 2),

@@ -1000,6 +1000,10 @@ GIRS Shadow Operation 구동 및 모니터링 시 매 루프마다 수집되는 
     - 대상 테이블: `universe_guard_state`
     - 인덱스 구성 컬럼: `(status)`
     - 목적: 특정 가드 감시 상태에 해당하는 종목들의 차단 현황을 빠르게 스캔하기 위함.
+14. **`idx_candles_lookup_latest`**
+    - 대상 테이블: `candles`
+    - 인덱스 구성 컬럼: `(exchange_id, symbol, is_closed, timestamp DESC)`
+    - 목적: 최신 캔들 종가 배치 쿼리 및 사후 성과 평가 배치 쿼리 실행 시, 특정 종목별 최신 확정된 캔들을 초고속으로 탐색하여 N+1 SQLite 조회 병목을 예방하기 위함.
 
 ---
 

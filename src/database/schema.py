@@ -235,6 +235,7 @@ async def _init_db_core(target_path: str):
         # candles 테이블에 is_closed 및 is_backfill 컬럼 추가
         await ensure_column(db, 'candles', 'is_closed', 'INTEGER DEFAULT 1')
         await ensure_column(db, 'candles', 'is_backfill', 'INTEGER DEFAULT 0')
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_candles_lookup_latest ON candles (exchange_id, symbol, is_closed, timestamp DESC)")
         
         # exchanges 테이블에 korean_name 컬럼 추가 및 데이터 보정
         await ensure_column(db, 'exchanges', 'korean_name', 'TEXT')

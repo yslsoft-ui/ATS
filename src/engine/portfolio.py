@@ -143,10 +143,24 @@ class Portfolio:
             'context': context or {}
         })
 
-    def get_total_value(self, current_prices: Dict[str, float]) -> float:
+    def get_total_value(self, current_prices: Dict[tuple[str, str], float]) -> float:
         """현재 가를 반영한 총 자산 가치를 계산합니다."""
-        pos_value = sum(pos.quantity * current_prices.get(pos.symbol, pos.avg_price) 
-                        for pos in self.positions.values())
+        pos_value = 0.0
+        for pos in self.positions.values():
+            qty = getattr(pos, 'quantity', 0.0)
+            ex = getattr(pos, 'exchange_id', None)
+            sym = getattr(pos, 'symbol', None)
+            
+            if qty > 0:
+                if not ex or not sym:
+                    raise ValueError("exchange_id or symbol is missing in positions")
+                
+                lookup_key = (ex.lower(), sym)
+                if lookup_key not in current_prices:
+                    raise KeyError(f"Price for {lookup_key} is missing in current_prices")
+                
+                price = current_prices[lookup_key]
+                pos_value += qty * price
         return self.cash + pos_value
 
 class OrderExecutor(ABC):
