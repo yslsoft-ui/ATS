@@ -343,10 +343,24 @@ class StrategyService(DaemonService):
                             c_ts = c_info['timestamp']
                             
                             ex_lower = key[0]
-                            stale_threshold = self.config_manager.get(
-                                f"system.price_hydrate_stale_threshold_seconds.{ex_lower}",
-                                self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
-                            )
+                            is_kis_open = False
+                            if ex_lower == "kis":
+                                is_kis_open = await self._is_kis_market_open_now()
+                                if is_kis_open:
+                                    stale_threshold = self.config_manager.get(
+                                        "system.price_hydrate_stale_threshold_seconds_kis_open",
+                                        self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
+                                    )
+                                else:
+                                    stale_threshold = self.config_manager.get(
+                                        "system.price_hydrate_stale_threshold_seconds_kis_closed",
+                                        345600
+                                    )
+                            else:
+                                stale_threshold = self.config_manager.get(
+                                    f"system.price_hydrate_stale_threshold_seconds_{ex_lower}",
+                                    self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
+                                )
                             
                             if c_ts > 10000000000:
                                 cmp_time = int(current_time * 1000)
@@ -355,14 +369,24 @@ class StrategyService(DaemonService):
                                 cmp_time = int(current_time)
                                 cmp_threshold = stale_threshold
                                 
-                            if cmp_time - c_ts > cmp_threshold:
-                                raise KeyError(f"Price for {key} is stale in DB candles (Diff: {cmp_time - c_ts} > {cmp_threshold})")
+                            diff_seconds = cmp_time - c_ts
+                            if diff_seconds > cmp_threshold:
+                                if ex_lower == "kis" and is_kis_open:
+                                    logger.critical(f"Price for {key} is stale during KIS open market.")
+                                raise KeyError(f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {cmp_threshold})")
+                                
+                            if ex_lower == "kis" and not is_kis_open:
+                                logger.info(
+                                    f"[strategy_daemon] KIS market closed; accepting last candle price. "
+                                    f"key={key}, age_seconds={diff_seconds}, threshold_seconds={cmp_threshold}"
+                                )
                                 
                             self.latest_prices[key] = float(c_close)
         except (ValueError, KeyError, asyncio.CancelledError):
             raise
         except Exception as e:
             logger.error(f"[StrategyService] 초기 세션 로드 예외: {e}")
+            raise
 
         # GIRSScorer 싱글톤 인스턴스 초기 생성
         onnx_path = self.config_manager.get("system.onnx_model_path", None)
@@ -408,6 +432,31 @@ class StrategyService(DaemonService):
                 except Exception as e:
                     logger.error(f"[StrategyService] 초기 감사 로그 청소 중 오류: {e}")
             self._tasks.append(asyncio.create_task(run_clean()))
+
+    async def _is_kis_market_open_now(self) -> bool:
+        """
+        한국 표준시(KST) 기준으로 현재 시각이 KIS 국내 주식 개장 상태(개장일 & 정규장 운영시간)인지 판별합니다.
+        """
+        from datetime import datetime, timezone, timedelta
+        kst = timezone(timedelta(hours=9))
+        now_kst = datetime.now(kst)
+        date_str = now_kst.strftime("%Y%m%d")
+        
+        from src.engine.credentials import CredentialProvider
+        provider = CredentialProvider(self.config_manager.config)
+        
+        try:
+            is_open_day = await provider.check_kis_open_day(date_str)
+        except Exception as e:
+            logger.error(f"[StrategyService] KIS market open/closed check failed: {e}")
+            raise RuntimeError(f"Failed to resolve KIS market open/closed state during price hydration. (Error: {e})") from e
+
+        if not is_open_day:
+            return False
+
+        # 정규 거래 시간: 09:00 ~ 15:30
+        current_time_str = now_kst.strftime("%H:%M")
+        return "09:00" <= current_time_str <= "15:30"
 
     async def stop(self):
         # 1. 리스너 중단
