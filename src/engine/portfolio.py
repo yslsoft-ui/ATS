@@ -1206,6 +1206,10 @@ class PortfolioManager:
                 logger.error(f"Failed to parse strategy_info final_prices: {e}")
 
         # 2순위: 진행중이거나 meta에 종가 정보가 없는 경우 ➔ system.latest_prices 메모리 캐시 확인
+        is_current_active = False
+        if system and hasattr(system, 'current_portfolio_id') and system.current_portfolio_id == portfolio_id:
+            is_current_active = True
+
         for pos_key, pos in portfolio.positions.items():
             if pos.quantity <= 0:
                 continue
@@ -1219,6 +1223,11 @@ class PortfolioManager:
                 if price is not None:
                     current_prices[lookup_key] = float(price)
                     continue
+
+            # 액티브 포트폴리오가 아닌 과거/비활성 포트폴리오의 경우 avg_price 폴백 적용
+            if not is_current_active:
+                current_prices[lookup_key] = float(pos.avg_price)
+                continue
 
             raise KeyError(f"Price for {lookup_key} is missing in system.latest_prices (hydrate error)")
 
