@@ -168,15 +168,14 @@ async def test_kis_closed_market_stale_passed(mock_check_open_day, mock_pm_class
         "system": {
             "price_hydrate_stale_threshold_seconds": 3600,
             "price_hydrate_stale_threshold_seconds_kis_open": 3600,
-            "price_hydrate_stale_threshold_seconds_kis_closed": 345600,
             "db_path": ":memory:",
             "strategies_dir": "src/engine/strategies"
         }
     })
     
     current_time = time.time()
-    # 50000초 전 타임스탬프 (3600초는 초과하지만 345600초 이내)
-    ts = int(current_time) - 50000
+    # 500000초 전 타임스탬프 (비개장 상태이므로 가격 경과 시간 제한 없이 바이패스되어 기동 성공해야 함)
+    ts = int(current_time) - 500000
     
     candles = {
         ("kis", "009150"): {

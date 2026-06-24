@@ -352,34 +352,34 @@ class StrategyService(DaemonService):
                                         self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
                                     )
                                 else:
-                                    stale_threshold = self.config_manager.get(
-                                        "system.price_hydrate_stale_threshold_seconds_kis_closed",
-                                        345600
-                                    )
+                                    # KIS 비개장/휴장 상태일 시 stale 시간 검사를 바이패스(Bypass)
+                                    stale_threshold = None
                             else:
                                 stale_threshold = self.config_manager.get(
                                     f"system.price_hydrate_stale_threshold_seconds_{ex_lower}",
                                     self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
                                 )
                             
-                            if c_ts > 10000000000:
-                                cmp_time = int(current_time * 1000)
-                                cmp_threshold = stale_threshold * 1000
+                            if stale_threshold is not None:
+                                if c_ts > 10000000000:
+                                    cmp_time = int(current_time * 1000)
+                                    cmp_threshold = stale_threshold * 1000
+                                else:
+                                    cmp_time = int(current_time)
+                                    cmp_threshold = stale_threshold
+                                    
+                                diff_seconds = cmp_time - c_ts
+                                if diff_seconds > cmp_threshold:
+                                    if ex_lower == "kis" and is_kis_open:
+                                        logger.critical(f"Price for {key} is stale during KIS open market.")
+                                    raise KeyError(f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {cmp_threshold})")
                             else:
-                                cmp_time = int(current_time)
-                                cmp_threshold = stale_threshold
-                                
-                            diff_seconds = cmp_time - c_ts
-                            if diff_seconds > cmp_threshold:
-                                if ex_lower == "kis" and is_kis_open:
-                                    logger.critical(f"Price for {key} is stale during KIS open market.")
-                                raise KeyError(f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {cmp_threshold})")
-                                
-                            if ex_lower == "kis" and not is_kis_open:
-                                logger.info(
-                                    f"[strategy_daemon] KIS market closed; accepting last candle price. "
-                                    f"key={key}, age_seconds={diff_seconds}, threshold_seconds={cmp_threshold}"
-                                )
+                                if ex_lower == "kis" and not is_kis_open:
+                                    diff_seconds = int(current_time) - (c_ts // 1000 if c_ts > 10000000000 else c_ts)
+                                    logger.info(
+                                        f"[strategy_daemon] KIS market closed; bypassing stale price check and accepting last candle price. "
+                                        f"key={key}, age_seconds={diff_seconds}"
+                                    )
                                 
                             self.latest_prices[key] = float(c_close)
         except (ValueError, KeyError, asyncio.CancelledError):
