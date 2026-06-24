@@ -24,6 +24,10 @@ from src.engine.candles import Candle
 
 logger = get_logger("strategy_service")
 
+def _to_seconds(ts: int) -> int:
+    """타임스탬프가 ms 단위(13자리 이상)이면 초 단위로 변환하고, 그렇지 않으면 그대로 반환합니다."""
+    return ts // 1000 if ts > 10000000000 else ts
+
 class StrategyService(DaemonService):
     """전략 인스턴스 핫리로드, 포트폴리오 모니터링, 실시간 틱 연산 및 매매 집행 도메인 서비스"""
     def __init__(self, config_manager: ConfigManager, event_bus: EventBus, market_data_repository: BaseMarketDataRepository):
@@ -360,22 +364,45 @@ class StrategyService(DaemonService):
                                     self.config_manager.get("system.price_hydrate_stale_threshold_seconds", 3600)
                                 )
                             
+                            c_ts_sec = _to_seconds(c_ts)
+                            diff_seconds = int(current_time) - c_ts_sec
+                            
                             if stale_threshold is not None:
-                                if c_ts > 10000000000:
-                                    cmp_time = int(current_time * 1000)
-                                    cmp_threshold = stale_threshold * 1000
-                                else:
-                                    cmp_time = int(current_time)
-                                    cmp_threshold = stale_threshold
-                                    
-                                diff_seconds = cmp_time - c_ts
-                                if diff_seconds > cmp_threshold:
-                                    if ex_lower == "kis" and is_kis_open:
-                                        logger.critical(f"Price for {key} is stale during KIS open market.")
-                                    raise KeyError(f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {cmp_threshold})")
+                                if diff_seconds > stale_threshold:
+                                    if ex_lower in ("upbit", "bithumb"):
+                                        try:
+                                            latest_db_ts = await self.market_data_repository.get_latest_candle_timestamp(ex_lower)
+                                        except Exception as e:
+                                            raise RuntimeError(
+                                                f"Failed to query latest candle timestamp for {ex_lower} "
+                                                f"(Collector state is unknown, cannot proceed with stale price check for {key})"
+                                            ) from e
+                                        
+                                        if latest_db_ts is None:
+                                            raise RuntimeError(
+                                                f"No latest candle timestamp found for {ex_lower} "
+                                                f"(Collector state is unknown, cannot proceed with stale price check for {key})"
+                                            )
+                                        
+                                        latest_db_ts_sec = _to_seconds(latest_db_ts)
+                                        collector_age = int(current_time) - latest_db_ts_sec
+                                        
+                                        if collector_age <= stale_threshold:
+                                            logger.info(
+                                                f"[strategy_daemon] {ex_lower} collector is alive (latest candle: {collector_age}s ago); "
+                                                f"bypassing stale check for low-volume symbol {key}. age_seconds={diff_seconds}"
+                                            )
+                                        else:
+                                            raise KeyError(
+                                                f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {stale_threshold}) "
+                                                f"and {ex_lower} collector appears to be dead (latest candle age: {collector_age}s)"
+                                            )
+                                    else:
+                                        if ex_lower == "kis" and is_kis_open:
+                                            logger.critical(f"Price for {key} is stale during KIS open market.")
+                                        raise KeyError(f"Price for {key} is stale in DB candles (Diff: {diff_seconds} > {stale_threshold})")
                             else:
                                 if ex_lower == "kis" and not is_kis_open:
-                                    diff_seconds = int(current_time) - (c_ts // 1000 if c_ts > 10000000000 else c_ts)
                                     logger.info(
                                         f"[strategy_daemon] KIS market closed; bypassing stale price check and accepting last candle price. "
                                         f"key={key}, age_seconds={diff_seconds}"

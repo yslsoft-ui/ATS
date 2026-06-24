@@ -160,6 +160,11 @@ class BaseMarketDataRepository(abc.ABC):
         raise NotImplementedError()
 
     @abc.abstractmethod
+    async def get_latest_candle_timestamp(self, exchange_id: str) -> Optional[int]:
+        """특정 거래소 전체 종목 중 가장 최근에 저장된 확정 캔들의 타임스탬프를 조회합니다."""
+        pass
+
+    @abc.abstractmethod
     async def get_candle_close_at_or_before_batch(
         self, 
         pairs: List[tuple[str, str]], 
@@ -814,6 +819,16 @@ class SqliteMarketDataRepository(BaseMarketDataRepository):
             logger.error(f"[SqliteMarketDataRepository] Failed to query latest closed candles batch: {e}")
         return result
 
+    async def get_latest_candle_timestamp(self, exchange_id: str) -> Optional[int]:
+        """특정 거래소 전체 종목 중 가장 최근에 저장된 확정 캔들의 타임스탬프를 조회합니다."""
+        query = "SELECT MAX(timestamp) FROM candles WHERE exchange_id = ? AND is_closed = 1"
+        async with get_db_conn(self.db_path) as db:
+            async with db.execute(query, (exchange_id.lower(),)) as cursor:
+                row = await cursor.fetchone()
+                if row and row[0] is not None:
+                    return int(row[0])
+        return None
+
     async def get_candle_close_at_or_before_batch(
         self, 
         pairs: List[tuple[str, str]], 
@@ -1080,6 +1095,20 @@ class InMemoryMarketDataRepository(BaseMarketDataRepository):
 
         candidates.sort(key=lambda x: x.get('timestamp', 0))
         return candidates[-1].get('close')
+
+    async def get_latest_candle_timestamp(self, exchange_id: str) -> Optional[int]:
+        """인메모리에 저장된 특정 거래소 전체 종목 중 가장 최근에 저장된 확정 캔들의 타임스탬프를 조회합니다."""
+        max_ts = None
+        for key, candles in self.candles_store.items():
+            parts = key.split(':')
+            if len(parts) == 2 and parts[0].lower() == exchange_id.lower():
+                for c in candles:
+                    if c.get('is_closed', 1) == 1 or c.get('is_closed', True) is True:
+                        ts = c.get('timestamp')
+                        if ts is not None:
+                            if max_ts is None or ts > max_ts:
+                                max_ts = ts
+        return max_ts
 
 
 
