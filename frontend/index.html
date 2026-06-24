@@ -937,6 +937,22 @@
                                 </div>
                             </div>
 
+                            <!-- [NEW] 실시간 리스크 가드레일 종합 계기판 -->
+                            <div class="card" id="guardrail-dashboard-panel" style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                                <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.9rem;">🛡️ 리스크 가드레일 작동 현황</h3>
+                                <div id="guardrail-indicators-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px;">
+                                    <!-- JS에서 동적 LED 지표들 채움 -->
+                                </div>
+                            </div>
+
+                            <!-- [NEW] 종목별 실시간 가동 상태 그리드 -->
+                            <div class="card" style="padding: 15px; background: #0F172A; border: 1px solid rgba(148, 163, 184, 0.1); border-radius: 6px; margin-bottom: 20px;">
+                                <h3 style="margin: 0 0 10px 0; color: #F8FAFC; font-size: 0.9rem;">🟢 종목별 실시간 가동 상태 (Symbol Runtime Matrix)</h3>
+                                <div id="strategy-symbol-matrix-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+                                    <!-- JS에서 동적으로 채워짐 -->
+                                </div>
+                            </div>
+
                             <!-- 경고 배너 -->
                             <div class="alert-banner warning" id="workspace-strategy-warning-banner"
                                 style="display: none; margin-bottom: 20px;">
@@ -1078,6 +1094,15 @@
                                             style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; font-weight: bold; color: #EF4444;">-</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- [NEW] 파라미터 변이 및 성과 비교 영역 -->
+                            <div class="panel-section" id="proposal-visual-diff-area" style="display: none; border-top: 1px solid rgba(148, 163, 184, 0.15); padding-top: 12px; margin-top: 10px;">
+                                <span class="label" style="font-weight: bold; margin-bottom: 8px;">🔄 파라미터 변이점 (Before ➔ After)</span>
+                                <div id="proposal-param-mutation-list" style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;"></div>
+                                
+                                <span class="label" style="font-weight: bold; margin-bottom: 8px;">📊 성과 변동 예측 (Champion vs Proposed)</span>
+                                <div id="proposal-performance-comparison" style="background: rgba(15, 23, 42, 0.4); padding: 10px; border-radius: 6px; border: 1px solid rgba(148, 163, 184, 0.08); font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px;"></div>
                             </div>
 
                             <!-- 안전 제한 상태 (Guards) -->
@@ -1616,6 +1641,37 @@
                         </div>
                         <button id="btn-sync-assets" class="btn success" style="width: 100%; margin-top: 15px;">🔄 관리종목
                             변경 확인 및 동기화</button>
+                    </div>
+
+                    <!-- 실시간 알림 제어 카드 [NEW] -->
+                    <div class="settings-card">
+                        <h3>실시간 알림 제어</h3>
+                        <p class="status-text">용도에 맞게 실시간 팝업 알림(Toast)의 노출 여부를 선택합니다.</p>
+                        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 15px;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.85rem; color: #E2E8F0;">
+                                <input type="checkbox" id="chk-alert-global" checked style="width: 16px; height: 16px; cursor: pointer;">
+                                <strong>전체 알림 활성화</strong>
+                            </label>
+                            
+                            <div style="margin-left: 20px; display: flex; flex-direction: column; gap: 8px; border-left: 2px solid rgba(148, 163, 184, 0.15); padding-left: 12px;">
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.8rem; color: #94A3B8;">
+                                    <input type="checkbox" id="chk-alert-system" checked style="width: 14px; height: 14px; cursor: pointer;">
+                                    시스템 에러 및 위기 상황 알림 (권장)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.8rem; color: #94A3B8;">
+                                    <input type="checkbox" id="chk-alert-trade" checked style="width: 14px; height: 14px; cursor: pointer;">
+                                    전략매매 체결 알림
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.8rem; color: #94A3B8;">
+                                    <input type="checkbox" id="chk-alert-skip" checked style="width: 14px; height: 14px; cursor: pointer;">
+                                    매매 보류 알림
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.8rem; color: #94A3B8;">
+                                    <input type="checkbox" id="chk-alert-asset" checked style="width: 14px; height: 14px; cursor: pointer;">
+                                    자산 변동 알림
+                                </label>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 전략 설정 및 관리 카드 [NEW] -->

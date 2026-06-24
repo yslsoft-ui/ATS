@@ -577,8 +577,14 @@ async function updateSystemEvents() {
 window.updateSystemEvents = updateSystemEvents;
 
 if (typeof ViewRouter !== 'undefined') {
-    ViewRouter.registerRoute('settings-view', () => {
+    ViewRouter.registerRoute('settings-view', async () => {
         updateCollectorStatus();
+        updateSystemEvents();
+        
+        // 알림 설정값 백엔드 복구 및 UI 동기화
+        await loadAlertSettings();
+        syncAlertUI();
+        initAlertControls();
     });
 }
 
@@ -586,7 +592,141 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof initCollectorControls === 'function') initCollectorControls();
     if (typeof initDatabaseControls === 'function') initDatabaseControls();
     if (typeof initAssetSyncControls === 'function') initAssetSyncControls();
+    
+    // 알림 세팅 연동 및 초기화 진행
+    if (typeof initAlertControls === 'function') {
+        loadAlertSettings().then(() => {
+            syncAlertUI();
+            initAlertControls();
+        });
+    }
 });
+
+/**
+ * 백엔드 서버로부터 저장된 알림 채널 제어 상태를 로드하여 전역 상태(Store)를 갱신합니다.
+ */
+async function loadAlertSettings() {
+    try {
+        const res = await APIClient.fetchSystemSetting('alert_settings');
+        if (res && res.value) {
+            const settings = JSON.parse(res.value);
+            Store.update({
+                isAlertEnabled: settings.isAlertEnabled !== undefined ? settings.isAlertEnabled : true,
+                isTradeAlertEnabled: settings.isTradeAlertEnabled !== undefined ? settings.isTradeAlertEnabled : true,
+                isSkipAlertEnabled: settings.isSkipAlertEnabled !== undefined ? settings.isSkipAlertEnabled : true,
+                isAssetAlertEnabled: settings.isAssetAlertEnabled !== undefined ? settings.isAssetAlertEnabled : true,
+                isSystemAlertEnabled: settings.isSystemAlertEnabled !== undefined ? settings.isSystemAlertEnabled : true
+            });
+        }
+    } catch (e) {
+        console.error("[loadAlertSettings] Failed to load settings:", e);
+    }
+}
+
+/**
+ * 전역 상태(Store)에 기록된 알림 제어 값을 백엔드 시스템 설정에 JSON으로 영구 저장합니다.
+ */
+async function saveAlertSettings() {
+    try {
+        const settings = {
+            isAlertEnabled: Store.get('isAlertEnabled'),
+            isTradeAlertEnabled: Store.get('isTradeAlertEnabled'),
+            isSkipAlertEnabled: Store.get('isSkipAlertEnabled'),
+            isAssetAlertEnabled: Store.get('isAssetAlertEnabled'),
+            isSystemAlertEnabled: Store.get('isSystemAlertEnabled')
+        };
+        await APIClient.saveSystemSetting('alert_settings', JSON.stringify(settings));
+    } catch (e) {
+        console.error("[saveAlertSettings] Failed to save settings:", e);
+    }
+}
+
+/**
+ * Store에 기록된 알림 허용값에 의거하여 화면 체크박스 UI의 checked와 disabled 상태를 동기화합니다.
+ */
+function syncAlertUI() {
+    const chkGlobal = document.getElementById('chk-alert-global');
+    const chkTrade = document.getElementById('chk-alert-trade');
+    const chkSkip = document.getElementById('chk-alert-skip');
+    const chkAsset = document.getElementById('chk-alert-asset');
+    const chkSystem = document.getElementById('chk-alert-system');
+
+    if (!chkGlobal) return;
+
+    const isEnabled = Store.get('isAlertEnabled');
+    chkGlobal.checked = isEnabled;
+    chkTrade.checked = Store.get('isTradeAlertEnabled');
+    chkSkip.checked = Store.get('isSkipAlertEnabled');
+    chkAsset.checked = Store.get('isAssetAlertEnabled');
+    chkSystem.checked = Store.get('isSystemAlertEnabled');
+
+    // 글로벌 알림 비활성화 시 하위 개별 필터 체크박스들을 disabled 상태로 일괄 전환
+    const subChecks = [chkTrade, chkSkip, chkAsset, chkSystem];
+    subChecks.forEach(cb => {
+        if (cb) {
+            cb.disabled = !isEnabled;
+            const label = cb.closest('label');
+            if (label) {
+                label.style.opacity = isEnabled ? '1' : '0.5';
+                label.style.cursor = isEnabled ? 'pointer' : 'not-allowed';
+            }
+        }
+    });
+}
+
+/**
+ * 알림 체크박스 컨트롤들에 대해 이벤트 리스너를 매핑합니다.
+ */
+function initAlertControls() {
+    const chkGlobal = document.getElementById('chk-alert-global');
+    const chkTrade = document.getElementById('chk-alert-trade');
+    const chkSkip = document.getElementById('chk-alert-skip');
+    const chkAsset = document.getElementById('chk-alert-asset');
+    const chkSystem = document.getElementById('chk-alert-system');
+
+    if (!chkGlobal || chkGlobal.dataset.boundAlert === 'true') return;
+    chkGlobal.dataset.boundAlert = 'true'; // 중복 바인딩 방지
+
+    chkGlobal.addEventListener('change', async (e) => {
+        const checked = e.target.checked;
+        
+        // 전체 알림 활성화 체크에 따라 하위 4개 채널 스위치 상태 일괄 동기화
+        Store.update({
+            isAlertEnabled: checked,
+            isTradeAlertEnabled: checked,
+            isSkipAlertEnabled: checked,
+            isAssetAlertEnabled: checked,
+            isSystemAlertEnabled: checked
+        });
+        
+        syncAlertUI();
+        await saveAlertSettings();
+        showNotification({ msg: `실시간 팝업 알림이 ${checked ? '활성화' : '비활성화'}되었습니다.`, notification_type: checked ? 'info' : 'warning' });
+    });
+
+    const childHandlers = [
+        { el: chkTrade, key: 'isTradeAlertEnabled', label: '전략매매 체결' },
+        { el: chkSkip, key: 'isSkipAlertEnabled', label: '매매 보류' },
+        { el: chkAsset, key: 'isAssetAlertEnabled', label: '자산 변동' },
+        { el: chkSystem, key: 'isSystemAlertEnabled', label: '시스템 장애' }
+    ];
+
+    childHandlers.forEach(({ el, key, label }) => {
+        if (el) {
+            el.addEventListener('change', async (e) => {
+                const checked = e.target.checked;
+                Store.set(key, checked);
+                await saveAlertSettings();
+                showNotification({ msg: `${label} 알림이 ${checked ? '활성화' : '비활성화'}되었습니다.`, notification_type: 'info' });
+            });
+        }
+    });
+}
+
+// 전역 window 바인딩 노출 리스트에 추가
+window.initAlertControls = initAlertControls;
+window.loadAlertSettings = loadAlertSettings;
+window.syncAlertUI = syncAlertUI;
 
 
 

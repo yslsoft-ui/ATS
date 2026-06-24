@@ -30,6 +30,13 @@ function showNotification(notification, typeFallback) {
         return;
     }
 
+    // 1안: 알림 유형별 스위치 제어 필터링
+    if (type === 'trade' && !state.isTradeAlertEnabled) return;
+    if (type === 'skip' && !state.isSkipAlertEnabled) return;
+    if (type === 'asset' && !state.isAssetAlertEnabled) return;
+    if ((type === 'error' || level === 'ERROR' || level === 'CRITICAL') && !state.isSystemAlertEnabled) return;
+    if (type === 'system' && !state.isSystemAlertEnabled) return;
+
     let cardClass = 'notification-card';
     let title = '🚀 알림';
     
@@ -249,6 +256,9 @@ async function checkMissedAssetEvents() {
             const toastType = event.event_type === 'ASSET_LISTED' ? 'success' : 'warning';
             // 사용자가 명시적으로 확인하고 닫을 때 비로소 last_seen_asset_event_ts를 업데이트합니다.
             if (typeof showToast === 'function') {
+                const blockedTypes = JSON.parse(localStorage.getItem('notification_blocked_types') || '[]');
+                if (blockedTypes.includes(event.event_type)) return;
+
                 showToast(event.message, toastType, false, async () => {
                     try {
                         let currentLastSeen = 0;
@@ -271,3 +281,5 @@ async function checkMissedAssetEvents() {
 }
 
 window.checkMissedAssetEvents = checkMissedAssetEvents;
+
+

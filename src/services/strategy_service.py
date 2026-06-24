@@ -514,6 +514,7 @@ class StrategyService(DaemonService):
                 ex_stat["active"] += 1
                 
             engines_list.append({
+                "exchange_id": ex_id,
                 "symbol": engine.symbol,
                 "strategy_id": ", ".join(strategy_ids) if strategy_ids else "None",
                 "is_active": is_engine_active,

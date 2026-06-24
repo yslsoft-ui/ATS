@@ -514,6 +514,9 @@ async function loadStrategyWorkspace(strategyId) {
         // 우측 Tracer 패널 요약정보 동기화
         loadTracerPanelForStrategy(trace);
 
+        // [NEW] 종목별 가동 상태 그리드 및 가드레일 대시보드 렌더링
+        await renderStrategyWorkspaceWidgets(strategyId);
+
     } catch (e) {
         console.error("[Strategy Workspace] 로드 실패:", e);
     }
@@ -1786,6 +1789,63 @@ async function selectProposalRow(proposalId, trElement) {
             warningsSec.style.display = 'none';
         }
 
+        // [NEW] 파라미터 변이 및 성과 비교 UI 렌더링
+        let orig = trace.proposal.original_params;
+        if (typeof orig === 'string') {
+            try { orig = JSON.parse(orig); } catch(e) {}
+        }
+        let prop = trace.proposal.proposed_params;
+        if (typeof prop === 'string') {
+            try { prop = JSON.parse(prop); } catch(e) {}
+        }
+
+        const mutContainer = document.getElementById('proposal-param-mutation-list');
+        const compContainer = document.getElementById('proposal-performance-comparison');
+        const diffArea = document.getElementById('proposal-visual-diff-area');
+
+        if (mutContainer && compContainer && diffArea) {
+            mutContainer.innerHTML = '';
+            if (orig && prop) {
+                Object.keys(prop).forEach(k => {
+                    const origVal = orig[k] !== undefined ? orig[k] : 'N/A';
+                    const propVal = prop[k];
+                    if (origVal !== propVal) {
+                        const item = document.createElement('div');
+                        item.style.display = 'flex';
+                        item.style.justifyContent = 'space-between';
+                        item.style.fontSize = '0.78rem';
+                        item.style.background = 'rgba(148, 163, 184, 0.08)';
+                        item.style.padding = '4px 8px';
+                        item.style.borderRadius = '4px';
+                        item.innerHTML = `
+                            <span style="color:#94A3B8; font-family: monospace;">${k}</span>
+                            <span style="color:#38BDF8; font-family: monospace;">${origVal} ➔ <strong style="color:#10B981;">${propVal}</strong></span>
+                        `;
+                        mutContainer.appendChild(item);
+                    }
+                });
+            }
+
+            const metrics = trace.proposal.metrics || {};
+            const expectedRoi = metrics.expected_roi !== undefined ? metrics.expected_roi : (metrics.roi_7d !== undefined ? metrics.roi_7d : 0.0);
+            const riskScore = metrics.risk_score !== undefined ? metrics.risk_score : (metrics.mdd !== undefined ? metrics.mdd : 0.0);
+
+            const roiGrowth = expectedRoi >= 0 ? `+${expectedRoi.toFixed(2)}%` : `${expectedRoi.toFixed(2)}%`;
+            const roiColor = expectedRoi >= 0 ? '#10B981' : '#EF4444';
+
+            compContainer.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#94A3B8;">예상 ROI (7일 시뮬레이션)</span>
+                    <span style="color:${roiColor}; font-weight:bold; font-family: monospace;">${roiGrowth}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:#94A3B8;">예상 MDD 위험도</span>
+                    <span style="color:#EF4444; font-weight:bold; font-family: monospace;">${riskScore.toFixed(2)}%</span>
+                </div>
+            `;
+            diffArea.style.display = 'block';
+        }
+
     } catch (e) {
         console.error("[Proposal Selection] 상세 조회 실패:", e);
     }
@@ -2465,4 +2525,203 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error("ViewRouter가 정의되지 않아 'strategy-view' 라우트를 등록할 수 없습니다.");
     }
 });
+
+/**
+ * [NEW] 전략-종목 모니터링 그리드와 리스크 가드레일 대시보드를 렌더링합니다.
+ */
+async function renderStrategyWorkspaceWidgets(strategyId) {
+    const matrixContainer = document.getElementById('strategy-symbol-matrix-container');
+    const guardrailPanel = document.getElementById('guardrail-dashboard-panel');
+    const guardrailList = document.getElementById('guardrail-indicators-list');
+
+    if (!matrixContainer || !guardrailPanel || !guardrailList) return;
+
+    try {
+        const res = await APIClient.fetchStrategyDaemonDetail();
+        if (!res || !res.daemon_detail) {
+            matrixContainer.innerHTML = '<p style="color:#64748B; font-size:0.8rem; padding: 10px;">데몬 정보를 받아올 수 없습니다.</p>';
+            guardrailPanel.style.display = 'none';
+            return;
+        }
+
+        const detail = res.daemon_detail;
+
+        // 1. 리스크 가드레일 상태 렌더링
+        const gStats = detail.guardrail_stats || {};
+        const labelsMap = {
+            'champion_cooldown': '🏆 챔피언 쿨다운',
+            'data_quality': '📊 데이터 품질',
+            'low_stability': '📉 안정성 저하',
+            'cooldown': '⏳ 제안 쿨다운',
+            'quota': '⚖️ 거래소 쿼타',
+            'daily_limit': '📅 일일 제한',
+            'lazy_replay': '🔁 랭크 이탈'
+        };
+
+        guardrailList.innerHTML = '';
+        Object.entries(labelsMap).forEach(([key, labelName]) => {
+            const count = gStats[key] || 0;
+            const isSafe = count === 0;
+            const indicatorColor = isSafe ? '#10B981' : '#EF4444'; // Safe: Green, Blocked: Red
+            
+            const card = document.createElement('div');
+            card.style.background = 'rgba(15, 23, 42, 0.4)';
+            card.style.border = `1px solid ${isSafe ? 'rgba(148, 163, 184, 0.1)' : 'rgba(239, 68, 68, 0.3)'}`;
+            card.style.borderRadius = '6px';
+            card.style.padding = '8px 10px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '4px';
+            card.style.minWidth = '120px';
+
+            card.innerHTML = `
+                <div style="display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#94A3B8; white-space: nowrap;">
+                    <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background-color:${indicatorColor}; box-shadow: 0 0 6px ${indicatorColor};"></span>
+                    ${labelName}
+                </div>
+                <div style="font-family: monospace; font-size: 0.95rem; font-weight: bold; color: ${isSafe ? '#F8FAFC' : '#EF4444'}; margin-top:2px;">
+                    ${isSafe ? 'SAFE' : count + '회 차단'}
+                </div>
+            `;
+            guardrailList.appendChild(card);
+        });
+        guardrailPanel.style.display = 'block';
+
+        // 2. 종목별 실시간 가동 상태 그리드 렌더링
+        matrixContainer.innerHTML = '';
+        const engines = (detail.engines && detail.engines.engines) || [];
+        const matchingEngines = engines.filter(e => 
+            e.strategy_id && e.strategy_id.toLowerCase().includes(strategyId.toLowerCase())
+        );
+
+        if (matchingEngines.length === 0) {
+            matrixContainer.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; color: #64748B; padding: 20px; font-size: 0.8rem; border: 1px dashed rgba(148, 163, 184, 0.15); border-radius: 6px; width: 100%;">
+                    이 전략으로 가동 중인 종목이 없습니다. (실거래/모의투자 가동 시 종목이 매핑되어 표시됩니다.)
+                </div>
+            `;
+            return;
+        }
+
+        // 거래소별 그룹화
+        const grouped = {};
+        matchingEngines.forEach(e => {
+            const ex = e.exchange_id ? e.exchange_id.toLowerCase() : 'unknown';
+            if (!grouped[ex]) grouped[ex] = [];
+            grouped[ex].push(e);
+        });
+
+        const exLabelMap = {
+            'upbit': { text: '🔵 UPBIT', border: 'rgba(59, 130, 246, 0.2)' },
+            'bithumb': { text: '🟡 BITHUMB', border: 'rgba(245, 158, 11, 0.2)' },
+            'kis': { text: '🟢 KIS (국내주식)', border: 'rgba(16, 185, 129, 0.2)' }
+        };
+
+        // matrixContainer의 스타일을 grid에서 flex-direction: column으로 변경하여 거래소별 섹션 세로 배치 가능하게 지원
+        matrixContainer.style.display = 'flex';
+        matrixContainer.style.flexDirection = 'column';
+        matrixContainer.style.gap = '20px';
+
+        Object.entries(grouped).forEach(([exId, exEngines]) => {
+            const exInfo = exLabelMap[exId] || { text: `⚪ ${exId.toUpperCase()}`, border: 'rgba(148, 163, 184, 0.2)' };
+            
+            // 거래소 섹션 생성
+            const section = document.createElement('div');
+            section.style.display = 'flex';
+            section.style.flexDirection = 'column';
+            section.style.gap = '10px';
+            section.style.width = '100%';
+            
+            // 거래소 헤더 생성
+            const header = document.createElement('div');
+            header.style.fontSize = '0.85rem';
+            header.style.fontWeight = 'bold';
+            header.style.color = '#F8FAFC';
+            header.style.borderBottom = `1px solid ${exInfo.border}`;
+            header.style.paddingBottom = '6px';
+            header.style.marginBottom = '4px';
+            header.innerText = exInfo.text;
+            section.appendChild(header);
+
+            // 종목 카드 그리드 생성
+            const grid = document.createElement('div');
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(180px, 1fr))';
+            grid.style.gap = '10px';
+            grid.style.width = '100%';
+
+            exEngines.forEach(e => {
+                const card = document.createElement('div');
+                card.style.background = '#1E293B';
+                card.style.border = '1px solid rgba(148, 163, 184, 0.15)';
+                card.style.borderRadius = '8px';
+                card.style.padding = '12px';
+                card.style.display = 'flex';
+                card.style.flexDirection = 'column';
+                card.style.gap = '6px';
+
+                // 상태 배지 연산
+                let statusText = 'RUNNING';
+                let statusBg = 'rgba(16, 185, 129, 0.15)';
+                let statusColor = '#10B981';
+                let statusBorder = 'rgba(16, 185, 129, 0.3)';
+
+                if (e.is_stale) {
+                    statusText = 'STALE';
+                    statusBg = 'rgba(239, 68, 68, 0.15)';
+                    statusColor = '#EF4444';
+                    statusBorder = 'rgba(239, 68, 68, 0.3)';
+                } else if (!e.is_active) {
+                    statusText = 'DISABLED';
+                    statusBg = 'rgba(148, 163, 184, 0.15)';
+                    statusColor = '#94A3B8';
+                    statusBorder = 'rgba(148, 163, 184, 0.3)';
+                }
+
+                // 시각 포맷팅
+                let timeStr = '틱 없음';
+                if (e.last_tick_received_at) {
+                    const date = new Date(e.last_tick_received_at);
+                    timeStr = date.toLocaleTimeString();
+                }
+
+                const latencyStr = e.decision_latency_ms !== null ? `${e.decision_latency_ms.toFixed(1)}ms` : '-';
+
+                // 한국어 종목명 매핑 캐시 확인
+                const exLower = (e.exchange_id || 'unknown').toLowerCase();
+                const cacheKey = `${exLower}:${e.symbol}`;
+                const cachedName = (typeof state !== 'undefined' && state.symbolNames) ? state.symbolNames[cacheKey] : null;
+                const displayName = cachedName ? `${cachedName} (${e.symbol})` : e.symbol;
+
+                card.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold; color:#F8FAFC; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:110px;" title="${displayName}">🪙 ${displayName}</span>
+                        <span class="badge-status" style="background:${statusBg}; color:${statusColor}; border:1px solid ${statusBorder}; font-size:0.65rem; padding:1px 5px; border-radius:4px; font-weight:bold;">
+                            ${statusText}
+                        </span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:2px; font-size:0.75rem; color:#94A3B8; margin-top:4px;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>최근 수신 시각</span>
+                            <span style="font-family:monospace; color:#cbd5e1;">${timeStr}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between;">
+                            <span>연산 지연 시간</span>
+                            <span style="font-family:monospace; color:#cbd5e1;">${latencyStr}</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            section.appendChild(grid);
+            matrixContainer.appendChild(section);
+        });
+
+    } catch (err) {
+        console.error("[Workspace Widgets] 그리드 렌더링 실패:", err);
+        matrixContainer.innerHTML = '<p style="color:#EF4444; font-size:0.8rem; padding: 10px;">상태 그리드를 불러오는 도중 오류가 발생했습니다.</p>';
+    }
+}
+window.renderStrategyWorkspaceWidgets = renderStrategyWorkspaceWidgets;
 

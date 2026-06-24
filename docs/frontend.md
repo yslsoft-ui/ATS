@@ -50,7 +50,7 @@
 - **[portfolio-view.js](file:///home/simon/ATS/frontend/portfolio-view.js)**: 포트폴리오의 실물 보유 현황 및 가상 투자 운용 상태를 표와 폼으로 렌더링합니다.
 - **[portfolio-chart.js](file:///home/simon/ATS/frontend/portfolio-chart.js)**: 포트폴리오 자산 비중 현황을 직관적인 원형 차트(Pie Chart)로 표현하며, 한글 종목명 매핑을 적용해 시인성을 보장합니다.
 - **[portfolio-adapter.js](file:///home/simon/ATS/frontend/portfolio-adapter.js)**: 백엔드 포지션 데이터(`avg_price`, `quantity`, `symbol`)를 프론트엔드 차트 및 UI 규격에 맞게 계산 및 가공해주는 변환기 모듈입니다.
-- **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다.
+- **[settings.js](file:///home/simon/ATS/frontend/settings.js)**: 실시간 수집기(Collector) 기동/중지 스위치 제어 및 DB 디스크 정리 관리 페이지입니다. **[NEW]** 실시간 팝업 알림의 전역 및 4대 채널(시스템 에러, 전략매매 체결, 매매 보류, 자산 변동) 개별 차단 체크박스 UI 제어와 백엔드 DB 영속성 바인딩 기능이 탑재되어 있습니다.
 - **[daemon-monitoring.js](file:///home/simon/ATS/frontend/daemon-monitoring.js)**: [NEW] 통합 데몬 상태 모니터링 뷰의 최상위 조율 컨트롤러(`DaemonMonitoringView`)입니다. 공통 헤더 UI(PID, 기동 시각, 하트비트, CPU/메모리 리소스, 상태 뱃지, 데몬 재기동) 제어를 통합 관리하며 각 데몬(수집기, 전략, 평가, 클린업)의 탭 전환 및 서브 인스턴스 생애주기를 관장합니다.
 - **[collector.js](file:///home/simon/ATS/frontend/collector.js)**: [NEW] 수집 데몬 프로세스의 실시간 리소스(메모리, 큐 사용률)와 거래소별 틱 수신 정보를 시각화하는 모듈로, 통합 데몬 모니터링 내 수집 데몬 탭 전용 화면 렌더링 및 개별 비동기 제어(거래소별 온/오프, ZMQ ACK 처리 등)를 담당합니다.
 - **[strategy-daemon.js](file:///home/simon/ATS/frontend/strategy-daemon.js)**: [NEW] 전략 실행 데몬 프로세스의 텔레메트리 렌더링 및 개별 제어를 담당하는 하위 모듈입니다.
@@ -59,7 +59,7 @@
 - **[ranking.js](file:///home/simon/ATS/frontend/ranking.js)**: 수집 중인 실시간 종목들의 상승/하락률 및 거래대금 기준 랭킹 대시보드 뷰입니다.
 - **[restored-view.js](file:///home/simon/ATS/frontend/restored-view.js)**: 캔들 데이터와 체결 틱 데이터의 정합성을 대조하여 불일치(누락) 캔들을 식별하고 수동/자동 복원 요청을 관리하는 복원 캔들 제어 뷰입니다. **[NEW]** 누락 캔들과 고스트 캔들(실제 틱이 없으나 DB에는 존재하는 오류 분봉) 탭 전환 기능을 탑재하고, 고스트 캔들 탭에서는 테이블 내 개별 '🗑️ 삭제' 버튼 연동을 통해 DB 데이터를 즉시 영구 클린업할 수 있도록 구현되어 있습니다.
 - **[system-events.js](file:///home/simon/ATS/frontend/system-events.js)**: [NEW] 시스템 감사 로그 통합 조회 페이지입니다. `system_events` 테이블의 모든 감사 로그를 조회하고, 실시간 검색(키워드 필터링) 및 동적 이벤트 타입 필터를 지원하는 전용 감사 로그 뷰 모듈입니다.
-- **[notifications.js](file:///home/simon/ATS/frontend/notifications.js)**: 실시간 매매 및 시스템 알림(수동 제어, 에러, 종목 동기화 등) 푸시 팝업 표시 및 상단 고정형 상장/상폐 예정 이벤트 배너 노출을 관장하는 모듈입니다.
+- **[notifications.js](file:///home/simon/ATS/frontend/notifications.js)**: 실시간 매매 및 시스템 알림(수동 제어, 에러, 종목 동기화 등) 푸시 팝업 표시 및 상단 고정형 상장/상폐 예정 이벤트 배너 노출을 관장하는 모듈입니다. **[NEW]** store.js의 개별 채널 제어 변수(isTradeAlertEnabled, isSystemAlertEnabled 등)를 기반으로 팝업 알림 생성을 선택적으로 필터링(차단)하는 가드 조건이 적용되어 있습니다.
   * **통합 알림 수신 규격화**: 백엔드로부터 전달되는 모든 알림 이벤트(`skip`, `error`, `system`, `trade`, `asset`)를 단일화된 `"notification"` 페이로드(`type: "notification"`) 규격으로 수신하여 일관되게 토스트 팝업을 조립합니다.
   * **지능형 타겟 라우팅**: 알림 페이로드의 `target` 필드 정보를 파싱(예: `symbol:KRW-BTC`, `exchange:upbit` 등)하여 사용자가 알림 팝업을 클릭할 때 해당 거래소/종목의 대시보드 화면으로 즉시 포커스 및 이동(라우팅)하는 기능이 지원됩니다.
   * `checkUpcomingAssetEvents()`를 수행하여 미처리된 예정 일정이 존재하는 경우 대시보드 상단에 닫기 버튼이 포함된 영속적 배너를 생성합니다.
